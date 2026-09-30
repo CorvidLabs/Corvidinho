@@ -2786,7 +2786,9 @@ order) and reach the model only as untrusted data.
   no later tick runs it or posts again; an auto-pause from this failure keeps
   its own pause ask), and that ask posted through the usual schedule ask path
   (REQ-discord-347 / REQ-discord-353: live gate at post time, schedule title
-  prefix, the owner pinged once with allowed mentions the owner only, handed
+  prefix — `Schedule (<id>) on <project>`, without the name, when the
+  creator's stored name itself trips the detector, so the post never quotes
+  it — the owner pinged once with allowed mentions the owner only, handed
   back for the next delivery pass when the post does not go out, left pending
   by a ticker with no Discord for a bridge tick to post).
 - Otherwise a non-owner creator's run SHALL get the prompt
@@ -2806,7 +2808,7 @@ Acceptance Criteria
 - A community user's and a declared team member's `/schedule create` whose prompt (or name alone) trips the detector stores no schedule, gets one ephemeral refusal that never quotes the text, and produces exactly one post in the channel with allowed mentions only the owner and one `injection-suspected` / `denied` row with the user as actor and surface `discord:/schedule` (`tests/scheduler.injection.test.ts`).
 - An ordinary non-owner `/schedule create` still gets only the ephemeral `NOT_AUTHORIZED` (no post, no row, nothing stored); the owner's create with injection-like words is stored unscanned.
 - A benign community schedule's tick runs with `Scheduled work on project:` and its name and prompt inside the fence (`role: community`, `source=schedule-prompt`), the name nowhere outside it; a declared team member's is fenced as `role: team`, and as `role: community` when muted; the owner's schedule's prompt is exactly as before (no fence) even with injection-like words.
-- A stored community (or team) schedule whose prompt or name trips the detector runs no agent, is paused, posts one ask with the schedule title that pings only the owner and never quotes the text, and appends one `denied` row (surface `scheduler:<id>`); a later tick posts nothing more.
+- A stored community (or team) schedule whose prompt or name trips the detector runs no agent, is paused, posts one ask with the schedule title (by id alone, without the name, when the name tripped) that pings only the owner and never quotes the text, and appends one `denied` row (surface `scheduler:<id>`); a later tick posts nothing more.
 - A ticker with no outbound (the daemon) leaves that ask pending on the run row and a bridge tick posts it once; through `startBridge` the row lands in the bridge's `audit_log` and the schedule is paused.
 - These tests fail on the base sources (the owner and ordinary-create guards pass on both).
 

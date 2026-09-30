@@ -33,7 +33,8 @@ allowlist file declaring one team member; no token, no network):
   run this schedule" pinging only the owner (never the text), and records
   one `denied` row (actor the stranger, surface `scheduler:<id>`); a later
   tick posts and records nothing more. A team member's injection name is
-  refused the same way. A ticker with no outbound (the daemon) leaves the ask
+  refused the same way, and its ask is titled by the schedule id alone (the
+  name appears nowhere in the post). A ticker with no outbound (the daemon) leaves the ask
   pending and a bridge-like ticker posts it once.
 - Through `startBridge`: a stored stranger injection schedule runs no agent,
   one reply pings only the owner in its channel, `audit_log` holds exactly

@@ -480,7 +480,8 @@ file that declares one team member):
 - Tick, stored stranger injection prompt (and a team member's injection
   name): no agent run; the schedule paused; one ask post with the schedule
   title pinging only the owner ("I didn't run this schedule"), never the
-  text; one `denied` row (surface `scheduler:<id>`); a later tick posts
+  text (for the injected name, the title is `Schedule (<id>) on <project>`
+  and the name appears nowhere in the post); one `denied` row (surface `scheduler:<id>`); a later tick posts
   nothing more. A ticker with no outbound (the daemon) leaves the ask pending
   on the run row and a bridge-like ticker posts it once. Through
   `startBridge` the row lands in the bridge's `audit_log` and the schedule is

@@ -1,6 +1,6 @@
 ---
 id: a-non-owner-s-schedule-text-is-scanned-at-schedule-create-and-fenced-at-every-tick-a-non-owner-s-create-whose-name-or
-state: implementing
+state: verifying
 type: bug_fix
 base_commit: 5aaf7f0d471a19ac310b9dcc68fc7754207345ea
 ---

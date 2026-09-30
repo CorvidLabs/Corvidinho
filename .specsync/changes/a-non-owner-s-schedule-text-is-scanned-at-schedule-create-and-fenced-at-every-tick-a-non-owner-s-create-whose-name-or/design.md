@@ -67,3 +67,7 @@ Design choices pending Leif:
 7. **A schedule without a channel** has no post to carry the owner's note:
    the refusal is the log line, the audit row, the run row's ask and the
    paused status. Alternative: send it to the `/announce` channel or a DM.
+8. **An injected name is not quoted back.** The ask about a schedule whose
+   stored name is what tripped the detector is titled `Schedule (<id>) on
+   <project>`, so the channel post never repeats that name; every other
+   schedule post keeps its name in the title.

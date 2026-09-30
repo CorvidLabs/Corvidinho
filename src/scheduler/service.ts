@@ -151,11 +151,16 @@ function runWorktreeKey(scheduleId: string, runId: string): string {
  * channel reads it, so the project is shown by name (`projectLabel`: the last
  * segment of an absolute path, a relative name as given), never as an
  * absolute host path (REQ-discord-353, REQ-discord-418, SAFE-6). The model's
- * prompt keeps the stored project.
+ * prompt keeps the stored project. `withName: false` leaves the name out (an
+ * ask about a non-owner's schedule whose name tripped SAFE-13).
  */
-function scheduleTitle(schedule: Schedule): string {
+function scheduleTitle(schedule: Schedule, opts: { withName?: boolean } = {}): string {
   const project = projectLabel(schedule.project) ?? "";
-  return `Schedule **${schedule.name}** (\`${schedule.id.slice(0, 12)}\`) on \`${project}\``;
+  const id = `(\`${schedule.id.slice(0, 12)}\`)`;
+  // SAFE-13 (#71): a non-owner's name that trips the detector is never
+  // quoted back into the channel; the id still says which schedule it is.
+  if (opts.withName === false) return `Schedule ${id} on \`${project}\``;
+  return `Schedule **${schedule.name}** ${id} on \`${project}\``;
 }
 
 /** One scrubbed line (SAFE-6), capped, never a stack. Never throws. */
@@ -282,8 +287,8 @@ export type SchedulerServiceOpts = {
   backup?: Pick<BackupTicker, "tick">;
   /**
    * SAFE-5 trail for a tick's SAFE-13 refusal (`injection-suspected` /
-   * `denied`; best effort). The bridge wires its trail; without it the
-   * refusal still happens and the run row records why.
+   * `denied`; best effort). The bridge wires its trail; without it (the
+   * daemon) the refusal still happens and the run row records why.
    */
   recordAudit?: (entry: AuditEntryInput) => unknown;
   /**
@@ -967,7 +972,11 @@ export class SchedulerService {
       owner: askOwner.owner,
       requesterDiscordId: alreadyPinged ? undefined : schedule.createdByUserId,
       context,
-      prefix: `${scheduleTitle(schedule)}:`,
+      // SAFE-13: an ask about a non-owner's schedule whose name trips the
+      // detector (the tick refused it) does not quote that name.
+      prefix: `${scheduleTitle(schedule, {
+        withName: !scheduleInjection({ name: schedule.name }, this.creatorRole(schedule)),
+      })}:`,
     });
     // SAFE-8: a pending 80% spend warning (this run's or one recorded by
     // any other run on the data dir) rides the post and pings the owner.

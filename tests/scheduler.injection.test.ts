@@ -349,6 +349,11 @@ describe("SAFE-13 on every tick: stored injection text never runs as instruction
     expect(h.calls).toHaveLength(0);
     expect(store.get(s.id)!.status).toBe("paused");
     expect(h.posts).toHaveLength(1);
+    // The ask names the schedule by id only: the injected name is never quoted.
+    expect(h.posts[0]!.content).toStartWith(`Schedule (\`${s.id.slice(0, 12)}\`) on \`proj-a\`:`);
+    expect(h.posts[0]!.content).toContain("I didn't run this schedule");
+    expect(h.posts[0]!.content).not.toContain("Owner override");
+    expect(h.posts[0]!.mentionUserIds).toEqual([OWNER_ID]);
     expect(h.audit).toHaveLength(1);
   });
 
