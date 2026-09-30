@@ -9,7 +9,8 @@
  *   in-process `createTaskExecute` tests, with {@link FAKE_LLM_ENV}.
  *
  * Every reply is a plain assistant message with no tool calls, so a run
- * changes nothing (like the removed demo stub, it claims no files).
+ * changes nothing (like the removed demo stub, it claims no files), unless a
+ * test's `reply` returns {@link FakeToolCalls}.
  */
 
 import { afterAll, beforeAll } from "bun:test";
@@ -18,6 +19,12 @@ import { afterAll, beforeAll } from "bun:test";
 export function fakeReplyText(attempt: number): string {
   return `fake model reply (attempt ${attempt})`;
 }
+
+/** A scripted reply that calls tools, with optional text beside them (AGENT-17 tests). */
+export type FakeToolCalls = { toolCalls: { name: string; args?: string }[]; text?: string };
+
+/** What a test's `reply` returns: the reply text, or tool calls. */
+export type FakeReply = string | FakeToolCalls;
 
 /** The attempt number in a chat request's user message, else 1. */
 function attemptOf(body: unknown): number {
@@ -36,18 +43,22 @@ function attemptOf(body: unknown): number {
   return 1;
 }
 
-function completion(body: unknown, reply?: (body: unknown) => string): Response {
+function completion(body: unknown, reply?: (body: unknown) => FakeReply): Response {
+  const out = reply ? reply(body) : fakeReplyText(attemptOf(body));
+  const message =
+    typeof out === "string"
+      ? { role: "assistant", content: out }
+      : {
+          role: "assistant",
+          content: out.text ?? null,
+          tool_calls: out.toolCalls.map((c, i) => ({
+            id: `fake_${i}`,
+            type: "function",
+            function: { name: c.name, arguments: c.args ?? "{}" },
+          })),
+        };
   return new Response(
-    JSON.stringify({
-      choices: [
-        {
-          message: {
-            role: "assistant",
-            content: reply ? reply(body) : fakeReplyText(attemptOf(body)),
-          },
-        },
-      ],
-    }),
+    JSON.stringify({ choices: [{ message }] }),
     { status: 200, headers: { "content-type": "application/json" } },
   );
 }
@@ -61,7 +72,7 @@ export const FAKE_LLM_ENV: Readonly<Record<string, string>> = {
 
 /** An injected fetch that answers every chat request like {@link startFakeLlm}. */
 export function fakeLlmFetch(
-  reply?: (body: unknown) => string,
+  reply?: (body: unknown) => FakeReply,
 ): (input: string | URL | Request, init?: RequestInit) => Promise<Response> {
   return async (_input, init) => {
     const body = init?.body ? JSON.parse(String(init.body)) : null;
@@ -85,7 +96,7 @@ export type FakeLlm = {
  * price; pass a priced id for a run under a SAFE-8 cap).
  */
 export function startFakeLlm(
-  opts: { reply?: (body: unknown) => string; model?: string } = {},
+  opts: { reply?: (body: unknown) => FakeReply; model?: string } = {},
 ): FakeLlm {
   const requests: unknown[] = [];
   const auth: (string | null)[] = [];

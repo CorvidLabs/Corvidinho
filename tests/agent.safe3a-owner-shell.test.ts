@@ -165,7 +165,7 @@ function fakeProvider(calls: Call[]) {
               function: { name: c.name, arguments: JSON.stringify({ argv: c.argv }) },
             })),
           }
-        : { role: "assistant", content: "done" };
+        : { role: "assistant", content: "ran it" };
     return Response.json({ choices: [{ message }] });
   };
   return { fetchImpl, seen };
@@ -211,7 +211,7 @@ describe("SAFE-3.a: the owner's own chat gets the allowlisted shell in its own w
     expect(existsSync(join(talk.work, "ran.marker"))).toBe(true);
     expect(existsSync(join(talk.project, "ran.marker"))).toBe(false);
     expect(texts(run.events).some((t) => t.includes("SAFE-3.a"))).toBe(false);
-    expect(result.summary).toBe("done");
+    expect(result.summary).toBe("ran it");
     // The shell's edits are ones no result reports (AGENT-4, REQ-agent-502).
     expect(result.unreportedEditTools).toEqual(["shell-exec"]);
   });

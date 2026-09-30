@@ -300,6 +300,43 @@ the stuck ask.
   no ask; the loop runs out its rounds); the pure units and the "changes
   approach" guard pass on both.
 
+## Plan-only or empty "Done." replies get one nudge (REQ-agent-087, AGENT-17 nudge half)
+
+`tests/agent.stall-nudge.test.ts` with the fake LLM
+(`tests/fixtures/fake-llm.ts`, which can now script tool calls):
+`stallKind` positives (empty and "Done."-style claims, plans opened by "I'll"
+/ "Let me" / "I'm going to" or a "Plan:" heading) and negatives (Q&A, social
+replies, deferrals and "next time" promises, clarifying questions, "let me
+know" and offers, AUTONOMY-7 declines and toy demos, code, the length caps,
+a plan the task asked for — `planWanted`); `nothingChanged`,
+`isStateChangingTool`, `changedForStall` (memory writes), the nudge text,
+operator lines and the one-nudge guard (which remembers a change); the tool
+loop (a "Done.", a plan and an empty reply are nudged once to the same
+model; a second stall stands with the operator line; one nudge per run
+across attempts; never nudged for the negatives, after a tool-reported,
+Fledge or stored-memory change, after an unreported edit in an earlier
+attempt, for an empty closing reply after an answer given beside a tool
+call (a plan given there is nudged), for a plan the task asked for, with a
+non-empty or unreadable diff, on the tool or read tier, after a SAFE-13
+trip, or when a stop lands while the diff is read; the diff is read only for
+a stall); `runTask` passes the gate's real diff (an unreported edit ⇒ no
+nudge and the gate verifies; an empty diff ⇒ the nudge) and a stop during
+the nudge round's request ends the run cancelled after two requests; the
+real CLI `task run --output ndjson` against a localhost fake LLM (two
+requests, both operator frames, `done`).
+- Fail on base: with the base's (81ceb4a) `execute.ts`, `loop.ts` and
+  `types.ts` swapped in (the branch's `loop-guards.ts` kept), the 8 nudge
+  cases fail; with only the base's `loop.ts`, the runTask unreported-edit
+  case fails; the pure units and the never-nudged cases pass on both.
+- Review fixes (fail on the first head, 9e93cda, with the branch's test
+  file's new behavioral cases ported to it): a stored memory before
+  "Done!", an empty closing reply after an answer, a plan the task asked
+  for, and an unreported edit in an earlier attempt were all nudged there
+  (4 fail); the two stop cases pass on both (coverage for #332's stop).
+- `tests/agent.safe3a-owner-shell.test.ts` and
+  `tests/scheduler.owner-role.test.ts`: their fake model's closing reply is
+  no longer a bare "done" that changed nothing (which is now nudged).
+
 ## Public spend text (REQ-agent-098 modified, SAFE-14.a)
 
 `tests/discord.spend-dm.test.ts` › "the public spend text" — `SPEND_PAUSED_TEXT`

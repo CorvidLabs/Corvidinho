@@ -1,7 +1,9 @@
 /**
  * AGENT-16 (#86): "When it repeats a failing call, it changes approach or
- * asks me." Pure helpers for the task-run tool loop (src/agent/execute.ts);
- * no I/O besides reading the in-memory plugin registry.
+ * asks me." AGENT-17 (#86, nudge half): a reply that only plans, or says
+ * "Done." without changing anything, gets one nudge. Pure helpers for the
+ * task-run tool loop (src/agent/execute.ts); no I/O besides reading the
+ * in-memory plugin registry (and the caller's diff probe, {@link nothingChanged}).
  *
  * - {@link callSignature}: the tool name plus its canonical argv, so
  *   `{"argv":["a"]}` and `["a"]` are the same call.
@@ -20,6 +22,20 @@
  *   owner, AUTONOMY-2/4). A steer the model has not seen yet (same tool_calls
  *   batch, or a fresh verify-retry conversation) means "steer again", never
  *   "ask", so changing approach is always offered before asking.
+ * - {@link stallKind}: a narrow English heuristic for a final reply that is
+ *   only a plan (`plan`) or a short "Done."-style or empty claim
+ *   (`done-claim`); never a question, an offer, "let me know", a decline,
+ *   code or a toy demo, a social reply or an answer, and never a plan the
+ *   task asked for ({@link planWanted}).
+ * - {@link changedForStall}: {@link changedState}, or a successful memory
+ *   write ({@link STALL_CHANGE_TOOLS}), which AGENT-16 leaves out.
+ * - {@link nothingChanged}: no result of the run changed anything
+ *   ({@link changedForStall}), no tool ran whose edits no result reports,
+ *   and the verify gate's real git diff (where there is a git tree) is empty.
+ * - {@link createStallNudgeGuard}: remembers a change in any attempt of the
+ *   run; the first stall of a run gets {@link stallNudge} (to the same
+ *   model); later ones stand with an operator note. Moving to a stronger
+ *   model is not built yet.
  *
  * Thresholds are constants; there is no knob (no env var, config key or flag).
  */
@@ -89,6 +105,16 @@ export function callSignature(name: string, rawArgs: string | undefined): string
   return JSON.stringify([name, argvFromToolArguments(rawArgs)]);
 }
 
+/**
+ * True for a tool whose success changes state: a {@link STATE_CHANGING_TOOLS}
+ * builtin or a Fledge plugin command (`origin` `fledge:`). {@link changedState}
+ * uses it for results; AGENT-17 uses it for the round's catalog.
+ */
+export function isStateChangingTool(name: string): boolean {
+  if (STATE_CHANGING_TOOLS.has(name)) return true;
+  return Boolean(get(name)?.origin?.startsWith("fledge:"));
+}
+
 /** True when this tool result changed something (see module doc). */
 export function changedState(
   name: string,
@@ -96,8 +122,7 @@ export function changedState(
 ): boolean {
   if (filesChangedFromToolData(result.data).length > 0) return true;
   if (!result.ok) return false;
-  if (STATE_CHANGING_TOOLS.has(name)) return true;
-  return Boolean(get(name)?.origin?.startsWith("fledge:"));
+  return isStateChangingTool(name);
 }
 
 /** Scrubbed, one-line, capped error text for the steer / operator note. */
@@ -213,5 +238,252 @@ export function createRepeatFailureGuard(): RepeatFailureGuard {
       return { failures: n, steer };
     },
     lastError: (sig) => errors.get(sig),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// AGENT-17 (#86), the nudge half: "If it only plans, or says 'Done.' without
+// changing anything, it gets one nudge, then moves to a stronger model I've
+// configured." Moving to a stronger model is not built yet: a second stall
+// stands, with an operator note.
+
+/** A final reply that stalls: only a plan, or a short "Done."-style or empty claim. */
+export type StallKind = "plan" | "done-claim";
+
+/** Longest reply (trimmed characters) that can be a "Done."-style claim. */
+export const STALL_DONE_MAX_CHARS = 60;
+
+/** Longest reply (trimmed characters) that can be only a plan. */
+export const STALL_PLAN_MAX_CHARS = 600;
+
+/** The nudge's first words (harness text, not the owner speaking). */
+export const STALL_NUDGE_MARK = "[Corvidinho harness — AGENT-17]";
+
+/**
+ * Builtins whose success is a change for AGENT-17 although AGENT-16's
+ * {@link changedState} leaves them out: a memory stored or a forget-me asked
+ * for ("remember that …" → memory-store → "Done." is not a stall). Only the
+ * "nothing changed" check reads it; the catalog check does not.
+ */
+export const STALL_CHANGE_TOOLS: ReadonlySet<string> = new Set(["memory-store", "memory-forget-me"]);
+
+/** AGENT-17: this tool result changed something ({@link changedState}, or a successful memory write). */
+export function changedForStall(
+  name: string,
+  result: Pick<PluginHandlerResult, "ok" | "data">,
+): boolean {
+  return changedState(name, result) || (Boolean(result.ok) && STALL_CHANGE_TOOLS.has(name));
+}
+
+/**
+ * Never a stall, whatever else the reply says: a question (a clarifying ask,
+ * AUTONOMY-1), an offer or "let me know", a decline (AUTONOMY-7), code, a toy
+ * demo or joke (AUTONOMY-7), or a deferral ("I'll check back later").
+ */
+const NOT_A_STALL: readonly RegExp[] = [
+  /\?/,
+  /```/,
+  /\b(?:let me know|would you like|do you want|shall i|should i|feel free)\b/,
+  /\bif you(?:'d| would)? (?:like|want|prefer|need)\b/,
+  /\b(?:can't|cannot|can not|won't|unable|not able|not allowed|not permitted|not possible|impossible|decline|refuse|sorry|rather not)\b/,
+  /\b(?:toy|demo|joke|kidding)\b/,
+  /\b(?:later|tomorrow|soon|in a bit|when you're ready|next time|in the future|from now on|going forward)\b/,
+];
+
+/**
+ * The task asks for a plan, or asks for nothing to change yet: a plan-only
+ * reply is then the answer (Q&A), never a stall. Read over the whole task
+ * text, so a match anywhere means no plan nudge (no nudge when unsure).
+ */
+const PLAN_WANTED: readonly RegExp[] = [
+  /\b(?:plan|plans|planning|approach|outline|propose|proposal|strategy)\b/,
+  /\bhow (?:would|should|could|might|will) (?:you|we|i)\b/,
+  /\bwhat (?:would|should|could|will) (?:you|we|i) (?:do|change)\b/,
+  /\bwhat you(?:'d| would)\b/,
+  /\b(?:don't|dont|do not|without)\s+(?:\w+\s+){0,2}(?:chang|edit|touch|modif|commit|implement|writ)\w*/,
+];
+
+/** AGENT-17: the task asks for a plan, or for nothing to change yet ({@link PLAN_WANTED}). */
+export function planWanted(task: string): boolean {
+  const t = stallText(task);
+  return PLAN_WANTED.some((re) => re.test(t));
+}
+
+/** Whole-reply "Done."-style claims (lower case, ends trimmed of punctuation and emoji). */
+const DONE_CLAIMS: readonly RegExp[] = [
+  // "Done.", "All done!", "Task complete.", "Okay, that's fixed now."
+  /^(?:(?:ok|okay|alright|all right|sure|great)[,.!]*\s+)?(?:(?:it's|it is|that's|that is|this is|everything's|everything is|all|the task is|task is|task)\s+)?(?:done|finished|complete|completed|fixed|implemented|all set|taken care of)(?:\s+(?:now|already|as requested))?$/,
+  // "I've done it.", "I have finished the task."
+  /^i(?:'ve| have)?\s+(?:done|finished|completed|fixed|implemented|made|applied|handled)\s+(?:it|that|this|them|the (?:task|change|changes|fix|edit|edits|update|updates|work))(?:\s+(?:now|already|as requested))?$/,
+  // "Changes made.", "The edits are applied."
+  /^(?:the\s+)?(?:task|work|change|changes|fix|edit|edits|update|updates)\s+(?:(?:is|are|has been|have been)\s+)?(?:done|made|applied|complete|completed|finished)(?:\s+(?:now|already|as requested))?$/,
+];
+
+/** Verbs a plan step starts with (after its opener). */
+const PLAN_VERBS =
+  "add|apply|build|change|check|commit|create|delete|edit|fix|implement|inspect|investigate|look|make|modify|move|open|patch|push|read|refactor|remove|rename|replace|rewrite|run|search|start|update|write";
+
+/** "I'll update …", "Let me check …", "Okay, first I'm going to fix …". */
+const PLAN_OPENER = new RegExp(
+  "^(?:(?:ok|okay|alright|all right|sure|got it|understood|on it)[,.!]*\\s+)?" +
+    "(?:(?:first|next|now|so)[,]?\\s+)?" +
+    "(?:i'll|i will|i'm going to|i am going to|i'm gonna|i plan to|i intend to|let me)\\s+" +
+    "(?:(?:now|first|then|next|also|quickly|go ahead and)\\s+)*" +
+    `(?:${PLAN_VERBS})\\b`,
+);
+
+/** "Plan:", "My plan:", "Here's my plan:", "Here's what I'll do:". */
+const PLAN_HEADING =
+  /^(?:(?:here's|here is)\s+)?(?:my\s+)?plan:?$|^here(?:'s| is) what i(?:'ll| will| am going to|'m going to) do:?$/;
+
+/** A later step: "Then I'll run the tests.", "2. Fix the parser", "- read a.ts", "commit it." */
+const PLAN_STEP = new RegExp(
+  "^(?:(?:\\d+[.)]|[-*•])\\s+)?" +
+    "(?:(?:and\\s+)?then|next|after that|afterwards|finally|once that's done)?[,]?\\s*" +
+    "(?:(?:i'll|i will|i'm going to|i am going to|let me)\\s+)?" +
+    `(?:${PLAN_VERBS})\\b`,
+);
+
+/** An interjection sentence around a plan ("Sure!", "On it."). */
+const PLAN_FILLER = /^(?:ok|okay|alright|all right|sure|got it|understood|on it|will do|right)[.!,]*$/;
+
+/** Lower case, curly apostrophes straightened. */
+function stallText(text: string): string {
+  return text.toLowerCase().replace(/[‘’ʼ]/g, "'");
+}
+
+/** The sentences of a plan-shaped reply: split at line breaks and sentence ends. */
+function planUnits(text: string): string[] {
+  return text
+    .split(/\n+/)
+    // Not after a list number ("1. Read …").
+    .flatMap((line) => line.split(/(?<=\D[.!…:;])\s+|\s+[—–]\s+/))
+    .map((u) => u.replace(/^[\s>#*_]+|[\s*_]+$/g, ""))
+    .filter((u) => u.length > 0);
+}
+
+/**
+ * AGENT-17: what a final reply (no tool calls) stalls as, or null. `plan`:
+ * every sentence is a step of a plan that opens with "I'll …", "Let me …",
+ * "I'm going to …" (or a "My plan:" heading) and a work verb, at most
+ * {@link STALL_PLAN_MAX_CHARS}, unless `task` asks for a plan or for nothing
+ * to change yet ({@link planWanted}). `done-claim`: an empty reply, or the
+ * whole reply is a short "Done."-style claim (at most
+ * {@link STALL_DONE_MAX_CHARS}). Deliberately narrow: a question
+ * (AUTONOMY-1), an offer or "let me know", a decline or a toy demo
+ * (AUTONOMY-7), code, a deferral ("later", "next time"), a social reply
+ * ("Thanks!", "I'll be around"), "Yes, it's done." and any sentence that
+ * answers rather than plans ("Let me check… yes: …") are null.
+ */
+export function stallKind(text: string, task = ""): StallKind | null {
+  const trimmed = text.trim();
+  if (trimmed === "") return "done-claim";
+  const t = stallText(trimmed);
+  if (NOT_A_STALL.some((re) => re.test(t))) return null;
+
+  if (t.length <= STALL_DONE_MAX_CHARS) {
+    const claim = t
+      .replace(/^[\s\p{P}\p{S}\p{M}‍]+|[\s\p{P}\p{S}\p{M}‍]+$/gu, "")
+      .replace(/\s+/g, " ");
+    if (claim && DONE_CLAIMS.some((re) => re.test(claim))) return "done-claim";
+  }
+
+  if (t.length > STALL_PLAN_MAX_CHARS) return null;
+  let opened = false;
+  for (const unit of planUnits(t)) {
+    if (PLAN_FILLER.test(unit)) continue;
+    if (!opened) {
+      if (!PLAN_OPENER.test(unit) && !PLAN_HEADING.test(unit)) return null;
+      opened = true;
+      continue;
+    }
+    if (!PLAN_OPENER.test(unit) && !PLAN_STEP.test(unit)) return null;
+  }
+  return opened && !planWanted(task) ? "plan" : null;
+}
+
+/**
+ * AGENT-17: true when nothing changed in the run so far — no result changed
+ * anything ({@link changedForStall}, via the stall guard's `sawChange`, every
+ * attempt), no tool ran whose edits no result reports, and, where there is a
+ * git tree, the verify gate's real diff since the run's baseline
+ * (`workspaceChanged`, `WorkspaceDiffTracker.changed`) is empty. A diff git
+ * cannot read counts as a change (no nudge when unsure).
+ */
+export async function nothingChanged(opts: {
+  sawChange: boolean;
+  unreportedEdits: boolean;
+  workspaceChanged?: () => Promise<string[] | null>;
+}): Promise<boolean> {
+  if (opts.sawChange || opts.unreportedEdits) return false;
+  if (!opts.workspaceChanged) return true;
+  try {
+    const real = await opts.workspaceChanged();
+    return real !== null && real.length === 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The harness text a stalled reply gets once (a user message to the same
+ * model). `askOffered`: `ask-human` is in the catalog.
+ */
+export function stallNudge(kind: StallKind, askOffered: boolean): string {
+  const said =
+    kind === "plan"
+      ? "Your reply only described a plan, and nothing has changed in this run yet."
+      : "Your reply said the work is done (or said nothing), but nothing has changed in this run: no file edits and no other changes.";
+  return (
+    `${STALL_NUDGE_MARK} ${said} ` +
+    "If the task needs changes, make them now with the tools you have. " +
+    "If it needs none, reply with what you checked and found instead." +
+    (kind === "plan"
+      ? " If you were asked only for a plan, or not to change anything yet, change nothing: reply with the plan as your answer."
+      : "") +
+    (askOffered ? " If you can't go on without the owner's choice, call ask-human." : "")
+  );
+}
+
+/** Operator Text line when the nudge goes out. */
+export function stallNudgedNote(kind: StallKind): string {
+  return `[operator] AGENT-17: the reply was ${stallLabel(kind)} with nothing changed; nudged once (same model)`;
+}
+
+/** Operator Text line when a stall after the nudge stands. */
+export function stallStandsNote(kind: StallKind): string {
+  return `[operator] AGENT-17: the reply was ${stallLabel(kind)} with nothing changed, after the nudge; the reply stands (moving to a stronger model is not built yet)`;
+}
+
+function stallLabel(kind: StallKind): string {
+  return kind === "plan" ? "only a plan" : "a 'Done.'-style or empty claim";
+}
+
+export type StallNudgeGuard = {
+  /**
+   * A tool result of the run changed something ({@link changedForStall}), or
+   * a tool ran whose edits no result reports; remembered for every attempt.
+   */
+  changed(): void;
+  /** True once {@link StallNudgeGuard.changed} was called in this run. */
+  sawChange(): boolean;
+  /** A stall in this run: "nudge" the first time, "stand" after that. */
+  next(): "nudge" | "stand";
+};
+
+/** One per `createTaskExecute` (one run, every attempt): one nudge per run. */
+export function createStallNudgeGuard(): StallNudgeGuard {
+  let nudged = false;
+  let changedOnce = false;
+  return {
+    changed() {
+      changedOnce = true;
+    },
+    sawChange: () => changedOnce,
+    next() {
+      if (nudged) return "stand";
+      nudged = true;
+      return "nudge";
+    },
   };
 }

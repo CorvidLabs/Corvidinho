@@ -290,6 +290,7 @@ async function gate(
     workspace = null;
   }
   started(workspace);
+  const tracker = workspace;
   // AGENT-15 (REQ-agent-185): with no git snapshot, the none-deleted check
   // compares a walk of the project's test files taken now with one taken
   // after the lane passes; a walk that could not finish fails closed.
@@ -321,6 +322,9 @@ async function gate(
       signal,
       specBriefing,
       ...(repoWays.sdd || repoWays.hi || repoWays.trust ? { repoWays } : {}),
+      // AGENT-17 (REQ-agent-087): the real diff decides "nothing changed" for
+      // the tool loop's one nudge, as it does for this gate.
+      ...(tracker ? { workspaceChanged: () => tracker.changed() } : {}),
     });
     summary = exec.summary;
     // AGENT-4: union across attempts. Files from an attempt whose verify

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "if-it-only-plans-or-says-done-without-changing-anything-it-gets-one-nudge-to-the-same-model-a-second-stall-stands-with",
+  "implementation_commit": "06d61ae8d33497d11b13212750d0acbd050d5281",
+  "implementation_tree": "7a7ca773dae866ea9f2110b6c540e2974fca648a",
+  "contract_digest": "534e4516540a6db6b5c932f49fca5f07b5835fe3f7c09dfe35d01371494a3a61",
+  "workspace_digest": "aef92f5cf5e8c33cf8f1fd52090d03fb31635e7de62d23f55ff8bbf681260d93",
+  "closing_digest": "d9e4f4fb5fc2fe4d1cf9f827471841cfab3d2413d8fd28b11e027263aaabbdfd",
+  "review_digest": "c1066357ed68a6b95892aa1670dc1ce7f4609d76b31d3d772ac37ca17c10f6d2",
+  "finalization_digest": "a745fc0246200789f9e826d6eae79863e0d8e2fb4e35b20a8bde7119a0793a3b",
+  "timestamp": 1790806537
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "if-it-only-plans-or-says-done-without-changing-anything-it-gets-one-nudge-to-the-same-model-a-second-stall-stands-with",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "06d61ae8d33497d11b13212750d0acbd050d5281",
+  "contract_digest": "534e4516540a6db6b5c932f49fca5f07b5835fe3f7c09dfe35d01371494a3a61",
+  "execution_digest": "9d35eb08930a3b9bfda7b13b5a51ac644bf826d907bc29fda7c7dbb4925a8098",
+  "workspace_digest": "aef92f5cf5e8c33cf8f1fd52090d03fb31635e7de62d23f55ff8bbf681260d93",
+  "timestamp": 1790806523
+}
