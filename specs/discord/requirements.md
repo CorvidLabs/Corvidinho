@@ -711,17 +711,21 @@ Acceptance Criteria
 ### REQ-discord-024
 
 (Clarify bridge-live content only.) After every successful bridge restart
-(`ClientReady`), when configured, Corvidinho SHALL post the enriched bridge-live
-note from `formatBridgeLiveAnnouncement` (REQ-discord-025) via `postAnnouncement`
+(`ClientReady`), when configured, Corvidinho SHALL post the update note from
+`formatBridgeLiveAnnouncement` (REQ-discord-025) via `postAnnouncement`
 — never to the general allowlisted chat by default (DISCORD-ANNOUNCE-4). The
-bare `bridge live vX.Y.Z` one-liner is the minimum header; ship notes MAY include
-≤5 CHANGELOG bullets. Package version history for `/announce` slash itself
-remains **0.0.8**; current package is **0.0.11** after this enrichment.
+note SHALL be one short line in the persona's voice naming the running version
+with a link to that version's release notes (PERSONA-1.a), posted as one
+message; it SHALL NOT carry CHANGELOG bullets (the bare `bridge live vX.Y.Z`
+header and the ≤5 CHANGELOG bullets of package 0.0.11 are replaced). Package
+version history for `/announce` slash itself remains **0.0.8**; the bullets
+shipped in **0.0.11**.
 
 Acceptance Criteria
 - ClientReady posts bridge-live note only to announce channel (not dogfood allowlist).
-- Note content matches REQ-discord-025 (header + optional ≤5 bullets).
+- Note content matches REQ-discord-025 (one in-voice line with the version and the release notes link; no bullets).
 - `/announce` slash + persist behavior from REQ-discord-024 otherwise unchanged.
+- Through `startBridge`, one ClientReady gives exactly one post, to the announcements channel, pinging nobody; with no announcements channel nothing is posted.
 
 ### REQ-discord-042
 
@@ -897,28 +901,39 @@ Acceptance Criteria
 
 ### REQ-discord-025
 
-`formatBridgeLiveAnnouncement` SHALL post a Discord-friendly bridge-live note
-after every successful restart when an announce channel is configured
-(DISCORD-ANNOUNCE-4): a version header `bridge live **vX.Y.Z**` plus a short
-bullet list (≤5) of what shipped in the current package version.
+`formatBridgeLiveAnnouncement` SHALL give the Discord-friendly bridge-live
+note the bridge posts after every successful restart when an announce channel
+is configured (DISCORD-ANNOUNCE-4): the update post, a short note in the
+persona's voice (`persona.md`: warm, direct, an emoji, never a flat changelog)
+with a link to the release notes, not a changelog dump (PERSONA-1.a, #69).
 
-Bullets SHALL prefer the matching `CHANGELOG.md` (or RELEASE notes) section for
-that version. When CHANGELOG is missing or has no usable bullets, the helper
-SHALL fall back to the package description or a single-line tip — never invent
-features. Posts remain **only** via `postAnnouncement` to the configured
-announce channel (never dogfood allowlist by default).
+For a plain release version `X.Y.Z` (each part 1–6 digits; a leading `v` and
+surrounding spaces dropped) the note SHALL be exactly one line:
+`Back online and running **vX.Y.Z** 🐦‍⬛ Everything new in this version is in the release notes 👀 <https://github.com/CorvidLabs/Corvidinho/releases/tag/vX.Y.Z>`
+— the version, one plain sentence and the link to that version's GitHub
+Release (every package version has a `vX.Y.Z` tag and Release,
+`.github/workflows/release.yml`), built from `CORVIDINHO_URL` and wrapped in
+`<>` so Discord shows no preview card. Any other version (empty, a
+pre-release, a mention, markdown, a secret, an over-long part) SHALL NOT be
+echoed: the note is then `Back online 🐦‍⬛ Everything new is in the release notes 👀 <https://github.com/CorvidLabs/Corvidinho/releases>`.
+The note SHALL be a fixed template: no model call and no spend, nothing read
+from `CHANGELOG.md` or `package.json` beyond the package version, no bullet,
+heading or newline, under 200 characters (always under 400); it SHALL be SAFE-6
+scrubbed and have `@everyone` / `@here` defanged. Posts remain **only** via
+`postAnnouncement` to the configured announce channel (never dogfood
+allowlist by default), and the gateway reply parses no mentions
+(REQ-discord-205). Editing `persona.md` does not change the template.
 
-Package version SHALL bump to **0.0.11**. Fixture tests without live Discord.
-No new slash commands; no new HI criteria (implements standing order + existing
-DISCORD-ANNOUNCE-4).
+No new slash command, config key, env var or schema change; no package
+version bump. Fixture tests without live Discord.
 
 Acceptance Criteria
-- Header is always `bridge live **vX.Y.Z**`.
-- With a CHANGELOG section, body has 1–5 short `-` bullets from that version.
-- Missing CHANGELOG / empty section → description or tip fallback (or header-only if none).
-- `postAnnouncement` still default-deny / announce-channel-only.
-- Package `0.0.11`; docs/STATUS/CHANGELOG updated.
-- Fixture tests + SpecSync + fledge verify green.
+- A plain release version gives exactly the one-line template: `**vX.Y.Z**`, the persona's 🐦‍⬛ / 👀, and `<https://github.com/CorvidLabs/Corvidinho/releases/tag/vX.Y.Z>`; a leading `v` and spaces are dropped; the default is the package version.
+- No `bridge live` header, no `-` / `*` bullet or heading line, no newline and no CHANGELOG text, even when CHANGELOG.md has a long section for that version; under 400 characters for the longest plain version.
+- A version that is not a plain release version (empty, pre-release, `@everyone` / `@here`, a fake key, a newline bullet, markdown, a 20-digit part) is never echoed; the note links the Releases page.
+- The note is unchanged by `scrubSecrets` and carries no `@everyone` / `@here`.
+- `postAnnouncement` still default-deny / announce-channel-only, sending the note as one message.
+- Regression tests in `tests/discord.update-post.test.ts` fail on the base sources and pass after.
 
 ### REQ-discord-098
 

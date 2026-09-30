@@ -135,9 +135,7 @@ describe("postAnnouncement", () => {
     const store = new AnnounceStore(memoryDb());
     store.setChannelId("announce-chan");
     const sends: Array<{ channelId: string; content: string }> = [];
-    const note = formatBridgeLiveAnnouncement("0.0.8", {
-      changelogText: "## 0.0.8\n\n- slash /announce\n- bridge-live only\n",
-    });
+    const note = formatBridgeLiveAnnouncement("0.0.8");
     const r = await postAnnouncement(
       store,
       async (opts) => {
@@ -150,83 +148,12 @@ describe("postAnnouncement", () => {
     expect(sends).toHaveLength(1);
     expect(sends[0]?.channelId).toBe("announce-chan");
     expect(sends[0]?.content).toBe(note);
-    expect(sends[0]?.content.startsWith("bridge live **v0.0.8**")).toBe(true);
+    expect(sends[0]?.content).toContain("**v0.0.8**");
   });
 });
 
-describe("formatBridgeLiveAnnouncement", () => {
-  test("header plus ≤5 CHANGELOG bullets", () => {
-    const changelog = `# Changelog
-
-## 0.0.11
-
-### Ship
-
-- **DISCORD-ANNOUNCE-4** — enriched bridge-live with CHANGELOG bullets
-- Watches spawn JSONL
-- Rate-limit backoff
-- Extra sixth bullet should be dropped
-- Seventh also dropped
-- Eighth dropped
-
-### Ops
-
-- Package version **0.0.11** — presence reads v0.0.11
-- Restart the Discord bridge
-
-## 0.0.10
-
-- old stuff
-`;
-    const note = formatBridgeLiveAnnouncement("0.0.11", { changelogText: changelog });
-    expect(note.startsWith("bridge live **v0.0.11**\n")).toBe(true);
-    const lines = note.split("\n");
-    expect(lines[0]).toBe("bridge live **v0.0.11**");
-    const bullets = lines.slice(1);
-    expect(bullets.length).toBeLessThanOrEqual(5);
-    expect(bullets.length).toBe(5);
-    expect(bullets.every((b) => b.startsWith("- "))).toBe(true);
-    expect(note).toContain("enriched bridge-live");
-    expect(note).not.toContain("Package version");
-    expect(note).not.toContain("Restart the Discord");
-    expect(note).not.toContain("Eighth dropped");
-  });
-
-  test("falls back to package description when CHANGELOG missing", () => {
-    const note = formatBridgeLiveAnnouncement("9.9.9", {
-      changelogText: "",
-      packageDescription: "Linux-first Bun/TS agent runner",
-    });
-    expect(note).toBe(
-      "bridge live **v9.9.9**\n- Linux-first Bun/TS agent runner",
-    );
-  });
-
-  test("falls back to tip when description also missing", () => {
-    const note = formatBridgeLiveAnnouncement("9.9.9", {
-      changelogText: "## 1.0.0\n\n- other version only\n",
-      packageDescription: "",
-      tip: "tip: see CHANGELOG",
-    });
-    expect(note).toBe("bridge live **v9.9.9**\n- tip: see CHANGELOG");
-  });
-
-  test("header-only when no changelog, description, or tip", () => {
-    const note = formatBridgeLiveAnnouncement("9.9.9", {
-      changelogText: "",
-      packageDescription: "",
-      tip: "",
-    });
-    expect(note).toBe("bridge live **v9.9.9**");
-  });
-
-  test("reads real CHANGELOG for tip version when present", () => {
-    const note = formatBridgeLiveAnnouncement("0.0.10");
-    expect(note.startsWith("bridge live **v0.0.10**")).toBe(true);
-    expect(note.split("\n").length).toBeGreaterThan(1);
-    expect(note).toContain("WATCH-RELIABILITY");
-  });
-});
+// The note's text (PERSONA-1.a: a short in-voice note linking the release
+// notes, not a CHANGELOG bullet list) is covered in tests/discord.update-post.test.ts.
 
 describe("/announce dispatch", () => {
   test("show when empty", async () => {

@@ -11,7 +11,8 @@
  * MEMORY: auto-recall inject on spawn (AGENT-7 / MEMORY-2/4).
  * DISCORD-10: Merlin-shaped protocol-version lockstep.
  * DISCORD-12: presence/custom status shows shared package version.
- * DISCORD-ANNOUNCE: /announce + bridge-live note to dedicated channel only.
+ * DISCORD-ANNOUNCE: /announce + bridge-live note to dedicated channel only
+ *   (PERSONA-1.a: a short in-voice note linking the release notes).
  * ADMIN-1..4: /admin edits the allowlist file + live allowlist (owner only).
  * AUTONOMY-1/2/4..6: ask replies ping requester (clarify) or owner (stuck);
  * thin acks restate pending asks; cancel clears (ask-ping.ts / thin-ack.ts).
@@ -1788,7 +1789,8 @@ export async function startBridge(
       }) >= PermissionLevel.ADMIN,
     onReady: (id) => {
       console.log(`[discord] bot user id ${id}; monitoring ${config.channelIds.length} channel(s)`);
-      // DISCORD-ANNOUNCE-4 — post bridge-live note only to configured announce channel.
+      // DISCORD-ANNOUNCE-4 — post bridge-live note only to configured announce channel;
+      // PERSONA-1.a — one short in-voice line linking the release notes (fixed template).
       if (announceStore && replyRef.fn) {
         const note = formatBridgeLiveAnnouncement(version);
         void postAnnouncement(announceStore, replyRef.fn, note).then((r) => {

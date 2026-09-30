@@ -106,6 +106,7 @@ files:
   - src/discord/announce-store.ts
   - src/discord/announce.ts
   - tests/discord.announce.test.ts
+  - tests/discord.update-post.test.ts
   - src/scheduler/cron.ts
   - src/scheduler/store.ts
   - src/scheduler/service.ts
@@ -226,6 +227,8 @@ Error lines (REQ-discord-417, SAFE-6): `formatErrorLine` / `ERROR_LINE_MAX`
 `formatDiscordLoginFailure` (`bridge.ts`) words a rejected gateway login;
 `formatRegisterCommandsFailure` (`register-commands.ts`) words a failed slash
 registration (CLI `register-commands` and the bridge's registration on ready).
+
+Update post (DISCORD-ANNOUNCE-4, PERSONA-1.a / REQ-discord-025): `formatBridgeLiveAnnouncement(version?)` (`src/discord/announce.ts`) returns the one-line note the bridge posts on every ClientReady through `postAnnouncement` (announcements channel only): a fixed template in persona.md's voice naming the running version with a `<…>`-wrapped link to that version's GitHub Release (`https://github.com/CorvidLabs/Corvidinho/releases/tag/v<version>`, from `CORVIDINHO_URL`), under 200 characters, no bullets, no model call, nothing read from CHANGELOG.md, scrubbed (SAFE-6) and mass mentions defanged; a version that is not a plain `X.Y.Z` is never echoed and the note links the Releases page instead.
 
 Export `AnnounceStore` / `postAnnouncement` / `formatBridgeLiveAnnouncement` and `enrichPromptWithMemories`, `formatMemoryInjectBlock`, and related
 constants/types from `src/discord/memory-inject.ts` (also re-exported via
@@ -1112,6 +1115,7 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-30 | on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a: On GitHub people match only by their numeric user id: a renamed or re-registered login never counts as the owner or a declared person on WATCH (prompt, memory scope, SAFE-13 exemption); [owner] github_id declares the owner's id; /admin people link github stores the looked-up numeric id; doctor warns about logins without an id (IDENTITY-7.a, #36) |
 | 2026-09-30 | safe-2-a-the-file-tools-refuse-fledge-like-fledge-toml-and-specs-so-a-run-cannot-weaken-the-verify-lane-it-is-judged-by: SAFE-2.a: the file tools refuse .fledge/ like fledge.toml and specs/, so a run cannot weaken the verify lane it is judged by |
 | 2026-09-29 | an-answer-typed-in-the-private-answer-form-is-fenced-and-scanned-like-a-chat-reply-a-non-owner-s-submit-that-looks-like: An answer typed in the private Answer form is fenced and scanned like a chat reply: a non-owner's submit that looks like an injection starts no run, keeps the ask open, pings only the owner once and appends an injection-suspected audit row; an ordinary non-owner answer reaches the model inside the untrusted-data fence; the owner's answer is unchanged (SAFE-12/13, DISCORD-ASK-4.a) |
+| 2026-09-30 | the-bridge-s-update-post-bridge-live-note-on-every-restart-announcements-channel-only-is-a-short-note-in-persona-md-s: The bridge's update post (bridge-live note on every restart, announcements channel only) is a short note in persona.md's voice with the version and a link to that version's GitHub Release notes, never a CHANGELOG bullet dump: deterministic template, no model call, under 400 chars, one message, mass mentions defanged, scrubbed (PERSONA-1.a, #69) |
 | 2026-09-30 | verification-can-t-be-skipped-and-the-real-diff-since-the-talk-started-decides-what-changed-agent-14-agent-15-agent-15: Verification can't be skipped and the real diff since the talk started decides what changed (AGENT-14, AGENT-15, AGENT-15.a): task run refuses --no-verify, [corvidinho] verify_before_complete is ignored, filesChanged comes from the real git diff alone (a claimed path git does not show still runs the lane), and a talk worktree whose last run did not end verified verifies from the talk branch's merge-base |
 | 2026-09-30 | ask-questions-and-choice-labels-are-secret-scrubbed-before-they-are-cut-or-posted-safe-6-a: Ask questions and choice labels are secret-scrubbed before they are cut or posted (SAFE-6.a) |
 | 2026-09-30 | a-non-owner-s-schedule-text-is-scanned-at-schedule-create-and-fenced-at-every-tick-a-non-owner-s-create-whose-name-or: A non-owner's schedule text is scanned at /schedule create and fenced at every tick: a non-owner's create whose name or prompt looks like an injection stores nothing, gets a private refusal, pings only the owner and appends an injection-suspected audit row; each tick re-resolves the creator's role, fences a non-owner's stored name and prompt as untrusted data, and stored text that trips the detector runs nothing, pauses the schedule and tells the owner once; the owner's own schedules are unchanged (SAFE-12/13) |
