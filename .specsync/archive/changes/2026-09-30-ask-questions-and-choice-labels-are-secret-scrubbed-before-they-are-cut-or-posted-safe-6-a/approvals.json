@@ -1,0 +1,110 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790727910,
+      "digest": "35cf2f4d85d2e4cbf75bcd777c853dc509ec8b74adfc8d8ec091681b685f6b98",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "ask-questions-and-choice-labels-are-secret-scrubbed-before-they-are-cut-or-posted-safe-6-a",
+        "title": "Ask questions and choice labels are secret-scrubbed before they are cut or posted (SAFE-6.a)",
+        "description": "Ask questions and choice labels are secret-scrubbed before they are cut or posted (SAFE-6.a)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent",
+          "discord"
+        ],
+        "affected_paths": [
+          "INTENT.md",
+          "docs/discord.md",
+          "hi/safe.md",
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "src/agent/ask-options.ts",
+          "src/agent/ask.ts",
+          "src/discord/ask-buttons.ts",
+          "tests/agent.ask.test.ts",
+          "tests/discord.ask-buttons.test.ts",
+          "tests/discord.ask-scrub-first.test.ts",
+          "tests/scheduler.ask-outbox.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Each ask question (ASK_QUESTION_MAX 1500, normalizeQuestion) and choice label (80, cleanAskLabel) is SAFE-6 scrubbed before it is cut, and Discord option buttons scrub their labels before the 80-char cut; a question or label whose secret straddles the cut shows [redacted:<kind>] and never a raw piece shorter than the scrub pattern, in what is posted (Choose-pick buttons, the Answer stub and form, an ask restated after a restart, schedule ask posts) and what is stored (discord_sessions.pending_ask, schedule_runs.ask_question); option ids keep today's behaviour (a secret-looking id becomes its position, other ids byte-identical); regression tests fail on main and pass here; no new env var, config key, flag, command, data field, schema or scrub-rules version change"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "2180981051f63bbe0b5100a65738ab0be1084f9073cbb52b4516b125f62f1595",
+        "discord": "4f52b24d890fc532fd2172058f59d86d7749db73de1bda8512610ca43ab75bd6"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790730679,
+      "digest": "35cf2f4d85d2e4cbf75bcd777c853dc509ec8b74adfc8d8ec091681b685f6b98",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "ask-questions-and-choice-labels-are-secret-scrubbed-before-they-are-cut-or-posted-safe-6-a",
+        "title": "Ask questions and choice labels are secret-scrubbed before they are cut or posted (SAFE-6.a)",
+        "description": "Ask questions and choice labels are secret-scrubbed before they are cut or posted (SAFE-6.a)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent",
+          "discord"
+        ],
+        "affected_paths": [
+          "INTENT.md",
+          "docs/discord.md",
+          "hi/safe.md",
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "src/agent/ask-options.ts",
+          "src/agent/ask.ts",
+          "src/discord/ask-buttons.ts",
+          "tests/agent.ask.test.ts",
+          "tests/discord.ask-buttons.test.ts",
+          "tests/discord.ask-scrub-first.test.ts",
+          "tests/scheduler.ask-outbox.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Each ask question (ASK_QUESTION_MAX 1500, normalizeQuestion) and choice label (80, cleanAskLabel) is SAFE-6 scrubbed before it is cut, and Discord option buttons scrub their labels before the 80-char cut; a question or label whose secret straddles the cut shows [redacted:<kind>] and never a raw piece shorter than the scrub pattern, in what is posted (Choose-pick buttons, the Answer stub and form, an ask restated after a restart, schedule ask posts) and what is stored (discord_sessions.pending_ask, schedule_runs.ask_question); option ids keep today's behaviour (a secret-looking id becomes its position, other ids byte-identical); regression tests fail on main and pass here; no new env var, config key, flag, command, data field, schema or scrub-rules version change"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "ebd502f1c7f24e42b2baee23bf84d9b7f7e6b39806bb1d4e141be0fcc10aa9e4",
+        "discord": "4f52b24d890fc532fd2172058f59d86d7749db73de1bda8512610ca43ab75bd6"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790733328,
+      "digest": "282220f64d057a141925978a6a6ad2bc1ff83676b8e9e92e03d2704682ecaeef",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

@@ -135,6 +135,7 @@ files:
   - tests/discord.ask-buttons.test.ts
   - tests/discord.ask-answer-modal.test.ts
   - tests/discord.ask-ephemeral.test.ts
+  - tests/discord.ask-scrub-first.test.ts
   - src/discord/inflight-replies.ts
   - tests/discord.inflight-replies.test.ts
   - src/discord/allowed-mentions.ts
@@ -286,7 +287,13 @@ an ephemeral button UI on press (`ASK_BUTTON_TTL_MS` ~30m; late press →
 Thinking collapses into the Choose stub (DISCORD-ASK-6); done/pick and slash
 `/session start` / `/work` prefer editing that message into the final answer
 (DISCORD-ASK-7) via `ThinkingStatus.finalizeContent` (`finishSlashWithThinking`). The bridge wires `SlashContext.trackBotMessage`, so that answer message (the collapsed thinking message, or the deferred reply whose id `SlashInteraction.editReply` may resolve with as `{ messageId }`) maps to its session and the session's own user continues it by replying (DISCORD-2 / REQ-discord-002); the tracking write is best effort, so a DB error is logged and never keeps the slash run from resolving its deferred reply. After an ephemeral pick, buttons clear and the Got-it ephemeral is deleted when resume finishes (DISCORD-ASK-8).
-`src/agent/ask-options.ts` exports `resolveAskOptions` / `parseChoicesFromQuestion`.
+`src/agent/ask-options.ts` exports `resolveAskOptions` / `parseChoicesFromQuestion`
+and `cleanAskLabel` (whitespace collapsed, SAFE-6 scrubbed, then cut at 80, a cut
+label scrubbed once more), which
+every option label and every Choose-pick button label (`buildChoiceComponents`)
+goes through; the ask question is scrubbed before its 1500 cut
+(`normalizeQuestion`), so a question or label that held a secret shows
+`[redacted:<kind>]` even when the cut falls inside it (SAFE-6.a / REQ-discord-066).
 Gateway `reply` accepts optional `components`; `onComponent` handles button
 custom ids. Sessions persist their open asks in `discord_sessions.pending_ask`
 (schema v8), keyed by askId (SESSION-MULTI-3 / REQ-discord-044): `pendingAsk`
@@ -833,6 +840,16 @@ failed lookup writes nothing.
   `[redacted:anthropic-key]` in valid JSON, with the same askId, option ids,
   expiresAt and stubMessageId, so the Choose button still opens the choices
 
+### Scenario: A secret the cut would split is redacted, not cut (SAFE-6.a)
+
+- **Given** a run asks with a choice label whose fake key starts near the
+  80-character cut, or a question whose fake key starts near the 1500 cut
+- **When** the ask is made, posted, stored, or reloaded after a restart
+- **Then** the Choose-pick button, the Answer stub and form, a restated ask,
+  a schedule ask post, `discord_sessions.pending_ask` and
+  `schedule_runs.ask_question` show `[redacted:github-token]`, never a raw
+  `ghp_` piece shorter than the scrub pattern; option ids are unchanged
+
 ### Scenario: A secret-looking option id never reaches a button or the row (SAFE-6)
 
 - **Given** a run asks with an option whose id is an AWS key id
@@ -1087,4 +1104,5 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-30 | on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a: On GitHub people match only by their numeric user id: a renamed or re-registered login never counts as the owner or a declared person on WATCH (prompt, memory scope, SAFE-13 exemption); [owner] github_id declares the owner's id; /admin people link github stores the looked-up numeric id; doctor warns about logins without an id (IDENTITY-7.a, #36) |
 | 2026-09-30 | safe-2-a-the-file-tools-refuse-fledge-like-fledge-toml-and-specs-so-a-run-cannot-weaken-the-verify-lane-it-is-judged-by: SAFE-2.a: the file tools refuse .fledge/ like fledge.toml and specs/, so a run cannot weaken the verify lane it is judged by |
 | 2026-09-29 | an-answer-typed-in-the-private-answer-form-is-fenced-and-scanned-like-a-chat-reply-a-non-owner-s-submit-that-looks-like: An answer typed in the private Answer form is fenced and scanned like a chat reply: a non-owner's submit that looks like an injection starts no run, keeps the ask open, pings only the owner once and appends an injection-suspected audit row; an ordinary non-owner answer reaches the model inside the untrusted-data fence; the owner's answer is unchanged (SAFE-12/13, DISCORD-ASK-4.a) |
+| 2026-09-30 | ask-questions-and-choice-labels-are-secret-scrubbed-before-they-are-cut-or-posted-safe-6-a: Ask questions and choice labels are secret-scrubbed before they are cut or posted (SAFE-6.a) |
 | 2026-09-30 | a-non-owner-s-schedule-text-is-scanned-at-schedule-create-and-fenced-at-every-tick-a-non-owner-s-create-whose-name-or: A non-owner's schedule text is scanned at /schedule create and fenced at every tick: a non-owner's create whose name or prompt looks like an injection stores nothing, gets a private refusal, pings only the owner and appends an injection-suspected audit row; each tick re-resolves the creator's role, fences a non-owner's stored name and prompt as untrusted data, and stored text that trips the detector runs nothing, pauses the schedule and tells the owner once; the owner's own schedules are unchanged (SAFE-12/13) |

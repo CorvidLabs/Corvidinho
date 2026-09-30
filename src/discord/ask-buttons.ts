@@ -17,7 +17,7 @@
  */
 
 import type { AskOption, HumanAsk } from "../agent/types.ts";
-import { resolveAskOptions } from "../agent/ask-options.ts";
+import { cleanAskLabel, resolveAskOptions } from "../agent/ask-options.ts";
 import { ASK_QUESTION_MAX, normalizeQuestion } from "../agent/ask.ts";
 import { defangMassMentions } from "./ask-ping.ts";
 import { scrubSecrets } from "../store/scrub.ts";
@@ -245,7 +245,11 @@ export function normalizeAskAnswer(raw: unknown): string {
   return text.length <= ASK_ANSWER_MAX ? text : `${text.slice(0, ASK_ANSWER_MAX - 1)}…`;
 }
 
-/** Option buttons (style Secondary = 2), one row, ≤5. */
+/**
+ * Option buttons (style Secondary = 2), one row, ≤5. Each label is SAFE-6
+ * scrubbed before it is cut to Discord's 80 (SAFE-6.a, `cleanAskLabel`);
+ * the custom_id keeps the option id byte-identical.
+ */
 export function buildChoiceComponents(
   askId: string,
   options: readonly AskOption[],
@@ -253,7 +257,7 @@ export function buildChoiceComponents(
   const components: DiscordButton[] = options.slice(0, 5).map((o) => ({
     type: 2,
     style: 2,
-    label: o.label.slice(0, 80),
+    label: cleanAskLabel(o.label),
     custom_id: pickCustomId(askId, o.id),
   }));
   return [{ type: 1, components }];
