@@ -243,7 +243,10 @@ for ephemeral Discord buttons). `src/agent/ask-options.ts` exports
 `resolveAskOptions` / `parseChoicesFromQuestion` / `normalizeAskOptions`
 (option ids come out unique within an ask: a repeated id takes the first
 unused position number, and already-unique ids are kept byte-identical,
-REQ-agent-045).
+REQ-agent-045) and `cleanAskLabel`. The question is SAFE-6 scrubbed before it
+is cut at `ASK_QUESTION_MAX` (1500, `normalizeQuestion`) and each option label
+before it is cut at 80 (`cleanAskLabel`), so a secret the cut would split
+shows as `[redacted:<kind>]`, never as a raw piece (SAFE-6.a, REQ-agent-045).
 `HumanAsk` MAY include `options: AskOption[]`. A clarify ask ends the run
 `blocked` (verify skipped, exit 0); verify exhaustion stays `failed` and
 carries a `stuck` ask. Additive on the NDJSON wire: protocol stays 2.

@@ -1,6 +1,7 @@
 /**
  * DISCORD-ASK-1 — extract a short list of choices from ask-human structured
- * options or from numbered / lettered lines in the question text.
+ * options or from numbered / lettered lines in the question text. Labels
+ * are secret-scrubbed before they are cut (SAFE-6.a, `cleanAskLabel`).
  * Pure; no I/O.
  */
 
@@ -17,8 +18,16 @@ export const ASK_OPTION_LABEL_MAX = 80;
 const CHOICE_LINE_RE =
   /^\s*(?:(?:\d+)[.)]\s+|[a-dA-D][.)]\s+|[-*]\s+)(.+?)\s*$/;
 
-function cleanLabel(raw: string): string {
-  const t = raw.replace(/\s+/g, " ").trim();
+/**
+ * One choice label as it is posted on its button and stored with the open
+ * ask: whitespace collapsed, SAFE-6 scrubbed, then cut at
+ * ASK_OPTION_LABEL_MAX. The scrub runs before the cut (SAFE-6.a), so a label
+ * that held a secret shows `[redacted:<kind>]` and a secret the cut would
+ * split never survives as a raw piece too short for its scrub pattern.
+ * Empty ⇒ "".
+ */
+export function cleanAskLabel(raw: string): string {
+  const t = scrubSecrets(raw.replace(/\s+/g, " ").trim());
   if (!t) return "";
   return t.length <= ASK_OPTION_LABEL_MAX
     ? t
@@ -26,7 +35,7 @@ function cleanLabel(raw: string): string {
 }
 
 function toOption(id: string, label: string): AskOption | null {
-  const cleaned = cleanLabel(label);
+  const cleaned = cleanAskLabel(label);
   if (!cleaned) return null;
   return { id, label: cleaned };
 }
