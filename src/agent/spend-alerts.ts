@@ -70,12 +70,30 @@ CREATE INDEX IF NOT EXISTS idx_spend_alerts_ts ON spend_alerts(ts);
  */
 export function ensureSpendAlerts(db: Database): void {
   db.exec(SPEND_ALERTS_SQL);
-  const cols = db.query("PRAGMA table_info(spend_alerts)").all() as Array<{ name: string }>;
-  if (!cols.some((c) => c.name === "delivered_at")) {
-    db.exec("ALTER TABLE spend_alerts ADD COLUMN delivered_at INTEGER");
+  const cols = spendAlertColumns(db);
+  if (!cols.has("delivered_at")) addSpendAlertColumn(db, "delivered_at", "delivered_at INTEGER");
+  if (!cols.has("scope")) {
+    addSpendAlertColumn(db, "scope", `scope TEXT NOT NULL DEFAULT '${TOTAL_SPEND_SCOPE}'`);
   }
-  if (!cols.some((c) => c.name === "scope")) {
-    db.exec(`ALTER TABLE spend_alerts ADD COLUMN scope TEXT NOT NULL DEFAULT '${TOTAL_SPEND_SCOPE}'`);
+}
+
+function spendAlertColumns(db: Database): Set<string> {
+  const cols = db.query("PRAGMA table_info(spend_alerts)").all() as Array<{ name: string }>;
+  return new Set(cols.map((c) => c.name));
+}
+
+/**
+ * ALTER one column in. Processes sharing the DB (parallel council voices
+ * right after an update) can each see it missing; the one that loses the race
+ * gets "duplicate column name", which is fine once the column is there — the
+ * spend check must not stop that call over it (fail closed only when the
+ * column is really missing).
+ */
+function addSpendAlertColumn(db: Database, name: string, ddl: string): void {
+  try {
+    db.exec(`ALTER TABLE spend_alerts ADD COLUMN ${ddl}`);
+  } catch (err) {
+    if (!spendAlertColumns(db).has(name)) throw err;
   }
 }
 

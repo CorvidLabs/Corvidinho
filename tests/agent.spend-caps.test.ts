@@ -48,6 +48,7 @@ import { askPingKey, formatAskReply } from "../src/discord/ask-ping.ts";
 import { createSpendDm, formatSpendWarningDm } from "../src/discord/spend-dm.ts";
 import { askPingOwner } from "../src/discord/spend-post.ts";
 import type { SendPrivateDm } from "../src/discord/private-reply.ts";
+import type { Database } from "bun:sqlite";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 import { rescrubDatabase, SCRUB_TARGETS } from "../src/store/scrub.ts";
 
@@ -533,6 +534,54 @@ describe("spend_alerts gains its scope column in place (SAFE-14, no schema versi
     ensureSpendAlerts(db);
     ensureSpendAlerts(db);
     expect(db.query("SELECT scope FROM spend_alerts").all()).toEqual([{ scope: "total" }]);
+  });
+
+  test("two processes adding `scope` at once: the one that loses the race carries on, a real ALTER failure still throws", async () => {
+    // A DB whose first look at the table is stale: another process (a
+    // parallel council voice right after an update) added the column between
+    // that look and this process's ALTER.
+    const stale = (db: Database, failAlter?: Error): Database => {
+      let looked = false;
+      return new Proxy(db, {
+        get(target, prop) {
+          if (prop === "query") {
+            return (sql: string) => {
+              if (!looked && sql.startsWith("PRAGMA table_info(spend_alerts)")) {
+                looked = true;
+                return { all: () => [{ name: "id" }, { name: "delivered_at" }] };
+              }
+              return target.query(sql);
+            };
+          }
+          if (prop === "exec") {
+            return (sql: string) => {
+              if (failAlter && sql.startsWith("ALTER TABLE spend_alerts")) throw failAlter;
+              return target.exec(sql);
+            };
+          }
+          const v = Reflect.get(target, prop);
+          return typeof v === "function" ? v.bind(target) : v;
+        },
+      });
+    };
+    const db = openCorvidinhoDb({ memory: true });
+    ensureSpendAlerts(db);
+    expect(() => ensureSpendAlerts(stale(db))).not.toThrow();
+    // The guard's first call in that process is sent, not stopped over the ledger.
+    const { fetch, hosts } = mockFetch();
+    const guard = createSpendGuard(fetch, {
+      env: modelEnv({ [SPEND_CAP_ENV]: "5" }),
+      readUsage: extractUsage,
+      db: stale(db),
+      now: () => NOW,
+    });
+    await guard.fetch(OPENAI_URL, chatInit("gpt-4o-mini"));
+    expect(hosts).toEqual([OPENAI]);
+    // The column really missing and the ALTER failing: fail closed.
+    const old = openCorvidinhoDb({ memory: true });
+    old.exec(`CREATE TABLE spend_alerts (id TEXT PRIMARY KEY NOT NULL, ts INTEGER NOT NULL, kind TEXT NOT NULL,
+      cap_micro_usd INTEGER NOT NULL, spent_micro_usd INTEGER NOT NULL, delivered_at INTEGER)`);
+    expect(() => ensureSpendAlerts(stale(old, new Error("disk I/O error")))).toThrow("disk I/O error");
   });
 
   test("the scope is written scrubbed and listed in SCRUB_TARGETS", () => {
