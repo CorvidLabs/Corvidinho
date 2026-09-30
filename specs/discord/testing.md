@@ -455,6 +455,44 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   `ok row not recorded (see bridge log)`; a non-ADMIN delete while the trail
   throws still gets only `not authorized` and deletes nothing. No live Discord.
 
+## Schedule text is data (REQ-discord-713, SAFE-12/13)
+
+`tests/scheduler.injection.test.ts` (slash dispatcher with an in-memory
+context; `SchedulerService` with a memory store, a recording agent and no
+worktrees; `startBridge` with a null gateway and a memory DB; an allowlist
+file that declares one team member):
+
+- `/schedule create` by a stranger (community) and by a declared team member
+  with an injection prompt, and by a stranger with an injection name alone:
+  nothing stored; one ephemeral refusal that never quotes the text; one post
+  in the channel pinging only the owner ("a /schedule request here");
+  one `injection-suspected` / `denied` row (actor the user, surface
+  `discord:/schedule`). An ordinary stranger create: only the ephemeral
+  `NOT_AUTHORIZED`, no post, no row. The owner's create with the same words
+  is stored unscanned.
+- Tick, benign stranger schedule: the prompt starts `Scheduled work on
+  project: proj-a`, carries `role: community` and the name and prompt inside
+  the fence (`source=schedule-prompt`), the name nowhere else; the run is not
+  ADMIN; the result post is unchanged. A declared team member's schedule is
+  fenced as `role: team`, and as `role: community` when the creator is muted.
+  The owner's schedule (injection-like words included) keeps its old prompt,
+  unfenced, stays active, no row.
+- Tick, stored stranger injection prompt (and a team member's injection
+  name): no agent run; the schedule paused; one ask post with the schedule
+  title pinging only the owner ("I didn't run this schedule"), never the
+  text (for the injected name, the title is `Schedule (<id>) on <project>`
+  and the name appears nowhere in the post); one `denied` row (surface `scheduler:<id>`); a later tick posts
+  nothing more. A ticker with no outbound (the daemon) leaves the ask pending
+  on the run row and a bridge-like ticker posts it once. Through
+  `startBridge` the row lands in the bridge's `audit_log` and the schedule is
+  paused.
+
+Fail-on-base: with `src/scheduler/service.ts`,
+`src/discord/command-handlers/schedule.ts`, `src/discord/injection-guard.ts`
+and `src/discord/bridge.ts` from `origin/main` (5aaf7f0), 9 of the 12 tests
+fail; the ordinary-create, owner-create and owner-schedule guards pass on
+both.
+
 ## Slash answer reply continuity (REQ-discord-002, DISCORD-2 / SESSION-MULTI-1)
 
 - `tests/discord.slash-reply-continuity.test.ts` — through `startBridge` with a
@@ -563,6 +601,22 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   `normalizeAskOptions` stores the id redacted; an older row's secret-looking
   option id is redacted on the next open with askId, expiresAt and
   stubMessageId byte-identical.
+- Scrub before cut (REQ-discord-066 modified, SAFE-6.a):
+  `tests/discord.ask-scrub-first.test.ts` (bridge on temp SQLite, the ask as
+  the spawn client parses it): a choice label whose fake key straddles the
+  80-char cut is `…[redacted:github-token]…` on the Choose-pick buttons, in
+  the stored `pending_ask` row and in the pick's human text; a free-text
+  question straddling the 1500 cut is stored that way and nothing the Answer
+  stub, its form or a restated ask posts carries a raw `ghp_` piece; after a
+  restart the reloaded ask posts the same labels, and a stored label past the
+  cut loads scrubbed before it is cut (ids unchanged).
+  `tests/discord.ask-buttons.test.ts` › "SAFE-6.a: choice labels are scrubbed
+  before they are cut or posted": `buildChoiceComponents` posts a whole or
+  straddling key as `[redacted:<kind>]` (≤80, custom_ids unchanged).
+  `tests/scheduler.ask-outbox.test.ts` › "SAFE-6.a: a question whose secret
+  straddles the ASK_QUESTION_MAX cut…": `schedule_runs.ask_question` holds
+  the marker for a daemon-claimed and a bridge-claimed run, and neither the
+  run summary nor the posts carry a raw piece. All fail on the base sources.
 - `tests/discord.send-file.test.ts` (REQ-discord-476, DISCORD-17): stubbed
   fetch (records the multipart `payload_json` and `files[0]`) and an injected
   requester checker, no live Discord. `discord-send-file` is dangerous,
@@ -576,8 +630,9 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   channel or acting user are refused; a channel off the allowlist is refused
   and a thread passes through its parent; `.env`, `.env.*`, `.git`, keystore,
   `.specsync` (also inside a change folder), `specs/`, `.ssh`,
-  `fledge.toml`, a symlink to `.env`, a symlink into `.git`, a symlink out of
-  the project and `..` / absolute outside paths are refused; `.sh`, a
+  `fledge.toml`, a file under `.fledge/` and a link to it (SAFE-2.a; fails
+  on main's `isProtectedPath`), a symlink to `.env`, a symlink into `.git`, a
+  symlink out of the project and `..` / absolute outside paths are refused; `.sh`, a
   non-PNG `.png` and non-UTF-8 `.txt` are refused; a file over 8 MB is
   refused before the check, and so is a PNG whose size as first taken
   (`statSync` / `fstatSync` spied to report its size before it grew) is
@@ -626,11 +681,12 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   1500-char run-row summary ending with the note and posts at most 1900 chars
   ending with it; a run returning 1800 plain chars stores and posts exactly its
   first 1500.
-- `tests/discord.slash-ask7.test.ts` › "/work answer for a non-owner keeps the
-  closing role note within the 1900 cap": a `member-1` `/work` with a
-  207-char description (non-owner PR line) gets a collapsed answer of at most
-  1900 chars whose summary part is under 1500 (fitted after the head) and ends
-  with the note.
+- `tests/discord.slash-ask7.test.ts` › "/work answer for a non-owner (team)
+  keeps the closing role note in the rich answer": a declared team member's
+  `/work` (community can't start one, IDENTITY-11.a) with a 207-char
+  description (stub PR line) gets a collapsed answer of at most 1900 chars
+  whose summary part is under 1500 (fitted after the head) and ends with the
+  note.
 - Same file › "/session start answer for a non-owner keeps the closing role
   note within the 1900 cap": the answer is at most 1900 chars, its summary part
   at most 1500, and it ends with the note.
@@ -650,8 +706,9 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
 - `tests/identity.people.test.ts` — `[people.<id>]` TOML (plural + singular
   keys) and JSON parse; the allowlist loader and `[owner]` reader load the same
   file; unreadable entries skipped whole with id-free problems; `owner`
-  reserved; `resolvePerson` by Discord id / `<@id>` / GitHub login / numeric
-  id, never by display or nickname, renamed-login rule, clashes match nobody;
+  reserved; `resolvePerson` by Discord id / `<@id>` / GitHub numeric id,
+  never by GitHub login (IDENTITY-7.a), display or nickname, clashes match
+  nobody;
   the owner's built-in or declared person with `role: owner`;
   `loadDeclaredPeople` re-reads the loaded file and never throws.
 - `tests/discord.admin-people.test.ts` — `/admin people add|link|unlink|
@@ -678,7 +735,8 @@ community; muted or deny-listed team ⇒ community); the spawn client stamps
 (schedules pass no role ⇒ community); through `startBridge` chat stamps each
 speaker's role and a file edit applies to the next message; `/work` runs a
 team member with `actingRole: "team"` + `workTask: true` and reaches the PR
-step, the owner is unchanged, community / undeclared never reach it, and a
+step, the owner is unchanged, community / undeclared get the ephemeral
+`not authorized` and never run (IDENTITY-11.a), and a
 team member demoted mid-run gets no PR; `/session start` stamps the role
 without the work flag; `/admin people role` promotes / demotes with
 `admin-people-role` `started`/`ok` rows, no-change on the same role, refuses
@@ -688,6 +746,26 @@ and a missing audit trail; `people list` shows each role, `config show` counts
 them; JSON files keep unread keys. `tests/discord.admin-slash.test.ts`: the
 `people` group ends with `role` (`person`, `role` with team / community
 choices).
+
+Community can't start /work (IDENTITY-11.a, REQ-discord-065 / REQ-discord-088):
+`tests/roles.community-no-work.test.ts` — a temp git repo as the project and a
+temp worktree base; through `handleSlashInteraction`, a `/work` by declared
+community, a declared person with no role and an undeclared user (also with a
+`project` option, with no owner and nobody declared, and with no owner but a
+people file) gets exactly one ephemeral `not authorized` reply, no deferred
+reply, no session, work task, agent run or PR step, and the repo keeps one
+worktree and no `talk/*` branch; with no owner a declared team member still
+runs as team; a muted or deny-listed team member is refused the same way at
+the handler, and through the dispatcher gets the mute reply / zero-width ack
+first with nothing started;
+the owner and a team member still run with a worktree under the base,
+`workTask: true` and the PR step; a demotion / promotion written to the
+people file applies to the next `/work`; through `startBridge` a community
+`/work` spawns nothing while the owner's runs. `tests/work.pr.test.ts`,
+`tests/discord.actor-gate.test.ts` and `tests/roles.team.test.ts` expect the
+refusal for community; `tests/safe.injection.test.ts` keeps the SAFE-13
+refusal for a stranger's injected `/work`. Tests that drive `/work` as a
+non-owner declare the invoker team with `tests/fixtures/team-people.ts`.
 
 Forget on request (MEMORY-ACL-6, #101 / REQ-discord-101):
 `tests/discord.forget-card.test.ts` — the Approve/Deny card helper
@@ -768,8 +846,9 @@ GitHub commenter keys". `tests/memory.rank.test.ts` —
 `recallTerms` / `stemTerm`, `rankMemories` (idf, key weight, recency floor),
 a multi-scope search keeping the newest of a key once and no private notes, a
 question-words-only query matching as one substring, `recallRelevantThenRecent`,
-`memorySubjectForGithub` (id, login, a login whose id differs is nobody, the
-undeclared-under-`[people]` owner on their Discord id) and
+`memorySubjectForGithub` (numeric id only: a login alone or with an id that
+differs is nobody; the undeclared-under-`[people]` owner, by `[owner]
+github_id`, on their Discord id) and
 `projectScopeForRepo`.
 
 ## Update post in the persona's voice (REQ-discord-025 / REQ-discord-024 modified, PERSONA-1.a, DISCORD-ANNOUNCE-4)
@@ -796,3 +875,40 @@ undeclared-under-`[people]` owner on their Discord id) and
 - Fails on the base sources (main 5aaf7f0 `src/discord/announce.ts`): 5 of 7
   (the bridge posted an 838-character `bridge live **v0.0.34**` + bullets
   note); passes after.
+## One verify gate; talk worktrees start verified (REQ-discord-085)
+
+- `tests/agent.verify-gate.test.ts`: a talk worktree made by
+  `ensureTalkWorkspace` holds the verified marker (`talkWorktreeGitDir`), its
+  first run that changes nothing has nothing to verify, and after a blocked
+  run with an edit the next run there verifies it (REQ-agent-015).
+- `tests/work.pr.test.ts`: the `/work` PR path finds the base and merge-base
+  through the shared `resolveBase` (`src/worktree/base.ts`).
+- `tests/spawn.argv.test.ts`, `tests/agent.ndjson-spawn.test.ts`: Discord
+  spawn argv has no `--no-verify` (REQ-discord-014 / 073).
+## GitHub by numeric user id only (REQ-discord-367, IDENTITY-7.a)
+
+- `tests/identity.github-numeric-id.test.ts` — `resolvePerson` /
+  `memorySubjectForGithub`: a login alone, or the owner's or a declared
+  person's login with another numeric id, resolves nobody; the declared id
+  resolves under any login. `[owner] github_id` from TOML (quoted or bare) and
+  JSON (string or number), an invalid one ignored with a value-free issue;
+  loaded from the file it joins the owner's person; an env-only owner login is
+  not the owner on GitHub. A login-only entry loads without an issue, matches
+  on Discord, not on GitHub, and matches once `github_ids` is added.
+  `/admin people link github:` through the slash dispatcher with an injected
+  `lookupGithubUser`: the looked-up id is written to `github_ids` (login kept),
+  `started` / `ok` rows, the reply deferred first, live at once, a second link
+  no change; a failed, missing or mismatched lookup writes nothing and audits
+  `error`; a refused request and `github_id:` links make no lookup.
+  `createGithubUserLookup` over a stubbed fetch: 200 → id + canonical login
+  (token sent as auth), 404 → no user, 500 → status only (token never in the
+  error), a payload without an id refused.
+- `tests/identity.people.test.ts`, `tests/identity.owner.test.ts`
+  (`isOwnerGithub` by numeric id only) and `tests/discord.admin-people.test.ts`
+  (fake lookup; unlinking a login says its id still matches; the owner's
+  person matched by its linked id, not the `[owner]` login) hold the rule.
+- Fail on base: with the base sources (main 20a0f58) swapped in,
+  `tests/identity.github-numeric-id.test.ts` fails 8 of 9 (the login still
+  matches; no `[owner] github_id`; `link github:` stores no id; no lookup
+  module — only "a refused request makes no lookup" holds on both) and all 9
+  pass on the branch; the updated cases in the four files above fail too.

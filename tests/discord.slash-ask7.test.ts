@@ -26,6 +26,10 @@ import {
 } from "../src/discord/thinking-status.ts";
 import { WorkStore } from "../src/discord/work-store.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
+import { declareTeam } from "./fixtures/team-people.ts";
+
+/** A declared team member (IDENTITY-11.a: community can't start /work). */
+const TEAM_MEMBER = "700000000000000007";
 
 /** DISCORD-15: an answer footer is `<before> | <time> [| <after>]` (time from the real clock). */
 function answerFooterText(before: string, after?: string) {
@@ -135,7 +139,7 @@ describe("DISCORD-ASK-7 slash /session /work (REQ-discord-048)", () => {
     return {
       store,
       workStore: new WorkStore(),
-      allowlist: emptyConfig(),
+      allowlist: declareTeam(emptyConfig(), TEAM_MEMBER),
       agent,
       version: "0.0.25",
       protocolVersion: 2,
@@ -297,16 +301,16 @@ describe("DISCORD-ASK-7 slash /session /work (REQ-discord-048)", () => {
     };
   }
 
-  test("/work answer for a non-owner keeps the closing role note in the rich answer (REQ-discord-734)", async () => {
+  test("/work answer for a non-owner (team) keeps the closing role note in the rich answer (REQ-discord-734)", async () => {
     await withRepo(async (_project, store) => {
       const { outbound, contentEdits } = mockOutbound();
       const tracked: string[] = [];
-      const { ix } = slashIx("work", { description: `Fix it ${"d".repeat(200)}` }, undefined, "member-1");
+      const { ix } = slashIx("work", { description: `Fix it ${"d".repeat(200)}` }, undefined, TEAM_MEMBER);
       await handleWorkCommand(slashCtx(store, outbound, tracked, roleNoteAgent()), ix);
 
       expect(contentEdits.length).toBe(1);
       const answer = contentEdits[0]!.content ?? contentEdits[0]!.embed?.description ?? "";
-      expect(answer).toContain("only the owner (ADMIN) can ship /work as a PR");
+      expect(answer).toContain("PR: not opened — test stub");
       // DISCORD-16 may use one prose embed; the closing role note stays whole.
       expect(answer.length).toBeLessThanOrEqual(4096);
       expect(answer.endsWith(ROLE_TAIL)).toBe(true);

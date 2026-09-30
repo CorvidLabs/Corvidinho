@@ -48,10 +48,11 @@ Acceptance Criteria
 
 WATCH `createSpawnAgentClient` SHALL spawn via `buildCorvidinhoArgv` so a
 `.ts` corvidinho bin is always invoked with `bun` (never posix_spawn alone).
-Spawns SHALL NOT pass `--no-verify` — prove-before-done (AGENT-4 / FLEDGE-2)
-is the default for ingress runs; an empty real diff with no tool-reported
-files still skips verify inside the agent loop (REQ-agent-085). Fixture tests
-SHALL cover argv shape.
+Spawns SHALL NOT pass `--no-verify` (the flag is removed and refused,
+REQ-cli-085) — prove-before-done (AGENT-4 / FLEDGE-2 / AGENT-14) always
+applies to ingress runs; a run whose real diff is empty and that claimed no
+change ends with "no changes, nothing to verify" inside the agent loop
+(REQ-agent-003 / REQ-agent-085). Fixture tests SHALL cover argv shape.
 
 Acceptance Criteria
 - `.ts` → bun-prefixed argv; binary path unchanged when not `.ts`.
@@ -133,7 +134,7 @@ Acceptance Criteria
 ### REQ-watch-073
 
 The WATCH spawn agent client SHALL run
-`task run --no-verify --task <prompt> --output ndjson`, read stdout line by
+`task run --task <prompt> --output ndjson`, read stdout line by
 line, forward live state / current tool / token totals to an optional
 `onStatus` callback (AGENT-8), and take the summary from the stream's `result`
 frame, falling back to `summarizeTaskRunOutput` when no result frame parses.
@@ -142,7 +143,7 @@ No new GitHub-visible surface is added.
 Acceptance Criteria
 - Fake-bin fixture printing ndjson drives the WATCH `onStatus` and returns the result-frame summary.
 - Missing result frame falls back to `summarizeTaskRunOutput`.
-- Spawn argv ends with `--output ndjson` (no `--json`).
+- Spawn argv ends with `--output ndjson` (no `--json`) and has no `--no-verify`.
 
 ### REQ-watch-009
 
@@ -178,18 +179,21 @@ Acceptance Criteria
 ### REQ-watch-085
 
 WATCH `createSpawnAgentClient` SHALL always hold ingress runs to the
-prove-before-done gate (AGENT-4 / FLEDGE-2 / issue #85 captured slice): spawn
-argv MUST NOT include `--no-verify`. Same skip as Discord: an empty real diff
-with no tool-reported files skips verify; a run that changed the git working
-tree is verified before done (REQ-agent-085).
-Draft AGENT-14/15 out of scope. Package **0.0.13**. Fixture tests without live
-tokens.
+prove-before-done gate (AGENT-4 / FLEDGE-2 / AGENT-14): spawn argv MUST NOT
+include `--no-verify` (the flag is removed and refused, REQ-cli-085), and no
+project `fledge.toml` key turns the gate off (REQ-agent-003). WATCH runs
+reach the same gate as chat, schedules and `/work`. Same as Discord: the real
+git diff decides what changed (AGENT-15), so a run that changed the git
+working tree, or claimed a change git does not show, is verified before done
+(REQ-agent-085), and a run whose real diff is empty and that claimed nothing
+ends with "no changes, nothing to verify" (REQ-agent-003). Package
+**0.0.13**. Fixture tests without live tokens.
 
 Acceptance Criteria
 - WATCH spawn argv never includes `--no-verify`.
 - Package `0.0.13`; docs/WATCH.md updated.
 - Fixture tests + SpecSync + fledge verify green.
-- A run that changed the git working tree without a tool reporting it is verified before done; a run with an empty real diff and no tool-reported files still skips verify (REQ-agent-085).
+- A run that changed the git working tree without a tool reporting it is verified before done; a run with an empty real diff and no tool claim ends with the "no changes, nothing to verify" note (REQ-agent-003 / REQ-agent-085).
 
 ### REQ-watch-231
 
@@ -323,7 +327,8 @@ WATCH SHALL recognise the owner and each declared person (IDENTITY-14,
 REQ-discord-036) who triggers an event, by stable ids only (IDENTITY-7): the
 commenter's GitHub numeric id (`DetectedEvent.senderId`, from the API's
 `user.id` on search items and comments; the fixture search client reads
-`user_id`) and login, through `resolvePerson`. `startWatchPoller` SHALL load
+`user_id`) through `resolvePerson` — never the login (IDENTITY-7.a,
+REQ-watch-367). `startWatchPoller` SHALL load
 the owner (IDENTITY-1) from the allowlist file it loaded plus env, and pass
 the declared people, re-read from that file for every routed event, to
 `routeEvent` (`RouterDeps.people`), so edits apply without a restart. For a
@@ -333,16 +338,19 @@ resolved commenter the run prompt SHALL open with a separate paragraph headed
 still gets no ADMIN tools), before the `[WATCH …]` header; Planning ignores
 that paragraph like the Discord identity block. Once anyone is declared, an
 unresolved commenter SHALL get the block with `declared_person: none`; with
-nobody declared (only the owner) and an unresolved commenter, or without
-`people`, the prompt SHALL be exactly as before, apart from the SAFE-12 fence
-around the title and body (REQ-watch-071). Allowlist gates, sessions,
+nobody declared (only the owner), an unresolved commenter whose login is the
+owner's `[owner] github_login` SHALL get it too (REQ-watch-367), and for any
+other unresolved commenter, or without `people`, the prompt SHALL be exactly
+as before, apart from the SAFE-12 fence around the title and body
+(REQ-watch-071). Allowlist gates, sessions,
 acks and the spawn env (no Discord actor, non-ADMIN) are unchanged.
 
 Acceptance Criteria
 - A declared commenter's start prompt begins with the identity paragraph (`github_login`, `declared_person`, `display_name`, `nicknames`), then a blank line and `[WATCH issue_comment] …`; `planningSelectionText` drops it.
-- A renamed login with the declared numeric id resolves; the declared login with a different numeric id does not (`declared_person: none`).
-- The owner is recognised by the `[owner]` / env GitHub login with `role: owner`; a commenter whose login equals a declared display name is not that person.
-- With nobody declared, or without `people`, an unresolved commenter's prompt starts with `[WATCH`.
+- A renamed login with the declared numeric id resolves; the declared login with a different numeric id, or with none, does not (`declared_person: none`).
+- The owner is recognised by `[owner] github_id` with `role: owner`, never by the `[owner]` / env GitHub login; a commenter whose login equals a declared display name is not that person.
+- With nobody declared, or without `people`, an unresolved commenter's prompt starts with `[WATCH`, unless (nobody declared) the commenter's login is the owner's, which gets `declared_person: none`.
+- With only the owner configured, live events from the owner's login with no id or another id get `declared_person: none` and no `role: owner`, the owner's id gets `role: owner`, and another undeclared login gets no block (`tests/watch.github-numeric-id.test.ts`).
 - The fixture search client carries `user_id` to `senderId` on comment events.
 - `startWatchPoller` with an allowlist file recognises a declared commenter, and a person added to the file after start is recognised on the next event.
 - Regression tests in `tests/identity.recognise.test.ts` fail on the base sources and pass after.
@@ -358,7 +366,8 @@ text clipped before fencing (and again by any overflow the fence adds) so the
 whole prompt stays within `WATCH_PROMPT_MAX_CHARS` (8000) and the end marker
 with its random id is always last. Before any ack or run the poller SHALL call
 `watchInjectionVerdict(event, people)` for every routed event: null for the
-owner (recognised by GitHub id / login in the owner's people list) and for
+owner (recognised by the owner's GitHub numeric id in the people list only,
+never the login, REQ-watch-367) and for
 text that does not trip `detectInjection`; on a hit the event SHALL count
 `refused`, run nothing and get no ack, one comment
 (`buildInjectionRefusalBody`: what WATCH won't do and why in plain words,
@@ -382,7 +391,7 @@ post backs off like the summary). No env var, config key, table or column.
 
 Acceptance Criteria
 - `routeEvent` puts the title and body inside the fence after the header; a 20 000-char body that guesses the end marker, and a body of lines that get quoted, both leave the real end marker last and the prompt within 8000 chars.
-- `watchInjectionVerdict` flags a non-owner's injected body or title and returns null for the owner's and for an ordinary body.
+- `watchInjectionVerdict` flags a non-owner's injected body or title — including one from the owner's login with no or another numeric id — and returns null for the owner's (by numeric id) and for an ordinary body.
 - Through `startWatchPoller` with a memory DB and the echo ack client: an injected comment runs nothing, gets one comment @mentioning the owner's GitHub login and one `injection-suspected` row with actor `github:<login>`; the next ordinary event runs with its body fenced.
 - `buildSummaryBody` adds the owner line only when the run reports `injection`.
 - Through `startWatchPoller`: an assignment event whose run reports `injection` gets one comment @mentioning the owner's login with the SAFE-13 line, and a second poll does not repeat it.
@@ -405,9 +414,10 @@ Before the spawn, when the poller has the shared DB, it SHALL search memory
 for the comment (`enrichWatchPromptWithMemories`, title + body as the query;
 `recallRelevantThenRecent`: rows relevant to it first, ranked by relevance
 then recency, then the newest, at most 20 per block) and prepend: for a
-commenter whose GitHub numeric id / login resolves to a declared person in
+commenter whose GitHub numeric id resolves to a declared person in
 the owner's people list re-read for the event (`memorySubjectForGithub`,
-stable ids only, IDENTITY-7) a `[Corvidinho memory for this GitHub user …]`
+stable ids only, IDENTITY-7; the numeric id only, never the login,
+IDENTITY-7.a, REQ-watch-367) a `[Corvidinho memory for this GitHub user …]`
 block with that person's own profile (the same scopes as on Discord; the
 configured owner not declared under `[people]` reads their Discord-id scope;
 an empty profile gets a one-line nudge), never private notes and never anyone
@@ -423,6 +433,7 @@ Acceptance Criteria
 - Through `startWatchPoller` a declared commenter's prompt holds their profile rows relevant to the comment and the repo's project rows, never another person's; an undeclared commenter's holds only the project rows; `runChat` receives `actingGithubLogin`, `actingGithubId` and `repo`.
 - `enrichWatchPromptWithMemories` leaves the prompt unchanged with no store, or for an undeclared commenter when the repo has no project rows.
 - `tests/memory.recall-github.test.ts` and `tests/memory.rank.test.ts` cover each and fail on the stacked base sources.
+- A commenter whose login is a declared person's or the owner's but whose numeric id is missing or different gets only the project block (`tests/watch.github-numeric-id.test.ts`).
 
 ### REQ-watch-472
 
@@ -469,4 +480,34 @@ Acceptance Criteria
 - With a 1024-token window a long thread's prompt stays under the budget with the summary, the opening request and the latest request word for word.
 - An opening event prompt of over 7000 chars replays whole (word for word, its fence header marked `(quoted)`) in the follow-up's block.
 - The stored turns hold `[redacted:github-token]`, never the token; participants are the lowercased senders; forgetting a login that only commented deletes the thread.
+
+### REQ-watch-367
+
+WATCH recognises GitHub users by numeric user id only (IDENTITY-7.a, #36,
+REQ-discord-367). Every WATCH path that recognises the sender — the
+`[Corvidinho acting GitHub user …]` identity block
+(`formatWatchIdentityBlock`, REQ-watch-036), the memory inject
+(`enrichWatchPromptWithMemories` → `memorySubjectForGithub`, REQ-watch-067),
+the memory plugins in the run (REQ-plugins-067) and the SAFE-13 owner
+exemption (`watchInjectionVerdict`, REQ-watch-071) — SHALL match
+`DetectedEvent.senderId` (the API's numeric `user.id`) against the owner's
+people list and SHALL NOT match `sender` (the login). An event with no
+`senderId`, or one nobody declared, SHALL resolve undeclared (community): the
+block says `declared_person: none` once anyone is declared, only the repo's
+project memory is injected, and the SAFE-13 detector runs on it — never the
+owner's exemption, block or memory — even when its login is the owner's
+`[owner] github_login` or a declared person's login. `WATCH_IDENTITY_HEADER`
+SHALL say the match is by GitHub numeric user id only. The live Octokit search
+client (`createOctokitSearchClient`) SHALL map `user.id` to `userId` and so to
+`senderId` on issue / PR items and comments (a payload without a numeric id
+carries none), as the fixture client maps `user_id`. The login is still shown
+(`github_login`), still gates the user allowlist (ALLOW-1/2), and is still the
+@mention target and audit actor (`github:<login>`). No env var, config key,
+table or column beyond REQ-discord-367.
+
+Acceptance Criteria
+- Through the live Octokit client over a stubbed GitHub transport: issue and comment events carry the API's numeric `user.id` as `senderId`; a comment payload without one has no `senderId`.
+- On those live events: a renamed login with a declared id is that person; the owner's login with no id or another id gets `declared_person: none`, no `role: owner`, no owner or person memory, and is flagged by `watchInjectionVerdict`; the owner's own id is the owner and exempt.
+- Through `startWatchPoller` with the live client: an injection comment from the owner's login with another id is refused before any run (one comment @mentioning the owner); an ordinary one runs as undeclared without the owner's memory; the owner's id runs with `role: owner` and the owner's memory.
+- `tests/watch.github-numeric-id.test.ts` fails on the base sources and passes after.
 

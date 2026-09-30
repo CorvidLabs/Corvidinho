@@ -11,6 +11,10 @@
  * - The project files `task run`'s verify gate reads in the current dir
  *   (`fledge.toml`, its verify lane with spec-check, `.specsync/`, `specs/`),
  *   shared with the report-only `corvidinho init`.
+ * - Declared people and the owner with a GitHub login but no GitHub numeric
+ *   id (IDENTITY-7.a): not recognised on GitHub until an id is linked.
+ * - A removed verify switch (`[corvidinho] verify_before_complete`) still set
+ *   in `fledge.toml`: ignored, so `[warn]` (AGENT-14).
  * Secret and list values are never printed (SAFE-6).
  */
 
@@ -25,6 +29,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { Database } from "bun:sqlite";
+import { removedVerifyKeys } from "./agent/config.ts";
 import { loadLlmEnv } from "./agent/execute.ts";
 import { findProjectRoot } from "./agent/project-instructions.ts";
 import { perTierModels } from "./agent/tier.ts";
@@ -39,6 +44,11 @@ import {
 import type { AllowlistConfig } from "./allowlist/types.ts";
 import { AnnounceStore } from "./discord/announce-store.ts";
 import { mergeChannelIds } from "./discord/config.ts";
+import {
+  OWNER_PERSON_ID,
+  peopleWithoutGithubId,
+  type PeopleDirectory,
+} from "./identity/people.ts";
 import {
   BACKUP_DIR_ENV,
   BACKUP_HOUR,
@@ -59,6 +69,30 @@ export type DoctorCheck = {
   /** Printed label override (informational checks never fail doctor). */
   mark?: string;
 };
+
+/**
+ * IDENTITY-7.a — `[warn] people-github` naming (by person id only, never an
+ * account id or login) the owner and declared people who have a GitHub login
+ * but no GitHub numeric id: on GitHub people match only by that id, so they
+ * read as undeclared (community) there until one is linked. Null when nobody
+ * is affected. Never fails doctor.
+ */
+export function peopleGithubDoctorCheck(dir: PeopleDirectory): DoctorCheck | null {
+  const missing = peopleWithoutGithubId(dir);
+  if (missing.length === 0) return null;
+  const names = missing.map((id) =>
+    id === OWNER_PERSON_ID ? "the owner" : id === dir.ownerPersonId ? `${id} (the owner)` : id,
+  );
+  return {
+    name: "people-github",
+    ok: true,
+    mark: "warn",
+    detail:
+      `${names.join(", ")}: a GitHub login but no GitHub numeric id — on GitHub people match only by that id, ` +
+      "so they read as undeclared (community) there until one is linked: set [owner] github_id / github_ids in " +
+      "the allowlist file, or /admin people link person:<id> github:<login> (IDENTITY-7.a)",
+  };
+}
 
 /** Where usable allowlist entries came from. */
 export type AllowlistSource = "file" | "env";
@@ -614,6 +648,22 @@ function projectDirCheck(
     );
   }
   return { name, ok: true, detail: `found in ${dir}` };
+}
+
+/**
+ * AGENT-14 (REQ-cli-085): `[warn] verify-gate` when the project's
+ * `fledge.toml` still sets a removed verify switch; the key is ignored and
+ * verification still runs. Null when none is set. Never fails doctor.
+ */
+export function removedVerifyKeyDoctorCheck(cwd: string = process.cwd()): DoctorCheck | null {
+  const keys = removedVerifyKeys(resolve(cwd));
+  if (keys.length === 0) return null;
+  return {
+    name: "verify-gate",
+    ok: true,
+    mark: "warn",
+    detail: `fledge.toml [corvidinho] ${keys.join(", ")} is ignored — verification can't be turned off (AGENT-14); remove the key`,
+  };
 }
 
 /**

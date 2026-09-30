@@ -499,6 +499,19 @@ describe("project files: doctor and a report-only init name what is missing (CLI
     expect(r.code).toBe(0);
   }, 30_000);
 
+  test("a fledge.toml that still sets verify_before_complete gets [warn] verify-gate: ignored, never fails (AGENT-14)", async () => {
+    const dir = readyProject(`${VERIFY_WITH_SPEC_CHECK}\n[corvidinho]\nverify_before_complete = false\n`);
+    const r = await runDoctor(readyEnv(allowEnv), dir);
+    expect(r.out).toContain(
+      "[warn] verify-gate: fledge.toml [corvidinho] verify_before_complete is ignored — verification can't be turned off (AGENT-14); remove the key",
+    );
+    expect(r.out).toContain("All checks passed.");
+    expect(r.code).toBe(0);
+    // Without the key there is no such line.
+    const clean = await runDoctor(readyEnv(allowEnv), readyProject());
+    expect(clean.out).not.toContain("verify-gate");
+  }, 30_000);
+
   test("doctor in this checkout: its own fledge.toml, verify lane, .specsync/ and specs/ pass", async () => {
     const r = await runDoctor(readyEnv(allowEnv));
     for (const line of okLines(REPO_ROOT)) expect(r.out).toContain(line);
@@ -667,5 +680,45 @@ describe("project files: doctor and a report-only init name what is missing (CLI
     expect(b.out).toContain("`fledge run --init` creates one");
     expect(b.out).toContain("`specsync init` creates it");
     expect(b.out).toContain(`[missing] specs: not found in ${join(bare, "pkg")} — spec-check has no specs to hold the code to; ${bare} (the project root) has it`);
+  }, 30_000);
+});
+
+describe("doctor warns about GitHub logins with no numeric id (IDENTITY-7.a)", () => {
+  const OWNER_DC = "100000000000000001";
+  const ADA_DC = "300000000000000003";
+  const OWNER_LOGIN = "doctor-owner-login";
+  const ADA_LOGIN = "doctor-ada-login";
+  const TOFU_ID = "424242";
+
+  test("the owner and a declared person with a GitHub login but no github_id get one [warn] line naming person ids only; exit code unchanged", async () => {
+    const file = writeFile(
+      "people-no-github-id.toml",
+      `[discord]\nchannels = ["${CHANNEL}"]\n\n[github]\nrepos = ["${REPO}"]\n\n` +
+        `[owner]\ndiscord_id = "${OWNER_DC}"\ngithub_login = "${OWNER_LOGIN}"\n\n` +
+        `[people.ada]\ndiscord_ids = ["${ADA_DC}"]\ngithub_logins = ["${ADA_LOGIN}"]\n\n` +
+        `[people.tofu]\ngithub_logins = ["tofu-login"]\ngithub_ids = ["${TOFU_ID}"]\n`,
+    );
+    const r = await runDoctor(readyEnv({ CORVIDINHO_ALLOWLIST_FILE: file }));
+    expect(r.out).toContain(
+      "[warn] people-github: ada, the owner: a GitHub login but no GitHub numeric id — on GitHub people match only by that id, so they read as undeclared (community) there until one is linked",
+    );
+    expect(r.out).toContain("/admin people link person:<id> github:<login> (IDENTITY-7.a)");
+    expect(r.out).not.toContain("tofu");
+    for (const v of [OWNER_DC, ADA_DC, OWNER_LOGIN, ADA_LOGIN, TOFU_ID]) expect(r.out).not.toContain(v);
+    expectNoValues(r.out);
+    expect(r.out).toContain("All checks passed.");
+    expect(r.code).toBe(0);
+  }, 30_000);
+
+  test("[owner] github_id and github_ids on everyone with a login: no people-github line", async () => {
+    const file = writeFile(
+      "people-with-github-id.toml",
+      `[discord]\nchannels = ["${CHANNEL}"]\n\n[github]\nrepos = ["${REPO}"]\n\n` +
+        `[owner]\ndiscord_id = "${OWNER_DC}"\ngithub_login = "${OWNER_LOGIN}"\ngithub_id = "8268288"\n\n` +
+        `[people.ada]\ndiscord_ids = ["${ADA_DC}"]\ngithub_logins = ["${ADA_LOGIN}"]\ngithub_ids = ["5151"]\n`,
+    );
+    const r = await runDoctor(readyEnv({ CORVIDINHO_ALLOWLIST_FILE: file }));
+    expect(r.out).not.toContain("people-github");
+    expect(r.code).toBe(0);
   }, 30_000);
 });

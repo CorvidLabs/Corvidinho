@@ -18,6 +18,7 @@ import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
 import type { SlashInteraction, SlashReplyPayload } from "../src/discord/slash-types.ts";
 import { ASK_CANCELLED_ACK } from "../src/discord/thin-ack.ts";
+import { teamPeopleFile } from "./fixtures/team-people.ts";
 
 const OWNER_ID = "111122223333444455";
 const REQUESTER = "222233334444555566";
@@ -52,7 +53,7 @@ function askingAgent(first: { ask: HumanAsk; summary: string }) {
   return { agent, calls };
 }
 
-async function bridgeWith(agent: AgentClient, opts: { editMessage?: boolean } = {}) {
+async function bridgeWith(agent: AgentClient, opts: { editMessage?: boolean; community?: boolean } = {}) {
   const box: { handlers: GatewayHandlers | null } = { handlers: null };
   // With editMessage (default): the slash answer is the thinking message
   // edited in place (DISCORD-ASK-7), as on the live gateway. Without it the
@@ -65,7 +66,11 @@ async function bridgeWith(agent: AgentClient, opts: { editMessage?: boolean } = 
       DISCORD_BOT_TOKEN: "fake",
       DISCORD_CHANNEL_IDS: "chan-1",
       CORVIDINHO_DISCORD_DRY_RUN: "1",
-      CORVIDINHO_ALLOWLIST_FILE: join(mkdtempSync(join(tmpdir(), "corvidinho-slash-ask-")), "none.toml"),
+      // IDENTITY-11.a: the requester is declared team (community can't start
+      // /work); `community` keeps them undeclared (a /session start test).
+      CORVIDINHO_ALLOWLIST_FILE: opts.community
+        ? join(mkdtempSync(join(tmpdir(), "corvidinho-slash-ask-")), "none.toml")
+        : teamPeopleFile(REQUESTER),
       CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID,
     },
     projectRoot: mkdtempSync(join(tmpdir(), "corvidinho-slash-ask-proj-")),
@@ -208,8 +213,8 @@ describe("/work and /session start keep a run's ask as the pending ask (AUTONOMY
     expect(calls[1]!.prompt).toContain("Prior clarifying question");
     expect(calls[1]!.prompt).toContain("Postgres or SQLite?");
     expect(calls[1]!.prompt).toMatch(
-      // SAFE-12: a non-owner's answer rides an untrusted-data fence.
-      /Human answer:\n\[untrusted message from the acting user \(role: community\)[^\n]*\n<<<UNTRUSTED_DATA id=[0-9a-f]+ source=chat-message>>>\nPostgres, with a pooled client\n<<<END_UNTRUSTED_DATA/,
+      // SAFE-12: a non-owner's (here a team member's) answer rides an untrusted-data fence.
+      /Human answer:\n\[untrusted message from the acting user \(role: team\)[^\n]*\n<<<UNTRUSTED_DATA id=[0-9a-f]+ source=chat-message>>>\nPostgres, with a pooled client\n<<<END_UNTRUSTED_DATA/,
     );
     expect(bridge.result.store.getByBotMessage(answerId)!.pendingAsk ?? null).toBeNull();
     expect(
@@ -236,7 +241,7 @@ describe("/work and /session start keep a run's ask as the pending ask (AUTONOMY
 
   test("/session start with a clarify ask: pending ask stored; thin reply restates, substantive reply resumes with the question", async () => {
     const { agent, calls } = askingAgent({ ask: CLARIFY, summary: "Needs your input: Postgres or SQLite?" });
-    const bridge = await bridgeWith(agent);
+    const bridge = await bridgeWith(agent, { community: true });
     const answerId = await runSlash(bridge, "session", { topic: "storage" }, "Postgres or SQLite?");
     expect(bridge.result.store.getByBotMessage(answerId)!.pendingAsk).toMatchObject(CLARIFY);
     await bridge.handlers.onMessage(replyTo(answerId, "k"));
@@ -260,7 +265,7 @@ describe("/work and /session start keep a run's ask as the pending ask (AUTONOMY
       options: [{ id: "pg", label: "Postgres" }],
     };
     const { agent, calls } = askingAgent({ ask: oneOption, summary: "Needs your input: Postgres or SQLite?" });
-    const bridge = await bridgeWith(agent);
+    const bridge = await bridgeWith(agent, { community: true });
     const answerId = await runSlash(bridge, "session", { topic: "storage" }, "Postgres or SQLite?");
     const pending = bridge.result.store.getByBotMessage(answerId)!.pendingAsk;
     expect(pending).toMatchObject(CLARIFY);
@@ -330,7 +335,7 @@ describe("/work and /session start keep a run's ask as the pending ask (AUTONOMY
 
   test("/session start stopped at the spend cap keeps no pending ask", async () => {
     const { agent } = askingAgent({ ask: CAP_ASK, summary: SPEND_CAP_SUMMARY });
-    const bridge = await bridgeWith(agent);
+    const bridge = await bridgeWith(agent, { community: true });
     const answerId = await runSlash(bridge, "session", { topic: "storage" }, "Daily spend cap reached");
     const session = bridge.result.store.getByBotMessage(answerId);
     expect(session).toBeDefined();

@@ -271,7 +271,10 @@ Acceptance Criteria
 
 `files-write`, `files-edit`, and `files-delete` SHALL hard-refuse protected
 project infra with no override (SAFE-2): `.env` / `.env.*`, `.git` components,
-basename `fledge.toml`, basename `bunfig.toml` / `.bunfig.toml` (Bun runtime
+basename `fledge.toml`, any `.fledge` path component (Fledge lane imports
+and config such as `.fledge/lanes/*.toml`, which the verify gate runs, so a
+run cannot weaken the checks it is verified by: SAFE-2.a; reads stay
+allowed), basename `bunfig.toml` / `.bunfig.toml` (Bun runtime
 config whose `preload` would run code in spawned agents), paths under `specs/`
 or ending in `.spec.md`, SpecSync state under `.specsync/` (config, registry,
 version, archive, and `.specsync/changes` / `.specsync/changes/<id>`
@@ -293,6 +296,8 @@ Acceptance Criteria
 - In a project whose root directory name contains `keystore`, files-write (relative or absolute path) and files-edit of ordinary files succeed, and `keystore/…` inside it is still refused.
 - git-commit refuses to stage the deletion of `.specsync/config.toml` (exit 2, SAFE-2) and stages the deletion of a `.specsync/changes/<id>/` file.
 - files-write, files-edit and files-delete of a file under `specs/` that does not end in `.spec.md` (`specs/agent/requirements.md`, `specs/agent/context.md`) and files-write of a new `specs/notes.md` are refused with SAFE-2 (exit 2); the files are unchanged and the new file is not created (the test fails with the `specs` component rule removed).
+- files-write, files-edit and files-delete of `.fledge/lanes/verify.toml` and `.fledge/config.toml` (also spelled `./.fledge/…`, `src/../.fledge/…`, `.FLEDGE/…` or as an absolute path, through a symlink to the lane file or a symlink to `.fledge/lanes`), files-write of a new `.fledge/lanes/extra.toml`, of a dangling symlink to a missing lane file and of `.fledge` itself in a project without one are refused with the SAFE-2 refusal (exit 2, text names `.fledge`); the files are unchanged and nothing is created; files-read and files-list of `.fledge/` still work (SAFE-2.a; the test fails with the `.fledge` component rule removed).
+- git-commit refuses to stage the deletion of a tracked `.fledge/lanes/verify.toml` or `.fledge/config.toml` (exit 2, SAFE-2); the path stays in `ls-files` and nothing is staged (SAFE-2.a; fails with the `.fledge` rule removed).
 
 ### REQ-plugins-084
 
@@ -535,6 +540,12 @@ SHALL run `CDPATH=; readonly CDPATH` before the command and SHALL NOT inherit
 the command (including one built dynamically) cannot redirect a relative `cd`
 outside the root; `CDPATH` is therefore NOT refused lexically.
 
+The clamp SHALL run after the SAFE-21 foot-gun check (REQ-plugins-494), so a
+command that is both a foot-gun and a clamp refusal is refused with the
+SAFE-21 reason; the clamp on its own still refuses it. It SHALL also check
+`env -C` / `sudo -D` directories, symlinks and `ln` targets as REQ-plugins-495
+says.
+
 The clamp SHALL also check, before spawn, each script the command runs in a
 shell, looking for it from the root and from every in-root `cd` target before
 it: a file sourced with `.` / `source` or named by `BASH_ENV=` or a shell's
@@ -562,12 +573,13 @@ Acceptance Criteria
 - Integration: `cd /tmp && …` and `cd ..` from root refuse with exit 2 and SAFE-3 message; `cd sub && …` inside project succeeds when allowlisted.
 - Redirection-hidden targets refuse: `>/dev/null cd /etc`, `cd >/dev/null /etc`, `cd</dev/null /etc`, `cd 2>&1 /etc`, `cd -P >/dev/null /etc`; an in-root `cd sub >/dev/null` and `cd 2>&1 sub` stay allowed.
 - Quote-aware forms refuse: `X="a b" cd /etc`, `X=';' cd /etc`, `cd "x /../.."`, `cd 'sub dir/../..'`; a backslash-newline `cd` (`c\`+newline+`d /etc`, `cd sub/\`+newline+`../..`) refuses; `cd "sub dir"` and `X=';' cd sub` stay allowed.
-- Quoting is read as the shell reads it: `mkdir -p "a b" && cd "a b/../.."`, `cd "zz q/../.."`, `cd a\ b/../..`, `cd 'a b'/../..` and `cd sub/..\`+newline+`/..` refuse; so does a `cd /etc` after an escaped backslash and a newline (`echo a\\`+newline), after a `#` comment holding a quote, after a here-doc body holding a lone quote (`<<EOF`, `<<'EOF'`, `<<-EOF`), or after a `$(…)` whose comment or here-doc holds a `)`; an escaping `cd` in a `$(…)` or backtick of an unquoted here-doc body refuses, also when the delimiter holds a backtick (`cat <<`+backtick+`x`+newline+`#' $(cd ..)`); `(( x = 1 << 2 ))`+newline+`cd /etc` refuses, also inside `eval` when quote removal forms the `<<`; `cd "sub`, `cd 'sub` and `cd sub\` refuse; `$(`-nesting too deep to check refuses instead of throwing; `cd sub # comment`, `cd sub \`+newline+`&& ls`, and an in-root `cd sub` after a here-doc whose body holds a stray quote or apostrophe stay allowed; `eval "cd /; ls"` refuses `/`. End to end each refused form returns exit 2 with SAFE-3 and nothing is spawned.
+- Quoting is read as the shell reads it: `mkdir -p "a b" && cd "a b/../.."`, `cd "zz q/../.."`, `cd a\ b/../..`, `cd 'a b'/../..` and `cd sub/..\`+newline+`/..` refuse; so does a `cd /etc` after an escaped backslash and a newline (`echo a\\`+newline), after a `#` comment holding a quote, after a here-doc body holding a lone quote (`<<EOF`, `<<'EOF'`, `<<-EOF`), or after a `$(…)` whose comment or here-doc holds a `)`; an escaping `cd` in a `$(…)` or backtick of an unquoted here-doc body refuses, also when the delimiter holds a backtick (`cat <<`+backtick+`x`+newline+`#' $(cd ..)`); `(( x = 1 << 2 ))`+newline+`cd /etc` refuses, also inside `eval` when quote removal forms the `<<`; `cd "sub`, `cd 'sub` and `cd sub\` refuse; `$(`-nesting too deep to check refuses instead of throwing; `cd sub # comment`, `cd sub \`+newline+`&& ls`, and an in-root `cd sub` after a here-doc whose body holds a stray quote or apostrophe stay allowed; `eval "cd /; ls"` refuses `/`. End to end each refused form returns exit 2 with SAFE-3 (or SAFE-21 when the form is also a SAFE-21 foot-gun, REQ-plugins-494) and nothing is spawned.
 - bash `$'…'` is read as bash reads it: `echo $'\''; cd /etc #'` refuses, and so do `cd $'\x2e\x2e'` and `$'\x63d' /etc`. A shell's `-c` string is checked like an `eval` argument: `sh -c 'cd /etc'`, `/bin/sh -ec 'cd /etc'`, `bash --norc -o pipefail -c 'cd ..'`, `env X=1 sh -c 'cd /etc'`, `timeout 5 sh -c 'cd /etc'`, `xargs sh -c 'cd /etc'`, `find . -exec sh -c 'cd /etc' \;` and `sh -c "cd $X"` refuse; `sh -c 'cd sub && ls'`, `bash -lc 'echo hi'` and `bash scripts/build.sh` (an in-root script) stay allowed.
 - Expansion forms refuse: `$(echo cd) /etc`, `` `echo cd` /etc ``, `x=cd; $x /etc`, `cd${IFS}/etc`, `eval $(printf 'cd /etc')`, `echo` `` `cd /etc` `` and `echo $(cd /etc && cat x)`; `echo $(cd sub && ls)` and `eval 'cd sub'` stay allowed.
 - Bash `X+=1 cd /etc` refuses; a `DIRSTACK[...]=` write refuses.
 - With `OLDPWD` set outside the root in the bot's environment, `cd -` is refused before spawn; with `CDPATH` set outside the root, `cd sub && pwd` prints the in-root `sub`; a command that sets `CDPATH` to an outside dir and then runs a relative `cd sub` does not print the outside path.
-- Scripts a command runs in a shell are checked, with `bad.sh` holding `cd /etc`: `. ./bad.sh`, `source bad.sh`, `sh bad.sh`, `bash -e ./bad.sh arg`, `./bad.sh`, a `#!`-less text file or `#!/usr/bin/env -S bash -e` script run by path, `env X=1 ./bad.sh`, `timeout 5 ./bad.sh`, `exec ./bad.sh`, `find . -exec ./bad.sh \;`, `BASH_ENV=./bad.sh bash -c true`, `bash --rcfile bad.sh -i ok.sh`, `sh < bad.sh`, `sh -s arg < bad.sh`, a nested `. ./nested.sh` and `cd sub && . ./inner.sh` (`cd ../..`) refuse, naming the script (`/etc (in ./bad.sh)`); so do `sh <<'EOF'`+newline+`cd /etc`+newline+`EOF`, an unquoted here-doc whose body expands to `cd /etc` (`c\\d /etc`), `bash <<< 'cd /etc'`, shell input that would expand (`sh <<EOF` with a `$`, `bash <<< "$X"`), `cat bad.sh | sh`, `{ sh; } < bad.sh`, `bash < <(cat bad.sh)`, `. <(cat bad.sh)`, `sh missing.sh`, `sh "$S"`, `. ~/x.sh`, `sh *.sh`, a script over 1 MiB, and a script the command writes (`echo … > gen.sh; sh gen.sh`, `cp bad.sh ok.sh && ./ok.sh`, `for i in 1 2; do sh ok.sh; cp bad.sh ok.sh; done`). `trap 'cd /etc' EXIT`, `trap "$X" EXIT`, `alias c=cd`, `sh -c - 'cd /etc'` and `bash -co pipefail 'cd /etc'` refuse. `sh ok.sh`, `./ok.sh && ./okcd.sh` (`cd sub`), `. ./ok.sh`, `bash scripts/build.sh`, `cd sub && sh ../ok.sh`, `chmod +x ok.sh && ./ok.sh`, `sh <<'EOF'`+newline+`cd sub && pwd`+newline+`EOF`, `bash <<< 'echo hi'`, a binary or `#!/usr/bin/env python3` file run by path, a program the command builds first, and `trap 'rm -f tmp.txt' EXIT` stay allowed. End to end each refused form returns exit 2 with SAFE-3 and nothing is spawned; in-root scripts run.
+- Scripts a command runs in a shell are checked, with `bad.sh` holding `cd /etc`: `. ./bad.sh`, `source bad.sh`, `sh bad.sh`, `bash -e ./bad.sh arg`, `./bad.sh`, a `#!`-less text file or `#!/usr/bin/env -S bash -e` script run by path, `env X=1 ./bad.sh`, `timeout 5 ./bad.sh`, `exec ./bad.sh`, `find . -exec ./bad.sh \;`, `BASH_ENV=./bad.sh bash -c true`, `bash --rcfile bad.sh -i ok.sh`, `sh < bad.sh`, `sh -s arg < bad.sh`, a nested `. ./nested.sh` and `cd sub && . ./inner.sh` (`cd ../..`) refuse, naming the script (`/etc (in ./bad.sh)`); so do `sh <<'EOF'`+newline+`cd /etc`+newline+`EOF`, an unquoted here-doc whose body expands to `cd /etc` (`c\\d /etc`), `bash <<< 'cd /etc'`, shell input that would expand (`sh <<EOF` with a `$`, `bash <<< "$X"`), `cat bad.sh | sh`, `{ sh; } < bad.sh`, `bash < <(cat bad.sh)`, `. <(cat bad.sh)`, `sh missing.sh`, `sh "$S"`, `. ~/x.sh`, `sh *.sh`, a script over 1 MiB, and a script the command writes (`echo … > gen.sh; sh gen.sh`, `cp bad.sh ok.sh && ./ok.sh`, `for i in 1 2; do sh ok.sh; cp bad.sh ok.sh; done`). `trap 'cd /etc' EXIT`, `trap "$X" EXIT`, `alias c=cd`, `sh -c - 'cd /etc'` and `bash -co pipefail 'cd /etc'` refuse. `sh ok.sh`, `./ok.sh && ./okcd.sh` (`cd sub`), `. ./ok.sh`, `bash scripts/build.sh`, `cd sub && sh ../ok.sh`, `chmod +x ok.sh && ./ok.sh`, `sh <<'EOF'`+newline+`cd sub && pwd`+newline+`EOF`, `bash <<< 'echo hi'`, a binary or `#!/usr/bin/env python3` file run by path, a program the command builds first, and `trap 'rm -f tmp.txt' EXIT` stay allowed. End to end each refused form returns exit 2 with SAFE-3 (or SAFE-21 when the form is also a SAFE-21 foot-gun, REQ-plugins-494) and nothing is spawned; in-root scripts run.
+- End to end, `cp bad.sh gen.sh; sh gen.sh` refuses with exit 2 and nothing spawned; its `>` and `tee` forms (`echo … > gen.sh; sh gen.sh`) are refused first by SAFE-21 (an edit), still exit 2 with nothing spawned, while `firstDisallowedCd` alone still refuses them.
 
 ### REQ-plugins-088
 
@@ -1043,12 +1055,13 @@ caller's argv verbatim (no shell, no expansion, its own flags kept) and SHALL
 pin the child's cwd to the plugin cwd (project root / task worktree), with no
 cwd option. The child SHALL get the verify lane's scrubbed env (no Discord
 config, GitHub tokens, audit key, acting identity or LLM keys) without
-`CDPATH` / `OLDPWD`, stdin closed, a timeout (exit 124), per-stream output
+`CDPATH` / `OLDPWD` and without the owner's GitHub or git credentials
+(SAFE-21.a, the env of REQ-plugins-495), stdin closed, a timeout (exit 124), per-stream output
 caps, and its process group killed on timeout or the calling run's abort (exit
 130); output SHALL be secret-scrubbed (SAFE-6). A non-zero exit SHALL return
 ok=false with that exit code; empty argv SHALL be a usage error (exit 1) that
-spawns nothing. `shell-exec` is unchanged. No new slash command, env var or
-config key.
+spawns nothing. `shell-exec` gets the same env (REQ-plugins-495). No new slash command,
+env var or config key.
 
 Acceptance Criteria
 - With stub `node`, `python3` and `cargo` on PATH, `node-exec`, `python-exec` and `cargo-exec` are registered with dangerous=true, mutating=true, minTier=2; a second load keeps the same commands.
@@ -1060,6 +1073,7 @@ Acceptance Criteria
 - `buildOpenAiTools` lists the runners at code tier with dangerous tools for ADMIN only; not at tool tier, not without dangerous tools, not for a non-ADMIN session.
 - An aborted calling run returns exit 130 and kills the runner's process tree; a run past the timeout returns exit 124 and kills the tree.
 - Where real `node` / `python3` / `cargo` are installed, `node-exec -e 'console.log(process.cwd())'` and `python-exec -c 'import os; print(os.getcwd())'` print the project root and `cargo-exec --version` succeeds.
+- The child env also has no `GH_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GIT_ASKPASS`, `SSH_AUTH_SOCK`, inherited `GIT_CONFIG_KEY_<n>` / `GIT_CONFIG_VALUE_<n>` / `GIT_CONFIG_PARAMETERS`, and has `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_COUNT=3` with empty `credential.helper` / `http.extraHeader` / `http.https://github.com/.extraHeader`, `GIT_TERMINAL_PROMPT=0`, a key-less `GIT_SSH_COMMAND`, `CARGO_NET_GIT_FETCH_WITH_CLI=true` and a `GH_CONFIG_DIR` with no `hosts.yml` (SAFE-21.a).
 
 ### REQ-plugins-314
 
@@ -1361,12 +1375,13 @@ ranked search (MEMORY-8 / MEMORY-9, #67). When a run has no Discord actor
 and the WATCH spawn set a GitHub commenter (`CORVIDINHO_ACTING_GITHUB_LOGIN`
 / `CORVIDINHO_ACTING_GITHUB_ID`, the thread's `CORVIDINHO_ACTING_GITHUB_REPO`;
 env only, never argv, REQ-watch-067), the acting subject SHALL be the
-commenter's declared person: their GitHub numeric id / login matched in the
+commenter's declared person: their GitHub numeric id matched in the
 owner's people list re-read at the call (`memorySubjectForGithub`, stable
-ids only, IDENTITY-7; a login whose known numeric id differs from the
-declared ones matches nobody), the same `person:<id>` profile and read
-scopes as on Discord; the configured owner not declared under `[people]`
-SHALL use their Discord-id scope. A Discord actor SHALL always win over the
+ids only, IDENTITY-7; the numeric id only, never the login, IDENTITY-7.a,
+REQ-discord-367 — a login alone, or with another numeric id, matches
+nobody), the same `person:<id>` profile and read scopes as on Discord; the
+configured owner not declared under `[people]` (recognised by `[owner]
+github_id`) SHALL use their Discord-id scope. A Discord actor SHALL always win over the
 GitHub keys.
 
 For a declared commenter `memory-store` / `memory-recall` /
@@ -1396,8 +1411,182 @@ does not know (MEMORY-9), and the `memory-store` / `memory-recall`
 descriptions SHALL say how they work on GitHub.
 
 Acceptance Criteria
-- In a GitHub-shaped env a declared commenter (numeric id or login, any case) stores into `person:<id>`, recalls with a plain-words `--query` and reads `memory-profile`; the same rows are read from Discord; the `[owner]` GitHub login recalls the owner's Discord-id memory.
-- On GitHub private notes, `memory-forget-me` and `--person` (any other ref) are refused and another person's rows never show; a login whose numeric id differs saves nothing.
+- In a GitHub-shaped env a declared commenter (by numeric id, under any login) stores into `person:<id>`, recalls with a plain-words `--query` and reads `memory-profile`; the same rows are read from Discord; the `[owner] github_id` recalls the owner's Discord-id memory and the `[owner]` login alone recalls nothing.
+- On GitHub private notes, `memory-forget-me` and `--person` (any other ref) are refused and another person's rows never show; a login whose numeric id differs, or with no id, saves nothing.
 - An undeclared commenter saves nothing (own or `--project`), has no personal recall and reads only the thread repo's project memory with `--project`.
 - A Discord actor wins over stale GitHub keys.
 - `tests/memory.recall-github.test.ts` covers each and fails on the stacked base sources.
+
+### REQ-plugins-494
+
+`shell-exec` SHALL refuse SAFE-21 foot-guns before it spawns anything, and
+SHALL say why. Each refusal SHALL return ok=false, exit 2, `data.refused`
+true with `rule: "SAFE-21"`, its `family` (`download`, `delete`, `secret`,
+`edit`) and the in-root `script` it was found in (null for the typed
+command), and the message
+`shell-exec refused (SAFE-21): <why>[ (in SCRIPT)]; <what to do instead>`.
+The check (`firstFootgun`, `plugins/shell/footguns.ts`) SHALL run before the
+SAFE-3 clamp (REQ-plugins-087) and SHALL read every simple command over the
+same ground as the clamp, through one walker (`forEachSimpleCommand`,
+`plugins/shell/clamp.ts`): the dash and bash readings, `eval` / `trap` /
+shell `-c` strings, command substitutions, the here-docs and here-strings a
+shell reads, and the in-root scripts the command runs in a shell (sourced,
+handed to a shell, or run by path), in the clamp's order, so for a command
+the clamp accepts it reads exactly what the clamp reads. Each command comes
+with the commands piped into it (`|`, `|&`) and the dirs the shell may be in
+(the root and every in-root `cd` / `env -C` target anywhere in the command,
+so a loop or a later `cd` is covered). What the clamp cannot read is left to
+the clamp, which refuses it. The families are
+checked most serious first:
+
+- download: a downloader (`curl`, `wget`, `wget2`, `fetch`, `aria2c`,
+  `http`, `https`, `xh`, `xhs`, `curlie`, also behind exec wrappers) whose
+  output is run as code — piped into a shell (`sh bash dash zsh ksh mksh ash
+  yash posh`), an interpreter (`python`, `python2`, `python3`, `pypy`,
+  `pypy3`, `perl`, `ruby`, `node`, `nodejs`, `php`, `lua`) or `.` / `source`
+  that reads its code from standard input, also through `env`, `timeout`,
+  `sudo` or `doas`, and any shell or interpreter behind `xargs`; a shell fed
+  a download whatever its code is (its `-c` string can hand that input on);
+  a file the same command's downloader names run by path (`curl -O …/i.sh;
+  ./i.sh`); a shell,
+  interpreter, `eval` or `.` whose code is an expanded string, a `<(…)`
+  process substitution or an expanded here-doc / here-string while the
+  command runs a downloader; or a script file the same command's downloader
+  names (`curl -o i.sh … && sh i.sh`, or the last component of a URL it
+  fetches: `wget https://…/install.sh && sh install.sh`). A download used as
+  data (piped into `jq`, or into an interpreter running a literal `-c`
+  program) is not refused.
+- delete: `rm`, `rmdir`, `unlink`, `shred`, `mv` (every operand, a `-t`
+  directory included), `find` with `-delete` or with `-exec` / `-execdir` /
+  `-ok` / `-okdir` running one of those (its start paths), `ln -f` (its
+  destination) and `git worktree remove|move` (its paths), when a target
+  lands outside the worktree as written or through a symlink that exists,
+  or is the worktree's own directory (a `find` start path may be the
+  worktree itself). A target fails closed when it expands (`$`, backtick,
+  brace), starts with `~`, or is a glob with a `..` component, a glob before
+  its last component, a last component that can match `.` or `..`, or (for
+  `shred`, which follows links) any glob. Also refused: `find -L` /
+  `-follow` with `-delete` or a deleting `-exec` (it walks into symlinked
+  dirs, so its deletes can land outside whatever its start paths are);
+  `rsync` with `--delete*` / `--del` / `--remove-source-files` whose
+  operands land outside; those
+  commands behind `xargs` (their targets come from input), `rmdir -p` of an
+  absolute path or one with `..`, `git worktree prune`, and `git clean|rm|
+  mv|worktree|reset|checkout|restore|switch|stash` under a `-C`,
+  `--work-tree` or `--git-dir` outside the worktree or that expands.
+- secret: a word, the path after its first or last `:` / `=` (`HEAD:.env`,
+  `--env-file=.env`) or a redirection target that `isSecretPath` matches
+  (unchanged, ROLES-CHAT-8) or that is `/proc/<pid>/environ` (also
+  `task/<tid>/environ`, `$PPID`); a path that — with `~`, `$HOME` and set env
+  vars expanded, from every dir the shell may be in, as written and through
+  symlinks — is or is inside a host secret place: the `CORVIDINHO_ENV_FILE`
+  and the allowlist file (`resolveAllowlistPath`), the `corvidinho`, `gh` and
+  `git` dirs under `~/.config` and `$XDG_CONFIG_HOME`, `GH_CONFIG_DIR`,
+  `~/.git-credentials`, `~/.gitconfig`, `~/.netrc`, `~/_netrc` and `~/.ssh`;
+  a path that holds one when the command reads trees (`tar`, `zip`, `7z`,
+  `rsync`, `find`, `rg`, `ag`, `ack`, `fd`, `grep -r`, `cp -r|-a`,
+  `scp -r`) or through a glob's literal prefix; a glob that matches, when
+  checked, a path `isSecretPath` matches (`cat .en*` is `cat .env`); a
+  wrapper that starts its command with an env of its own instead of the
+  credential-free one (`env -i` / `-` / `--ignore-environment`, `exec -c`,
+  `sudo`, `doas`, `su`, `runuser`, `pkexec`; SAFE-21.a); `ps` with a BSD
+  `e` option (other processes' environments); a `$VAR` / `${VAR}` of a
+  verify-dropped key or a credential key (REQ-plugins-495); a word naming a
+  credential key (`NAME=…`, `unset NAME`, `env -u NAME`), which would point
+  git or gh back at credentials; `gh auth token|git-credential|login|refresh|
+  setup-git|switch` and `gh auth status -t|--show-token`; `git credential`
+  and `git credential-*`; `git -c` of a `credential`, `include`, `includeIf`,
+  `url.`, `core.sshCommand`, `core.askPass` or `http.*extraHeader` key,
+  `--config-env`, and `git config` of such a key; and the ssh family (`ssh`,
+  `scp`, `sftp`, `ssh-add`, `ssh-agent`, `ssh-copy-id`, `sshfs`, `autossh`,
+  `mosh`, `rsync` to a remote or with `-e`), which uses the owner's ssh keys.
+- edit, in the typed command text only (its `eval` / `-c` strings,
+  substitutions and the here-docs a shell reads included; a project script's
+  own redirections are a stated residual): `sed` / `gsed` with `-i`, an
+  option cluster holding `i` (`-ni`, `-i.bak`) or `--in-place[=SUFFIX]` (or
+  an abbreviation), also behind wrappers and `find -exec`; the same in-place
+  edit by `perl -i` / `ruby -i` (a cluster holding `i`) and `awk` / `gawk`
+  / `mawk -i inplace`; `tee` / `sponge` with a file operand other than
+  `/dev/null`, `/dev/stdout`, `/dev/stderr` (a `>` spelled as a command);
+  and every output
+  redirection (`>`, `>>`, `>|`, `&>`, `&>>`, `>&`, `<>`) whose target is not
+  `/dev/null`, `/dev/stdout`, `/dev/stderr` or an fd dup (`>&N`, `N>&M`,
+  `>&-`), an expanded target included. The reason points to files-write and
+  files-edit.
+
+No env var, config key, flag or slash command is added, and `isSecretPath`
+is unchanged.
+
+Acceptance Criteria
+- End to end each of these refuses with exit 2, `refused` / `rule: "SAFE-21"` / its family, a message that starts `shell-exec refused (SAFE-21): ` and gives a reason and, after `; `, what to do instead, and never runs its leading `touch spawned`: `sed -i`, `sed -ni.bak`, `sed --in-place`, `find … -exec sed -i … {} +`, `echo hi > f.txt`, `>> f.txt`, `>& f.txt`, `cat <<EOF > new.txt`, `echo $(echo hi > f.txt)`, `sh -c 'echo hi > f.txt'` (edit); `curl … | sh`, `curl … | sudo bash`, `wget -qO- … | python3`, `curl … | env sh`, `curl … | timeout 5 bash -s`, `curl … | xargs sh -c …`, `sh -c "$(curl …)"`, `eval "$(curl …)"`, `bash <(curl …)`, `. <(curl …)`, `curl -o i.sh … && sh i.sh`, `wget https://…/install.sh && sh install.sh` (download); `rm -rf OUTSIDE/victim`, `rm -f OUTSIDE/*`, `rm -rf ../sibling`, `rm -rf ~/x`, `rm -rf "$TMPDIR/x"`, `unlink`, `shred -u`, `find OUTSIDE -delete`, `find OUTSIDE -exec rm {} \;`, `find . … | xargs rm`, `mv OUTSIDE/victim .`, `rm -rf .*`, `rm -rf .`, `git worktree remove ../sibling`, `git worktree prune`, `rm -rf link-out/victim` through an in-root symlink to outside, and `for i in 1 2; do rm -rf up2/victim; cd sub; done` with `sub/up2` pointing outside (delete; the victims still exist); `cat .env`, `git show HEAD:.env`, `cat ~/.config/corvidinho/env`, `cat $CORVIDINHO_ENV_FILE`, `cat ~/.netrc`, `cat $HOME/.git-credentials`, `cat ~/.config/gh/hosts.yml`, `ls ~/.ssh`, `cat /proc/self/environ`, `cat /proc/$PPID/environ`, `grep -r token ~`, `gh auth token`, `git credential fill`, `echo $GH_TOKEN`, `GIT_SSH_COMMAND=ssh git push`, `git -c credential.helper=store push`, `ssh -T git@github.com` (secret); `echo hi | tee f.txt`, `tee -a`, `| sponge f.txt`, `perl -pi -e …`, `perl -i.bak`, `ruby -i`, `awk -i inplace` (edit); `curl … | sh -c 'python3'`, `curl … | bash -c 'cat | sh'`, `curl -O …/i.sh; chmod +x i.sh; ./i.sh` (download); `find -L . -delete` and `find . -follow -type f -exec rm {} \;` with an in-root link to outside, `rsync -a --delete sub/ OUTSIDE/` (delete; the victim still exists); `cat .en*` and `cat .e?v` with an in-root `.env`, `env -i git …`, `env - git …`, `env --ignore-environment gh …`, `sudo -u nobody gh …`, `ps eww` (secret).
+- In-root scripts run with `sh` are read too: `sh dl.sh` (`curl … | sh`), `sh del.sh` (`rm -rf OUTSIDE/victim`) and `sh sec.sh` (`cat ~/.netrc`) refuse naming the script, and the script's first line `touch spawned` never runs; `sh edit.sh`, whose own `echo … > file` is the stated residual, runs.
+- Still allowed: `echo shown 2>&1; echo hidden >/dev/null; echo err >&2; ls 2>/dev/null 1>&2`, `>/dev/stdout`, `2>/dev/stderr`, `&>/dev/null`, `exec 3>&-`; `rm -rf build && rm -f *.o && find . -name f.txt -delete`; `cat README.md && grep -r text .`; a download used as data (`curl … | jq .`, `curl … | python3 -c '…sys.stdin…'`, `curl … | python3 -c 'd = {}; print(d)'`, `curl -o x.json … && cat x.json`); `echo x | tee /dev/null`, `echo x | tee`, `perl -pe …` (no `-i`), `find . -name '*.o' -delete`, `cat *.md`, `ls -la`, `ps aux`, `env -u FOO printenv PATH`.
+
+### REQ-plugins-495
+
+The `shell-exec` child and the language runners' children (REQ-plugins-313)
+SHALL start without the owner's GitHub or git credentials (SAFE-21.a), from
+one env builder (`runnerChildEnv` → `withoutGitCredentials`,
+`plugins/runners/commands.ts`): the verify lane's scrub (`buildVerifyEnv`:
+no Discord config, GitHub tokens, audit key, acting identity or LLM keys)
+minus `CDPATH` / `OLDPWD` and minus every credential key
+(`isCredentialEnvKey`: `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`,
+`GITHUB_ENTERPRISE_TOKEN`, any `GH_*` / `GITHUB_*` key naming a token, PAT,
+password or secret, `GH_CONFIG_DIR`, `GIT_ASKPASS`, `SSH_ASKPASS`,
+`SSH_ASKPASS_REQUIRE`, `SSH_AUTH_SOCK`, `GIT_SSH`, `GIT_SSH_COMMAND`,
+`GIT_CONFIG`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`,
+`GIT_CONFIG_NOSYSTEM`, `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT`,
+`GIT_CONFIG_KEY_<n>`, `GIT_CONFIG_VALUE_<n>`, `GIT_TERMINAL_PROMPT`), then
+with `GIT_CONFIG_GLOBAL=/dev/null` and `GIT_CONFIG_NOSYSTEM=1` (no global or
+system git config, where credential helpers and URL rewrites live),
+`GIT_CONFIG_COUNT=3` with empty command-line values for
+`credential.helper`, `http.extraHeader` and
+`http.https://github.com/.extraHeader` (`GIT_CONFIG_KEY_<n>` /
+`GIT_CONFIG_VALUE_<n>`, n = 0..2: an empty value resets a repo's own
+helpers and stored extra headers, such as an `Authorization` header), `GIT_TERMINAL_PROMPT=0`, a `GIT_SSH_COMMAND` that reads no ssh
+config and offers no key or agent (`ssh -F /dev/null -o
+IdentityFile=/dev/null -o IdentitiesOnly=yes -o IdentityAgent=none -o
+BatchMode=yes`), a `GH_CONFIG_DIR` that is an empty dir private to the
+process (gh is logged out), `CARGO_NET_GIT_FETCH_WITH_CLI=true` (cargo
+fetches git dependencies with that git) and `CORVIDINHO_PROJECT_ROOT`.
+Pushes, PRs and merges then happen only through the checked GitHub tools.
+
+`shell-exec` SHALL spawn through `spawnCapped` (`plugins/fledge/spawn.ts`)
+with that env, the calling run's abort signal, the runners' timeout (10
+minutes, exit 124) and per-stream output cap (64 KiB, with a truncation
+note), stdin closed, in its own process group, killed on timeout or abort
+(exit 130); a shell that cannot start SHALL return exit 127, and the output
+SHALL be secret-scrubbed (SAFE-6): vendor-key shapes (`scrubSecrets`) and
+the literal value of every set secret env var (`redactSecretEnvValues`).
+
+The SAFE-3 clamp (REQ-plugins-087) SHALL also:
+- check the directory of `env -C DIR` / `-CDIR` / `--chdir[=]DIR` (in an
+  option cluster such as `-iC`, or abbreviated such as `--ch`) and of
+  `sudo -D` / `-R` / `--chdir` / `--chroot` like a `cd` target, wherever the
+  wrapper sits in the command (behind other wrappers or `find -exec`), and
+  look for the wrapped command's scripts from that dir;
+- refuse a wrapper whose command it cannot read (`env -S` /
+  `--split-string`, `sudo -s` / `-i` / `--shell` / `--login` with a
+  command), and read `sudo` and `doas` as exec wrappers;
+- check each `cd` / `pushd` / `env -C` target from the root and every dir
+  the shell may be in both as written and as the kernel walks it (an
+  existing symlink followed, a `..` after it taken from the link's target),
+  refusing one that lands outside the real root or cannot be walked (a
+  dangling or looping link);
+- refuse an `ln` (symbolic or hard) whose target leads out of the root (a
+  symbolic link's relative target read from the directory the link is made
+  in), expands or starts with `~`.
+
+The refusal names `cd/pushd/env -C or a symlink` and the target with its
+option (`/ (env -C)`, `/ (sudo -D)`, `/ (ln target)`).
+
+Acceptance Criteria
+- `printenv` in `shell-exec` shows no `OPENAI_API_KEY`, `DISCORD_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`, `GIT_ASKPASS` or `SSH_AUTH_SOCK` set in the bot's env, shows `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`, `GIT_TERMINAL_PROMPT=0`, a key-less `GIT_SSH_COMMAND`, and a `GH_CONFIG_DIR` outside the owner's home with no `hosts.yml`.
+- With a credential helper (a marker-writing script) in the owner's `~/.gitconfig` and in the repo's own config, `shell-exec` running `git ls-remote` against a local HTTP server that answers 401 fails and the helper never runs.
+- The node runner's child env (a stub that prints `env`) drops `GH_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GIT_ASKPASS`, `SSH_AUTH_SOCK`, inherited `GIT_CONFIG_KEY_1` / `GIT_CONFIG_VALUE_1` / `GIT_CONFIG_PARAMETERS` and an inherited `GH_CONFIG_DIR`, and sets the values above plus `GIT_CONFIG_COUNT=3`, `GIT_CONFIG_KEY_0=credential.helper`, `GIT_CONFIG_KEY_1=http.extraHeader`, `GIT_CONFIG_KEY_2=http.https://github.com/.extraHeader`, empty `GIT_CONFIG_VALUE_0..2` (no inherited `store` value) and `CARGO_NET_GIT_FETCH_WITH_CLI=true`.
+- An aborted calling run stops `shell-exec` running `sleep 60` with exit 130 well before the sleep ends; 200000 bytes of output come back truncated (under 80000 characters, `truncated: true`); a `ghp_…` token printed by the command is scrubbed, and so is the literal value of a set `DISCORD_TOKEN` with no vendor shape.
+- `firstDisallowedCd` refuses `env -C / ls` (`/ (env -C)`), `env --chdir=/ ls`, `env --chdir /etc sh -c pwd`, `env -iC/ ls`, `env --ch=.. ls`, `env -C up ls` (up → /), `env -C $D ls`, `sudo -D / ls`, `find . -exec env -C / ls \;` and `env -S '…'`; allows `env -C sub ls` and `env -C sub ./x.sh`.
+- With in-root `up → /`, `sub/out → OUTSIDE` and `insub → sub`: `cd up && ls`, `pushd up`, `cd up/etc`, `cd sub && cd out` and `cd nothere/../up` refuse; `cd insub && cd deep` and `cd sub/deep/../..` stay allowed.
+- `ln -s / x && cd x` (`/ (ln target)`), `ln -sfn /etc cfg`, `ln -s ../../x sub/l`, `ln /etc/hosts h` and `ln -s $T x` refuse; `ln -s ../sub sub/again` and `ln -s sub l` stay allowed.
+- End to end `env -C / pwd`, `env --chdir=/ pwd`, `cd up && pwd`, `cd sub/out && pwd` and `ln -s / x && cd x && pwd` return exit 2 with SAFE-3 and spawn nothing (no marker, no `x`); `env -C sub pwd && cd insub && pwd` runs and prints the in-root `sub`.
+

@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 67
+version: 68
 status: draft
 files:
   - src/cli.ts
@@ -47,7 +47,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `runCli` | `argv: string[], run?: (argv) => Promise<number>` | `Promise<number>` | Top-level error boundary around `main` (REQ-cli-419) |
 | `reportCliError` | `err: unknown, opts?: { json?: boolean }` | `number` | One scrubbed error line + hint; returns the exit code (REQ-cli-419) |
 | `cliErrorHint` | `err: unknown` | `string` | Next step for the operator matched to the error kind (data-dir hint for a filesystem error with a path or a bun:sqlite DB open error; a `ProjectDirError` carries its own) |
-| `parseGlobalFlags` | `args: string[]` | `{ rest, nonInteractiveFlag, json, noVerify, maxRetries, taskText, tier, project }` | Global flags anywhere in argv; `project` is the `--project` path (`""` when given without one; only before `--`) (REQ-cli-505) |
+| `parseGlobalFlags` | `args: string[]` | `{ rest, pluginArgs, nonInteractiveFlag, json, removedFlag, maxRetries, taskText, tier, project }` | Global flags anywhere in argv; `project` is the `--project` path (`""` when given without one; only before `--`) (REQ-cli-505); `removedFlag` is `--no-verify` when read as a flag, which `main` refuses (REQ-cli-085) |
 | `readStartEnv` | `path?: string` | `Record<string, string> or null` | The env this process was started with (`/proc/self/environ`), before Bun added the start directory's `.env*` values (REQ-cli-505) |
 | `enterProject` | `path: string, opts?: { startEnv? }` | `EnterProjectResult` | CLI-5 `--project`: env as Bun builds it for a process started in `path` (probe pinned to `SPAWN_BUN_CONFIG`), then `chdir`; later `Bun.spawn` / `Bun.spawnSync` without `env` pass the new `process.env`; changes nothing on failure (REQ-cli-505) |
 | `envFileFlags` | `execArgv: readonly string[]` | `string[]` | Bun's `--no-env-file` / `--env-file` flags from `execArgv`, in order, forwarded to the `--project` probe (REQ-cli-505) |
@@ -68,7 +68,9 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `llmDoctorCheck` | `env?` | `DoctorCheck` | Doctor `llm` line; `warn` (demo stub) without a key, never fails |
 | `dataDirDoctorCheck` | `env?, home?` | `DoctorCheck` | Doctor `data-dir` line: exists + writable / creatable / `fail` |
 | `projectFilesDoctorChecks` | `cwd?` | `DoctorCheck[]` | Doctor / `init` project-file lines for `cwd` (CLI-4, REQ-cli-430): `fledge.toml`, `verify-lane` (runs spec-check), `.specsync`, `specs`; each missing one `[missing]` in plain language; reads only |
+| `removedVerifyKeyDoctorCheck` | `cwd?` | `DoctorCheck \| null` | Doctor `[warn] verify-gate` line when `cwd`'s `fledge.toml` still sets `[corvidinho] verify_before_complete` (ignored, AGENT-14); null otherwise; never fails doctor (REQ-cli-085) |
 | `backupDoctorCheck` | `env?, opts?: { db? }` | `DoctorCheck` | Doctor `backup` line (OPS-1/2, REQ-cli-680): `[warn]` off / unusable dir / failing job (reason, owner told or not) / no `/announce` channel set, `[ok]` dir + snapshots + last backup and restore test; never fails doctor; creates nothing |
+| `peopleGithubDoctorCheck` | `dir: PeopleDirectory` | `DoctorCheck \| null` | Doctor `people-github` line (IDENTITY-7.a, REQ-cli-367): `[warn]` naming (person ids only) the owner and declared people with a GitHub login but no GitHub numeric id; null when nobody is affected; never fails doctor |
 | `resolveBackupConfig` | `env?` | `BackupConfig` | `CORVIDINHO_BACKUP_DIR`: unset → `off`, relative → `invalid`, absolute → `on` + resolved dir (src/store/backup.ts) |
 | `gitWorkTreeAbove` / `backupDirRefusal` | `dir` | `string or null` | Nearest dir holding `.git`; why a dir cannot hold backups (in a git work tree as given or with symlinks resolved, not a directory, unreadable) |
 | `snapshotName` | `now: number` | `string` | `corvidinho-<YYYYMMDD>T<HHMMSS>Z.db` (UTC) |
@@ -120,6 +122,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `DoctorCheck` | One doctor line: name, ok, detail, optional printed mark |
 | `EnterProjectResult` | `{ ok: true, dir }` or `{ ok: false, error, hint }` from `enterProject` (REQ-cli-505) |
 | `ProjectDirError` | Error class for an unusable `--project`; `hint` is the operator's next step (REQ-cli-505) |
+| `RemovedFlagError` / `REMOVED_NO_VERIFY_FLAG` | Error class for the removed `--no-verify` (message and `hint`, exit 1 through `reportCliError`) and the flag it names (REQ-cli-085) |
 | `DoctorAllowlist` / `AllowlistUsage` / `AllowlistSource` | Doctor allowlist load result, listed / usable / deny-listed entry counts and source (`file` / `env`) |
 | `BackupConfig` / `SnapshotInfo` / `SnapshotResult` / `DbFileCheck` / `RestoreOptions` / `RestoreResult` / `RestoreTestResult` | Backup config, snapshot, check, restore and restore-test results (REQ-cli-680) |
 | `BackupJob` / `JobStatus` / `BackupStatus` / `PendingBackupNotice` | `backup` / `restore_test` state read from `schema_meta` |
@@ -127,7 +130,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 
 ## Invariants
 
-task run honors --no-verify, --tier, and agent config; bridges may skip verify for latency.
+task run honors --tier and agent config (`max_retries`); it has no verify skip (AGENT-14, REQ-cli-085): `--no-verify` read as a flag (not `--task` text, not a `plugins run` argument after `--`) is refused before anything runs with one `corvidinho: --no-verify was removed: verification can't be skipped (AGENT-14)` line or `{ ok: false, error }`, exit 1, and a `[corvidinho] verify_before_complete` key is ignored with a `[warn] verify-gate` doctor line. In a delegate or council worker (`CORVIDINHO_DELEGATE_DEPTH` above 0) task run starts the real diff with `{ nested: true }`, so the worker leaves its lead's talk verified marker alone (REQ-agent-015).
 plugins list/run load builtins and honor non-interactive deny; doctor reports plugin count.
 `specsync <list|read|check|brief|coverage|score|change-list|ship-status>` runs the matching `specsync-*` plugin through `plugins run`; `score` is `specsync-score`, the local `specsync score` report (SPECSYNC-3, REQ-cli-089).
 plugins list/run load builtins and honor non-interactive deny; doctor reports plugin count. The `plugins list` text view also prints which PLUGIN-4 language runners loaded (with their binary) and one `<name> not loaded: <tool> not found on PATH` line per missing toolchain, and still exits 0 (REQ-cli-112).
@@ -197,6 +200,8 @@ Nightly backup (OPS-1/2, REQ-cli-680, `src/store/backup.ts`): with `CORVIDINHO_B
 |-----------|----------|
 | Unknown command | Print error + help; exit 1 |
 | `--project` path missing, not a directory, unreadable, or no path given | `corvidinho: --project …` + `hint: pass --project the path of an existing project directory`; exit 1; no command runs; `--json` → `{ok:false,error}` (REQ-cli-505) |
+| `--no-verify` read as a Corvidinho flag (any command) | `corvidinho: --no-verify was removed: verification can't be skipped (AGENT-14)` + `hint:`; exit 1 before anything runs; `--json` → `{ok:false,error}` (REQ-cli-085) |
+| `fledge.toml` still sets `[corvidinho] verify_before_complete` | Ignored: the gate still runs; doctor prints `[warn] verify-gate` naming the key, never fails (REQ-cli-085) |
 | `--project` `.env` probe fails | `corvidinho: --project <dir>: could not load its .env files …` + hint to check the dir and its `.env` files; exit 1; nothing changed (REQ-cli-505) |
 | `specsync` with no or an unknown subcommand | Usage line naming every subcommand (`score` included); exit 1 |
 | `plugins run` unknown name (incl. `fledge-*`) | `corvidinho: Unknown plugin command: <name>` + `hint:` (`plugins list`); exit 1; `--json` → `{ok:false,error}` |
@@ -208,6 +213,7 @@ Nightly backup (OPS-1/2, REQ-cli-680, `src/store/backup.ts`): with `CORVIDINHO_B
 | Doctor: allowlists only in the allowlist file | `[ok] discord` / `[ok] github-watch` naming source `file` (values not shown) |
 | Doctor: every allowlisted channel / repo also deny-listed, or allowlist file does not load | `[missing] discord` / `[missing] github-watch`; exit 1 |
 | Doctor: no LLM key | `[warn] llm` (task run uses the demo stub); exit code unchanged |
+| Doctor: the owner or a declared person has a GitHub login but no GitHub numeric id | `[warn] people-github` naming person ids only (on GitHub they read as undeclared until an id is linked); exit code unchanged (REQ-cli-367) |
 | Doctor: data dir not a directory, a symlink to nothing, not creatable or not writable | `[fail] data-dir`; exit 1 |
 | Doctor: blank (whitespace-only) Discord / GitHub token or watch login | `[missing] discord` / `[missing] github` / `[missing] github-watch` (bridge / WATCH / Octokit trim them); exit 1 |
 | Doctor / `init`: no `fledge.toml`, no verify lane or one without spec-check, no `.specsync/` or `specs/` in the current dir | `[missing]` line per item in plain language; exit 1; nothing is created |
@@ -285,4 +291,6 @@ Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), 
 | 2026-09-29 | docs-operator-docs-match-the-code-help-and-the-go-live-checklist-say-empty-discord-user-role-allowlists-admit-anyone-in: Docs: operator docs match the code - --help and the go-live checklist say empty Discord user/role allowlists admit anyone in an allowlisted channel (not deny-all), and docs/DAEMON.md lists daemon.start_failed and spend.warning |
 | 2026-09-29 | verify-retry-feedback-never-ends-on-half-a-surrogate-pair-a-non-git-lead-verifies-after-a-delegate-worker-that-returned: Verify retry feedback never ends on half a surrogate pair; a non-git lead verifies after a delegate worker that returned no result frame; github-pr-create attribution check is exact; doctor and the Octokit plugins treat a blank GITHUB_TOKEN / GH_TOKEN as missing |
 | 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |
+| 2026-09-30 | on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a: On GitHub people match only by their numeric user id: a renamed or re-registered login never counts as the owner or a declared person on WATCH (prompt, memory scope, SAFE-13 exemption); [owner] github_id declares the owner's id; /admin people link github stores the looked-up numeric id; doctor warns about logins without an id (IDENTITY-7.a, #36) |
 | 2026-09-29 | release-0-0-34-declared-people-and-roles-person-and-project-memory-with-forget-me-github-memory-and-ranked-recall: Release 0.0.34: declared people and roles, person and project memory with forget-me, GitHub memory and ranked recall, condensed chats kept 30 days and resumed after the TTL (schema v13), answer footer and fence-safe 2000-char splits, nightly backup, discord-send-file, private Answer form, injection guards, W12 sweep |
+| 2026-09-30 | verification-can-t-be-skipped-and-the-real-diff-since-the-talk-started-decides-what-changed-agent-14-agent-15-agent-15: Verification can't be skipped and the real diff since the talk started decides what changed (AGENT-14, AGENT-15, AGENT-15.a): task run refuses --no-verify, [corvidinho] verify_before_complete is ignored, filesChanged comes from the real git diff alone (a claimed path git does not show still runs the lane), and a talk worktree whose last run did not end verified verifies from the talk branch's merge-base |

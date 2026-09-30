@@ -39,7 +39,9 @@ streamed NDJSON result still parses; with the hash budget spent an untouched
 dirty file stays quiet and an edit to it is caught; the gate off takes no
 snapshot.
 `tests/agent.tool-loop.test.ts` "runTask: a real code-tier shell-exec edit
-reaches the verify gate": end to end through the real `shell-exec` plugin.
+reaches the verify gate": end to end through the real `shell-exec` plugin,
+writing with `cp broken.ts app.ts` (SAFE-21 refuses a `>` or `tee` edit,
+REQ-plugins-494).
 ## Allowlisted dangerous tools in task run (REQ-agent-501, REQ-agent-502)
 
 `tests/agent.allowlisted-dangerous.test.ts` (fake provider, fake `fledge` on
@@ -166,6 +168,19 @@ only the searches not yet run, refusals or nothing ⇒ null).
   take the first unused position number; a dropped empty option holds no id;
   already-unique options normalize byte-identically (again and again); an
   ask-human call with one id twice gives buttons with distinct `custom_id`s.
+- Scrub before cut (REQ-agent-045 modified, SAFE-6.a):
+  `tests/agent.ask.test.ts` › "SAFE-6.a: ask questions and choice labels are
+  scrubbed before they are cut": a question whose fake key straddles the 1500
+  cut comes out `…[redacted:github-token]…` from `askFromToolArguments` and
+  `askFromUnknown` (and in `formatAskSummary`), and for every cut position
+  across the key no raw `ghp_` piece survives; a label straddling the 80 cut
+  does the same from string options, `{id,label}` options and numbered
+  question lines, a secret-looking id still becomes its position; a numbered
+  choice the question cap cuts is parsed from the scrubbed question. Fails on
+  the base sources. "a cut that ends a key shape is scrubbed too…": `AKIA`
+  plus 20 capitals placed so the cut keeps 16 comes out
+  `…[redacted:aws-key]…` for a label and a question, and normalizing the
+  result again changes nothing.
 
 
 ## Persona file (REQ-agent-069, PERSONA-1..3)
@@ -220,3 +235,37 @@ no `files-write`, `memory-store` or worker tool, both calls are refused and
 never run, `onInjection` gets the worker's notice once, the summary ends with
 the note and one row is audited; at delegation depth 1 an injected issue
 title is reported but records no row.
+
+## Verification can't be skipped; the real diff since the talk started decides (REQ-agent-003, REQ-agent-085, REQ-agent-015)
+
+- `tests/agent.verify-gate.test.ts`: a project `fledge.toml` with
+  `verify_before_complete = false` still verifies a real edit (runTask and
+  the real CLI with a fake `fledge`); a talk worktree made by
+  `ensureTalkWorkspace` starts verified; an edit left by a run that ended
+  blocked, failed, cancelled, or whose process died (marker taken, never
+  settled), and a commit made through a shell, are verified by the next run
+  that changes nothing (carried note, merge-base baseline); a talk whose base
+  branch is gone verifies anyway; the caller's own checkout keeps the
+  run-start baseline; marker take / settle / symlink / planted-marker cases;
+  a claimed path git does not show is left out of `filesChanged` yet runs the
+  lane (and its retry after a failed verify runs it again); a delegate or
+  council worker (`{ nested: true }`, and the real CLI with
+  `CORVIDINHO_DELEGATE_DEPTH=1`) in its lead's talk worktree keeps its own
+  baseline and never writes the marker, so a lead that dies still leaves its
+  edits carried.
+- `tests/agent.loop.test.ts`: a run that changed files verifies with no
+  option; a run that changed nothing ends `done` with one "no changes,
+  nothing to verify" note; the snapshot is always taken; the huge-diff cap
+  note counts all changed paths.
+- `tests/agent.allowlisted-dangerous.test.ts`: the non-git Fledge run in a
+  project whose `fledge.toml` sets the removed key still verifies and fails.
+- `tests/agent.config.test.ts`: `parseCorvidinhoSection` reads only
+  `max_retries`; `removedVerifyKeys` names the key only under `[corvidinho]`.
+- `tests/agent.execute.test.ts`, `tests/agent.tool-loop.test.ts`: the demo
+  execute reports no files.
+## SAFE-13 WATCH owner exemption by numeric id (REQ-agent-071, REQ-watch-367)
+
+`tests/safe.injection.test.ts` › "the verdict skips the owner (by [owner]
+github_id only, IDENTITY-7.a)" — `watchInjectionVerdict` exempts the owner's
+numeric id and flags the same injected body from the owner's login with no
+id or another id; fails on the base sources (the login alone was exempt).

@@ -7,8 +7,9 @@
  * after verify retries keeps state "failed" (AGENT-4) and carries a "stuck"
  * ask so bridges can surface a question and ping the configured owner.
  *
- * The question is model-written text: it is data for the human, capped here
- * and scrubbed / mention-restricted by bridges before posting.
+ * The question is model-written text: it is data for the human, SAFE-6
+ * scrubbed and then capped here (SAFE-6.a: scrub before cut), and scrubbed /
+ * mention-restricted again by bridges before posting.
  */
 
 import type { PluginHandlerResult } from "../plugins/types.ts";
@@ -21,6 +22,7 @@ import type {
   TaskResult,
 } from "./types.ts";
 import { resolveAskOptions } from "./ask-options.ts";
+import { scrubSecrets } from "../store/scrub.ts";
 
 export const ASK_TOOL_NAME = "ask-human";
 
@@ -113,16 +115,26 @@ export function withAskTool(tools: readonly OpenAiToolDef[]): ChatToolDef[] {
   ];
 }
 
-/** Trim, drop control characters, cap at ASK_QUESTION_MAX. Empty ⇒ "". */
+/**
+ * Trim, drop control characters, SAFE-6 scrub, then cap at ASK_QUESTION_MAX.
+ * The scrub runs before the cut (SAFE-6.a): a secret the cut would split
+ * shows as `[redacted:<kind>]`, never as a raw piece shorter than its scrub
+ * pattern's minimum. A cut question is scrubbed once more, since the cut can
+ * end a key shape (an AWS key id is matched only up to a word boundary); that
+ * marker is shorter than what it replaces, so the question stays within the
+ * cap and normalizing it again changes nothing. Empty ⇒ "".
+ */
 export function normalizeQuestion(raw: unknown): string {
   if (typeof raw !== "string") return "";
-  const cleaned = raw
-    .replace(/\r\n?/g, "\n")
-    .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  const cleaned = scrubSecrets(
+    raw
+      .replace(/\r\n?/g, "\n")
+      .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim(),
+  );
   if (cleaned.length <= ASK_QUESTION_MAX) return cleaned;
-  return `${cleaned.slice(0, ASK_QUESTION_MAX - 1)}…`;
+  return scrubSecrets(`${cleaned.slice(0, ASK_QUESTION_MAX - 1)}…`);
 }
 
 export type AskToolOutcome =

@@ -1,7 +1,7 @@
 /**
  * Spawn corvidinho for chat with prove-before-done (AGENT-4 / FLEDGE-2 / #85).
- * Does not pass --no-verify; an empty real diff (no tool-reported files and no
- * git working-tree change, REQ-agent-085) still skips verify in the loop.
+ * Verification can't be skipped (AGENT-14); a run whose real git diff is
+ * empty ends with "no changes, nothing to verify" (REQ-agent-003 / 085).
  * Reads the `task run --output ndjson` event stream so the thinking status
  * shows real state / current tool / token counts (AGENT-8 / DISCORD-3, #73).
  * Injectable for tests; no ProcessManager.

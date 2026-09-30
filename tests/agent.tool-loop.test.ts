@@ -125,7 +125,7 @@ describe("createTaskExecute tool loop (mock HTTP)", () => {
       signal: new AbortController().signal,
     });
     expect(r.summary).toBe("demo task attempt 1");
-    expect(r.filesChanged).toEqual(["src/cli.ts"]);
+    expect(r.filesChanged).toEqual([]);
   });
 
   test("tool loop: LLM requests plugins-list then finishes", async () => {
@@ -605,7 +605,6 @@ describe("provider failures are errors, not done (AGENT-4/8, REQ-agent-242)", ()
     let verifyRuns = 0;
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: true,
       maxRetries: 2,
       verifyRunner: async () => {
         verifyRuns += 1;
@@ -656,7 +655,8 @@ describe("runTask: a real code-tier shell-exec edit reaches the verify gate (AGE
     g(dir, "config", "user.email", "fixture@example.invalid");
     g(dir, "config", "commit.gpgsign", "false");
     writeFileSync(join(dir, "app.ts"), "export const x = 1;\n");
-    g(dir, "add", "app.ts");
+    writeFileSync(join(dir, "broken.ts"), "broken");
+    g(dir, "add", "app.ts", "broken.ts");
     g(dir, "commit", "-q", "-m", "init");
   });
   afterEach(() => {
@@ -665,7 +665,9 @@ describe("runTask: a real code-tier shell-exec edit reaches the verify gate (AGE
     rmSync(dir, { recursive: true, force: true });
   });
 
-  test("shell-exec `printf broken > app.ts` reports no filesChanged, yet verify runs and the run is never done", async () => {
+  // `cp`, not `>` or `tee`: SAFE-21 refuses those edits (shell.footguns.test.ts);
+  // other shell writes still report no filesChanged.
+  test("shell-exec `cp broken.ts app.ts` reports no filesChanged, yet verify runs and the run is never done", async () => {
     let llmCalls = 0;
     const fetchImpl = async () => {
       llmCalls += 1;
@@ -679,7 +681,9 @@ describe("runTask: a real code-tier shell-exec edit reaches the verify gate (AGE
               type: "function",
               function: {
                 name: "shell-exec",
-                arguments: JSON.stringify({ argv: ["--command", "printf broken > app.ts"] }),
+                arguments: JSON.stringify({
+                  argv: ["--command", "cp broken.ts app.ts"],
+                }),
               },
             },
           ],
@@ -705,7 +709,6 @@ describe("runTask: a real code-tier shell-exec edit reaches the verify gate (AGE
     const verifyCwds: string[] = [];
     const result = await runTask({
       cwd: dir,
-      verifyBeforeComplete: true,
       maxRetries: 0,
       onEvent: (e) => events.push(e),
       verifyRunner: async (cwd) => {
@@ -779,7 +782,6 @@ describe("verify retry feedback reaches the model as the failing step's output (
     let verifyN = 0;
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: true,
       maxRetries: 2,
       verifyRunner: async () => {
         verifyN += 1;

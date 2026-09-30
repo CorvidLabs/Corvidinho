@@ -35,7 +35,7 @@ import {
   WATCH_PROJECT_MEMORY_INJECT_HEADER,
 } from "../src/watch/memory-inject.ts";
 
-const OWNER = { discordId: "100000000000000001", display: "Leif", githubLogin: "0xleif" };
+const OWNER = { discordId: "100000000000000001", display: "Leif", githubLogin: "0xleif", githubId: "8268288" };
 const PEOPLE = `[people.tofu]
 display = "Tofu"
 discord_ids = ["200000000000000002"]
@@ -142,17 +142,20 @@ describe("MemoryStore.recall with a query and recallRelevantThenRecent", () => {
 });
 
 describe("memorySubjectForGithub / projectScopeForRepo", () => {
-  test("declared by numeric id or login (case-insensitive); a login whose id differs is nobody", () => {
-    expect(memorySubjectForGithub(dir, { login: "Tofu-Dev" })?.writeScope).toBe("person:tofu");
+  test("declared by numeric id only; a login alone, or with an id that differs, is nobody (IDENTITY-7.a)", () => {
     expect(memorySubjectForGithub(dir, { id: 4242 })?.writeScope).toBe("person:tofu");
+    expect(memorySubjectForGithub(dir, { login: "renamed", id: "4242" })?.writeScope).toBe("person:tofu");
+    expect(memorySubjectForGithub(dir, { login: "Tofu-Dev" })).toBeNull();
     expect(memorySubjectForGithub(dir, { login: "tofu-dev", id: "9" })).toBeNull();
     expect(memorySubjectForGithub(dir, { login: "stranger" })).toBeNull();
-    expect(memorySubjectForGithub(null, { login: "tofu-dev" })).toBeNull();
+    expect(memorySubjectForGithub(null, { id: 4242 })).toBeNull();
   });
-  test("the undeclared-under-[people] owner maps to their Discord-id scope", () => {
-    const s = memorySubjectForGithub(dir, { login: "0xleif" });
+  test("the undeclared-under-[people] owner maps to their Discord-id scope by [owner] github_id", () => {
+    const s = memorySubjectForGithub(dir, { login: "0xleif", id: 8268288 });
     expect(s?.writeScope).toBe(OWNER.discordId);
     expect(s?.role).toBe("owner");
+    expect(memorySubjectForGithub(dir, { login: "0xleif" })).toBeNull();
+    expect(memorySubjectForGithub(dir, { login: "0xleif", id: 1 })).toBeNull();
   });
   test("owner/repo only, lowercased", () => {
     expect(projectScopeForRepo("CorvidLabs/Corvidinho")).toEqual({

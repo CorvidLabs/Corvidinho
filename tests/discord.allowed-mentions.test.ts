@@ -30,6 +30,7 @@ import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { runPlugin } from "../src/plugins/run.ts";
 import { SchedulerService } from "../src/scheduler/service.ts";
 import { ScheduleStore } from "../src/scheduler/store.ts";
+import { teamPeopleFile } from "./fixtures/team-people.ts";
 
 const BOT_ID = "100000000000000001";
 const USER_ID = "200000000000000002";
@@ -380,7 +381,7 @@ describe("live gateway parses no mentions from outbound text (REQ-discord-205)",
 });
 
 describe("bridge outbound paths with model text (REQ-discord-205)", () => {
-  async function liveBridge(agent: AgentClient) {
+  async function liveBridge(agent: AgentClient, allowlistFile?: string) {
     const fake = fakeDiscord();
     const box: { handlers: GatewayHandlers | null } = { handlers: null };
     const result = await startBridge({
@@ -390,10 +391,12 @@ describe("bridge outbound paths with model text (REQ-discord-205)", () => {
         CORVIDINHO_DISCORD_DRY_RUN: "1",
         CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID,
         // Env-only config: never read a real allowlist file from $HOME.
-        CORVIDINHO_ALLOWLIST_FILE: join(
-          mkdtempSync(join(tmpdir(), "corvidinho-mentions-")),
-          "none.toml",
-        ),
+        CORVIDINHO_ALLOWLIST_FILE:
+          allowlistFile ??
+          join(
+            mkdtempSync(join(tmpdir(), "corvidinho-mentions-")),
+            "none.toml",
+          ),
       },
       // Temp non-git project: never create real worktrees in this repo.
       projectRoot: mkdtempSync(join(tmpdir(), "corvidinho-mentions-proj-")),
@@ -479,7 +482,8 @@ describe("bridge outbound paths with model text (REQ-discord-205)", () => {
     ["/work", "work", null, { description: "fix the docs @everyone" }],
   ] as const) {
     test(`${name} answer pings nobody from the summary`, async () => {
-      const { result, fake } = await liveBridge(summaryAgent(HOSTILE));
+      // IDENTITY-11.a: the chatter is declared team (community can't start /work).
+      const { result, fake } = await liveBridge(summaryAgent(HOSTILE), teamPeopleFile(USER_ID));
       const { i, calls } = slashInteraction(command, sub, { ...opts });
       fake.client().emit("interactionCreate", i);
       const all = () => [

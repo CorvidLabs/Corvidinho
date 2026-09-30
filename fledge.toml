@@ -49,12 +49,10 @@ description = "Required gate before claiming done (AGENT-4 / SPECSYNC-2). Includ
 steps = ["lint", "smoke", "test", "spec-check"]
 
 # Prove-before-done (AGENT-4 / FLEDGE-2). Merlin field names; Corvidinho section.
-# Discord / WATCH spawns do NOT pass --no-verify (REQ-discord-085 / REQ-watch-085);
-# a run that changed no files (none tool-reported and none in the git working
-# tree) still skips the lane inside the agent loop. CLI --no-verify remains for
-# local/operator opt-out only (REQ-cli-085).
+# The gate has no off switch (AGENT-14): chat, WATCH, schedules, /work and the
+# CLI all run the verify lane when the run's real git diff changed (AGENT-15);
+# a run that changed nothing ends with "no changes, nothing to verify".
 [corvidinho]
-verify_before_complete = true
 max_retries = 3
 
 # Autonomous mode (AUTONOMOUS-1) stays off until a project enables it here.

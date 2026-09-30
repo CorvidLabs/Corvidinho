@@ -31,6 +31,7 @@ import { checkRepoGateAsync, type RepoGateResult } from "../plugins/githubDeny.t
 import { runPlugin, type RunOptions } from "../plugins/run.ts";
 import type { PluginHandlerResult } from "../plugins/types.ts";
 import { scrubSecrets } from "../store/scrub.ts";
+import { resolveBase } from "../worktree/base.ts";
 import {
   buildWorkPrBody,
   workCommitMessage,
@@ -120,24 +121,6 @@ function errText(r: PluginHandlerResult): string {
 async function defaultRunPlugin(opts: RunOptions): Promise<PluginHandlerResult> {
   loadBuiltins();
   return runPlugin(opts);
-}
-
-async function resolveBase(
-  git: NonNullable<OpenWorkPrDeps["git"]>,
-  cwd: string,
-  remote: string,
-): Promise<{ base: string; mergeBase: string } | null> {
-  const head = await git(cwd, ["symbolic-ref", "--quiet", "--short", `refs/remotes/${remote}/HEAD`]);
-  const sym = head.code === 0 ? head.stdout.trim() : "";
-  const base = sym.startsWith(`${remote}/`) ? sym.slice(remote.length + 1) : "main";
-  for (const ref of [`refs/remotes/${remote}/${base}`, `refs/heads/${base}`]) {
-    const v = await git(cwd, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]);
-    if (v.code !== 0) continue;
-    const mb = await git(cwd, ["merge-base", "HEAD", ref]);
-    const sha = mb.stdout.trim();
-    if (mb.code === 0 && sha) return { base, mergeBase: sha };
-  }
-  return null;
 }
 
 /**

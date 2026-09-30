@@ -15,7 +15,7 @@ spec: discord.spec.md
 
 ### REQ-discord-001
 
-The system SHALL start a session stub with a stable session id when the bot is @mentioned in an allowlisted channel (DISCORD-1). The stub MAY spawn `corvidinho task run --no-verify` (or echo); it SHALL NOT port ProcessManager.
+The system SHALL start a session stub with a stable session id when the bot is @mentioned in an allowlisted channel (DISCORD-1). The stub MAY spawn `corvidinho task run` (or echo), which always holds the run to the verify gate (AGENT-14, REQ-cli-085); it SHALL NOT port ProcessManager.
 
 Acceptance Criteria
 - `routeMessage` on mention in allowed channel returns `kind: "start_session"` with new session id.
@@ -302,11 +302,12 @@ Discord/WATCH spawn agent clients SHALL build subprocess argv with
 `task run` stdout is present (ndjson result frame or legacy `--json`), the
 Discord chat reply SHALL surface a parsed summary (state / verified /
 attempts + summary) rather than dumping raw JSON. Spawns SHALL NOT pass
-`--no-verify` — prove-before-done (AGENT-4 / FLEDGE-2) is the default; the
-agent loop still skips the verify lane when no tool reported files and the
-run's git working tree is unchanged (REQ-agent-085), so plain chat stays
-fast. Fixture tests SHALL cover argv shape and summary parsing without a live
-Discord token.
+`--no-verify` (the flag is removed and refused, REQ-cli-085) —
+prove-before-done (AGENT-4 / FLEDGE-2 / AGENT-14) always applies; a run whose
+real git diff is empty and that claimed no change ends with "no changes,
+nothing to verify" and no lane (REQ-agent-003 / REQ-agent-085), so plain
+chat stays fast. Fixture tests SHALL cover argv shape and summary parsing
+without a live Discord token.
 
 Acceptance Criteria
 - `.ts` bin → `["bun", "--no-env-file", bin, "task", "run", ...]`; non-`.ts` → `[bin, ...]`.
@@ -673,6 +674,22 @@ or slash surface is added. Outbound reply scrubbing beyond the
 spawned-run summary text (REQ-agent-232) and a Discord-admin re-scrub command
 are draft SAFE-10 and out of scope until captured.
 
+An ask's question and each of its choice labels SHALL be scrubbed before
+they are cut or posted (SAFE-6.a): the question before its `ASK_QUESTION_MAX`
+(1500) cut (`normalizeQuestion`, which every ask the tool loop makes, the
+spawn client reads from a result frame and a stored ask reloads through), and
+each label before its 80-character cut (`cleanAskLabel`, which every option
+`resolveAskOptions` returns goes through, and again every Choose-pick button
+label `buildChoiceComponents` posts). A question or label that held a secret
+SHALL show `[redacted:<kind>]` (a marker the cut itself falls inside is cut
+like other text), so a secret the cut would split never survives as a raw
+piece shorter than its scrub pattern's minimum, in what is posted (the
+Choose-pick buttons, the Answer stub and its form, an ask restated after a
+restart, a schedule ask post) and in what is stored
+(`discord_sessions.pending_ask`, `schedule_runs.ask_question`). Option ids
+keep the behaviour above. No env var, config key, flag, command, data field,
+schema or `SCRUB_RULES_VERSION` change.
+
 Acceptance Criteria
 - Each vendor shape is redacted; ordinary text is untouched; scrub is idempotent.
 - Hostile input (many private-key or JWT openers with no closer) scrubs in linear time.
@@ -685,6 +702,11 @@ Acceptance Criteria
 - A model-chosen option id that looks like a secret is replaced by its position when the ask is made, so neither the button nor the stored row carries it; an id that reaches the row another way is stored redacted, and an older row's secret-looking option id is redacted by the re-scrub while its other ids stay byte-identical.
 - Fixture tests use runtime-built fake secrets only.
 - A fake vendor key written raw, before the current rules, into any one of the listed text columns — session topic, work task description and summary, schedule name, description and prompt, schedule run summary and error, memory key and content — reads `[redacted:<kind>]` after the next open that re-scrubs; `SCRUB_TARGETS` lists each of these columns.
+- A choice label whose fake key starts where the whole marker fits before the 80-character cut is `…[redacted:github-token]…` on the Choose-pick buttons, in the stored `pending_ask` row and in the resumed pick's human text, with ids `1` / `2` unchanged; after a restart the reloaded ask posts the same labels, and a stored label past the cut with the key across it loads scrubbed before it is cut (its id unchanged).
+- A free-text question whose fake key straddles the 1500-character cut is stored as `…[redacted:github-token]…`; nothing the Answer stub, its form or a restated ask posts carries a raw piece of the key.
+- A schedule run's question whose fake key straddles the cut is stored in `schedule_runs.ask_question` as `…[redacted:github-token]…` for a daemon-claimed and a bridge-claimed run; neither the run summary nor the posts carry a raw piece.
+- `buildChoiceComponents` posts a label that holds a whole or a straddling key as `[redacted:<kind>]`, at most 80 characters, with custom_ids unchanged.
+- These tests fail on the base sources and pass on the branch.
 
 ### REQ-discord-024
 
@@ -711,10 +733,12 @@ Corvidinho SHALL load a durable owner record from bot-VM config (IDENTITY-1,
 ALLOW-4): a Discord user snowflake plus optional GitHub login and display
 name, from env `CORVIDINHO_OWNER_DISCORD_ID`, `CORVIDINHO_OWNER_GITHUB_LOGIN`,
 `CORVIDINHO_OWNER_DISPLAY` and/or an `[owner]` section (`discord_id`,
-`github_login`, `display`) in the allowlist file. Env SHALL override the file
-per field. The record is re-read on every start, so it survives restarts.
-The owner SHALL be matched only by Discord snowflake or case-insensitive
-GitHub login, never by display name.
+`github_login`, `display`) in the allowlist file, plus an optional GitHub
+numeric user id from `[owner] github_id` (file only, REQ-discord-367). Env
+SHALL override the file per field. The record is re-read on every start, so
+it survives restarts. The owner SHALL be matched only by Discord snowflake
+and, on GitHub, by the `[owner] github_id` numeric user id (IDENTITY-7.a) —
+never by GitHub login or display name; the login is kept for @mentions.
 
 ADMIN SHALL be owner-only (IDENTITY-2, Leif decision on #42). At handler time
 (ADMIN-4 / DISCORD-7) `resolvePermissionLevel` SHALL return ADMIN only for
@@ -730,7 +754,7 @@ configured plus the display name only, never ids, logins, or tokens.
 
 Acceptance Criteria
 - Env and allowlist-file `[owner]` load the owner; env wins per field; reloading the same config yields the same owner.
-- The owner matches by Discord snowflake or lowercased GitHub login; the display name never matches.
+- The owner matches by Discord snowflake or the `[owner] github_id` numeric id (`isOwnerGithub(owner, githubId)`); the GitHub login and the display name never match.
 - The owner resolves to ADMIN; a muted or deny-listed owner does not.
 - Admin user/role lists never resolve to ADMIN, with or without an owner; no owner ⇒ nobody ADMIN and admin slash (/mute) is refused for everyone.
 - Bridge start warns when the legacy admin lists are set or no owner is configured.
@@ -851,7 +875,7 @@ Acceptance Criteria
 ### REQ-discord-073
 
 The Discord spawn agent client SHALL run
-`task run --no-verify --task <prompt> --output ndjson`, read stdout line by
+`task run --task <prompt> --output ndjson`, read stdout line by
 line while the child runs, and forward each frame's live state, current tool,
 and token counts to `onStatus` so the thinking embed shows what the agent is
 doing (AGENT-8 / DISCORD-3). The reply summary SHALL come from the stream's
@@ -872,7 +896,7 @@ Acceptance Criteria
 - Summary equals `summarizeTaskResult` of the result frame; garbage lines and stderr do not break parsing.
 - Missing result frame falls back to `summarizeTaskRunOutput`.
 - A protocol-3 frame's tool output never reaches the reply; the reply is the protocol-mismatch notice.
-- Spawn argv ends with `--output ndjson` (no `--json`).
+- Spawn argv ends with `--output ndjson` (no `--json`) and has no `--no-verify`.
 - `checkProtocolVersion` treats a protocol-1 binary as a mismatch; `--protocol-version` prints 2.
 
 ### REQ-discord-025
@@ -1007,8 +1031,10 @@ opened only when all of these hold, checked before any commit or push:
 
 The PR step SHALL run only for the owner (ADMIN) or a declared team member
 (IDENTITY-10; the role is re-resolved from the live people list after the
-run, REQ-discord-065); community /work runs keep the changes on the work
-branch (ROLES-CHAT-3).
+run, REQ-discord-065). Community never starts `/work` (IDENTITY-11.a,
+REQ-discord-065), so it never reaches this step; a team member demoted to
+community during the run keeps the changes on the work branch
+(ROLES-CHAT-3).
 
 The steps SHALL run through the existing typed plugins with
 `nonInteractive: true` — `git-commit` (explicit paths from `git status`),
@@ -1030,25 +1056,36 @@ Acceptance Criteria
 - An unverified run triggers one verify-lane run in the worktree before push; a failing lane ships nothing.
 - Push or PR-create failure yields a plain line and never a claimed PR.
 - Fixture tests use temp repos, a local bare remote, the dry-run github plugin and a mocked verify lane.
-- A /work by anyone other than ADMIN (the owner) or a declared team member (IDENTITY-10, re-resolved from the people list after the run) never runs the PR step (ROLES-CHAT-3); the reply says the changes stay on the work branch.
+- A /work by anyone other than ADMIN (the owner) or a declared team member (IDENTITY-10, re-resolved from the people list after the run) never runs the PR step (ROLES-CHAT-3): a community /work never runs at all (IDENTITY-11.a; the reply is the ephemeral `not authorized`), and a team member demoted during the run gets a reply that says the changes stay on the work branch.
 - A team member's /work reaches the PR step with the same gates as the owner's; a team member demoted during the run does not.
 - Nothing is committed or pushed unless the worktree HEAD is the work branch and not the base; a switched or detached HEAD opens no PR.
 
 ### REQ-discord-085
 
 Discord `createSpawnAgentClient` SHALL always hold chat/schedule runs to the
-prove-before-done gate (AGENT-4 / FLEDGE-2 / issue #85 captured slice): spawn
-argv MUST NOT include `--no-verify`. An empty real diff with no
-tool-reported files continues to skip verify inside the agent loop (honest
-`verifySkipped`); when tools report file changes or the run's git working
-tree changed (REQ-agent-085), `fledge lanes run verify` runs before done. Draft AGENT-14/15 are out
-of scope. Package version SHALL bump to **0.0.13**. Fixture tests without live
-Discord.
+prove-before-done gate (AGENT-4 / FLEDGE-2 / AGENT-14): spawn argv MUST NOT
+include `--no-verify` (the flag is removed and refused, REQ-cli-085), and no
+project `fledge.toml` key turns the gate off (REQ-agent-003). Chat, button
+resumes, `/session`, `/work` and schedule runs all reach the one gate of
+`task run`. A run whose real diff is empty and that claimed no change ends
+with "no changes, nothing to verify" (honest `verifySkipped`); when the
+run's git working tree changed (REQ-agent-085) or a tool claimed a change
+git does not show, `fledge lanes run verify` runs before done.
+`ensureTalkWorkspace` SHALL write the verified marker into a new talk
+worktree's own git dir, so a new talk's first run starts from its own
+snapshot; a later run in that worktree after one that did not end `done`
+verifies every edit since the talk started (AGENT-15.a, REQ-agent-015).
+The talk base (`resolveBase`: the remote's default branch, else `main`, and
+HEAD's merge-base with it) lives in `src/worktree/base.ts`, shared by the
+`/work` PR path (REQ-discord-088) and the verify gate. Package version SHALL
+bump to **0.0.13**. Fixture tests without live Discord.
 
 Acceptance Criteria
 - Discord spawn argv never includes `--no-verify`.
 - Package `0.0.13`; docs/STATUS/CHANGELOG updated.
-- A run that changed the git working tree without a tool reporting it is verified before done; a run with an empty real diff and no tool-reported files still skips verify (REQ-agent-085).
+- A run that changed the git working tree without a tool reporting it is verified before done; a run with an empty real diff and no tool claim ends with the "no changes, nothing to verify" note (REQ-agent-003 / REQ-agent-085).
+- A talk worktree made by `ensureTalkWorkspace` holds the verified marker in its own git dir (`talkWorktreeGitDir`), and its first run that changes nothing has nothing to verify; after that run ends blocked with an edit, the next run there verifies the edit (REQ-agent-015).
+- The `/work` PR tests still find the base and merge-base through the shared `resolveBase`.
 - Fixture tests + SpecSync + fledge verify green.
 
 ### REQ-discord-108
@@ -2129,7 +2166,7 @@ WebP image whose magic bytes match its extension, or UTF-8 text with a
 extension; text (and the optional caption) SHALL be secret-scrubbed (SAFE-6:
 vendor-key shapes and set secret env values, `redactSecretEnvValues`) before
 upload, and the caption SHALL parse no mentions (REQ-discord-205). SAFE-2
-protected paths (`.env*`, `.git`, `fledge.toml`, `bunfig.toml`,
+protected paths (`.env*`, `.git`, `fledge.toml`, `.fledge/`, `bunfig.toml`,
 `specs`, `*.spec.md`, keystores), any `.specsync` path and secret paths
 (`.ssh`, keys, credentials) SHALL be refused, judged on the path as given and
 on where it resolves inside the project root with symlinks followed; a path
@@ -2180,6 +2217,7 @@ Acceptance Criteria
 - A file whose size, as first taken, is under 8 MB but which is over it when read is refused with the upload-limit error after at most 8 MB + 1 byte is read: no requester check runs and nothing is uploaded.
 - A checked file swapped for a link to `.env`, or whose folder is swapped for a link into `.ssh`, after the path checks is refused (SAFE-2): no requester check runs and nothing is uploaded.
 - An ask-button pick in a thread resumes with `replyChannelId` = the thread and `replyParentChannelId` = its parent.
+- A file under `.fledge/` (`.fledge/lanes/notes.md`) and a link to it are refused like the rest of the SAFE-2 set (SAFE-2.a); nothing is uploaded (fails on main's `isProtectedPath`).
 
 ### REQ-discord-734
 
@@ -2227,7 +2265,8 @@ People SHALL be read from the allowlist file this process loaded (the file
 `[owner]` comes from, `AllowlistConfig.sourcePath`), re-read on every use, so
 a VM edit or an `/admin people` change applies on the next message, slash run
 or WATCH event without a restart; no file loaded means nobody declared. There
-SHALL be no second store, env var, config key, table or column, and the
+SHALL be no second store, env var, config key, table or column (the one later
+key, the owner's `[owner] github_id`, is REQ-discord-367), and the
 allowlist loader and `[owner]` reader SHALL read a file with people sections
 exactly as before.
 
@@ -2239,14 +2278,15 @@ plain-language problem naming the person id and key, never an account id.
 `resolvePerson(directory, { discordId, githubLogin, githubId })` SHALL be the
 one resolver (for later slices too) and SHALL return `{ personId,
 displayName?, role?, person }` or null. It SHALL match only on stable ids —
-the Discord user id (or `<@id>`), the GitHub numeric id and the
-case-insensitive GitHub login — and never on a display name or nickname
-(IDENTITY-7). A login SHALL NOT match when the GitHub numeric id is known and
-the person declared other GitHub ids; ids that point at two different people,
-and an id declared for two people, SHALL match nobody. The configured owner
-(IDENTITY-1) SHALL always be a person: the declared entry holding the owner's
-Discord id (the owner's GitHub login added to it), else a built-in `owner`
-entry from `[owner]` / env; its `role` SHALL be `owner`. No other role is read
+the Discord user id (or `<@id>`) and the GitHub numeric id — and never on a
+display name, nickname or GitHub login (IDENTITY-7; on GitHub the numeric id
+only, IDENTITY-7.a, REQ-discord-367: `githubLogin` is accepted and ignored,
+so a renamed or re-registered login never counts as anyone); ids that point
+at two different people, and an id declared for two people, SHALL match
+nobody. The configured owner (IDENTITY-1) SHALL always be a person: the
+declared entry holding the owner's Discord id (the owner's `[owner]` GitHub
+id and login added to it), else a built-in `owner` entry from `[owner]` /
+env; its `role` SHALL be `owner`. No other role is read
 yet (#65 adds roles). No AlgoChat or wallet ids.
 
 Recognised on Discord (IDENTITY-14): every interactive run (chat message,
@@ -2291,8 +2331,8 @@ without a file SHALL read the file its first `/admin people` change writes.
 Acceptance Criteria
 - `[people.<id>]` TOML (plural and singular keys) and the JSON `people` object parse to people; the allowlist loader and `[owner]` reader load the same file unchanged.
 - Unreadable entries are skipped whole with problems that name the person and key but no account id; `owner` is a reserved id.
-- `resolvePerson` resolves by Discord id, `<@id>`, GitHub login (any case, `@`) and GitHub numeric id (number or string); display names and nicknames resolve nobody; a login with a different known numeric id resolves nobody; ids of two different people, and an id declared twice, resolve nobody.
-- The owner resolves with `role: owner` as the built-in entry (by Discord id and `[owner]` GitHub login) or as the declared person holding the owner's Discord id; no owner configured ⇒ no owner person.
+- `resolvePerson` resolves by Discord id, `<@id>` and GitHub numeric id (number or string); GitHub logins (alone, or with another numeric id), display names and nicknames resolve nobody; ids of two different people, and an id declared twice, resolve nobody.
+- The owner resolves with `role: owner` as the built-in entry (by Discord id and `[owner]` GitHub id, never the `[owner]` login) or as the declared person holding the owner's Discord id; no owner configured ⇒ no owner person.
 - People are re-read per call from the loaded file; a missing / unreadable file reads as nobody declared, never a throw.
 - A declared chat speaker's prompt names `declared_person`, the declared display (not the Discord one), nicknames and GitHub logins; a stranger with a declared person's display name gets `declared_person: none`; the undeclared owner's and everyone's block with nobody declared are byte-identical to before.
 - Through `startBridge`: an `/admin people add` + `link` by the owner and a VM edit of the file change who the next chat message is recognised as, without a restart; a chat message asking to change links changes nothing.
@@ -2302,6 +2342,7 @@ Acceptance Criteria
 - Only `src/discord/command-handlers/admin.ts` imports the people writer; nothing under `src/` or `plugins/` else does.
 - Regression tests `tests/identity.people.test.ts`, `tests/discord.admin-people.test.ts` and `tests/identity.recognise.test.ts` fail on the base sources and pass after.
 - SAFE-11 (REQ-discord-071): a stranger named `[owner] L<zero-width>eif` is shown as `display_name: Leif` with a `name_clash` line naming the owner and no owner facts; a stranger named like a declared person gets a `name_clash` line naming that person; the owner and a declared person shown by their own declared display get none; with nobody declared a clean, non-clashing name leaves the block byte-identical to before (`tests/safe.injection.test.ts`, `tests/identity.recognise.test.ts`).
+- IDENTITY-7.a (REQ-discord-367): an entry with `github_logins` but no `github_ids` loads without an issue and still matches on Discord, but resolves nobody on GitHub until an id is linked (`tests/identity.github-numeric-id.test.ts`).
 
 ### REQ-discord-065
 
@@ -2336,6 +2377,24 @@ no change for the same role. `/admin people list` shows each person's role;
 `config show` counts team and community. No chat or plugin path sets a role
 (IDENTITY-8).
 
+`/work` SHALL start only for the owner or a declared team member
+(IDENTITY-11.a): the handler resolves the caller's role with
+`resolveDiscordActingRole` from the live owner config and the people list
+re-read at the time of the command (`loadDeclaredPeople`), after the SAFE-13
+inbound check (REQ-discord-071), and for community — declared community, a
+declared person with no role and anyone undeclared (IDENTITY-12); a muted or
+deny-listed caller is community here too, though the dispatcher's mute and
+actor gates refuse them first — it SHALL reply only with the ephemeral
+`not authorized` (`NOT_AUTHORIZED`, the reply the owner-only
+`/announce channel`, `/schedule create` and `/admin` give a non-owner) and
+return before it defers a public reply, creates a session, a git worktree or
+`talk/*` branch, a work task, an agent run (so no verify lane) or the PR step.
+With no owner configured nobody is owner (IDENTITY-3), so only a declared
+team member can start `/work`. The owner's and a team member's `/work` are
+unchanged. `/session start` and chat stay open to community (read tools only,
+ROLES-CHAT-2). No new env var, config key, slash command, option or schema
+change.
+
 Acceptance Criteria
 - `role = "team"` / `"community"` (any case, TOML and JSON) resolve; no role, undeclared ⇒ community; the owner ⇒ owner; `role = "owner"` elsewhere ⇒ community with a problem; a list or unknown value skips the entry.
 - `resolveDiscordActingRole` gives owner, team and community, and community for a muted or deny-listed team member.
@@ -2343,6 +2402,10 @@ Acceptance Criteria
 - Through `startBridge`, chat stamps each speaker's role and a file edit applies to the next message; `/work` stamps team + the work flag for a team member and reaches the PR step; `/session start` stamps the role without the work flag.
 - `/admin people role` promotes and demotes with `admin-people-role` `started`/`ok` rows and a no-change reply for the same role; it refuses the owner role, unknown roles, undeclared people, the owner's person and a missing role (`denied`, file unchanged), a non-owner, and a missing audit trail; JSON files keep unread keys; `people list` shows roles and `config show` counts them.
 - Regression tests in `tests/roles.team.test.ts` and `tests/discord.admin-slash.test.ts` fail on the base sources and pass after.
+- IDENTITY-11.a: a `/work` by declared community, a declared person with no role, or an undeclared user (also with a `project` option, and with no owner configured) gets exactly one ephemeral `not authorized` reply and no deferred reply; no session, work task, agent run or PR step; the project repo gains no worktree or `talk/*` branch; through `handleSlashInteraction` and through `startBridge` alike. A muted or deny-listed team member gets the same refusal at the handler (through the dispatcher the mute and actor gates refuse them first, and nothing starts). With no owner configured a declared team member still starts `/work` as team.
+- A role change in the people file applies to the next `/work` without a restart: a demoted team member is refused, a promoted community member runs as team with the work flag.
+- The owner's and a team member's `/work` run unchanged (a worktree under the worktree base, `workTask: true`, the PR step); a community `/work` description that trips SAFE-13 still gets the SAFE-13 refusal and the owner ping.
+- Regression tests in `tests/roles.community-no-work.test.ts` fail on the base sources and pass after; the community cases in `tests/roles.team.test.ts`, `tests/work.pr.test.ts` and `tests/discord.actor-gate.test.ts` now expect the refusal.
 
 ### REQ-discord-101
 
@@ -2567,9 +2630,11 @@ likewise be searched for the work description
 blocks are the newest rows, as before.
 
 `memorySubjectForGithub(dir, { login, id })` SHALL resolve a GitHub
-commenter to their declared person's subject (the same scopes as on Discord;
-the configured owner not declared under `[people]` to their Discord-id
-subject; undeclared or ambiguous ⇒ null), and `projectScopeForRepo(repo)`
+commenter to their declared person's subject by the numeric `id` only (the
+`login` is ignored, IDENTITY-7.a, REQ-discord-367; the same scopes as on
+Discord; the configured owner not declared under `[people]`, recognised by
+`[owner] github_id`, to their Discord-id subject; no id, undeclared or
+ambiguous ⇒ null), and `projectScopeForRepo(repo)`
 SHALL give `project:<owner/repo>` lowercased for a valid `owner/repo` (else
 null). The Discord agent spawn SHALL always clear
 `CORVIDINHO_ACTING_GITHUB_LOGIN` / `_ID` / `_REPO`, so a Discord or
@@ -2579,7 +2644,7 @@ Acceptance Criteria
 - A question in plain words finds the fact it is about; a key hit outranks a newer passing mention; equal relevance goes to the newer row; a question-words-only query matches as one substring.
 - A multi-scope search keeps the newest of a key once and leaves private notes out.
 - The Discord inject holds an older fact the message is about although newer rows fill the block; an owner's `/work` run holds an older project fact its description is about although newer rows fill the block.
-- `memorySubjectForGithub` matches by numeric id or login, refuses a login whose numeric id differs, and maps the undeclared-under-`[people]` owner to their Discord id; `projectScopeForRepo` accepts only `owner/repo`.
+- `memorySubjectForGithub` matches by numeric id only (a login alone, or with a numeric id that differs, is nobody) and maps the undeclared-under-`[people]` owner, by `[owner] github_id`, to their Discord id; `projectScopeForRepo` accepts only `owner/repo`.
 - A Discord spawn clears inherited GitHub commenter keys.
 - `tests/memory.recall-github.test.ts` and `tests/memory.rank.test.ts` cover each and fail on the stacked base sources.
 
@@ -2753,4 +2818,133 @@ Acceptance Criteria
 - A v12 DB migrates to v13 keeping its rows and its forget requests, and a v11 DB goes through v12 to v13; `rescrubDatabase` re-scrubs `conversation_threads.summary` and `turns`.
 - An approved forget-me deletes the person's retained records (Discord ids, a declared person's GitHub logins, threads they commented on) with their memory, nobody else's; the running bridge's `forgetTurnsOfUsers` drops their live summary and records, and their next prompt replays nothing.
 - A fenced turn folded into a summary point keeps its words between that fence's own markers; a summary over its cap leaves a fenced point out whole; replayed turns and summary points quote fake block lines and turn labels, and a turn clipped inside its fence gets its end marker back.
+
+### REQ-discord-713
+
+A schedule's text is its creator's words (SAFE-12 / SAFE-13, #71). A
+schedule's name, description and prompt SHALL be treated like the same words
+in the creator's chat message (REQ-discord-071): the owner's are the
+principal's and are neither scanned nor fenced; anyone else's are scanned by
+the same detector (`scheduleInjection`, `inboundInjection` over each of the
+name, description and prompt, reason ids merged in `INJECTION_REASONS`
+order) and reach the model only as untrusted data.
+
+- `/schedule create` SHALL resolve the requester's role before the ADMIN gate
+  (`resolveDiscordActingRole` with the requester's Discord role ids, the admin
+  lists, the owner, the live mute set and the declared people list, as
+  `/work` does). When the requester is not the owner and their `name` or
+  `prompt` trips the detector, the create SHALL be refused through
+  `refuseInjectedSlash` (source `schedule-prompt`) with the interaction's
+  reply ephemeral (every `/schedule` reply is): the requester gets
+  `injectionRefusalHead` plus "I've flagged it to the owner" (never the
+  text; without an owner or a post function the `formatInjectionRefusal`
+  line), the owner one fresh post in the command's channel that pings only
+  them ("a /schedule request here looked like a prompt-injection attempt"),
+  and the SAFE-5 trail one `injection-suspected` / `denied` row (actor the
+  requester, surface `discord:/schedule`, digest of `schedule-prompt` and the
+  reason ids). Nothing SHALL be stored. A non-owner create that trips nothing
+  gets the ephemeral `NOT_AUTHORIZED` as before (no post, no row). There is no
+  other create or edit path for a schedule's text (pause, resume and delete
+  take none).
+- On every tick, after the DISCORD-SCHEDULE-3 gate (REQ-discord-020) and
+  before any worktree or agent run, the scheduler SHALL resolve the creator's
+  role again (`resolveDiscordActingRole` with the creator's user id, the live
+  allowlist, the owner, the bridge's live mute set when wired
+  (`SchedulerServiceOpts.mutedUsers`) and the declared people list re-read
+  now; a tick has no Discord role ids; any failure reads as community), so a
+  schedule stored before this check, or by someone who is no longer the
+  owner, is judged by who its creator is at that tick.
+- When the creator is not the owner and the stored name, description or
+  prompt trips the detector, the tick SHALL run nothing (no worktree, no
+  agent): one `injection-suspected` / `denied` row through
+  `SchedulerServiceOpts.recordAudit` when wired (the bridge wires its trail;
+  actor the creator, surface `scheduler:<schedule id>`, digest of
+  `schedule-prompt` and the reason ids; best effort), the run recorded failed
+  (`not run: … prompt-injection attempt (<reason ids>) (SAFE-13)`) with a
+  stuck ask whose question is `injectedScheduleQuestion(reasons)` (what
+  happened and why in plain words, never the text), the schedule paused (so
+  no later tick runs it or posts again; an auto-pause from this failure keeps
+  its own pause ask), and that ask posted through the usual schedule ask path
+  (REQ-discord-347 / REQ-discord-353: live gate at post time, schedule title
+  prefix — `Schedule (<id>) on <project>`, without the name, when the
+  creator's stored name itself trips the detector, so the post never quotes
+  it — the owner pinged once with allowed mentions the owner only, handed
+  back for the next delivery pass when the post does not go out, left pending
+  by a ticker with no Discord for a bridge tick to post).
+- Otherwise a non-owner creator's run SHALL get the prompt
+  `Scheduled work on project: <project>` (no name on that line), the
+  worktree line, then `fenceSpeakerText("Schedule \"<name>\":\n<prompt>",
+  role, "schedule-prompt")` (the `UNTRUSTED_DATA` fence with a header naming
+  the creator's role), then the closing SAFE line; the owner's schedule keeps
+  exactly the prompt it had (`Scheduled work "<name>" on project: <project>`
+  and the stored prompt as written).
+- Schedule runs keep `actingIsAdmin: false` and no acting role (never the
+  shell or runners, SAFE-3.a); result posts, ask posts, ping keys, auto-pause
+  and the delivery pass are otherwise unchanged. `SpeakerSurface` gains
+  `schedule-prompt`. No new env var, config key, slash option, table, column
+  or schema version.
+
+Acceptance Criteria
+- A community user's and a declared team member's `/schedule create` whose prompt (or name alone) trips the detector stores no schedule, gets one ephemeral refusal that never quotes the text, and produces exactly one post in the channel with allowed mentions only the owner and one `injection-suspected` / `denied` row with the user as actor and surface `discord:/schedule` (`tests/scheduler.injection.test.ts`).
+- An ordinary non-owner `/schedule create` still gets only the ephemeral `NOT_AUTHORIZED` (no post, no row, nothing stored); the owner's create with injection-like words is stored unscanned.
+- A benign community schedule's tick runs with `Scheduled work on project:` and its name and prompt inside the fence (`role: community`, `source=schedule-prompt`), the name nowhere outside it; a declared team member's is fenced as `role: team`, and as `role: community` when muted; the owner's schedule's prompt is exactly as before (no fence) even with injection-like words.
+- A stored community (or team) schedule whose prompt or name trips the detector runs no agent, is paused, posts one ask with the schedule title (by id alone, without the name, when the name tripped) that pings only the owner and never quotes the text, and appends one `denied` row (surface `scheduler:<id>`); a later tick posts nothing more.
+- A ticker with no outbound (the daemon) leaves that ask pending on the run row and a bridge tick posts it once; through `startBridge` the row lands in the bridge's `audit_log` and the schedule is paused.
+- These tests fail on the base sources (the owner and ordinary-create guards pass on both).
+### REQ-discord-367
+
+GitHub matches people by numeric user id only (IDENTITY-7.a, #36; captured
+from Leif's 2026-09-28 interview, round 12: "On GitHub it matches people only
+by their numeric user id, so a renamed or re-registered login never counts as
+them."). On GitHub a person — the configured owner included — SHALL be
+recognised only by their GitHub numeric user id, never by a GitHub login.
+`resolvePerson` (REQ-discord-036) SHALL match the GitHub side on `githubId`
+alone (`PersonQuery.githubLogin` is accepted and ignored), and
+`memorySubjectForGithub(dir, { login, id })` (REQ-discord-067) on `id` alone.
+An actor with no numeric id, or an id nobody declared, SHALL resolve to
+nobody — undeclared, so community at most (IDENTITY-12), never the owner —
+whatever its login. GitHub logins (`github_logins`, `[owner] github_login`)
+SHALL stay labels: read, written and shown as before (the Discord identity
+block's `github` line, `/admin people list`), used to @mention the owner on
+GitHub and to find a person's kept GitHub threads on forget-me, and still
+refused on a second person by `/admin people link`, but never matched.
+
+The owner's GitHub id SHALL be declared as `github_id` in the allowlist file's
+`[owner]` section (TOML quoted or bare digits; JSON string or safe integer),
+read into `OwnerRecord.githubId` and added to the owner's person (the declared
+entry holding the owner's Discord id, else the built-in `owner` entry); an
+invalid value SHALL be ignored with a value-free issue. There is no env var
+for it; env still overrides the other owner fields. `isOwnerGithub(owner,
+githubId)` SHALL be true only for that numeric id.
+
+`/admin people link person:<id> github:<login>` SHALL, once the request plans
+without a refusal, defer its ephemeral reply and look the login's numeric id
+up once through the GitHub API (`createGithubUserLookup` in
+`src/identity/github-user.ts`: `GET /users/{login}` with `GITHUB_TOKEN` /
+`GH_TOKEN` when set, a 10 s timeout; `SlashContext.lookupGithubUser`
+overrides it), then link that id as a `github_id` next to the login — also
+when the login is already linked — so the id is stored in `github_ids`
+(`github_ids` stays the stored field); owner-only and audited like every
+`/admin people` change (REQ-discord-036). A lookup that fails, times out,
+finds no user or answers for another login SHALL link nothing, append one
+`admin-people-link` `error` row and reply why (the HTTP status only, never a
+token or response body), suggesting `github_id:<number>`. A refused request
+makes no GitHub call, and neither do `github_id:`, `discord:` or `nickname:`
+links. `unlink github:<login>` removes the label only; when GitHub ids stay
+linked the reply says they still match. The lookup module is not a writer of
+people.
+
+People entries with only `github_logins` SHALL keep loading (no issue, still
+matched on Discord) but SHALL NOT match on GitHub until an id is linked;
+`peopleWithoutGithubId(dir)` lists them, the owner's person included, by
+person id for `corvidinho doctor` (REQ-cli-367). No schema, table or column
+change; no package version bump.
+
+Acceptance Criteria
+- `resolvePerson` / `memorySubjectForGithub`: a GitHub login alone, or the owner's or a declared person's login with another numeric id, resolves nobody; the declared numeric id resolves the person whatever the login now is.
+- `[owner] github_id` is read from TOML and JSON (string or number), joins the owner's person (built-in or declared) and is the owner on GitHub; an invalid one is ignored with a value-free issue; an env-only owner login is not the owner on GitHub; `isOwnerGithub` matches the numeric id only.
+- A login-only people entry loads without an issue and still matches on Discord, but not on GitHub; with `github_ids` added it matches on GitHub under any login.
+- `/admin people link github:<login>` writes the looked-up id to `github_ids` (login kept), audits `started` / `ok`, defers the reply first and resolves the id at once; linking again is no change; a failed, missing or mismatched lookup writes nothing and audits `error`; a refused request and `github_id:` links make no lookup; unlinking a login says the id still matches.
+- `createGithubUserLookup` over a stubbed transport returns the numeric id and canonical login on 200, "no user" on 404, the status only otherwise (never the token), and refuses a payload without a numeric id.
+- `tests/identity.github-numeric-id.test.ts` fails on the base sources and passes after; `tests/identity.people.test.ts`, `tests/identity.owner.test.ts`, `tests/discord.admin-people.test.ts` and `tests/memory.rank.test.ts` hold the numeric-id rule.
 

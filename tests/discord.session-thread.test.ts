@@ -23,6 +23,7 @@ import { SessionStore } from "../src/discord/session-store.ts";
 import type { SlashInteraction } from "../src/discord/slash-types.ts";
 import { extractConfirmTokens } from "../src/memory/confirm.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
+import { teamPeopleFile } from "./fixtures/team-people.ts";
 
 const CHAN = "chan-1";
 const OWNER = "100000000000000001";
@@ -48,7 +49,7 @@ type Script = (n: number, opts: AgentRunChatOpts) => string | { summary: string;
 
 async function bridgeWith(
   script: Script,
-  extra: { db?: Database; sessionStore?: SessionStore; projectRoot?: string } = {},
+  extra: { db?: Database; sessionStore?: SessionStore; projectRoot?: string; allowlistFile?: string } = {},
 ) {
   const calls: Call[] = [];
   const agent: AgentClient = {
@@ -80,7 +81,7 @@ async function bridgeWith(
       DISCORD_BOT_TOKEN: "fake",
       DISCORD_CHANNEL_IDS: CHAN,
       CORVIDINHO_DISCORD_DRY_RUN: "1",
-      CORVIDINHO_ALLOWLIST_FILE: NO_ALLOWLIST,
+      CORVIDINHO_ALLOWLIST_FILE: extra.allowlistFile ?? NO_ALLOWLIST,
       CORVIDINHO_OWNER_DISCORD_ID: OWNER,
     },
     // Temp non-git project: never create real worktrees/branches in this repo.
@@ -106,6 +107,11 @@ async function bridgeWith(
   if (result.ok !== true || !box.handlers) throw new Error("bridge did not start");
   running.push(result);
   return { result, handlers: box.handlers, calls, outbound };
+}
+
+/** IDENTITY-11.a: community can't start /work, so /work runs declare MEMBER team. */
+function teamFor(command: "session" | "work"): { allowlistFile?: string } {
+  return command === "work" ? { allowlistFile: teamPeopleFile(MEMBER) } : {};
 }
 
 /** Message id of the answer the Nth run was collapsed into (DISCORD-ASK-7). */
@@ -264,7 +270,8 @@ describe("session thread replay (AGENT-6 / REQ-discord-072)", () => {
     test(`a reply to a /${command === "session" ? "session start" : "work"} answer carries its ${command === "session" ? "topic" : "description"} and answer`, async () => {
       const text = "draft the HERON release notes";
       const summary = "Drafted the notes under the HERON heading.";
-      const { handlers, calls, outbound } = await bridgeWith((n) => (n === 1 ? summary : "done"));
+      // IDENTITY-11.a: /work needs the member declared team.
+      const { handlers, calls, outbound } = await bridgeWith((n) => (n === 1 ? summary : "done"), teamFor(command));
       await handlers.onSlash!(slash({ n: 1, command, userId: MEMBER, text }));
       await handlers.onMessage(replyTo("m2", MEMBER, "now shorten them", answerId(outbound, 0)));
       expect(calls).toHaveLength(2);
@@ -376,7 +383,7 @@ describe("session thread replay (AGENT-6 / REQ-discord-072)", () => {
       const { handlers, calls, outbound } = await bridgeWith((n) => {
         if (n === 1) throw new Error("agent spawn failed");
         return "done";
-      });
+      }, teamFor(command));
       await handlers.onSlash!(slash({ n: 1, command, userId: MEMBER, text }));
       await handlers.onMessage(replyTo("m2", MEMBER, "try again", answerId(outbound, 0)));
       expect(calls).toHaveLength(2);

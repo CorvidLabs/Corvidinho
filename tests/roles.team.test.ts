@@ -35,6 +35,7 @@ import { CORVIDINHO_PROTOCOL_VERSION } from "../src/discord/protocol-version.ts"
 import { SessionStore } from "../src/discord/session-store.ts";
 import type { SlashContext, SlashInteraction, SlashReplyPayload } from "../src/discord/slash-types.ts";
 import { WorkStore } from "../src/discord/work-store.ts";
+import { NOT_AUTHORIZED } from "../src/discord/types.ts";
 import type { OwnerRecord } from "../src/identity/owner.ts";
 import {
   buildPeopleDirectory,
@@ -706,16 +707,15 @@ describe("/work and /session start by role (IDENTITY-10/11)", () => {
     expect(t.body).toContain("PR: fixture line");
   });
 
-  test("the owner's /work is unchanged; community and undeclared never reach the PR step", async () => {
+  test("the owner's /work is unchanged; community and undeclared can't start it, so never reach the PR step (IDENTITY-11.a)", async () => {
     const o = await work(OWNER_ID);
     expect(o.seen[0]).toMatchObject({ actingIsAdmin: true, actingRole: "owner", workTask: true });
     expect(o.prCalls).toBe(1);
     for (const who of [KYN, GASPAR, STRANGER]) {
       const c = await work(who);
-      expect(c.seen[0]).toMatchObject({ actingIsAdmin: false, actingRole: "community" });
+      expect(c.seen).toHaveLength(0);
       expect(c.prCalls).toBe(0);
-      expect(c.body).toContain("only the owner (ADMIN) can ship /work as a PR");
-      expect(c.body).toContain("team member (IDENTITY-10)");
+      expect(c.body).toBe(NOT_AUTHORIZED);
     }
   });
 
