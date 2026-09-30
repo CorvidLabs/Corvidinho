@@ -7,11 +7,11 @@
   "title": "Release 0.0.35: numeric GitHub ids, DM private reads, GitHub forget-me, unskippable verify, shell guards, schedule repo gate",
   "description": "Release 0.0.35: numeric GitHub ids, DM private reads, GitHub forget-me, unskippable verify, shell guards, schedule repo gate",
   "kind": "operations",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "7697caf0f4ac4634c2cf2e1d3b848e11bd15c3b5",
   "created_at": 1790746411,
-  "updated_at": 1790746428,
+  "updated_at": 1790746796,
   "affected_specs": [
     "cli"
   ],

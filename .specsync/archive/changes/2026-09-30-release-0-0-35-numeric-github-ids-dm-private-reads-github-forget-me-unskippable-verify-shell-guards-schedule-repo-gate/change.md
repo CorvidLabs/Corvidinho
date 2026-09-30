@@ -1,6 +1,6 @@
 ---
 id: release-0-0-35-numeric-github-ids-dm-private-reads-github-forget-me-unskippable-verify-shell-guards-schedule-repo-gate
-state: implementing
+state: archived
 type: operations
 base_commit: 7697caf0f4ac4634c2cf2e1d3b848e11bd15c3b5
 ---
