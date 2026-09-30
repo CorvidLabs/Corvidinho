@@ -9,7 +9,8 @@
  * `@here` are defanged, and the post carries `mentionUserIds` so the live
  * gateway limits allowed mentions to the intended user(s). Posts go only
  * where the caller already posts (allowlisted channel reply or schedule
- * channel) — no DM path, no new channel (DISCORD-5 / DISCORD-8).
+ * channel; the owner's DM for a schedule with no channel, AUTONOMY-6.a) —
+ * no new channel (DISCORD-5 / DISCORD-8).
  *
  * An edit does not notify its mentions, so an answer collapsed into the
  * thinking message (DISCORD-ASK-6/7) is followed by the one-line
@@ -87,6 +88,12 @@ export type FormatAskReplyOpts = {
    * ASK_ANSWER_HINT in place of ASK_REPLY_HINT (ignored for a spend-cap ask).
    */
   answerButton?: boolean;
+  /**
+   * AUTONOMY-6.a — the hint line of a post whose own controls answer it (a
+   * schedule ask: Choose or Answer, and Cancel; a reply does not answer it),
+   * in place of the other hints (ignored for a spend-cap ask).
+   */
+  hint?: string;
 };
 
 /**
@@ -151,7 +158,8 @@ export function formatAskReply(opts: FormatAskReplyOpts): AskReply {
   }
   // SAFE-8: a reply cannot lift the cap (no Approve card yet, #96), so a
   // spend-cap ask never invites one.
-  if (opts.answerButton && !spendCap) lines.push(ASK_ANSWER_HINT);
+  if (opts.hint?.trim() && !spendCap) lines.push(opts.hint.trim());
+  else if (opts.answerButton && !spendCap) lines.push(ASK_ANSWER_HINT);
   else if (opts.replyHint && !spendCap) lines.push(ASK_REPLY_HINT);
   let content = lines.join("\n");
   if (content.length > ASK_REPLY_MAX) {

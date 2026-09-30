@@ -57,10 +57,19 @@ on the same data dir:
   with the same pings as a run the bridge claimed: the owner for stuck and
   spend-cap, the schedule's creator for clarify. A spend-cap ask posts only
   "💸 Work is paused for budget."; its details (amounts, the cap and the
-  setting) go to the owner by DM (SAFE-14.a). Only the newest ask of a
-  schedule is posted, and not at all once a later run of that schedule has
-  finished. With only the daemon running, the question waits until a bridge
-  starts.
+  setting) go to the owner by DM (SAFE-14.a). A schedule with no channel
+  gets its question by DM to the owner instead. Only the newest ask of a
+  schedule is posted, and not at all once it was cancelled or a later run of
+  that schedule has finished. With only the daemon running, the question
+  waits until a bridge starts.
+- Every such question blocks its schedule (AUTONOMY-6.a) until the
+  schedule's creator or the owner answers or cancels it on Discord (the
+  **Choose** / **Answer** and **Cancel** buttons on its post; a spend-cap
+  stop has **Cancel** only). Until then each due run is skipped, in the
+  daemon as in the bridge, and not made up later, and the bridge posts one
+  note saying the schedule is waiting (no ping; it carries the same
+  buttons). `/schedule resume` does
+  not answer it. The answer goes to the schedule's next run.
 
 ## Nightly backup (OPS-1/2)
 
@@ -185,10 +194,10 @@ scrubbed for secrets (SAFE-6).
 | `daemon.lock_held` / `daemon.lock_failed` | Start refused (exit 1) |
 | `daemon.start_failed` | Start refused (exit 1): start-up setup failed, for example an allowlist file that cannot be read or parsed or a DB that cannot open. `message` gives the reason; nothing runs and the lock is released |
 | `daemon.protocol_mismatch` / `daemon.protocol_unverified` | `CORVIDINHO_BIN` speaks another wire protocol (exit 1), or could not be checked (warn) |
-| `tick` | A tick started or skipped a due run. `skipped` includes runs that another ticker claimed first. |
+| `tick` | A tick started or skipped a due run. `skipped` includes runs that another ticker claimed first and runs that wait on their schedule's open question (AUTONOMY-6.a). |
 | `run.finished` | One run ended: `ok`, `error`, `autoPaused` |
 | `spend.warning` | (warn) A schedule run crossed 80% of the rolling 24 h spend cap (`CORVIDINHO_DAILY_SPEND_CAP_USD`, SAFE-8): `spentMicroUsd`, `capMicroUsd`, `percent` and a `message` line. The daemon has no Discord: the warning stays pending for a bridge's scheduler tick to DM to the owner (never posted in a channel, SAFE-14.a) |
-| `run.needs_human` | (warn) A run stopped to ask a human: `reason` is `stuck`, `clarify` or `spend-cap`. Also `stuck` for a run that could not start and for the run that auto-paused its schedule. Its question stays on the run row until a bridge posts it. |
+| `run.needs_human` | (warn) A run stopped to ask a human: `reason` is `stuck`, `clarify` or `spend-cap`. Also `stuck` for a run that could not start and for the run that auto-paused its schedule. Its question stays on the run row until a bridge posts it, and the schedule's due runs wait until someone answers or cancels it on Discord (AUTONOMY-6.a). |
 | `tick.failed` | A tick threw (for example, SQLite busy); the daemon keeps running |
 | `tick.allowlist_failed` | The allowlist file could not be read or parsed, so the tick was skipped (no schedule ran; due schedules stay due; the nightly backup still runs when due). Fix the file; the next tick picks it up |
 | `daemon.recovered` | At start: `runs` (ids) a dead process left running were marked failed, `worktrees` leftover schedule-run worktrees removed |

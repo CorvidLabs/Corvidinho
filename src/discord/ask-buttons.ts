@@ -14,6 +14,10 @@
  * press opens a private form (modal, interaction response type 9) with one
  * paragraph input; its submit (interaction type 5) passes the same gates as a
  * press and resumes the session like a reply. A reply still answers it.
+ *
+ * AUTONOMY-6.a — a schedule run's ask (src/discord/schedule-ask.ts) reuses
+ * these controls with the run id (`srun_…`) as its ask id, plus a `cancel`
+ * kind for its Cancel button.
  */
 
 import type { AskOption, HumanAsk } from "../agent/types.ts";
@@ -22,7 +26,11 @@ import { ASK_QUESTION_MAX, normalizeQuestion } from "../agent/ask.ts";
 import { defangMassMentions } from "./ask-ping.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 
-/** Button prompts expire after ~30 minutes (DISCORD-ASK-5). */
+/**
+ * Button prompts expire after ~30 minutes (DISCORD-ASK-5). Session asks
+ * only: a schedule ask's controls never lapse while it is open (AUTONOMY-6.a,
+ * src/discord/schedule-ask.ts).
+ */
 export const ASK_BUTTON_TTL_MS = 30 * 60 * 1000;
 
 export const ASK_CHOICE_EXPIRED = "that choice expired";
@@ -34,6 +42,9 @@ export const ASK_CUSTOM_PREFIX = "cvask";
 
 /** DISCORD-ASK-4.a — the free-text stub's one button. */
 export const ASK_ANSWER_LABEL = "Answer";
+
+/** AUTONOMY-6.a — a schedule ask's Cancel button. */
+export const ASK_CANCEL_LABEL = "Cancel";
 
 /** Discord's cap on a modal text input value. */
 export const DISCORD_MODAL_INPUT_MAX = 4000;
@@ -149,10 +160,16 @@ export function answerCustomId(askId: string): string {
   return `${ASK_CUSTOM_PREFIX}:answer:${askId}`;
 }
 
+/** AUTONOMY-6.a — a schedule ask's Cancel button custom_id. */
+export function cancelCustomId(askId: string): string {
+  return `${ASK_CUSTOM_PREFIX}:cancel:${askId}`;
+}
+
 export type ParsedAskCustomId =
   | { kind: "open"; askId: string }
   | { kind: "pick"; askId: string; optionId: string }
-  | { kind: "answer"; askId: string };
+  | { kind: "answer"; askId: string }
+  | { kind: "cancel"; askId: string };
 
 export function parseAskCustomId(raw: string): ParsedAskCustomId | null {
   const parts = raw.split(":");
@@ -165,6 +182,9 @@ export function parseAskCustomId(raw: string): ParsedAskCustomId | null {
   }
   if (parts[1] === "answer" && parts[2]) {
     return { kind: "answer", askId: parts[2] };
+  }
+  if (parts[1] === "cancel" && parts[2]) {
+    return { kind: "cancel", askId: parts[2] };
   }
   return null;
 }

@@ -340,7 +340,43 @@ CREATE INDEX IF NOT EXISTS idx_approval_codes_request
   ON approval_codes(kind, request_id);
 `;
 
-export const SCHEMA_VERSION = 14;
+/**
+ * v15 — blocking schedule asks (AUTONOMY-6.a, REQ-discord-606,
+ * src/scheduler/store.ts): every ask a schedule run records stays open until
+ * the schedule's creator or the owner answers or cancels it on Discord, and
+ * the schedule's due runs wait (skipped, no catch-up) with one note.
+ * `ask_options` holds the ask's listed choices (JSON, labels SAFE-6 scrubbed,
+ * a re-scrub target), `ask_blocking` marks an ask recorded under these rules,
+ * `ask_closed_at` / `ask_outcome` (`answered` | `picked` | `cancelled` |
+ * `superseded`) / `ask_closed_by` say when, how and by whom it closed,
+ * `ask_answer` is the answer handed to the next run (SAFE-6 scrubbed, a
+ * re-scrub target), `ask_skip_at` is when a due run first waited on it and
+ * `ask_note_at` when the one wait note went out. An ask recorded before v15
+ * that no bridge has posted yet, on its schedule's newest finished run (a
+ * daemon's question waiting for a bridge, REQ-discord-347, or a handed-back
+ * auto-pause ask, REQ-discord-353), has been shown to nobody: it becomes a
+ * blocking ask and is posted with its controls like a new one, so the
+ * upgrade never drops it. Every other ask recorded before v15 (posted
+ * without a Cancel, or moot) is closed as `superseded`, so an upgrade never
+ * blocks a schedule on a question that had no Cancel.
+ */
+const SCHEMA_V15_RUN_COLUMNS = [
+  ["ask_options", "TEXT"],
+  ["ask_blocking", "INTEGER NOT NULL DEFAULT 0"],
+  ["ask_closed_at", "INTEGER"],
+  ["ask_outcome", "TEXT"],
+  ["ask_answer", "TEXT"],
+  ["ask_closed_by", "TEXT"],
+  ["ask_skip_at", "INTEGER"],
+  ["ask_note_at", "INTEGER"],
+] as const;
+const SCHEMA_V15_SQL = `
+CREATE INDEX IF NOT EXISTS idx_schedule_runs_open_ask
+  ON schedule_runs(schedule_id)
+  WHERE ask_blocking = 1 AND ask_closed_at IS NULL;
+`;
+
+export const SCHEMA_VERSION = 15;
 
 export function migrateCorvidinhoDb(db: Database): void {
   db.exec("PRAGMA foreign_keys = ON;");
@@ -468,6 +504,39 @@ export function migrateCorvidinhoDb(db: Database): void {
     db.exec(SCHEMA_V14_SQL);
     db.run("UPDATE schema_meta SET value = '14' WHERE key = 'version'");
     version = 14;
+  }
+  if (version < 15) {
+    for (const [col, type] of SCHEMA_V15_RUN_COLUMNS) {
+      try {
+        db.exec(`ALTER TABLE schedule_runs ADD COLUMN ${col} ${type}`);
+      } catch {
+        // Column already present
+      }
+    }
+    db.exec(SCHEMA_V15_SQL);
+    // A pending ask (never posted) on its schedule's newest finished run is
+    // still owed to a human: it blocks and is posted with its controls.
+    db.run(
+      `UPDATE schedule_runs SET ask_blocking = 1
+       WHERE ask_reason IS NOT NULL AND ask_posted_at IS NULL AND ask_closed_at IS NULL
+         AND ask_blocking = 0 AND completed_at IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM schedule_runs l
+           WHERE l.schedule_id = schedule_runs.schedule_id AND l.completed_at IS NOT NULL
+             AND (l.completed_at > schedule_runs.completed_at
+                  OR (l.completed_at = schedule_runs.completed_at
+                      AND l.rowid > schedule_runs.rowid))
+         )`,
+    );
+    // Every other ask recorded before v15 was posted without a Cancel (or is
+    // moot): close it, so none blocks.
+    db.run(
+      `UPDATE schedule_runs SET ask_closed_at = ?, ask_outcome = 'superseded'
+       WHERE ask_reason IS NOT NULL AND ask_closed_at IS NULL AND ask_blocking = 0`,
+      [Date.now()],
+    );
+    db.run("UPDATE schema_meta SET value = '15' WHERE key = 'version'");
+    version = 15;
   }
 }
 

@@ -393,16 +393,16 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   warning, no reply hint) and hands the stored question to the owner's DM pass
   once per episode (SAFE-14.a), and once per run when its post keeps failing
   and is retried every tick (three failing ticks, one DM; the post then goes
-  out with the ping); the same question pings once and
-  only the newest of two pending asks posts; a later finished run or a
-  deleted schedule leaves nothing; a refused channel posts nothing; a creator
+  out with the ping); the same question pings once (the first cancelled,
+  AUTONOMY-6.a) and only the newest, open ask posts; a cancelled ask, a
+  later finished run or a deleted schedule leaves nothing; a refused channel posts nothing; a creator
   the live allowlist no longer lists (or deny-lists) gets no post until the
   shared allowlist lets them back, then one post with the ping; a post
   that resolves `false` or throws is retried with its ping; a run the bridge
   posted itself is never posted again and two bridge tickers post a pending
   ask once; a v10 DB migrates to v11; the question is scrubbed at rest and
-  re-scrubbed by `rescrubDatabase`; a later run that finishes while a pass
-  is posting another schedule's ask makes that ask moot; after `stop()` a
+  re-scrubbed by `rescrubDatabase`; an ask cancelled while a pass is
+  posting another schedule's ask is not posted; after `stop()` a
   pass finishes its post in flight and takes no other ask, and
   `settleAskDelivery(ms)` is bounded; `startDaemon` logs `run.needs_human`
   and a `startBridge` on the same data dir posts the ask to the owner once;
@@ -1160,6 +1160,57 @@ thinking outbound; no live Discord, no network):
   on their assertions and `tests/discord.spend-dm.test.ts` cannot load; with
   the branch restored all 154 tests in the seven files pass.
 
+## A schedule's question blocks it until answered or cancelled (REQ-discord-606, AUTONOMY-6.a; REQ-discord-045 / 347 / 353 / 548 modified)
+
+Fixture tests only: in-memory or temp SQLite, injected agents, recorded
+posts and DMs, `startBridge` with a null gateway and fake interactions; no
+live Discord, no network, no token.
+
+- `tests/scheduler.ask-block.test.ts` — a clarify ask blocks: the next due
+  slots are skipped (`{ started: [], skipped: [id] }`, `next_run_at` on the
+  next slot, no run row, `execution_count` unchanged), one wait note (no
+  mention; the ask's Answer + Cancel controls) and no second one; after Cancel nothing is made up
+  and the next slot runs with no answer. A stuck ask, a spend-cap stop and a
+  run that could not start block the same way (never reaching the
+  auto-pause); the auto-pause ask blocks and `/schedule resume` leaves it
+  open; an ask claimed but never posted (a crash between the claim and the
+  post) still gets its controls on the one wait note, and they close it; a daemon's due run waits too (`ask_skip_at`) and the bridge posts the
+  ask, then the note. Controls: Choose + Cancel for listed choices, Answer +
+  Cancel for free text, their hints, no reply hint; a spend-cap stop Cancel
+  only (its note too) with "💸 Work is paused for budget." and a note
+  without amounts; an
+  in-process post that fails is posted by the next tick. No channel: the
+  ask and the note, each with its controls, by DM to the owner, nothing
+  without an owner. The owner's pick reaches the next run unfenced and once; the
+  creator's typed answer is scrubbed at rest and fenced; a closed ask cannot
+  close again. A v14 DB migrates to v15 (the eight columns; earlier asks
+  that were posted or are moot closed `superseded`, not open or pending, and
+  that schedule runs; a still-pending ask on its schedule's newest run open
+  and blocking, posted with Answer + Cancel, its schedule waiting; a re-run
+  changes nothing); `ask_answer` / `ask_options` are re-scrubbed.
+- `tests/discord.schedule-ask.test.ts` — through `startBridge`: the
+  `srun_` ask id and the `cancel` kind; Choose shows the creator the choices
+  privately and a pick closes it `picked` (a re-press is refused); an unknown
+  option id is `ASK_CHOICE_EXPIRED`; Answer opens the form, a thin submit
+  restates privately and keeps it open, a typed submit closes it scrubbed,
+  `cancel` typed cancels; someone else's Cancel or submit is refused, the
+  owner's and the creator's Cancel close it; a spend-cap ask refuses Choose
+  and a submit and takes Cancel; a three-day-old ask still takes a pick
+  (DISCORD-ASK-5 is for session asks); the channel gate (zero-width ack, the
+  owner's tip, the schedule's channel off the allowlist), a deny-listed and a
+  muted creator; a channel-less schedule answered in the owner's DM and
+  refused from a guild channel; the creator's injection-like answer closes
+  nothing and pings the owner; a Cancel id on a session ask is refused; on
+  a paused schedule the ack of a Cancel, a typed answer or a pick ends with
+  `SCHEDULE_ASK_PAUSED_NOTE`. With
+  the bridge's own scheduler: the ask post carries Choose + Cancel, a reply
+  to it leaves it open, Cancel closes it; a channel-less schedule DMs its ask
+  and controls to the owner.
+- Rewritten for the blocking: `tests/scheduler.ask-outbox.test.ts` (a run
+  after an ask cancels it first; staleness by a cancelled ask and by a later
+  run another ticker finished) and `tests/discord.ask-ping.test.ts` (the
+  AUTONOMY-2 dedupe harness cancels the open ask before each run); schema
+  version assertions follow v15.
 ## /work checks tests against the merge-base (REQ-discord-185, AGENT-15)
 
 `tests/agent.test-evidence.test.ts` › "/work checks the tree against the

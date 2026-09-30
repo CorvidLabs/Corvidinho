@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "a-schedule-s-question-can-be-answered-or-cancelled-by-the-owner-or-its-creator-and-its-next-runs-wait-with-one-note",
+  "implementation_commit": "9f8355eb617ee6786d4f386d98164fc14ad6ae4d",
+  "implementation_tree": "052647bb274da8e052a826e49d306f2c52a61f93",
+  "contract_digest": "78cbbf817a1741c00027b62bdfb11a9ea0629b61a62fc7a5b02ed77ebf6871ab",
+  "workspace_digest": "f35ef0e7e4212bb681033f4983005e1211e3ef88f98fc0767cb9c3802cf39157",
+  "closing_digest": "e44ae452880241f42aabc65cc9f2ef0d7e54a5948f381a3c29e5856f10a4a236",
+  "review_digest": "3f2a2c957c47a9ca73b7d994ab18dae2b518ed5d54d102a499a488ca0834c83a",
+  "finalization_digest": "d7c6fb907add8c622fd300da43d9ede40493df1ef4e645b7c9b51dcf441cc2e2",
+  "timestamp": 1790782573
+}

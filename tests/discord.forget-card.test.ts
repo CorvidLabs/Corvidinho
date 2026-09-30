@@ -563,9 +563,10 @@ describe("no answer, or a late answer, is no", () => {
 
 describe("schema v12: forget_requests (forward-only migration)", () => {
   test("a v11 DB migrates to v12 keeping its memories; one pending ask per subject", () => {
-    // v13 (retained conversations, REQ-discord-472) and v14 (approval cards,
-    // REQ-discord-096) follow v12.
-    expect(SCHEMA_VERSION).toBe(14);
+    // v13 (retained conversations, REQ-discord-472), v14 (approval cards,
+    // REQ-discord-096) and v15 (blocking schedule asks, REQ-discord-606)
+    // follow v12.
+    expect(SCHEMA_VERSION).toBe(15);
     const d = new SqliteDatabase(":memory:");
     try {
       migrateCorvidinhoDb(d);

@@ -211,7 +211,15 @@ export const SCRUB_TARGETS: ReadonlyArray<{
   { table: "discord_session_turns", columns: ["content"] },
   { table: "discord_work_tasks", columns: ["description", "summary"] },
   { table: "schedules", columns: ["name", "description", "prompt"] },
-  { table: "schedule_runs", columns: ["summary", "error", "ask_question"] },
+  // AUTONOMY-6.a (schema v15, src/scheduler/store.ts): a schedule ask's
+  // answer and its listed choices (JSON; option ids never look like a
+  // secret, so an open Choose button keeps working). New columns, empty in
+  // every row written under older rules, so no rules version bump.
+  {
+    table: "schedule_runs",
+    columns: ["summary", "error", "ask_question", "ask_answer"],
+    json: ["ask_options"],
+  },
   { table: "memories", columns: ["key", "content"] },
   { table: "watch_sessions", columns: ["topic"] },
   // SESSION-5/6, AGENT-6.a (src/store/conversation.ts): the condensed summary
