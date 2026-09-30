@@ -7,11 +7,11 @@
   "title": "When it repeats a failing call it is steered to change approach, then asks; a stuck GitHub run pings the owner on Discord (AGENT-16, AGENT-16.a)",
   "description": "When it repeats a failing call it is steered to change approach, then asks; a stuck GitHub run pings the owner on Discord (AGENT-16, AGENT-16.a)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "9abc768f5b1a2122ae55025efea32b4a9113e249",
   "created_at": 1790743808,
-  "updated_at": 1790747928,
+  "updated_at": 1790748098,
   "affected_specs": [
     "agent",
     "watch",
