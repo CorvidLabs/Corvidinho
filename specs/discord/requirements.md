@@ -707,10 +707,12 @@ Corvidinho SHALL load a durable owner record from bot-VM config (IDENTITY-1,
 ALLOW-4): a Discord user snowflake plus optional GitHub login and display
 name, from env `CORVIDINHO_OWNER_DISCORD_ID`, `CORVIDINHO_OWNER_GITHUB_LOGIN`,
 `CORVIDINHO_OWNER_DISPLAY` and/or an `[owner]` section (`discord_id`,
-`github_login`, `display`) in the allowlist file. Env SHALL override the file
-per field. The record is re-read on every start, so it survives restarts.
-The owner SHALL be matched only by Discord snowflake or case-insensitive
-GitHub login, never by display name.
+`github_login`, `display`) in the allowlist file, plus an optional GitHub
+numeric user id from `[owner] github_id` (file only, REQ-discord-367). Env
+SHALL override the file per field. The record is re-read on every start, so
+it survives restarts. The owner SHALL be matched only by Discord snowflake
+and, on GitHub, by the `[owner] github_id` numeric user id (IDENTITY-7.a) —
+never by GitHub login or display name; the login is kept for @mentions.
 
 ADMIN SHALL be owner-only (IDENTITY-2, Leif decision on #42). At handler time
 (ADMIN-4 / DISCORD-7) `resolvePermissionLevel` SHALL return ADMIN only for
@@ -726,7 +728,7 @@ configured plus the display name only, never ids, logins, or tokens.
 
 Acceptance Criteria
 - Env and allowlist-file `[owner]` load the owner; env wins per field; reloading the same config yields the same owner.
-- The owner matches by Discord snowflake or lowercased GitHub login; the display name never matches.
+- The owner matches by Discord snowflake or the `[owner] github_id` numeric id (`isOwnerGithub(owner, githubId)`); the GitHub login and the display name never match.
 - The owner resolves to ADMIN; a muted or deny-listed owner does not.
 - Admin user/role lists never resolve to ADMIN, with or without an owner; no owner ⇒ nobody ADMIN and admin slash (/mute) is refused for everyone.
 - Bridge start warns when the legacy admin lists are set or no owner is configured.
@@ -2114,7 +2116,7 @@ WebP image whose magic bytes match its extension, or UTF-8 text with a
 extension; text (and the optional caption) SHALL be secret-scrubbed (SAFE-6:
 vendor-key shapes and set secret env values, `redactSecretEnvValues`) before
 upload, and the caption SHALL parse no mentions (REQ-discord-205). SAFE-2
-protected paths (`.env*`, `.git`, `fledge.toml`, `bunfig.toml`,
+protected paths (`.env*`, `.git`, `fledge.toml`, `.fledge/`, `bunfig.toml`,
 `specs`, `*.spec.md`, keystores), any `.specsync` path and secret paths
 (`.ssh`, keys, credentials) SHALL be refused, judged on the path as given and
 on where it resolves inside the project root with symlinks followed; a path
@@ -2165,6 +2167,7 @@ Acceptance Criteria
 - A file whose size, as first taken, is under 8 MB but which is over it when read is refused with the upload-limit error after at most 8 MB + 1 byte is read: no requester check runs and nothing is uploaded.
 - A checked file swapped for a link to `.env`, or whose folder is swapped for a link into `.ssh`, after the path checks is refused (SAFE-2): no requester check runs and nothing is uploaded.
 - An ask-button pick in a thread resumes with `replyChannelId` = the thread and `replyParentChannelId` = its parent.
+- A file under `.fledge/` (`.fledge/lanes/notes.md`) and a link to it are refused like the rest of the SAFE-2 set (SAFE-2.a); nothing is uploaded (fails on main's `isProtectedPath`).
 
 ### REQ-discord-734
 
@@ -2212,7 +2215,8 @@ People SHALL be read from the allowlist file this process loaded (the file
 `[owner]` comes from, `AllowlistConfig.sourcePath`), re-read on every use, so
 a VM edit or an `/admin people` change applies on the next message, slash run
 or WATCH event without a restart; no file loaded means nobody declared. There
-SHALL be no second store, env var, config key, table or column, and the
+SHALL be no second store, env var, config key, table or column (the one later
+key, the owner's `[owner] github_id`, is REQ-discord-367), and the
 allowlist loader and `[owner]` reader SHALL read a file with people sections
 exactly as before.
 
@@ -2224,14 +2228,15 @@ plain-language problem naming the person id and key, never an account id.
 `resolvePerson(directory, { discordId, githubLogin, githubId })` SHALL be the
 one resolver (for later slices too) and SHALL return `{ personId,
 displayName?, role?, person }` or null. It SHALL match only on stable ids —
-the Discord user id (or `<@id>`), the GitHub numeric id and the
-case-insensitive GitHub login — and never on a display name or nickname
-(IDENTITY-7). A login SHALL NOT match when the GitHub numeric id is known and
-the person declared other GitHub ids; ids that point at two different people,
-and an id declared for two people, SHALL match nobody. The configured owner
-(IDENTITY-1) SHALL always be a person: the declared entry holding the owner's
-Discord id (the owner's GitHub login added to it), else a built-in `owner`
-entry from `[owner]` / env; its `role` SHALL be `owner`. No other role is read
+the Discord user id (or `<@id>`) and the GitHub numeric id — and never on a
+display name, nickname or GitHub login (IDENTITY-7; on GitHub the numeric id
+only, IDENTITY-7.a, REQ-discord-367: `githubLogin` is accepted and ignored,
+so a renamed or re-registered login never counts as anyone); ids that point
+at two different people, and an id declared for two people, SHALL match
+nobody. The configured owner (IDENTITY-1) SHALL always be a person: the
+declared entry holding the owner's Discord id (the owner's `[owner]` GitHub
+id and login added to it), else a built-in `owner` entry from `[owner]` /
+env; its `role` SHALL be `owner`. No other role is read
 yet (#65 adds roles). No AlgoChat or wallet ids.
 
 Recognised on Discord (IDENTITY-14): every interactive run (chat message,
@@ -2276,8 +2281,8 @@ without a file SHALL read the file its first `/admin people` change writes.
 Acceptance Criteria
 - `[people.<id>]` TOML (plural and singular keys) and the JSON `people` object parse to people; the allowlist loader and `[owner]` reader load the same file unchanged.
 - Unreadable entries are skipped whole with problems that name the person and key but no account id; `owner` is a reserved id.
-- `resolvePerson` resolves by Discord id, `<@id>`, GitHub login (any case, `@`) and GitHub numeric id (number or string); display names and nicknames resolve nobody; a login with a different known numeric id resolves nobody; ids of two different people, and an id declared twice, resolve nobody.
-- The owner resolves with `role: owner` as the built-in entry (by Discord id and `[owner]` GitHub login) or as the declared person holding the owner's Discord id; no owner configured ⇒ no owner person.
+- `resolvePerson` resolves by Discord id, `<@id>` and GitHub numeric id (number or string); GitHub logins (alone, or with another numeric id), display names and nicknames resolve nobody; ids of two different people, and an id declared twice, resolve nobody.
+- The owner resolves with `role: owner` as the built-in entry (by Discord id and `[owner]` GitHub id, never the `[owner]` login) or as the declared person holding the owner's Discord id; no owner configured ⇒ no owner person.
 - People are re-read per call from the loaded file; a missing / unreadable file reads as nobody declared, never a throw.
 - A declared chat speaker's prompt names `declared_person`, the declared display (not the Discord one), nicknames and GitHub logins; a stranger with a declared person's display name gets `declared_person: none`; the undeclared owner's and everyone's block with nobody declared are byte-identical to before.
 - Through `startBridge`: an `/admin people add` + `link` by the owner and a VM edit of the file change who the next chat message is recognised as, without a restart; a chat message asking to change links changes nothing.
@@ -2287,6 +2292,7 @@ Acceptance Criteria
 - Only `src/discord/command-handlers/admin.ts` imports the people writer; nothing under `src/` or `plugins/` else does.
 - Regression tests `tests/identity.people.test.ts`, `tests/discord.admin-people.test.ts` and `tests/identity.recognise.test.ts` fail on the base sources and pass after.
 - SAFE-11 (REQ-discord-071): a stranger named `[owner] L<zero-width>eif` is shown as `display_name: Leif` with a `name_clash` line naming the owner and no owner facts; a stranger named like a declared person gets a `name_clash` line naming that person; the owner and a declared person shown by their own declared display get none; with nobody declared a clean, non-clashing name leaves the block byte-identical to before (`tests/safe.injection.test.ts`, `tests/identity.recognise.test.ts`).
+- IDENTITY-7.a (REQ-discord-367): an entry with `github_logins` but no `github_ids` loads without an issue and still matches on Discord, but resolves nobody on GitHub until an id is linked (`tests/identity.github-numeric-id.test.ts`).
 
 ### REQ-discord-065
 
@@ -2552,9 +2558,11 @@ likewise be searched for the work description
 blocks are the newest rows, as before.
 
 `memorySubjectForGithub(dir, { login, id })` SHALL resolve a GitHub
-commenter to their declared person's subject (the same scopes as on Discord;
-the configured owner not declared under `[people]` to their Discord-id
-subject; undeclared or ambiguous ⇒ null), and `projectScopeForRepo(repo)`
+commenter to their declared person's subject by the numeric `id` only (the
+`login` is ignored, IDENTITY-7.a, REQ-discord-367; the same scopes as on
+Discord; the configured owner not declared under `[people]`, recognised by
+`[owner] github_id`, to their Discord-id subject; no id, undeclared or
+ambiguous ⇒ null), and `projectScopeForRepo(repo)`
 SHALL give `project:<owner/repo>` lowercased for a valid `owner/repo` (else
 null). The Discord agent spawn SHALL always clear
 `CORVIDINHO_ACTING_GITHUB_LOGIN` / `_ID` / `_REPO`, so a Discord or
@@ -2564,7 +2572,7 @@ Acceptance Criteria
 - A question in plain words finds the fact it is about; a key hit outranks a newer passing mention; equal relevance goes to the newer row; a question-words-only query matches as one substring.
 - A multi-scope search keeps the newest of a key once and leaves private notes out.
 - The Discord inject holds an older fact the message is about although newer rows fill the block; an owner's `/work` run holds an older project fact its description is about although newer rows fill the block.
-- `memorySubjectForGithub` matches by numeric id or login, refuses a login whose numeric id differs, and maps the undeclared-under-`[people]` owner to their Discord id; `projectScopeForRepo` accepts only `owner/repo`.
+- `memorySubjectForGithub` matches by numeric id only (a login alone, or with a numeric id that differs, is nobody) and maps the undeclared-under-`[people]` owner, by `[owner] github_id`, to their Discord id; `projectScopeForRepo` accepts only `owner/repo`.
 - A Discord spawn clears inherited GitHub commenter keys.
 - `tests/memory.recall-github.test.ts` and `tests/memory.rank.test.ts` cover each and fail on the stacked base sources.
 
@@ -2811,4 +2819,60 @@ Acceptance Criteria
 - A stored community (or team) schedule whose prompt or name trips the detector runs no agent, is paused, posts one ask with the schedule title (by id alone, without the name, when the name tripped) that pings only the owner and never quotes the text, and appends one `denied` row (surface `scheduler:<id>`); a later tick posts nothing more.
 - A ticker with no outbound (the daemon) leaves that ask pending on the run row and a bridge tick posts it once; through `startBridge` the row lands in the bridge's `audit_log` and the schedule is paused.
 - These tests fail on the base sources (the owner and ordinary-create guards pass on both).
+### REQ-discord-367
+
+GitHub matches people by numeric user id only (IDENTITY-7.a, #36; captured
+from Leif's 2026-09-28 interview, round 12: "On GitHub it matches people only
+by their numeric user id, so a renamed or re-registered login never counts as
+them."). On GitHub a person — the configured owner included — SHALL be
+recognised only by their GitHub numeric user id, never by a GitHub login.
+`resolvePerson` (REQ-discord-036) SHALL match the GitHub side on `githubId`
+alone (`PersonQuery.githubLogin` is accepted and ignored), and
+`memorySubjectForGithub(dir, { login, id })` (REQ-discord-067) on `id` alone.
+An actor with no numeric id, or an id nobody declared, SHALL resolve to
+nobody — undeclared, so community at most (IDENTITY-12), never the owner —
+whatever its login. GitHub logins (`github_logins`, `[owner] github_login`)
+SHALL stay labels: read, written and shown as before (the Discord identity
+block's `github` line, `/admin people list`), used to @mention the owner on
+GitHub and to find a person's kept GitHub threads on forget-me, and still
+refused on a second person by `/admin people link`, but never matched.
+
+The owner's GitHub id SHALL be declared as `github_id` in the allowlist file's
+`[owner]` section (TOML quoted or bare digits; JSON string or safe integer),
+read into `OwnerRecord.githubId` and added to the owner's person (the declared
+entry holding the owner's Discord id, else the built-in `owner` entry); an
+invalid value SHALL be ignored with a value-free issue. There is no env var
+for it; env still overrides the other owner fields. `isOwnerGithub(owner,
+githubId)` SHALL be true only for that numeric id.
+
+`/admin people link person:<id> github:<login>` SHALL, once the request plans
+without a refusal, defer its ephemeral reply and look the login's numeric id
+up once through the GitHub API (`createGithubUserLookup` in
+`src/identity/github-user.ts`: `GET /users/{login}` with `GITHUB_TOKEN` /
+`GH_TOKEN` when set, a 10 s timeout; `SlashContext.lookupGithubUser`
+overrides it), then link that id as a `github_id` next to the login — also
+when the login is already linked — so the id is stored in `github_ids`
+(`github_ids` stays the stored field); owner-only and audited like every
+`/admin people` change (REQ-discord-036). A lookup that fails, times out,
+finds no user or answers for another login SHALL link nothing, append one
+`admin-people-link` `error` row and reply why (the HTTP status only, never a
+token or response body), suggesting `github_id:<number>`. A refused request
+makes no GitHub call, and neither do `github_id:`, `discord:` or `nickname:`
+links. `unlink github:<login>` removes the label only; when GitHub ids stay
+linked the reply says they still match. The lookup module is not a writer of
+people.
+
+People entries with only `github_logins` SHALL keep loading (no issue, still
+matched on Discord) but SHALL NOT match on GitHub until an id is linked;
+`peopleWithoutGithubId(dir)` lists them, the owner's person included, by
+person id for `corvidinho doctor` (REQ-cli-367). No schema, table or column
+change; no package version bump.
+
+Acceptance Criteria
+- `resolvePerson` / `memorySubjectForGithub`: a GitHub login alone, or the owner's or a declared person's login with another numeric id, resolves nobody; the declared numeric id resolves the person whatever the login now is.
+- `[owner] github_id` is read from TOML and JSON (string or number), joins the owner's person (built-in or declared) and is the owner on GitHub; an invalid one is ignored with a value-free issue; an env-only owner login is not the owner on GitHub; `isOwnerGithub` matches the numeric id only.
+- A login-only people entry loads without an issue and still matches on Discord, but not on GitHub; with `github_ids` added it matches on GitHub under any login.
+- `/admin people link github:<login>` writes the looked-up id to `github_ids` (login kept), audits `started` / `ok`, defers the reply first and resolves the id at once; linking again is no change; a failed, missing or mismatched lookup writes nothing and audits `error`; a refused request and `github_id:` links make no lookup; unlinking a login says the id still matches.
+- `createGithubUserLookup` over a stubbed transport returns the numeric id and canonical login on 200, "no user" on 404, the status only otherwise (never the token), and refuses a payload without a numeric id.
+- `tests/identity.github-numeric-id.test.ts` fails on the base sources and passes after; `tests/identity.people.test.ts`, `tests/identity.owner.test.ts`, `tests/discord.admin-people.test.ts` and `tests/memory.rank.test.ts` hold the numeric-id rule.
 

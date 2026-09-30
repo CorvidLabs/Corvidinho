@@ -220,3 +220,10 @@ no `files-write`, `memory-store` or worker tool, both calls are refused and
 never run, `onInjection` gets the worker's notice once, the summary ends with
 the note and one row is audited; at delegation depth 1 an injected issue
 title is reported but records no row.
+
+## SAFE-13 WATCH owner exemption by numeric id (REQ-agent-071, REQ-watch-367)
+
+`tests/safe.injection.test.ts` › "the verdict skips the owner (by [owner]
+github_id only, IDENTITY-7.a)" — `watchInjectionVerdict` exempts the owner's
+numeric id and flags the same injected body from the owner's login with no
+id or another id; fails on the base sources (the login alone was exempt).

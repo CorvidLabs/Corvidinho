@@ -17,7 +17,9 @@ files:
   - src/identity/owner.ts
   - src/identity/people.ts
   - src/identity/index.ts
+  - src/identity/github-user.ts
   - tests/identity.people.test.ts
+  - tests/identity.github-numeric-id.test.ts
   - tests/identity.recognise.test.ts
   - tests/identity.owner.test.ts
   - tests/discord.owner.test.ts
@@ -235,10 +237,13 @@ constants/types from `src/discord/memory-inject.ts` (also re-exported via
 `formatPersonLink`, `PeopleAdminPlan` / `PeopleAdminRequest`
 (`admin-people.ts`, the only writer of people and roles; `op: "role"` sets
 team / community, ADMIN-3.b). Declared people
-(IDENTITY-13/14/7, `src/identity/people.ts`): `resolvePerson(dir, { discordId,
+(IDENTITY-13/14/7/7.a, `src/identity/people.ts`): `resolvePerson(dir, { discordId,
 githubLogin, githubId })` → `{ personId, displayName?, role?, person }` | null
-(the one resolver; stable ids only; `role` is `owner` for the configured
-owner, else the declared `team` / `community`), `roleOfPerson` (effective
+(the one resolver; stable ids only — the Discord user id and, on GitHub, the
+numeric id only; `githubLogin` is accepted and ignored, REQ-discord-367;
+`role` is `owner` for the configured owner, else the declared `team` /
+`community`), `peopleWithoutGithubId(dir)` (person ids with a GitHub login
+but no numeric id, for doctor), `roleOfPerson` (effective
 role: undeclared or no `role` key ⇒ community, IDENTITY-8/12),
 `normalizePersonRole`, `PersonRole` / `DeclarableRole`, `PERSON_ROLES`,
 `DECLARABLE_ROLES`, `DEFAULT_PERSON_ROLE`, `loadDeclaredPeople({ allowlist, owner })`
@@ -248,7 +253,13 @@ role: undeclared or no `role` key ⇒ community, IDENTITY-8/12),
 `normalizeDiscordUserId`, `normalizeGithubId`, `validGithubLogin`,
 `cleanPersonLabel`, `PERSON_ID_RE`, `OWNER_PERSON_ID`, `PERSON_KEYS`,
 `LINK_FIELD` and the `DeclaredPerson` / `PeopleDirectory` / `ResolvedPerson`
-types.
+types. Owner (`src/identity/owner.ts`): `OwnerRecord.githubId` from
+`[owner] github_id` (file only), `normalizeGithubId` (shared with people),
+`isOwnerGithub(owner, githubId)` (the numeric id only, IDENTITY-7.a).
+`/admin people link github:` lookup (REQ-discord-367,
+`src/identity/github-user.ts`): `createGithubUserLookup(env)` →
+`GithubUserLookup` (`GET /users/{login}`, `GITHUB_USER_LOOKUP_TIMEOUT_MS`),
+`GithubUserLookupResult`; `SlashContext.lookupGithubUser` injects it.
 `flattenSlashOptions` (`gateway.ts`); `buildChannelAutocompleteChoices` / `matchChannels` / `resolveChannelOption` (`channel-autocomplete.ts`); `SlashInteraction.subcommandGroup` and
 `SlashContext.recordAudit`.
 
@@ -778,6 +789,14 @@ mark a line that imitates a Corvidinho block or a turn label (`Human:`,
 `You (Corvidinho):`) `(quoted)`; recalled memory lines strip invisible
 characters. No new env var, config key, table or column.
 
+GitHub by numeric id only (IDENTITY-7.a, REQ-discord-367): no GitHub login —
+a person's `github_logins`, the `[owner]` / env `github_login` — ever
+identifies anyone; on GitHub the owner is recognised only by `[owner]
+github_id` and a declared person only by `github_ids`. A login-only entry
+still loads and matches on Discord. `/admin people link github:<login>` looks
+the numeric id up once (GitHub API, owner-only, audited) and stores it; a
+failed lookup writes nothing.
+
 ## Behavioral Examples
 
 ### Scenario: Spawn with seeded identity
@@ -905,6 +924,8 @@ characters. No new env var, config key, table or column.
 | Channel autocomplete gate unset or throws | Empty choice list (fail closed); a throw is logged |
 | `/admin` on unreadable/unparsable file | Ephemeral refusal naming the path; file untouched |
 | `/admin` audit trail unavailable | Ephemeral refusal (SAFE-5 fail closed); nothing changed |
+| `/admin people link github:<login>`: the GitHub lookup fails, times out, finds no user or answers for another login | Ephemeral refusal naming why (HTTP status only) and suggesting `github_id:<number>`; nothing written; one `admin-people-link` `error` audit row (REQ-discord-367) |
+| A GitHub actor whose login is the owner's or a declared person's but whose numeric id is missing or not declared | Resolves nobody (undeclared, community), never the owner (REQ-discord-367) |
 | `/schedule delete` audit trail unavailable (throws, keyed chain without the key, or no DB) | Ephemeral `Refused: audit log unavailable (SAFE-5)`; schedule and run history kept |
 | `/schedule create` cadence with a zero cron step (`*/0`, `a-b/0`, `n/0`, any field, also in a comma list) | Ephemeral `Invalid cron step in "PART": the step must be 1 or more.`; nothing created; the bridge keeps answering (REQ-discord-020) |
 | Leftover in-flight reply, embed edit fails or no embed id | Reply to the request message with the interrupted text; row deleted |
@@ -1052,5 +1073,7 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |
 | 2026-09-29 | discord-rich-final-replies-answer-footer-with-model-tokens-cost-and-time-tokens-and-cost-owner-only-and-fence-safe: Discord rich final replies: answer footer with model, tokens, cost and time (tokens and cost owner-only) and fence-safe splits at 2000 (DISCORD-15/15.a/16) |
 | 2026-09-29 | condense-long-chats-at-about-80-of-the-model-s-window-with-the-task-and-latest-instruction-pinned-resume-from-the: Condense long chats at about 80% of the model's window with the task and latest instruction pinned, resume from the summary after the soft TTL, and keep each thread's summary 30 days (SESSION-5/6, SESSION-3.a, AGENT-6.a; #72) |
+| 2026-09-30 | on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a: On GitHub people match only by their numeric user id: a renamed or re-registered login never counts as the owner or a declared person on WATCH (prompt, memory scope, SAFE-13 exemption); [owner] github_id declares the owner's id; /admin people link github stores the looked-up numeric id; doctor warns about logins without an id (IDENTITY-7.a, #36) |
+| 2026-09-30 | safe-2-a-the-file-tools-refuse-fledge-like-fledge-toml-and-specs-so-a-run-cannot-weaken-the-verify-lane-it-is-judged-by: SAFE-2.a: the file tools refuse .fledge/ like fledge.toml and specs/, so a run cannot weaken the verify lane it is judged by |
 | 2026-09-29 | an-answer-typed-in-the-private-answer-form-is-fenced-and-scanned-like-a-chat-reply-a-non-owner-s-submit-that-looks-like: An answer typed in the private Answer form is fenced and scanned like a chat reply: a non-owner's submit that looks like an injection starts no run, keeps the ask open, pings only the owner once and appends an injection-suspected audit row; an ordinary non-owner answer reaches the model inside the untrusted-data fence; the owner's answer is unchanged (SAFE-12/13, DISCORD-ASK-4.a) |
 | 2026-09-30 | a-non-owner-s-schedule-text-is-scanned-at-schedule-create-and-fenced-at-every-tick-a-non-owner-s-create-whose-name-or: A non-owner's schedule text is scanned at /schedule create and fenced at every tick: a non-owner's create whose name or prompt looks like an injection stores nothing, gets a private refusal, pings only the owner and appends an injection-suspected audit row; each tick re-resolves the creator's role, fences a non-owner's stored name and prompt as untrusted data, and stored text that trips the detector runs nothing, pauses the schedule and tells the owner once; the owner's own schedules are unchanged (SAFE-12/13) |
