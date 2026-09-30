@@ -7,11 +7,11 @@
   "title": "Shared DB open takes the write lock up front, so processes that open a new file or one with a re-scrub due at once take turns instead of failing part way",
   "description": "Shared DB open takes the write lock up front, so processes that open a new file or one with a re-scrub due at once take turns instead of failing part way",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "24f70ecdca39ffa74e1645185baf7cc9882982ca",
   "created_at": 1790786556,
-  "updated_at": 1790791347,
+  "updated_at": 1790791934,
   "affected_specs": [
     "discord",
     "plugins"
