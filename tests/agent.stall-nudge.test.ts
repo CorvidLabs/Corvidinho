@@ -11,9 +11,12 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  changedForStall,
   createStallNudgeGuard,
   isStateChangingTool,
   nothingChanged,
+  planWanted,
+  STALL_CHANGE_TOOLS,
   STALL_DONE_MAX_CHARS,
   STALL_NUDGE_MARK,
   STALL_PLAN_MAX_CHARS,
@@ -135,6 +138,7 @@ describe("stallKind: a narrow heuristic (REQ-agent-087)", () => {
     ["social emoji", "👍"],
     ["social", "I'll be here."],
     ["social deferral", "I'll check back later!"],
+    ["a promise for later runs", "I'll make sure to run the tests next time."],
     ["clarifying question (AUTONOMY-1)", "Which file should I change: README.md or docs/cli.md?"],
     ["plan with a clarifying question", "I'll update the config — should I also bump the version?"],
     ["let me know", "Let me know if you want me to open a PR."],
@@ -151,6 +155,24 @@ describe("stallKind: a narrow heuristic (REQ-agent-087)", () => {
   ];
   test.each(negatives)("null: %s — %j", (_why, text) => {
     expect(stallKind(text)).toBeNull();
+  });
+
+  test("a plan the task asked for, or on a task that says not to change anything yet, is the answer (Q&A)", () => {
+    const plan = "I'll fix the typo in README.md, then run the tests.";
+    expect(planWanted("fix the typo in README.md")).toBe(false);
+    expect(stallKind(plan, "fix the typo in README.md")).toBe("plan");
+    for (const task of [
+      "What's your plan for the README typo?",
+      "How would you fix the typo in README.md",
+      "Outline the approach first.",
+      "Look at the README typo but don’t change anything yet.",
+      "Tell me what you'd do, without editing any files.",
+    ]) {
+      expect(planWanted(task)).toBe(true);
+      expect(stallKind(plan, task)).toBeNull();
+    }
+    // A "Done." on such a task is still a stall: it answers nothing.
+    expect(stallKind("Done.", "What's your plan?")).toBe("done-claim");
   });
 
   test("length caps: a long 'done' reply or a long plan is not a stall", () => {
@@ -192,6 +214,19 @@ describe("nothingChanged, the catalog check, the nudge text and the guard (REQ-a
     expect(await nothingChanged({ sawChange: true, unreportedEdits: false, workspaceChanged: diff([]) })).toBe(false);
   });
 
+  test("changedForStall: changedState, or a successful memory write; the catalog check leaves memory out", () => {
+    expect([...STALL_CHANGE_TOOLS].sort()).toEqual(["memory-forget-me", "memory-store"]);
+    for (const n of STALL_CHANGE_TOOLS) {
+      expect(changedForStall(n, { ok: true })).toBe(true);
+      expect(changedForStall(n, { ok: false })).toBe(false);
+      expect(isStateChangingTool(n)).toBe(false);
+    }
+    expect(changedForStall("files-write", { ok: true })).toBe(true);
+    expect(changedForStall("files-write", { ok: false })).toBe(false);
+    expect(changedForStall("files-read", { ok: true })).toBe(false);
+    expect(changedForStall("delegate", { ok: false, data: { filesChanged: ["a.md"] } })).toBe(true);
+  });
+
   test("isStateChangingTool: the STATE_CHANGING_TOOLS builtins and Fledge plugin commands; reads are not", () => {
     for (const n of STATE_CHANGING_TOOLS) expect(isStateChangingTool(n)).toBe(true);
     for (const n of ["files-read", "web-fetch", "council", "ask-human", "memory-recall"]) {
@@ -217,9 +252,11 @@ describe("nothingChanged, the catalog check, the nudge text and the guard (REQ-a
     expect(plan).toContain("make them now with the tools you have");
     expect(plan).toContain("reply with what you checked and found");
     expect(plan).toContain("call ask-human");
+    expect(plan).toContain("If you were asked only for a plan, or not to change anything yet, change nothing");
     const done = stallNudge("done-claim", false);
     expect(done).toContain("said the work is done (or said nothing)");
     expect(done).not.toContain("ask-human");
+    expect(done).not.toContain("asked only for a plan");
     expect(stallNudgedNote("plan")).toBe(
       "[operator] AGENT-17: the reply was only a plan with nothing changed; nudged once (same model)",
     );
@@ -228,8 +265,11 @@ describe("nothingChanged, the catalog check, the nudge text and the guard (REQ-a
     );
   });
 
-  test("one nudge per guard, then the reply stands", () => {
+  test("one nudge per guard, then the reply stands; a change is remembered", () => {
     const g = createStallNudgeGuard();
+    expect(g.sawChange()).toBe(false);
+    g.changed();
+    expect(g.sawChange()).toBe(true);
     expect(g.next()).toBe("nudge");
     expect(g.next()).toBe("stand");
     expect(g.next()).toBe("stand");
@@ -357,6 +397,105 @@ describe("tool loop: a plan-only or empty 'Done.' reply that changed nothing get
     expect(bodies).toHaveLength(2);
   });
 
+  test("a memory stored in the run is a change: 'Done!' is not nudged (no second memory-store)", async () => {
+    const real = get("memory-store");
+    if (real) expect(unregister("memory-store", real)).toBe(true);
+    let stored = 0;
+    register({
+      name: "memory-store",
+      description: "stand-in memory store",
+      minTier: 0,
+      async handler() {
+        stored += 1;
+        return { ok: true, message: "stored", exitCode: 0 };
+      },
+    });
+    const { exec, bodies, events } = makeExec(
+      [{ toolCalls: [{ name: "memory-store", args: '{"argv":["--key","indent","Leif prefers tabs"]}' }] }, "Done!", "never reached"],
+      { task: "remember that I prefer tabs" },
+    );
+    const r = await run(exec);
+    expect((bodies[0]?.tools ?? []).map((t) => t.function.name)).toContain("memory-store");
+    expect(stored).toBe(1);
+    expect(bodies).toHaveLength(2);
+    expect(r.summary).toBe("Done!");
+    expect(agent17(events)).toEqual([]);
+  });
+
+  test("an empty closing reply after an answer given beside a tool call: the answer stands, no nudge", async () => {
+    const answer = "README.md has three sections: Install, Usage and License.";
+    const { exec, bodies, events } = makeExec(
+      [{ text: answer, toolCalls: [{ name: "files-read", args: '{"argv":["README.md"]}' }] }, "", "never reached"],
+      { task: "which sections does README.md have" },
+    );
+    const r = await run(exec);
+    expect(bodies).toHaveLength(2);
+    expect(r.summary).toBe(answer);
+    expect(agent17(events)).toEqual([]);
+  });
+
+  test("an empty closing reply after a plan given beside a read: that plan would stand, so it is nudged", async () => {
+    const { exec, bodies } = makeExec([
+      { text: "Let me read README.md first.", toolCalls: [{ name: "files-read", args: '{"argv":["README.md"]}' }] },
+      "",
+      "README.md has no typo, so nothing needed changing.",
+    ]);
+    const r = await run(exec);
+    expect(bodies).toHaveLength(3);
+    expect(last(bodies[2])?.content).toContain(`${MARK} Your reply only described a plan`);
+    expect(r.summary).toBe("README.md has no typo, so nothing needed changing.");
+  });
+
+  test("a plan the task asked for is the answer: no nudge", async () => {
+    const plan = "I'll fix the typo in README.md, then run the tests.";
+    const { exec, bodies, events } = makeExec([plan, "never reached"], {
+      task: "What's your plan for the README typo? Don't change anything yet.",
+    });
+    const r = await run(exec);
+    expect(bodies).toHaveLength(1);
+    expect(r.summary).toBe(plan);
+    expect(agent17(events)).toEqual([]);
+  });
+
+  test("an edit no result reports, in an earlier attempt (no git tree), is remembered: a later 'Done.' is not nudged", async () => {
+    register({
+      name: "fledge-fmt-apply",
+      description: "fledge plugin command that edits files and then fails",
+      minTier: 0,
+      origin: "fledge:fmt@1.0.0",
+      async handler() {
+        return { ok: false, error: "formatter exited 1", exitCode: 1 };
+      },
+    });
+    const { exec, bodies, events } = makeExec([
+      { toolCalls: [{ name: "fledge-fmt-apply" }] },
+      "The formatter exited 1 after rewriting README.md.",
+      "Done.",
+      "never reached",
+    ]);
+    const first = await run(exec);
+    expect(first.unreportedEditTools).toEqual(["fledge-fmt-apply"]);
+    const second = await exec({ attempt: 2, signal: new AbortController().signal });
+    expect(bodies).toHaveLength(3);
+    expect(second.summary).toBe("Done.");
+    expect(agent17(events)).toEqual([]);
+  });
+
+  test("a stop while the diff is read: no nudge goes out", async () => {
+    const ac = new AbortController();
+    const { exec, bodies, events } = makeExec(["Done.", "never reached"]);
+    await exec({
+      attempt: 1,
+      signal: ac.signal,
+      workspaceChanged: async () => {
+        ac.abort();
+        return [];
+      },
+    });
+    expect(bodies).toHaveLength(1);
+    expect(agent17(events)).toEqual([]);
+  });
+
   test("the real git diff decides where there is one: non-empty or unreadable = no nudge; empty = nudge", async () => {
     for (const [diff, requests] of [
       [["README.md"], 1],
@@ -460,6 +599,46 @@ describe("runTask: the verify gate's real diff reaches the tool loop (REQ-agent-
     expect(result.state).toBe("done");
     expect(result.verified).toBe(true);
     expect(result.summary).toBe("Done.");
+  });
+
+  test("a stop while the nudge round's request is in flight stops the run: cancelled, no further request", async () => {
+    const ac = new AbortController();
+    const bodies: unknown[] = [];
+    const fetchImpl = async (_i: string | URL | Request, init?: RequestInit): Promise<Response> => {
+      bodies.push(JSON.parse(String(init?.body ?? "{}")));
+      if (bodies.length === 1) {
+        return Response.json({ choices: [{ message: { role: "assistant", content: "Done." } }] });
+      }
+      ac.abort();
+      throw new DOMException("The operation was aborted.", "AbortError");
+    };
+    const exec = createTaskExecute({
+      taskText: "fix the typo in README.md",
+      env: { ...process.env, ...FAKE_LLM_ENV },
+      fetchImpl,
+      tier: "code",
+      allowlist: [],
+      loadPlugins: false,
+      cwd: cwd(),
+      projectInstructions: false,
+      maxToolRounds: 8,
+    });
+    let verified = 0;
+    const result = await runTask({
+      cwd: cwd(),
+      execute: exec,
+      signal: ac.signal,
+      verifyRunner: async () => {
+        verified += 1;
+        return { success: true, output: LANE_PASS_OUTPUT };
+      },
+      workspaceDiff: async () => ({ changed: async () => [], testDrops: async () => [] }),
+    });
+    expect(bodies).toHaveLength(2);
+    expect(JSON.stringify(bodies[1])).toContain(MARK);
+    expect(result.cancelled).toBe(true);
+    expect(result.state).not.toBe("done");
+    expect(verified).toBe(0);
   });
 
   test("an empty diff: 'Done.' gets the nudge; nothing to verify", async () => {

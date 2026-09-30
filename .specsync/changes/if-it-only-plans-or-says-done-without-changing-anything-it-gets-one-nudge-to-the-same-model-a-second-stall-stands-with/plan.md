@@ -7,8 +7,9 @@ artifact: plan
 
 1. No `hi` capture: AGENT-17 is on main already.
 2. `src/agent/loop-guards.ts`: `isStateChangingTool` (used by
-   `changedState`), `sawChange()` on the repeat guard, `stallKind`,
-   `nothingChanged`, nudge text and notes, `createStallNudgeGuard`.
+   `changedState`), `stallKind` / `planWanted`, `changedForStall`,
+   `nothingChanged`, nudge text and notes, `createStallNudgeGuard` (which
+   remembers a change for the run).
 3. `ExecuteContext.workspaceChanged` (types.ts), passed by `runTask`'s
    gate (loop.ts); `createTaskExecute` / `runToolLoop` final-reply wiring.
 4. Tests: `tests/agent.stall-nudge.test.ts` with the fake LLM (tool calls

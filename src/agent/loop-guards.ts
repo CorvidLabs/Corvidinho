@@ -21,18 +21,21 @@
  *   {@link repeatedFailureAsk} (the existing "stuck" HumanAsk, which pings the
  *   owner, AUTONOMY-2/4). A steer the model has not seen yet (same tool_calls
  *   batch, or a fresh verify-retry conversation) means "steer again", never
- *   "ask", so changing approach is always offered before asking. It also
- *   remembers whether any result of the run changed state (`sawChange`).
+ *   "ask", so changing approach is always offered before asking.
  * - {@link stallKind}: a narrow English heuristic for a final reply that is
  *   only a plan (`plan`) or a short "Done."-style or empty claim
  *   (`done-claim`); never a question, an offer, "let me know", a decline,
- *   code or a toy demo, a social reply or an answer.
- * - {@link nothingChanged}: no result of the run changed state
- *   ({@link changedState}), no tool ran whose edits no result reports, and
- *   the verify gate's real git diff (where there is a git tree) is empty.
- * - {@link createStallNudgeGuard}: the first stall of a run gets
- *   {@link stallNudge} (to the same model); later ones stand with an
- *   operator note. Moving to a stronger model is not built yet.
+ *   code or a toy demo, a social reply or an answer, and never a plan the
+ *   task asked for ({@link planWanted}).
+ * - {@link changedForStall}: {@link changedState}, or a successful memory
+ *   write ({@link STALL_CHANGE_TOOLS}), which AGENT-16 leaves out.
+ * - {@link nothingChanged}: no result of the run changed anything
+ *   ({@link changedForStall}), no tool ran whose edits no result reports,
+ *   and the verify gate's real git diff (where there is a git tree) is empty.
+ * - {@link createStallNudgeGuard}: remembers a change in any attempt of the
+ *   run; the first stall of a run gets {@link stallNudge} (to the same
+ *   model); later ones stand with an operator note. Moving to a stronger
+ *   model is not built yet.
  *
  * Thresholds are constants; there is no knob (no env var, config key or flag).
  */
@@ -198,11 +201,6 @@ export type RepeatFailureGuard = {
   ): { failures: number; steer: boolean };
   /** Last error of `sig` since the last change (for the operator note). */
   lastError(sig: string): string | undefined;
-  /**
-   * AGENT-17: true once any result of this run (every attempt) changed
-   * state, as `after` was told ({@link changedState}).
-   */
-  sawChange(): boolean;
 };
 
 export function createRepeatFailureGuard(): RepeatFailureGuard {
@@ -210,7 +208,6 @@ export function createRepeatFailureGuard(): RepeatFailureGuard {
   const errors = new Map<string, string>();
   // Round in which each signature's steer was first added, this conversation.
   let steered = new Map<string, number>();
-  let changedOnce = false;
   return {
     newConversation() {
       steered = new Map();
@@ -222,7 +219,6 @@ export function createRepeatFailureGuard(): RepeatFailureGuard {
     },
     after(sig, round, result, changed) {
       if (changed) {
-        changedOnce = true;
         failures.clear();
         errors.clear();
         steered.clear();
@@ -242,7 +238,6 @@ export function createRepeatFailureGuard(): RepeatFailureGuard {
       return { failures: n, steer };
     },
     lastError: (sig) => errors.get(sig),
-    sawChange: () => changedOnce,
   };
 }
 
@@ -265,6 +260,22 @@ export const STALL_PLAN_MAX_CHARS = 600;
 export const STALL_NUDGE_MARK = "[Corvidinho harness — AGENT-17]";
 
 /**
+ * Builtins whose success is a change for AGENT-17 although AGENT-16's
+ * {@link changedState} leaves them out: a memory stored or a forget-me asked
+ * for ("remember that …" → memory-store → "Done." is not a stall). Only the
+ * "nothing changed" check reads it; the catalog check does not.
+ */
+export const STALL_CHANGE_TOOLS: ReadonlySet<string> = new Set(["memory-store", "memory-forget-me"]);
+
+/** AGENT-17: this tool result changed something ({@link changedState}, or a successful memory write). */
+export function changedForStall(
+  name: string,
+  result: Pick<PluginHandlerResult, "ok" | "data">,
+): boolean {
+  return changedState(name, result) || (Boolean(result.ok) && STALL_CHANGE_TOOLS.has(name));
+}
+
+/**
  * Never a stall, whatever else the reply says: a question (a clarifying ask,
  * AUTONOMY-1), an offer or "let me know", a decline (AUTONOMY-7), code, a toy
  * demo or joke (AUTONOMY-7), or a deferral ("I'll check back later").
@@ -276,8 +287,27 @@ const NOT_A_STALL: readonly RegExp[] = [
   /\bif you(?:'d| would)? (?:like|want|prefer|need)\b/,
   /\b(?:can't|cannot|can not|won't|unable|not able|not allowed|not permitted|not possible|impossible|decline|refuse|sorry|rather not)\b/,
   /\b(?:toy|demo|joke|kidding)\b/,
-  /\b(?:later|tomorrow|soon|in a bit|when you're ready)\b/,
+  /\b(?:later|tomorrow|soon|in a bit|when you're ready|next time|in the future|from now on|going forward)\b/,
 ];
+
+/**
+ * The task asks for a plan, or asks for nothing to change yet: a plan-only
+ * reply is then the answer (Q&A), never a stall. Read over the whole task
+ * text, so a match anywhere means no plan nudge (no nudge when unsure).
+ */
+const PLAN_WANTED: readonly RegExp[] = [
+  /\b(?:plan|plans|planning|approach|outline|propose|proposal|strategy)\b/,
+  /\bhow (?:would|should|could|might|will) (?:you|we|i)\b/,
+  /\bwhat (?:would|should|could|will) (?:you|we|i) (?:do|change)\b/,
+  /\bwhat you(?:'d| would)\b/,
+  /\b(?:don't|dont|do not|without)\s+(?:\w+\s+){0,2}(?:chang|edit|touch|modif|commit|implement|writ)\w*/,
+];
+
+/** AGENT-17: the task asks for a plan, or for nothing to change yet ({@link PLAN_WANTED}). */
+export function planWanted(task: string): boolean {
+  const t = stallText(task);
+  return PLAN_WANTED.some((re) => re.test(t));
+}
 
 /** Whole-reply "Done."-style claims (lower case, ends trimmed of punctuation and emoji). */
 const DONE_CLAIMS: readonly RegExp[] = [
@@ -336,14 +366,16 @@ function planUnits(text: string): string[] {
  * AGENT-17: what a final reply (no tool calls) stalls as, or null. `plan`:
  * every sentence is a step of a plan that opens with "I'll …", "Let me …",
  * "I'm going to …" (or a "My plan:" heading) and a work verb, at most
- * {@link STALL_PLAN_MAX_CHARS}. `done-claim`: an empty reply, or the whole
- * reply is a short "Done."-style claim (at most {@link STALL_DONE_MAX_CHARS}).
- * Deliberately narrow: a question (AUTONOMY-1), an offer or "let me know", a
- * decline or a toy demo (AUTONOMY-7), code, a social reply ("Thanks!",
- * "I'll be around"), "Yes, it's done." and any sentence that answers rather
- * than plans ("Let me check… yes: …") are null.
+ * {@link STALL_PLAN_MAX_CHARS}, unless `task` asks for a plan or for nothing
+ * to change yet ({@link planWanted}). `done-claim`: an empty reply, or the
+ * whole reply is a short "Done."-style claim (at most
+ * {@link STALL_DONE_MAX_CHARS}). Deliberately narrow: a question
+ * (AUTONOMY-1), an offer or "let me know", a decline or a toy demo
+ * (AUTONOMY-7), code, a deferral ("later", "next time"), a social reply
+ * ("Thanks!", "I'll be around"), "Yes, it's done." and any sentence that
+ * answers rather than plans ("Let me check… yes: …") are null.
  */
-export function stallKind(text: string): StallKind | null {
+export function stallKind(text: string, task = ""): StallKind | null {
   const trimmed = text.trim();
   if (trimmed === "") return "done-claim";
   const t = stallText(trimmed);
@@ -367,16 +399,16 @@ export function stallKind(text: string): StallKind | null {
     }
     if (!PLAN_OPENER.test(unit) && !PLAN_STEP.test(unit)) return null;
   }
-  return opened ? "plan" : null;
+  return opened && !planWanted(task) ? "plan" : null;
 }
 
 /**
  * AGENT-17: true when nothing changed in the run so far — no result changed
- * state ({@link changedState}, via the repeat guard's `sawChange`), no tool
- * ran whose edits no result reports, and, where there is a git tree, the
- * verify gate's real diff since the run's baseline (`workspaceChanged`,
- * `WorkspaceDiffTracker.changed`) is empty. A diff git cannot read counts as
- * a change (no nudge when unsure).
+ * anything ({@link changedForStall}, via the stall guard's `sawChange`, every
+ * attempt), no tool ran whose edits no result reports, and, where there is a
+ * git tree, the verify gate's real diff since the run's baseline
+ * (`workspaceChanged`, `WorkspaceDiffTracker.changed`) is empty. A diff git
+ * cannot read counts as a change (no nudge when unsure).
  */
 export async function nothingChanged(opts: {
   sawChange: boolean;
@@ -406,6 +438,9 @@ export function stallNudge(kind: StallKind, askOffered: boolean): string {
     `${STALL_NUDGE_MARK} ${said} ` +
     "If the task needs changes, make them now with the tools you have. " +
     "If it needs none, reply with what you checked and found instead." +
+    (kind === "plan"
+      ? " If you were asked only for a plan, or not to change anything yet, change nothing: reply with the plan as your answer."
+      : "") +
     (askOffered ? " If you can't go on without the owner's choice, call ask-human." : "")
   );
 }
@@ -425,6 +460,13 @@ function stallLabel(kind: StallKind): string {
 }
 
 export type StallNudgeGuard = {
+  /**
+   * A tool result of the run changed something ({@link changedForStall}), or
+   * a tool ran whose edits no result reports; remembered for every attempt.
+   */
+  changed(): void;
+  /** True once {@link StallNudgeGuard.changed} was called in this run. */
+  sawChange(): boolean;
   /** A stall in this run: "nudge" the first time, "stand" after that. */
   next(): "nudge" | "stand";
 };
@@ -432,7 +474,12 @@ export type StallNudgeGuard = {
 /** One per `createTaskExecute` (one run, every attempt): one nudge per run. */
 export function createStallNudgeGuard(): StallNudgeGuard {
   let nudged = false;
+  let changedOnce = false;
   return {
+    changed() {
+      changedOnce = true;
+    },
+    sawChange: () => changedOnce,
     next() {
       if (nudged) return "stand";
       nudged = true;

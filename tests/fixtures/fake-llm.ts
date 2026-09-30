@@ -20,8 +20,8 @@ export function fakeReplyText(attempt: number): string {
   return `fake model reply (attempt ${attempt})`;
 }
 
-/** A scripted reply that calls tools instead of answering (AGENT-17 tests). */
-export type FakeToolCalls = { toolCalls: { name: string; args?: string }[] };
+/** A scripted reply that calls tools, with optional text beside them (AGENT-17 tests). */
+export type FakeToolCalls = { toolCalls: { name: string; args?: string }[]; text?: string };
 
 /** What a test's `reply` returns: the reply text, or tool calls. */
 export type FakeReply = string | FakeToolCalls;
@@ -50,7 +50,7 @@ function completion(body: unknown, reply?: (body: unknown) => FakeReply): Respon
       ? { role: "assistant", content: out }
       : {
           role: "assistant",
-          content: null,
+          content: out.text ?? null,
           tool_calls: out.toolCalls.map((c, i) => ({
             id: `fake_${i}`,
             type: "function",

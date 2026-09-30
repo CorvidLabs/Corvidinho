@@ -6,7 +6,8 @@ artifact: tasks
 # Tasks
 
 - [x] Confirm AGENT-17 is already captured in `hi/agent.md` (nothing new to capture); `hi check` passes.
-- [x] `src/agent/loop-guards.ts`: `isStateChangingTool` (shared with `changedState`), repeat guard `sawChange()`, `stallKind`, `nothingChanged`, nudge text and operator notes, `createStallNudgeGuard`.
+- [x] `src/agent/loop-guards.ts`: `isStateChangingTool` (shared with `changedState`), `stallKind` / `planWanted`, `changedForStall` (memory writes count), `nothingChanged`, nudge text and operator notes, `createStallNudgeGuard` (remembers a change in any attempt); the AGENT-16 repeat guard unchanged.
+- [x] Review fixes: a stored memory, an unreported edit in an earlier attempt, an answer given beside a tool call before an empty closing reply, and a plan the task asked for are never nudged; stop coverage for the diff read and the nudge round.
 - [x] `ExecuteContext.workspaceChanged` (types.ts) passed by `runTask` from its `WorkspaceDiffTracker` (loop.ts).
 - [x] `runToolLoop` final-reply branch: one nudge to the same model when the reply stalls, the round offers a state-changing tool, no SAFE-13 trip, not the read tier and nothing changed; later stalls stand with an operator note; one guard per `createTaskExecute`.
 - [x] `tests/agent.stall-nudge.test.ts` (units, tool loop, runTask, CLI) with the fake LLM, which now can script tool calls; fixtures in `tests/agent.safe3a-owner-shell.test.ts` and `tests/scheduler.owner-role.test.ts` no longer end on a fake "done" that changed nothing.

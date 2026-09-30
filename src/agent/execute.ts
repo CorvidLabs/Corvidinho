@@ -53,6 +53,7 @@ import {
 } from "./untrusted.ts";
 import {
   callSignature,
+  changedForStall,
   changedState,
   createRepeatFailureGuard,
   createStallNudgeGuard,
@@ -1109,20 +1110,22 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
           continue;
         }
       }
-      // AGENT-17: a reply that is only a plan, or a short "Done."-style or
-      // empty claim, when this round offered a state-changing tool, SAFE-13
-      // has not tripped and nothing changed (the real git diff, or
-      // tool-reported changes with no git tree): the run's first such reply
-      // gets one nudge to the same model (it never uses up a tool round);
-      // after that the reply stands, with an operator note.
-      const stalled = stallKind(content);
+      // AGENT-17: the reply that would stand (this one, or the last text an
+      // earlier round of this attempt gave when this one is empty) is only a
+      // plan the task did not ask for, or a short "Done."-style or empty
+      // claim, when this round offered a state-changing tool, SAFE-13 has not
+      // tripped and nothing changed (the real git diff, or tool-reported
+      // changes with no git tree): the run's first such reply gets one nudge
+      // to the same model (it never uses up a tool round); after that the
+      // reply stands, with an operator note.
+      const stalled = stallKind(lastText, taskText);
       if (
         stalled &&
         llm.tier !== "read" &&
         !injectionTripped() &&
         roundTools.some((t) => isStateChangingTool(t.function.name)) &&
         (await nothingChanged({
-          sawChange: repeatGuard.sawChange(),
+          sawChange: stallGuard.sawChange(),
           unreportedEdits: unreportedEditTools.size > 0,
           workspaceChanged,
         })) &&
@@ -1265,6 +1268,8 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
               typeof (result.data as { verified?: unknown }).verified !== "boolean")))
       ) {
         unreportedEditTools.add(name);
+        // AGENT-17: remembered for every attempt of the run.
+        stallGuard.changed();
       }
 
       const detail = result.ok
@@ -1307,6 +1312,8 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         { ok: Boolean(result.ok), error: result.error },
         changedState(name, result),
       );
+      // AGENT-17: a change in any attempt means no nudge for the run.
+      if (changedForStall(name, result)) stallGuard.changed();
       if (repeat.steer) {
         const errorFenced =
           offered.has(name) &&
