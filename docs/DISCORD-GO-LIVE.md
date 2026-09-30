@@ -253,10 +253,12 @@ in the owner's tool catalog, see below). The allowlist file
 
 Dangerous tools on `main` (printed from the registry after loading the builtins and the
 project's Fledge plugins; re-check any time with `corvidinho plugins list`). An entry lets
-`corvidinho plugins run` run the tool and offers it to the model in the owner's runs;
-`shell-exec`, the runners and the Fledge core runs `fledge-lanes-run` / `fledge-run` only in
-the owner's own chat, `/session start`, `/work` and their ask answers, inside that talk's own
-worktree, and in a local `corvidinho task run` inside the worktree it made for itself
+`corvidinho plugins run` run the tool and offers it to the model in the owner's runs, plus
+declared team members' Discord runs for `github-issue-comment`, `github-pr-review` and
+`web-search` (IDENTITY-10, PLUGIN-9), never community, WATCH, schedules other people created or
+council voices; `shell-exec`, the runners and the Fledge core runs `fledge-lanes-run` /
+`fledge-run` only in the owner's own chat, `/session start`, `/work` and their ask answers,
+inside that talk's own worktree, and in a local `corvidinho task run` inside the worktree it made for itself
 (SAFE-3.a, see "What an entry unlocks" below):
 
 | Tool | dangerous | minTier | mutating | Allowlist it when |
@@ -308,10 +310,11 @@ What an entry unlocks **today**:
 - The model's tool catalog in `task run` (CLI-3 / SAFE-1). A dangerous tool is offered to the
   model only when the run's `CORVIDINHO_ALLOWLIST` names it and its `minTier` fits the run's
   tier; an unlisted one stays out, and a call to a tool that is not offered is refused. Role
-  gates are unchanged: only ADMIN runs (the owner's Discord chat, `/session start`, `/work` and
-  the schedules the owner created, DISCORD-SCHEDULE-1.a) and a local `corvidinho task run` get
-  them; non-owner chats, WATCH, schedules other people created and council voices never do
-  (E.6). A `delegate` worker gets the lead's effective allowlist (never a wider
+  gates still apply: ADMIN runs (the owner's Discord chat, `/session start`, `/work` and the
+  schedules the owner created, DISCORD-SCHEDULE-1.a) and a local `corvidinho task run` get
+  them, plus declared team members' Discord runs for `github-issue-comment`,
+  `github-pr-review` and `web-search` (IDENTITY-10, PLUGIN-9); community chats, WATCH,
+  schedules other people created and council voices never do (E.6). A `delegate` worker gets the lead's effective allowlist (never a wider
   one), so a worker of a local run is offered the same tools, and a worker of a role session is
   non-ADMIN and offered none.
 - The shell, the runners and the Fledge core runs (SAFE-3.a): `shell-exec`, `node-exec`,
@@ -369,8 +372,9 @@ two places, like `web-fetch`:
 
 1. `BRAVE_SEARCH_API_KEY` in the environment Corvidinho runs with (the bridge's
    `EnvironmentFile`; spawned runs inherit it). It is read from the environment only, with no
-   default. Without it the tool answers `web search is not configured: set BRAVE_SEARCH_API_KEY …`
-   and sends nothing.
+   default. Without it the tool answers
+   `web-search not-configured: web search is not configured: set BRAVE_SEARCH_API_KEY …` and
+   sends nothing.
 2. `web-search` in `CORVIDINHO_ALLOWLIST` (SAFE-1, E.3). Then it is offered at the tool and code
    tiers to the owner's runs and to declared team members' Discord runs (chat, button picks,
    `/session start`, `/work`). Community, WATCH and schedules never get it, `delegate` /
@@ -394,8 +398,13 @@ What one search does:
   the same total cap as the model calls before it is sent. A search that would pass the cap is
   not sent, and the run stops with the spend-cap ask, as a model call does. Prepay the Brave
   account with a usage limit as a hard backstop too.
-- Each call is on the audit trail like any dangerous tool (SAFE-5), and each result summary
-  carries Brave's "Powered by Brave Search" attribution.
+- Each call is on the audit trail like any dangerous tool (SAFE-5).
+- Brave's "Powered by Brave Search" attribution is in the tool result the model reads (its
+  summary line and `data.attribution`), not in the reply people see in Discord or the CLI.
+  Nothing adds it to a reply yet. Two questions are still open for you: whether replies should
+  show the attribution (Brave's free credit asks for it; a prepaid account may not), and
+  whether a reply that quotes search results is fine to keep in chat history and condensed
+  summaries, given Brave's terms against storing results beyond transient use.
 
 ### E.4 `corvidinho daemon` under systemd (CLI-8, AUTONOMOUS-4)
 

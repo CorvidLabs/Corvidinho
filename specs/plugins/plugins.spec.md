@@ -431,8 +431,13 @@ result: one suspicious snippet switches off every mutating tool, `web-search`
 and `web-fetch` included, for the rest of the run. No output, error, data
 field or audit row carries the key, the request URL, a request header or the
 pinned address (every string passes `scrubSecrets` and
-`redactSecretEnvValues`). It never posts, so it has no must-ask entry
-(AUTONOMY-11). Deep research is not built.
+`redactSecretEnvValues` as its last step, after the fence and any control or
+invisible-character strip, so a key split by such a character is never
+rebuilt). Query words together with `--query` are a usage error, and a term
+that starts with `--` goes in `--query`. A run already stopped reserves and
+sends nothing; an unexpected failure is one fixed line. Brave's attribution
+is in the tool result only (no reply footer). It never posts, so it has no
+must-ask entry (AUTONOMY-11). Deep research is not built.
 Git plugins (REQ-plugins-182) spawn `git` with argv arrays only (no shell),
 stdin closed, `GIT_TERMINAL_PROMPT=0`, hooks disabled, repo-locating env
 stripped and `GIT_CEILING_DIRECTORIES` at the cwd's parent; the plugin cwd
@@ -1164,11 +1169,13 @@ command line.
 | Scheduled run: web-fetch hop (first or redirect) to a GitHub host not naming an allowlisted OWNER/REPO, or with the allowlist unreadable (DISCORD-SCHEDULE-3.a) | Refuse before DNS (exit 2) |
 | web-fetch non-text or malformed content-type / compressed body / non-2xx / timeout / every checked address unreachable | Error (exit 1); nothing returned |
 | web-search with no, blank or malformed `BRAVE_SEARCH_API_KEY` | `not-configured` (exit 1) naming the env var, never its value; no DNS, request or spend (REQ-plugins-318) |
-| web-search usage error (count not a whole number 1–20, unknown freshness or flag, missing / oversized query) | `usage` (exit 1); nothing sent |
+| web-search usage error (count not a whole number 1–20, unknown freshness or flag, query words together with `--query`, missing / oversized query) | `usage` (exit 1); nothing sent |
 | web-search query carrying a secret-looking value or a set secret env value | Refuse (exit 2, SAFE-6) before spend or request |
 | web-search at the SAFE-8 cap, invalid cap value or unavailable ledger | Refuse (exit 2, "Work is paused for budget."); nothing sent; the tool loop ends the attempt with the spend-cap ask (REQ-agent-098) |
 | web-search / keyed JSON GET: http, another host or port, URL credentials; a non-public answer; any redirect | Refuse (exit 2) before DNS / before connecting / without following (REQ-plugins-3181) |
-| web-search Brave 401 / 403 / 422 `SUBSCRIPTION_TOKEN_INVALID`, other 422, 429, other status; non-JSON, compressed, oversized or malformed body; timeout; network error | `auth` / `bad-request` / `rate-limited` / `http-status` / `content-type` / `too-large` / `invalid-json` / `timeout` / `network` (exit 1); no server text, key or URL in the error |
+| web-search Brave 401 / 403 / 422 `SUBSCRIPTION_TOKEN_INVALID`, other 422, 429, other status; non-JSON, compressed, oversized or malformed body; timeout; network error or a body that fails mid-read | `auth` / `bad-request` / `rate-limited` / `http-status` / `content-type` / `too-large` / `invalid-json` / `timeout` / `network` (exit 1); no server text, key or URL in the error |
+| web-search in a run already stopped, or stopped mid-request | `aborted` (exit 1); a stopped run reserves and sends nothing |
+| web-search unexpected failure | `unexpected` (exit 1), the fixed line `web-search unexpected: the search failed unexpectedly` |
 | git plugin cwd not a repo top level | Refuse (exit 2, SAFE-3) |
 | git-commit stages protected delete / `.env*` / keystore / `.git` | Refuse (exit 2) |
 | git force / amend / `--all` / refspec / other-branch push | Refuse (exit 2) |

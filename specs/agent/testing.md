@@ -937,10 +937,15 @@ In `tests/web.search.test.ts`:
 - SAFE-8 (REQ-agent-098): no cap creates no DB file; under the cap a
   `reserved` 5000 micro-USD row exists when the request goes out and settles
   `actual` at 5000; a 429 and a refusal before connecting settle `failed` at
-  0; a network error keeps the estimate; at the cap (and with an invalid cap
-  value) nothing is sent, the error names no amount and the result carries
-  the `spend-cap` ask in `spendAsk`; in the tool loop that search ends the
-  attempt with `SPEND_CAP_SUMMARY` and the ask after one model call.
+  0; a network error, a timeout, a `text/html` or malformed 2xx body and an
+  abort after the request went out keep the estimate; a run already stopped
+  writes no row; at the cap (and with an invalid cap value, or an
+  unavailable ledger: a closed DB, whose ask says the spend ledger is
+  unavailable) nothing is sent, the error names no amount and the result
+  carries the `spend-cap` ask in `spendAsk`; in the tool loop that search
+  ends the attempt with `SPEND_CAP_SUMMARY` and the ask after one model call.
+  The two `createTaskExecute` tests set `CORVIDINHO_LLM_MODEL` (AGENT-13: no
+  built-in default model).
 
 `tests/agent.loop-guards.test.ts` keeps every dangerous or mutating builtin
 in exactly one of `STATE_CHANGING_TOOLS` / `NO_STATE_CHANGE_TOOLS`;

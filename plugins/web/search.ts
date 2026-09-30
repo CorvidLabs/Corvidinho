@@ -21,6 +21,7 @@
 import type { Database } from "bun:sqlite";
 import { reserveFlatSpend, type FlatSpendOutcome } from "../../src/agent/spend.ts";
 import type { HumanAsk } from "../../src/agent/types.ts";
+import { stripInvisible } from "../../src/agent/untrusted.ts";
 import { redactSecretEnvValues, scrubSecrets } from "../../src/store/scrub.ts";
 import { API_NOT_SENT_CODES, ApiRequestError, apiGetJson, type ApiGetDeps } from "./api.ts";
 import { fenceUntrusted, htmlToText, stripControls } from "./text.ts";
@@ -111,14 +112,17 @@ export type WebSearchResult = {
 function usage(message: string): WebSearchError {
   return new WebSearchError(
     "usage",
-    `${message} (web-search <query> [--count 1-${WEB_SEARCH_MAX_COUNT}] [--freshness pd|pw|pm|py])`,
+    `${message} (web-search <query words> | --query <text> [--count 1-${WEB_SEARCH_MAX_COUNT}] ` +
+      "[--freshness pd|pw|pm|py]; a term that starts with -- needs --query)",
   );
 }
 
 /**
  * `web-search <query words…> | --query <text> [--count N] [--freshness f] [--json]`.
  * `--count` must be a whole number 1–20 (default 5); `--freshness` one of
- * pd, pw, pm, py; any other `--flag` is a usage error.
+ * pd, pw, pm, py; any other `--flag` is a usage error, so a term that starts
+ * with `--` goes in `--query`. Query words and `--query` together are a usage
+ * error (never a silently dropped part of the query).
  */
 export function parseWebSearchArgs(argv: readonly string[]): WebSearchArgs {
   const words: string[] = [];
@@ -140,7 +144,12 @@ export function parseWebSearchArgs(argv: readonly string[]): WebSearchArgs {
     if (a.startsWith("--")) throw usage(`unknown option ${/^--[a-z-]{1,20}$/.test(a) ? a : "(flag)"}`);
     words.push(a);
   }
-  const text = stripControls(query ?? words.join(" "))
+  if (query !== undefined && words.length > 0) {
+    throw usage("use either query words or --query, not both");
+  }
+  // Controls and invisible characters go, so the SAFE-6 check sees the text
+  // that is sent (a zero-width split cannot hide a secret from it).
+  const text = stripInvisible(stripControls(query ?? words.join(" ")))
     .replace(/\s+/g, " ")
     .trim();
   if (!text) throw usage("missing query");
@@ -178,15 +187,24 @@ export function braveSearchUrl(args: WebSearchArgs): URL {
   return url;
 }
 
-/** Secret shapes and set secret env values removed (the key among them). */
+/**
+ * Secret shapes and set secret env values removed (the key among them). It
+ * is the last step on every string `web-search` returns: a transform after
+ * it (the fence's invisible-character strip, a control strip) could rebuild
+ * a key that an invisible or control character had split.
+ */
 export function scrubOut(text: string, env: NodeJS.ProcessEnv): string {
   return scrubSecrets(redactSecretEnvValues(text, env));
 }
 
-/** One line of third-party text: HTML reduced to text, controls gone, capped. */
+/**
+ * One line of third-party text: HTML reduced to text (entities decoded),
+ * controls and invisible characters (zero-width, bidi, soft hyphen, tag
+ * characters) gone, capped.
+ */
 function oneLine(raw: unknown, max: number): string {
   if (typeof raw !== "string") return "";
-  const t = htmlToText(raw.slice(0, max * 8)).replace(/\s+/g, " ").trim();
+  const t = stripInvisible(htmlToText(raw.slice(0, max * 8))).replace(/\s+/g, " ").trim();
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
@@ -195,7 +213,7 @@ function resultUrl(raw: unknown): string | undefined {
   if (typeof raw !== "string" || raw.length > MAX_URL_CHARS) return undefined;
   let u: URL;
   try {
-    u = new URL(stripControls(raw).trim());
+    u = new URL(stripInvisible(stripControls(raw)).trim());
   } catch {
     return undefined;
   }
@@ -281,12 +299,18 @@ export async function braveWebSearch(argv: readonly string[], deps: WebSearchDep
   }
   const args = parseWebSearchArgs(argv);
   // SAFE-6: a query is sent to a third party, so it never carries a secret
-  // (a vendor-key shape, or the value of a set secret env var, this key too).
-  if (scrubOut(args.query, env) !== args.query) {
+  // (a vendor-key shape, or the value of a set secret env var, this key too),
+  // not even split by a joiner or another format character.
+  const bare = args.query.replace(/\p{Cf}/gu, "");
+  if (scrubOut(args.query, env) !== args.query || scrubOut(bare, env) !== bare) {
     throw new WebSearchError(
       "secret",
       "refused: the query carries a secret-looking value (SAFE-6); it is not sent anywhere",
     );
+  }
+  // A run already stopped reserves nothing and sends nothing.
+  if (deps.signal?.aborted) {
+    throw new WebSearchError("aborted", "stopped: the calling run was interrupted");
   }
   const hold = reserveFlatSpend({
     env,
@@ -316,7 +340,8 @@ export async function braveWebSearch(argv: readonly string[], deps: WebSearchDep
   } catch (e) {
     outcome = spendOutcomeFor(e);
     if (e instanceof ApiRequestError) throw fromApiError(e);
-    throw new WebSearchError("unexpected", e instanceof Error ? e.message : String(e));
+    // A fixed line: an unexpected error's own text could carry anything.
+    throw new WebSearchError("unexpected", "the search failed unexpectedly");
   } finally {
     if (hold.kind === "held") hold.settle(outcome);
   }
@@ -337,7 +362,11 @@ export function formatHits(hits: readonly WebSearchHit[]): string {
     .join("\n\n");
 }
 
-/** Wrap a search body in the untrusted web fence (SAFE-12), scrubbed first. */
+/**
+ * Wrap a search body in the untrusted web fence (SAFE-12). The fenced string
+ * is scrubbed last (`scrubOut`), after the fence strips invisible characters,
+ * so a key split by one of them is never rebuilt in what the model reads.
+ */
 export function fenceSearchResults(body: string, env: NodeJS.ProcessEnv, id?: string): string {
-  return fenceUntrusted(scrubOut(body, env), "brave-search", id);
+  return scrubOut(fenceUntrusted(body, "brave-search", id), env);
 }

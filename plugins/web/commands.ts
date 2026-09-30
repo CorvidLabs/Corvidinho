@@ -32,6 +32,7 @@
  * server text.
  */
 
+import { stripInvisible } from "../../src/agent/untrusted.ts";
 import { scrubSecrets } from "../../src/store/scrub.ts";
 import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
 import {
@@ -102,19 +103,30 @@ const SEARCH_REFUSAL_CODES: ReadonlySet<string> = new Set([
   "redirect",
 ]);
 
+/**
+ * One `web-search` error line: controls and invisible characters normalised
+ * first, then scrubbed (`scrubOut`, the key's value among the secrets), then
+ * capped, so no later step can rebuild a key that a control or invisible
+ * character had split.
+ */
+function clipSearchError(text: string, env: NodeJS.ProcessEnv): string {
+  const t = scrubOut(stripInvisible(stripControls(text)).replace(/\s+/g, " ").trim(), env);
+  return t.length > MAX_ERROR_CHARS ? `${t.slice(0, MAX_ERROR_CHARS)}…` : t;
+}
+
 /** `web-search`'s handler result for an error: one scrubbed line, never the key or the URL. */
 function searchErrorResult(e: unknown, env: NodeJS.ProcessEnv): PluginHandlerResult {
   if (e instanceof WebSearchError) {
     return {
       ok: false,
-      error: clipError(scrubOut(`web-search ${e.code}: ${e.message}`, env)),
+      error: clipSearchError(`web-search ${e.code}: ${e.message}`, env),
       data: { code: e.code },
       exitCode: SEARCH_REFUSAL_CODES.has(e.code) ? 2 : 1,
       ...(e.spendAsk ? { spendAsk: e.spendAsk } : {}),
     };
   }
-  const msg = e instanceof Error ? e.message : String(e);
-  return { ok: false, error: clipError(scrubOut(`web-search: ${msg}`, env)), exitCode: 1 };
+  // A fixed line: an error from outside the search code could carry anything.
+  return { ok: false, error: "web-search unexpected: the search failed unexpectedly", data: { code: "unexpected" }, exitCode: 1 };
 }
 
 /** Build the web commands; tests inject the resolver/transport (and search) seams. */
