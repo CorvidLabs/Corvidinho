@@ -10,14 +10,17 @@ Decision: describe the behaviour as it is; change no gate.
 - A thread on `deny_channels` stays refused on every path (unchanged
   wording, now also naming `discord-post-message`).
 - A deny on the parent alone is stated to reach a thread allowlisted by its
-  own id only where the bridge knows the parent: MessageCreate, and the ask
-  buttons, restart rows, `discord-send-file` and forget-card fallback of a
-  session a message started in a thread. Slash commands, `/schedule`
-  create and ticks and `discord-post-message` gate the id they are given,
-  and a `/session start` / `/work` session in a thread carries no parent,
-  so those paths serve such a thread.
+  own id only where the bridge knows the parent: MessageCreate and the
+  restart row, `discord-send-file` and forget-card fallback of the run a
+  message in the thread starts or continues, and the ask buttons of a
+  session a message started in a thread and the runs they resume. Slash
+  commands, `/schedule` create and ticks and `discord-post-message` gate
+  the id they are given, and a `/session start` / `/work` session in a
+  thread carries no parent on its own run or its ask-button picks, so those
+  paths serve such a thread.
 - REQ-discord-311 and REQ-discord-476 say the parent is recorded / passed
-  only when a message started the session in a thread.
+  for a message in a thread, and for a button pick only when a message
+  started the session in a thread.
 - Tests pin both halves so a later change to either is a visible,
   reviewed decision.
 

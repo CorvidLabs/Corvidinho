@@ -4,10 +4,12 @@
  * path (chat @mention, thread continuation, reply-to-bot, ask button, slash,
  * schedule, restart recovery, discord-post-message). A deny on the parent
  * alone reaches a thread allowlisted by its own id only where the bridge
- * knows the parent: a message in the thread, and the ask buttons and restart
- * rows of a session a message started there. Slash, `/schedule` and
+ * knows the parent: a message in the thread (and the restart row and reply
+ * channel of the run it starts or continues), and the ask buttons and pick
+ * runs of a session a message started there. Slash, `/schedule` and
  * discord-post-message gate the id they are given, so there (and for a
- * `/session start` session in the thread) the thread is served by its own id.
+ * `/session start` run in the thread and its session's ask buttons and pick
+ * runs) the thread is served by its own id.
  * DISCORD-DENY-1..3: MessageCreate stays silent; an interaction gets only the
  * ephemeral zero-width ack (the allowlist tip for an admin). An allowlisted
  * parent without a deny still serves its threads (DISCORD-2.a). Fixtures
@@ -207,18 +209,33 @@ const BUTTON_ASK: HumanAsk = {
 };
 
 async function bridge(
-  opts: { channels?: string; deny?: string; ownerId?: string; ask?: boolean } = {},
+  opts: {
+    channels?: string;
+    deny?: string;
+    ownerId?: string;
+    ask?: boolean;
+    /** Shared DB; with `inflight` over it, each run sees the restart rows open while it runs. */
+    db?: ReturnType<typeof openCorvidinhoDb>;
+    inflight?: InflightReplyStore;
+  } = {},
 ) {
   const box: { handlers: GatewayHandlers | null } = { handlers: null };
   const outbound = memoryThinkingOutbound();
   const replies: Reply[] = [];
   const prompts: string[] = [];
   const calls: AgentRunChatOpts[] = [];
+  const rowsAtRun: Array<Array<{ channelId: string; parentChannelId: string | null }>> = [];
   const agent: AgentClient = {
     async runChat(input) {
       const { sessionId, prompt } = input;
       calls.push(input);
       prompts.push(prompt);
+      rowsAtRun.push(
+        (opts.inflight?.list() ?? []).map((r) => ({
+          channelId: r.channelId,
+          parentChannelId: r.parentChannelId,
+        })),
+      );
       if (opts.ask && prompts.length === 1) {
         return {
           ok: true,
@@ -242,6 +259,7 @@ async function bridge(
       CORVIDINHO_OWNER_DISCORD_ID: opts.ownerId ?? OWNER_ID,
     },
     projectRoot: tempDir("corvidinho-thread-deny-proj-"),
+    ...(opts.db ? { db: opts.db } : {}),
     skipProtocolCheck: true,
     disableScheduler: true,
     thinkingOutbound: outbound,
@@ -265,7 +283,7 @@ async function bridge(
     outbound.edits.length +
     outbound.contentEdits.length +
     outbound.deletes.length;
-  return { result, handlers: box.handlers, replies, prompts, calls, outbound, posted };
+  return { result, handlers: box.handlers, replies, prompts, calls, rowsAtRun, outbound, posted };
 }
 
 describe("bridge: a deny-listed thread under an allowlisted parent (DISCORD-5 / DISCORD-DENY-1)", () => {
@@ -572,13 +590,33 @@ describe("a deny on the parent alone reaches its threads only where the parent i
     expect(store.list()).toHaveLength(0);
   });
 
-  test("through the bridge, an @mention in that thread runs no agent and posts nothing (thread listed alone, or with the parent)", async () => {
-    for (const channels of [OK_THREAD, `${PARENT},${OK_THREAD}`]) {
-      const b = await bridge({ channels, deny: PARENT });
-      await b.handlers.onMessage(msg({ threadId: OK_THREAD }));
-      expect(b.prompts).toHaveLength(0);
-      expect(b.posted()).toBe(0);
-      expect(b.result.store.list()).toHaveLength(0);
+  test("through the bridge, a message in that thread runs no agent and posts nothing: a new @mention, and a talk started there before the parent was deny-listed (thread listed alone, or with the parent)", async () => {
+    for (const channels of [[OK_THREAD], [PARENT, OK_THREAD]]) {
+      const fresh = await bridge({ channels: channels.join(","), deny: PARENT });
+      await fresh.handlers.onMessage(msg({ threadId: OK_THREAD }));
+      expect(fresh.prompts).toHaveLength(0);
+      expect(fresh.posted()).toBe(0);
+      expect(fresh.result.store.list()).toHaveLength(0);
+
+      // A talk started while the parent was listed and not denied; then the
+      // live allowlist becomes `channels` with the parent deny-listed. The
+      // thread's own id is still listed, so only the parent deny stops it.
+      const b = await bridge({ channels: `${PARENT},${OK_THREAD}` });
+      await b.handlers.onMessage(msg({ id: "m-t0", threadId: OK_THREAD }));
+      expect(b.prompts).toHaveLength(1);
+      const tracked = b.outbound.sends[0]!.messageId;
+      const before = b.posted();
+      b.result.config.allowlist.discord.channels = channels;
+      b.result.config.allowlist.discord.denyChannels = [PARENT];
+      await b.handlers.onMessage(
+        msg({ id: "m-t1", threadId: OK_THREAD, mentionedBot: false, content: "more in thread" }),
+      );
+      await b.handlers.onMessage(
+        msg({ id: "m-t2", threadId: OK_THREAD, mentionedBot: false, content: "follow up", referencedMessageId: tracked }),
+      );
+      await b.handlers.onMessage(msg({ id: "m-t3", threadId: OK_THREAD }));
+      expect(b.prompts).toHaveLength(1);
+      expect(b.posted()).toBe(before);
     }
   });
 
@@ -591,6 +629,24 @@ describe("a deny on the parent alone reaches its threads only where the parent i
     }
     // A deny on the thread itself still wins for a /session start session in it.
     expect(componentChannelAllowlisted(THREAD, { channelId: THREAD }, threadDenied())).toBe(false);
+  });
+
+  test("through the bridge, a press for a session a message started in that thread, once the parent is deny-listed, gets only the zero-width ack: no resume, nothing posted, ask kept", async () => {
+    for (const channels of [[OK_THREAD], [PARENT, OK_THREAD]]) {
+      const b = await bridge({ channels: `${PARENT},${OK_THREAD}`, ask: true });
+      await b.handlers.onMessage(msg({ id: "m-ask", authorId: MEMBER_ID, threadId: OK_THREAD }));
+      const pending = b.result.store.list()[0]?.pendingAsk;
+      if (!pending?.options?.length) throw new Error("no button ask");
+      b.result.config.allowlist.discord.channels = channels;
+      b.result.config.allowlist.discord.denyChannels = [PARENT];
+      const before = b.posted();
+      const acks: Array<{ content?: string; ephemeral?: boolean }> = [];
+      await b.handlers.onComponent!(press(pending.askId, OK_THREAD, MEMBER_ID, acks));
+      expect(acks).toEqual([{ content: EPHEMERAL_SILENT_ACK, ephemeral: true }]);
+      expect(b.prompts).toHaveLength(1);
+      expect(b.posted()).toBe(before);
+      expect(b.result.store.list()[0]!.pendingAsk?.askId).toBe(pending.askId);
+    }
   });
 
   test("a slash command in a thread allowlisted by its own id is served although its parent is deny-listed (slash gates the id it is given)", async () => {
@@ -606,23 +662,25 @@ describe("a deny on the parent alone reaches its threads only where the parent i
   });
 
   test("/schedule create naming that thread as its channel is accepted, and its tick runs and posts in the thread (schedule gates the id it is given)", async () => {
-    const ctx = slashCtx(parentDenied());
-    const ix = slash({
-      commandName: "schedule",
-      subcommand: "create",
-      channelId: OK_THREAD,
-      userId: OWNER_ID,
-      options: { name: "Hourly", cadence: "@hourly", project: ".", prompt: "dig", channel: OK_THREAD },
-    });
-    await handleSlashInteraction(ctx, ix);
-    expect(ix.replies).toHaveLength(1);
-    expect(ix.replies[0]!.content).toContain("Schedule created");
-    expect(ctx.scheduleStore!.list().map((s) => s.channelId)).toEqual([OK_THREAD]);
+    for (const allowlist of [parentDenied, parentDeniedBothListed]) {
+      const ctx = slashCtx(allowlist());
+      const ix = slash({
+        commandName: "schedule",
+        subcommand: "create",
+        channelId: OK_THREAD,
+        userId: OWNER_ID,
+        options: { name: "Hourly", cadence: "@hourly", project: ".", prompt: "dig", channel: OK_THREAD },
+      });
+      await handleSlashInteraction(ctx, ix);
+      expect(ix.replies).toHaveLength(1);
+      expect(ix.replies[0]!.content).toContain("Schedule created");
+      expect(ctx.scheduleStore!.list().map((s) => s.channelId)).toEqual([OK_THREAD]);
 
-    const { calls, posts, finished } = await tickSchedule(OK_THREAD, parentDenied());
-    expect(calls).toHaveLength(1);
-    expect(posts.map((p) => p.channelId)).toEqual([OK_THREAD]);
-    expect(finished[0]).toMatchObject({ ok: true });
+      const { calls, posts, finished } = await tickSchedule(OK_THREAD, allowlist());
+      expect(calls).toHaveLength(1);
+      expect(posts.map((p) => p.channelId)).toEqual([OK_THREAD]);
+      expect(finished[0]).toMatchObject({ ok: true });
+    }
   });
 
   test("an ask press for a /session start session in that thread resumes it there, with no parent passed to the run (so discord-send-file and a restart row judge the thread alone)", async () => {
@@ -656,6 +714,47 @@ describe("a deny on the parent alone reaches its threads only where the parent i
       expect(b.calls[1]!.replyChannelId).toBe(OK_THREAD);
       expect(b.calls[1]!.replyParentChannelId).toBeUndefined();
     }
+  });
+
+  test("a reply in the thread to a /session start session's answer is a message run: it passes the thread's parent and records it on its restart row, while the session's pick passes and records none", async () => {
+    const db = openCorvidinhoDb({ memory: true });
+    cleanups.push(() => db.close());
+    const inflight = new InflightReplyStore(db);
+    const b = await bridge({ channels: `${PARENT},${OK_THREAD}`, ask: true, db, inflight });
+    await b.handlers.onSlash!({
+      id: "ix-session",
+      commandName: "session",
+      subcommand: "start",
+      channelId: OK_THREAD,
+      userId: OWNER_ID,
+      options: { topic: "pick a DB" },
+      reply: async () => {},
+      deferReply: async () => {},
+      editReply: async () => undefined,
+      deleteReply: async () => {},
+    });
+    const session = b.result.store.list()[0]!;
+    expect(session.threadId).toBeUndefined();
+    const askId = session.pendingAsk?.askId;
+    if (!askId) throw new Error("no button ask");
+
+    // The pick: the thread alone, on the run and on its restart row.
+    await b.handlers.onComponent!(press(askId, OK_THREAD, OWNER_ID, []));
+    expect(b.calls[1]!.sessionId).toBe(session.id);
+    expect(b.calls[1]!.replyParentChannelId).toBeUndefined();
+    expect(b.rowsAtRun[1]).toEqual([{ channelId: OK_THREAD, parentChannelId: null }]);
+
+    // A reply in the thread to its tracked answer continues it as a message
+    // run, which knows the thread's parent.
+    const tracked = [...b.result.store.byBotMessageId].find(([, s]) => s.id === session.id)?.[0];
+    if (!tracked) throw new Error("no tracked bot message");
+    await b.handlers.onMessage(
+      msg({ id: "m-reply", threadId: OK_THREAD, mentionedBot: false, content: "more", referencedMessageId: tracked }),
+    );
+    expect(b.calls).toHaveLength(3);
+    expect(b.calls[2]!.sessionId).toBe(session.id);
+    expect(b.calls[2]).toMatchObject({ replyChannelId: OK_THREAD, replyParentChannelId: PARENT });
+    expect(b.rowsAtRun[2]).toEqual([{ channelId: OK_THREAD, parentChannelId: PARENT }]);
   });
 });
 

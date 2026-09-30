@@ -36,7 +36,14 @@ Where the parent is recorded: `bridge.ts` message path
 (`session.threadId ? session.channelId : null`); `session.ts` /
 `work.ts` create the session with `channelId: interaction.channelId`
 and no thread id and pass only `replyChannelId`; `adaptChatInput`
-passes no parent for a slash interaction.
+passes no parent for a slash interaction. A reply message in a thread to a
+`/session start` session's tracked answer continues that session as a
+message run, so it passes and records the parent (`msg.threadId` is set).
+A new @mention also passes `gateInbound` on the message's channel (the
+parent, for a thread), so with `channels = [thread]` alone a new @mention
+in the thread is refused even without a deny, while a talk already in the
+thread continues on the thread's own id; the bridge tests for B therefore
+start the talk with both ids listed and then move the live allowlist.
 
 Spec text that overclaimed: REQ-discord-212 ("when a thread or its parent
 channel is on `deny_channels` … on every path"; AC "A thread under a
