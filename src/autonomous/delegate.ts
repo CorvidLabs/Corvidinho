@@ -2,7 +2,7 @@
  * Delegation core for the `delegate` autonomous tool (AUTONOMOUS-5, issue #117).
  *
  * A lead agent hands one skill-tagged subtask to a worker: a child
- * `corvidinho task run` (bun --no-env-file, non-interactive, NDJSON) in the
+ * `corvidinho task run --here` (bun --no-env-file, non-interactive, NDJSON) in the
  * lead's cwd. Like every product spawn it never passes --no-verify
  * (REQ-cli-085): the worker proves its own edits through the project's verify
  * lane (AGENT-4), and its filesChanged also join the lead's result, so the
@@ -245,6 +245,9 @@ export function buildDelegateSpawn(opts: {
   const cmd = buildCorvidinhoArgv(opts.bin, [
     "task",
     "run",
+    // SESSION-WORKTREE-1.a (REQ-cli-122): the worker works in its lead's cwd,
+    // never in a nested worktree of its own.
+    "--here",
     "--non-interactive",
     "--tier",
     opts.tier,

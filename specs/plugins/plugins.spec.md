@@ -153,7 +153,9 @@ Autonomous extras are plugins left off until the project opts in (PLUGIN-5):
 tool loop takes as its own hit (REQ-plugins-071), and a worker's model
 failovers (`result.modelFallback`, validated; a council's voices' each once)
 back as `data.modelFallback`, which the lead reports as its own run's
-(AGENT-11, REQ-plugins-080).
+(AGENT-11, REQ-plugins-080). Every worker and voice is spawned as
+`task run --here …` (REQ-agent-117), so it works in the lead's cwd and never
+makes a worktree of its own (SESSION-WORKTREE-1.a, REQ-cli-122).
 Every call goes through the must-ask gate in `runPlugin`: a call its command
 classes as prod or deploy contact or as a channel post waits for the owner's
 Approve card, and anything else runs with no ask (AUTONOMY-9/10/11,

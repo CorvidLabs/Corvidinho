@@ -384,3 +384,10 @@ the approve argv. `tests/roles.team.test.ts`: `TEAM_WORK_TOOLS` and the team
 `tests/fledge.plugins.test.ts`: the builtin surface with a Fledge plugin is
 under the ~9000-token budget. The fail-on-base proof is in
 `specs/agent/testing.md`.
+
+## Delegate and council workers are spawned with --here (REQ-plugins-117 / REQ-plugins-118 modified; SESSION-WORKTREE-1.a)
+
+`tests/autonomous.delegate.test.ts` ("runs one worker …") and
+`tests/autonomous.council.test.ts` ("voices are delegated read-tier …") —
+every worker's argv has `--here` right after `task run`. Fail on base: both
+fail.

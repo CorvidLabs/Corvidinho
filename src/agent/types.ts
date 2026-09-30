@@ -190,6 +190,25 @@ export type TaskResult = {
    * Absent when no model failed over.
    */
   modelFallback?: ModelFallback[];
+  /**
+   * SESSION-WORKTREE-1.a (REQ-cli-122): the worktree a local `task run`
+   * worked in and whether it and its branch were kept (additive; no protocol
+   * change). Absent when the run worked in place: `--here`, a directory that
+   * is not in a git repo, or a child a product surface spawned.
+   */
+  workspace?: TaskWorkspaceReport;
+};
+
+/** What became of a local `task run`'s own worktree at the end of the run (REQ-cli-122). */
+export type TaskWorkspaceReport = {
+  /** The linked worktree the run worked in. */
+  dir: string;
+  /** Its branch (`talk/cli_…`). */
+  branch: string;
+  /** The worktree is still there (not clean, or it could not be removed). */
+  kept: boolean;
+  /** The branch is still there (it has commits of its own, or its worktree was kept). */
+  branchKept: boolean;
 };
 
 /**

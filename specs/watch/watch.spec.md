@@ -149,6 +149,10 @@ comment keeps the run's closing `(model fallback: …)` note when it clips
 
 ## Invariants
 
+The spawn client runs `task run --here --task <prompt> --output ndjson`
+(REQ-watch-006 / REQ-watch-073): the run works in the watcher's cwd and never
+makes a worktree of its own (SESSION-WORKTREE-1.a, REQ-cli-122).
+
 Empty github orgs+repos fail-start; empty users = deny-all for triggers;
 allowlist BEFORE session spawn; assignment / review_request also gate the
 user who assigned / requested (actor; missing actor refused, deny wins) in the

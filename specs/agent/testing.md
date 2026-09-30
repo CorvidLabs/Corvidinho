@@ -683,3 +683,19 @@ Unchanged suites that cover the touched files pass: `tests/agent.spend.test.ts`,
   ends `used`. The target and scrub-before-cut tests fail on the branch's
   first cut (`6ac2d8c`) sources, which recorded and sent the call past a cap
   the card did not show and cut the task before scrubbing it.
+
+## Workers pass --here; the local-CLI shell refusal names the missing role session (REQ-agent-117, REQ-agent-503 modified; SESSION-WORKTREE-1.a)
+
+- `tests/cli.task-worktree.test.ts` › "delegate and council workers spawn
+  task run --here, --task last" — `buildDelegateSpawn` argv is `task run
+  --here --non-interactive --tier <t> --output ndjson --task <text>`.
+- `tests/agent.safe3a-gate.test.ts` / `tests/agent.safe3a-owner-shell.test.ts`
+  — a run with no role session is refused with `a local CLI run has no role
+  session (the CLI half of SAFE-3.a is not built yet)`.
+- Spawned `task run` tests that run in a talk worktree or temp repo pass
+  `--here` (`agent.cli`, `agent.verify-gate`, `agent.test-evidence`,
+  `agent.ndjson-spawn`, `agent.stall-nudge`, `agent.spend-ask`,
+  `agent.providers`, `agent.loop-guards`, `agent.persona`, `agent.fallback`,
+  `agent.ask`).
+- Fail on base: with the base's sources the argv case and both gate
+  assertions fail.

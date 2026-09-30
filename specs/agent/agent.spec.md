@@ -591,6 +591,16 @@ test seam), `HUMAN_LIFECYCLE_LINE`, `selfLifecycleRefusal(cwd, id, env)`,
 `citedHiIds(text, families)`. `ExecuteContext` gains optional
 `repoWays?: RepoWays`. No env var, config key, flag or schema.
 
+A local `task run`'s own worktree (SESSION-WORKTREE-1.a, REQ-cli-122):
+`TaskResult` gains optional `workspace?: TaskWorkspaceReport` (`dir`,
+`branch`, `kept`, `branchKept`), set only by the CLI for a run that worked in
+its own worktree (additive on `--json` and the NDJSON `result` frame:
+protocol stays 2). The delegate core spawns every worker (and council voice)
+with `task run --here …` (REQ-agent-117), so a worker works in its lead's cwd
+and never makes a worktree of its own. The SAFE-3.a gate's refusal for a run
+with no role session reads `a local CLI run has no role session (the CLI half
+of SAFE-3.a is not built yet)` (REQ-agent-503).
+
 ## Invariants
 
 A failed model hands the run to the next configured one and says so (AGENT-11,

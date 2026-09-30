@@ -728,7 +728,7 @@ describe("NDJSON: usage frames name the model and usage per model; the result fr
   test("task run --output ndjson: a Text frame, usage frames with the model, a result with model, usageByModel and modelFallback", async () => {
     const llm = startServer();
     try {
-      const proc = Bun.spawn([process.execPath, CLI, "task", "run", "--task", "hi", "--output", "ndjson"], {
+      const proc = Bun.spawn([process.execPath, CLI, "task", "run", "--here", "--task", "hi", "--output", "ndjson"], {
         cwd: tmp(),
         env: {
           ...process.env,
@@ -775,7 +775,7 @@ describe("NDJSON: usage frames name the model and usage per model; the result fr
   test("task run (text): a retired head (410) says so on stderr and the answer carries the note", async () => {
     const llm = startServer();
     try {
-      const proc = Bun.spawn([process.execPath, CLI, "task", "run", "--task", "hi"], {
+      const proc = Bun.spawn([process.execPath, CLI, "task", "run", "--here", "--task", "hi"], {
         cwd: tmp(),
         env: {
           ...process.env,

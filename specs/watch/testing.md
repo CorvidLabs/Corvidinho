@@ -176,3 +176,10 @@ value; `tests/agent.safe3a-gate.test.ts` and
 `CORVIDINHO_WATCH_SESSION_ID` marker) never gets the shell.
 - Fail on base: with the base's `src/watch/agent-client.ts` the stamp is
   unset and the test fails.
+
+## The spawn client passes --here (REQ-watch-006 / REQ-watch-073 modified; SESSION-WORKTREE-1.a)
+
+`tests/agent.ndjson-spawn.test.ts` (WATCH spawn client) and
+`tests/cli.task-worktree.test.ts` › "Discord and WATCH clients spawn task
+run --here" — the fake bin records exactly `task run --here --task <prompt>
+--output ndjson`. Fail on base: both fail (no `--here`).

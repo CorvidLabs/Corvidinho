@@ -417,6 +417,8 @@ describe("delegate plugin handler (fake bin)", () => {
     expect(r.message).toContain("worker [docs]");
     const argv = argvOf(dir);
     expect(argv.slice(0, 2)).toEqual(["task", "run"]);
+    // The worker works in its lead's cwd, never a worktree of its own (REQ-cli-122).
+    expect(argv[2]).toBe("--here");
     expect(argv).toContain("--non-interactive");
     expect(argv).not.toContain("--no-verify");
     expect(argv[argv.indexOf("--tier") + 1]).toBe("read");

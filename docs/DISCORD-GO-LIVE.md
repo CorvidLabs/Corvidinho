@@ -317,8 +317,9 @@ What an entry unlocks **today**:
   - the run's directory is that talk's own linked git worktree (`talk-…` under the worktree
     base). A non-git project (its scoped folder), the main checkout and another talk's
     worktree are refused.
-  A local `corvidinho task run` does not get them yet: it runs in the current checkout, not a
-  talk worktree of its own. When the allowlist names one of them and the run is refused, the
+  A local `corvidinho task run` does not get them yet (the CLI half of SAFE-3.a is not built):
+  it has no role session, whether it works in its own worktree (the default in a git repo) or,
+  with `--here`, in the current checkout. When the allowlist names one of them and the run is refused, the
   run's event stream carries one `[operator] SAFE-3.a: … allowlisted but not offered: <why>`
   line (never part of the reply). Every call still goes through the role re-check, SAFE-1,
   the must-ask Approve card for prod and deploy commands (AUTONOMY-9), the SAFE-5 audit trail
@@ -386,7 +387,8 @@ enabled = true
 counts; a missing file, section or key, or any other value, means off.
 
 - Each `task run` reads `fledge.toml` from its working directory. In a git project, Discord,
-  `/work` and schedule runs work in a git worktree made from the project checkout's `HEAD`, so
+  `/work` and schedule runs, and a local `corvidinho task run` without `--here`
+  (SESSION-WORKTREE-1.a), work in a git worktree made from the project checkout's `HEAD`, so
   **commit** the change there; an uncommitted edit is not seen by those runs.
 - `fledge.toml` is protected infra (SAFE-2): the agent's file tools cannot flip the switch.
 - Today the gate controls two tools, `delegate` and `council`. The model sees them only when all of these hold:

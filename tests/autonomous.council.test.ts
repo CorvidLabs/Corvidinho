@@ -511,6 +511,8 @@ describe("council plugin (REQ-plugins-118)", () => {
     ]);
     for (const c of Object.values(calls)) {
       expect(c.argv.slice(0, 2)).toEqual(["task", "run"]);
+      // A voice works in its lead's cwd, never a worktree of its own (REQ-cli-122).
+      expect(c.argv[2]).toBe("--here");
       expect(c.argv).toContain("--non-interactive");
       expect(c.argv).not.toContain("--no-verify");
       expect(c.argv[c.argv.indexOf("--tier") + 1]).toBe("read");

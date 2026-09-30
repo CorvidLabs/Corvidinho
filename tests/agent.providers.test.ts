@@ -247,7 +247,7 @@ describe("no built-in default: with no usable provider it says so (AGENT-10)", (
   test("task run: the notice on stderr at start and as the failed result, exit 1, no stub answer", async () => {
     const cwd = tmp();
     const env = { ...process.env, OPENAI_API_KEY: "sk-openai-secret-value", CORVIDINHO_DATA_DIR: tmp() };
-    const text = Bun.spawn([process.execPath, CLI, "task", "run", "--task", "hi"], { cwd, env, stdout: "pipe", stderr: "pipe" });
+    const text = Bun.spawn([process.execPath, CLI, "task", "run", "--here", "--task", "hi"], { cwd, env, stdout: "pipe", stderr: "pipe" });
     const [code, out, err] = await Promise.all([text.exited, new Response(text.stdout).text(), new Response(text.stderr).text()]);
     expect(code).toBe(1);
     expect(err.split("\n")[0]).toBe(UNSET_NOTICE);
@@ -256,7 +256,7 @@ describe("no built-in default: with no usable provider it says so (AGENT-10)", (
     expect(out + err).not.toContain("demo task");
     expect(out + err).not.toContain("sk-openai-secret-value");
 
-    const json = Bun.spawn([process.execPath, CLI, "task", "run", "--task", "hi", "--json"], { cwd, env, stdout: "pipe", stderr: "pipe" });
+    const json = Bun.spawn([process.execPath, CLI, "task", "run", "--here", "--task", "hi", "--json"], { cwd, env, stdout: "pipe", stderr: "pipe" });
     const [jcode, jout] = await Promise.all([json.exited, new Response(json.stdout).text()]);
     expect(jcode).toBe(1);
     const parsed = JSON.parse(jout) as { result: { state: string; summary: string; filesChanged: string[] } };
@@ -266,7 +266,7 @@ describe("no built-in default: with no usable provider it says so (AGENT-10)", (
   test("task run with a keyless ollama: model calls it end to end (no key, no auth header)", async () => {
     const llm = startFakeLlm();
     try {
-      const proc = Bun.spawn([process.execPath, CLI, "task", "run", "--task", "hi", "--json"], {
+      const proc = Bun.spawn([process.execPath, CLI, "task", "run", "--here", "--task", "hi", "--json"], {
         cwd: tmp(),
         env: { ...process.env, ...llm.env, CORVIDINHO_DATA_DIR: tmp() },
         stdout: "pipe",

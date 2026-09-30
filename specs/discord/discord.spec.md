@@ -717,7 +717,10 @@ bridge's chat path passes `chat`, its ask continuation (button pick or
 Answer form) `ask`, `/session start` `session`, `/work` `work` and the
 scheduler's `runOne` `schedule`. The agent's shell gate (REQ-agent-503)
 offers the allowlisted shell, runners and Fledge runs only on the first four,
-for the owner, in the talk's own worktree. Community can't start `/work` (IDENTITY-11.a): right after the SAFE-13
+for the owner, in the talk's own worktree. The spawn client runs
+`task run --here --task <prompt> --output ndjson` (REQ-discord-014 /
+REQ-discord-073): the run works in the cwd it is given and never makes a
+worktree of its own (SESSION-WORKTREE-1.a, REQ-cli-122). Community can't start `/work` (IDENTITY-11.a): right after the SAFE-13
 inbound check the handler refuses a community caller (declared community, no
 role, undeclared; muted or deny-listed callers too, though the dispatcher's
 mute and actor gates stop them first) with the ephemeral `not authorized` of

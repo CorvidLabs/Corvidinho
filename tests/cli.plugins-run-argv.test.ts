@@ -190,7 +190,7 @@ describe("corvidinho plugins run <name> -- ...args (REQ-cli-186)", () => {
     const llm = startFakeLlm();
     let r: Awaited<ReturnType<typeof cli>>;
     try {
-      r = await cli(["task", "run", "--json", "--task", "-h"], s.project, {
+      r = await cli(["task", "run", "--here", "--json", "--task", "-h"], s.project, {
         PATH: s.path,
         ...llm.env,
       });

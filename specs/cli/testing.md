@@ -147,3 +147,37 @@ of the same schedule is spawned `actingIsAdmin: false`, with no restart.
   (`tests/fixtures/preload-probe.ts` lists it). Fail on base: the base
   preload leaves it set and the probe reports it.
 
+
+## A task run in a git repo works in its own worktree; --here runs it in the checkout (REQ-cli-122; SESSION-WORKTREE-1.a)
+
+`tests/cli.task-worktree.test.ts` — temp repos under the test run's temp root
+(never this checkout), a localhost fake model and a fake `fledge`; every
+test removes the worktrees and branches it made.
+- `parseTaskHere`: `--here` only among `task run`'s own args before `--`,
+  never `--task --here`, `--task=--here` or `-- --here`.
+- `enterCliTaskWorkspace` / `finishCliTaskWorkspace` in-process: the
+  worktree comes from the realpath repo top (a start dir reached through a
+  symlink), sits under `<repo parent>/.corvid-worktrees` (or
+  `WORKTREE_BASE_DIR`) as `talk-cli_<12 hex>-<16 hex>` on `talk/<same>`, runs
+  in the same subdir and has neither the checkout's uncommitted edit nor its
+  untracked file; `--here`, a non-git dir and every child env stay in place;
+  an untracked start subdir and an unborn HEAD fail closed with nothing left;
+  an aborted signal is `cancelled`; a dirty worktree is kept with its branch,
+  a clean one with a commit is removed and its branch kept.
+- The real CLI: the default run's edit lands in the worktree (not the
+  checkout), the first event is the start line and `result.workspace` names
+  the kept worktree (`--json`), text mode prints the start and kept lines;
+  `--here` edits the checkout and makes nothing; a run that changes nothing
+  leaves nothing (`--task --here`, `-- --here`); an old-bridge child
+  (`CORVIDINHO_ACTING_IS_ADMIN=0`) makes nothing; an untracked subdir, a file
+  as `WORKTREE_BASE_DIR` and an unborn HEAD exit 1 with the `pass --here`
+  hint and no model call; SIGINT during `git worktree add` (a `git` wrapper
+  that pauses there) exits 130 with nothing left.
+- Existing spawned `task run` tests in git repos pass `--here` (they test
+  in-place behaviour).
+- Fail on base: with the base's (9ea4005) six modified sources swapped in
+  (the new `src/worktree/cli-run.ts` kept so imports resolve) the file cannot
+  load (`parseTaskHere` is missing); with that import stubbed, 8 of 18 fail —
+  every real-CLI worktree case, the flag parse and both spawner argv cases —
+  and the 10 that pass are the in-process units of the new module plus the
+  `--here` and child cases, which run in place on the base too.

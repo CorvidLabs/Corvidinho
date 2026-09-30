@@ -2,7 +2,9 @@
  * Spawn corvidinho for WATCH chat with prove-before-done (AGENT-4 / FLEDGE-2 / #85).
  * Verification can't be skipped (AGENT-14); a run whose real git diff is
  * empty ends with "no changes, nothing to verify" (REQ-agent-003 / 085).
- * Reads the `task run --output ndjson` event stream (AGENT-8, #73).
+ * Reads the `task run --here --output ndjson` event stream (AGENT-8, #73;
+ * --here: the run works in the watcher's cwd, never a worktree of its own,
+ * REQ-cli-122).
  * Sets the commenter's GitHub login / numeric id and the thread's repo for
  * the memory plugins (MEMORY-8, REQ-watch-067); no Discord actor, never ADMIN
  * (REQ-watch-008), and stamps the `watch` surface, which never gets the
@@ -71,6 +73,9 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       const cmd = buildCorvidinhoArgv(opts.bin, [
         "task",
         "run",
+        // SESSION-WORKTREE-1.a (REQ-cli-122): the run works in the cwd given
+        // here, never in a new worktree of its own.
+        "--here",
         "--task",
         prompt,
         "--output",

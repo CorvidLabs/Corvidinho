@@ -203,7 +203,7 @@ describe("SAFE-3.a gate: who gets the shell, runners and Fledge runs (REQ-agent-
       expect(v).toEqual({ granted: false, reason: "a delegate or council worker never gets them" });
     }
     const cli = await shellToolsGate({ env: ownerChatEnv(f, { CORVIDINHO_ACTING_IS_ADMIN: undefined }), cwd: f.own });
-    expect(cli).toEqual({ granted: false, reason: "a local CLI run has no talk worktree of its own yet" });
+    expect(cli).toEqual({ granted: false, reason: "a local CLI run has no role session (the CLI half of SAFE-3.a is not built yet)" });
   });
 
   test("refused: any cwd but the top of this talk's own linked worktree", async () => {
