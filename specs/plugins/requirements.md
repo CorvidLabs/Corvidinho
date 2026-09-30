@@ -1211,8 +1211,14 @@ the acting Discord user id, matched in the owner's people list re-read now
 (`loadDeclaredPeople` + `resolvePerson`, stable ids only), is a person whose
 role is team, not muted (`DISCORD_MUTED_USER_IDS`) and not on
 `[discord].deny_users`; else `community` — undeclared, declared community or
-without a role, WATCH / schedules / workers (community stamp or no actor), and
-any read failure. A stamp never raises the role. `roleAllowsPlugin(role, cmd,
+without a role, WATCH / schedules other people create / workers (community
+stamp or no actor), and any read failure. A stamp never raises the role. In a
+scheduled run (`isScheduleRunEnv`: `CORVIDINHO_DISCORD_SESSION_ID` starts
+with `schedule_`) `resolveActingRole` SHALL return `owner` only through the
+ADMIN re-check above (the scheduler stamps the ADMIN bit only for the live
+owner's own schedule, DISCORD-SCHEDULE-1.a) and otherwise `community`, never
+`team`, whatever `CORVIDINHO_ACTING_ROLE` says, so schedules other people
+create stay read-only. `roleAllowsPlugin(role, cmd,
 workTask)` SHALL be the one rule: read plugins for every role; mutating
 plugins (`isMutatingPlugin`) for the owner and `null`; for team only
 `TEAM_REVIEW_TOOLS` (`github-issue-comment`, `github-pr-review`) plus, when
@@ -1255,6 +1261,7 @@ Acceptance Criteria
 - Team reads pass on an allowlisted or confirmed-public repo and are refused on a private non-allowlisted one; team writes on a public non-allowlisted repo are refused; community writes are refused; deny lists win.
 - Every existing ROLES-CHAT test passes unchanged; regression tests in `tests/roles.team.test.ts` fail on the base sources and pass after.
 - In a scheduled run a public repo off the allowlist is refused for every role before any visibility lookup, and the role rules still apply to an allowlisted one (`tests/github.schedule-repo-gate.test.ts`).
+- In a scheduled run the owner stamp for the owner resolves `owner`, runs `github-issue-comment` (dry run) and `files-write`, and is offered its allowlisted owner tools but not `shell-exec`; a team member's scheduled run with a community, team or owner stamp resolves `community`, gets the role refusal for `github-issue-comment` and is offered no mutating tool; the same team stamp outside a schedule still resolves `team` (`tests/roles.team.test.ts`, failing on the base sources).
 
 ### REQ-plugins-066
 

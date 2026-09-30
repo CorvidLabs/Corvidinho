@@ -3132,9 +3132,12 @@ order) and reach the model only as untrusted data.
   the creator's role), then the closing SAFE line; the owner's schedule keeps
   exactly the prompt it had (`Scheduled work "<name>" on project: <project>`
   and the stored prompt as written).
-- Schedule runs keep `actingIsAdmin: false` and no acting role (never the
-  shell or runners, SAFE-3.a); result posts, ask posts, ping keys, auto-pause
-  and the delivery pass are otherwise unchanged. `SpeakerSurface` gains
+- Schedule runs pass no acting role, and `actingIsAdmin` only for the live
+  owner's own schedule (DISCORD-SCHEDULE-1.a, REQ-discord-741; never the
+  shell or runners, SAFE-3.a); the creator's role above is resolved against
+  the owner as configured at that run (`SchedulerServiceOpts.loadOwner`, else
+  the start-time owner); result posts, ask posts, ping keys, auto-pause and
+  the delivery pass are otherwise unchanged. `SpeakerSurface` gains
   `schedule-prompt`. No new env var, config key, slash option, table, column
   or schema version.
 
@@ -3145,6 +3148,8 @@ Acceptance Criteria
 - A stored community (or team) schedule whose prompt or name trips the detector runs no agent, is paused, posts one ask with the schedule title (by id alone, without the name, when the name tripped) that pings only the owner and never quotes the text, and appends one `denied` row (surface `scheduler:<id>`); a later tick posts nothing more.
 - A ticker with no outbound (the daemon) leaves that ask pending on the run row and a bridge tick posts it once; through `startBridge` the row lands in the bridge's `audit_log` and the schedule is paused.
 - These tests fail on the base sources (the owner and ordinary-create guards pass on both).
+- A schedule made by someone who was the owner at start but is not the owner `loadOwner` reads now is fenced as `role: community` and spawned with `actingIsAdmin: false` (`tests/scheduler.owner-role.test.ts`).
+
 ### REQ-discord-367
 
 GitHub matches people by numeric user id only (IDENTITY-7.a, #36; captured
@@ -3578,4 +3583,55 @@ Acceptance Criteria
 - `tests/discord.safe3a-surface.test.ts`: the spawn client writes `chat`, `ask`, `session`, `work` and `schedule` as given and an empty stamp when none is named, even with `CORVIDINHO_ACTING_SURFACE=chat` in its own env.
 - Same file: through the bridge, a chat message, an ask-button pick continuing it (same session id and cwd), `/session start` and `/work` pass `chat`, `ask`, `session` and `work`; a scheduler tick passes `schedule`.
 - With the base's sources these tests fail; they pass on the branch.
+
+### REQ-discord-741
+
+A schedule the owner creates runs as the owner; schedules other people create
+stay read-only (DISCORD-SCHEDULE-1.a, #124). `SchedulerServiceOpts` SHALL
+gain an optional `loadOwner` (`() => Promise<OwnerRecord | null> |
+OwnerRecord | null`), read once per run: the bridge SHALL wire it to
+`loadOwnerConfig({ env, filePath: <the loaded allowlist's source path> })`
+and the daemon to `loadOwnerConfig({ env })` (REQ-cli-741), so a run reads
+the owner as configured now; without it the start-time `owner` is used, and a
+read that throws SHALL be logged (`[scheduler] owner failed: <scrubbed
+line>`) and count as no owner (fail closed).
+
+- `runOne` SHALL, after the DISCORD-SCHEDULE-3 creator / channel gate
+  (REQ-discord-020) and before the SAFE-13 scan, resolve the creator's role
+  against that live owner (`resolveDiscordActingRole` with the live owner, the
+  live mute set and the people list read with that owner; the SAFE-12 fence
+  and the answered-ask block use the same owner) and spawn the run with
+  `actingIsAdmin: true` only when that role is `owner` and
+  `isOwnerDiscord(liveOwner, schedule.createdByUserId)` — the owner as
+  configured now, not muted or deny-listed. Every other schedule SHALL be
+  spawned with `actingIsAdmin: false`. No schedule SHALL pass `actingRole`,
+  so the spawn client stamps `owner` or `community`, never `team`.
+- The run keeps `surface: "schedule"` and its `schedule_<id>` session id, so
+  the SAFE-3.a gate still refuses the shell, runners and Fledge runs
+  (REQ-agent-503), no Fledge plugin command is discovered (REQ-agent-741), the
+  repo gate stays on (DISCORD-SCHEDULE-3.a) and the tool layer re-checks the
+  owner at every call (REQ-plugins-065). The owner's schedule is offered the
+  dangerous tools the allowlist names; a must-ask call it starts (a
+  `discord-post-message` included) raises the owner's Approve card through
+  `runPlugin`. A deny, a lapse or a resent deny ends the run with the stuck
+  ask `mustAskRefusedAsk` builds (REQ-agent-741); `finish` records it and it
+  blocks the schedule (AUTONOMY-6.a, REQ-discord-606): it is posted once to
+  the schedule's channel (the owner pinged, with its Answer and Cancel
+  controls), and each later due run is skipped with one wait note, raising no
+  new card, until it is answered or cancelled.
+- The schedule's own posts (its result, its ask, its wait note) SHALL keep
+  going out through the scheduler's outbound, never through `runPlugin`, so
+  they are not AUTONOMY-10 announcements it starts and need no card.
+- An owner schedule on a non-git project SHALL keep its own scoped folder
+  (`scoped-talk-schedule_…`), never the project folder itself.
+- No new env var, config key, slash option, table, column or schema version.
+
+Acceptance Criteria
+- `tests/scheduler.owner-role.test.ts`: the owner's due schedule is spawned `actingIsAdmin: true` with no `actingRole`, surface `schedule`, session `schedule_<id>` and its prompt unfenced, and its result post goes straight to its channel; a declared team member's and a stranger's are spawned `actingIsAdmin: false` with no `actingRole`.
+- Same file: started with one owner while `loadOwner` names another, the old owner's schedule is community (fenced `role: community`) and the new owner's runs as the owner, one read per run; `loadOwner` returning null, throwing (logged) or a muted owner give `false`; without `loadOwner` the start-time owner is used.
+- Same file: an owner schedule on a non-git project runs in its own `scoped-talk-schedule_…` folder, never the project folder.
+- Same file: through the real spawn client, the child of the owner's schedule resolves `owner` (stamps `1` / `owner` / `schedule`, the shell gate refusing "scheduled runs never get them") and a team member's resolves `community`.
+- Same file: in process, the owner's schedule's `discord-post-message` raises one `mustask-post` card; denied, the scheduler records the stuck ask naming it, posts it once pinging the owner with its controls, and the next two due ticks run nothing, raise no new card and post one wait note.
+- Same file: `startDaemon` and `startBridge` spawn the owner's schedule as the owner, and after the allowlist file names another owner the next run of it is community.
+- With the base sources these tests fail; the read-only, owner-chat and other-person guards pass on both.
 
