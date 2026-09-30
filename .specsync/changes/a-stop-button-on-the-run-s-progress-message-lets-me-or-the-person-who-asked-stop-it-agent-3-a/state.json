@@ -7,10 +7,11 @@
   "title": "A Stop button on the run's progress message lets me or the person who asked stop it (AGENT-3.a)",
   "description": "A Stop button on the run's progress message lets me or the person who asked stop it (AGENT-3.a)",
   "kind": "feature",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "9ea40051c5cd6841c201e1210319ee621aa4bde0",
   "created_at": 1790807824,
-  "updated_at": 1790807840,
+  "updated_at": 1790808099,
   "affected_specs": [
     "discord"
   ],
