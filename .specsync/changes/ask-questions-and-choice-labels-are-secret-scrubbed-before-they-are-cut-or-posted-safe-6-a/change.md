@@ -1,6 +1,6 @@
 ---
 id: ask-questions-and-choice-labels-are-secret-scrubbed-before-they-are-cut-or-posted-safe-6-a
-state: verifying
+state: implementing
 type: bug_fix
 base_commit: c56ce4978bb7990e6064d6673aa60ba02267e056
 ---
