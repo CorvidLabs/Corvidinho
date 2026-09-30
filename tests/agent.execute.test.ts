@@ -9,6 +9,7 @@ import { loadRelevantSpecs } from "../src/agent/specLoader.ts";
 import type { AgentEvent } from "../src/agent/types.ts";
 import { enrichPromptWithIdentity } from "../src/discord/identity-inject.ts";
 import { formatMemoryInjectBlock } from "../src/discord/memory-inject.ts";
+import { LANE_PASS_OUTPUT } from "./fixtures/lane-output.ts";
 
 describe("loadLlmEnv", () => {
   test("reads CORVIDINHO_LLM_* and falls back to OPENAI_API_KEY", () => {
@@ -250,7 +251,7 @@ describe("Planning SpecSync briefing reaches the model (REQ-agent-004)", () => {
     const result = await runTask({
       cwd,
       task,
-      verifyRunner: async () => ({ success: true, output: "ok" }),
+      verifyRunner: async () => ({ success: true, output: LANE_PASS_OUTPUT }),
       onEvent: (e) => events.push(e),
       execute: createTaskExecute({
         taskText: task,
@@ -303,7 +304,7 @@ describe("Planning SpecSync briefing reaches the model (REQ-agent-004)", () => {
         verifyN += 1;
         return verifyN === 1
           ? { success: false, output: "lint boom" }
-          : { success: true, output: "ok" };
+          : { success: true, output: LANE_PASS_OUTPUT };
       },
       execute: async (ctx) => {
         briefings.push(ctx.specBriefing);
@@ -324,7 +325,7 @@ describe("Planning SpecSync briefing reaches the model (REQ-agent-004)", () => {
     await runTask({
       cwd,
       task: "polish the readme wording",
-      verifyRunner: async () => ({ success: true, output: "ok" }),
+      verifyRunner: async () => ({ success: true, output: LANE_PASS_OUTPUT }),
       execute: async (ctx) => {
         briefings.push(ctx.specBriefing);
         return { summary: "noop", filesChanged: [] };
@@ -415,7 +416,7 @@ describe("Planning SpecSync briefing reaches the model (REQ-agent-004)", () => {
     await runTask({
       cwd,
       task,
-      verifyRunner: async () => ({ success: true, output: "ok" }),
+      verifyRunner: async () => ({ success: true, output: LANE_PASS_OUTPUT }),
       execute: async (ctx) => {
         briefings.push(ctx.specBriefing);
         return { summary: "ok", filesChanged: [] };

@@ -11,6 +11,7 @@ export type {
   RunTaskOptions,
   SpendWarning,
   TaskResult,
+  TestDrop,
   VerifyResult,
   VerifyRunner,
   WorkspaceDiffStart,
@@ -27,12 +28,23 @@ export { defaultVerifyRunner, VERIFY_ARGS } from "./verify.ts";
 export { runTask } from "./loop.ts";
 export {
   startWorkspaceDiff,
+  startWorkspaceDiffFrom,
   WORKSPACE_DIFF_HASH_BUDGET_BYTES,
   WORKSPACE_DIFF_HASH_MAX_BYTES,
   WORKSPACE_DIFF_MAX_FILES,
   WORKSPACE_DIFF_MAX_OUTPUT_BYTES,
 } from "./workspace-diff.ts";
 export type { WorkspaceDiffLimits } from "./workspace-diff.ts";
+export {
+  countExecutedTests,
+  droppedTests,
+  isTestFilePath,
+  judgeTestEvidence,
+  startTestNameWalk,
+  TEST_SUMMARY_RUNNERS,
+  testDeclarations,
+} from "./test-evidence.ts";
+export type { TestDecl, TestDropCheck, TestEvidenceVerdict, TestRunEvidence } from "./test-evidence.ts";
 
 export {
   extractConstraintSections,

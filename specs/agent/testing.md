@@ -311,6 +311,66 @@ amounts. `tests/agent.spend-ask.test.ts` and `tests/agent.spend.test.ts` keep
 asserting that a stopped run's summary is `SPEND_CAP_SUMMARY` (no `$`, no
 `CORVIDINHO_`) and that the question carries the details.
 
+## Tests ran and none deleted (REQ-agent-185, AGENT-15)
+
+`tests/agent.test-evidence.test.ts`:
+- Summaries: `bun test` (pass + fail count, skip / todo don't; a lane of only
+  skipped tests ran none), the real `bun test` output of this Bun (FORCE_COLOR
+  on, stdout then stderr as the runner joins them) recognised with 2 executed,
+  jest, vitest, `cargo test` (one line per binary, summed), pytest (`==` and
+  `-q` forms, `no tests ran`), `go test` (`-v` top-level PASS / FAIL lines,
+  or `ok` packages without `[no tests to run]`, `[no test files]` = 0);
+  "ok", "All checks passed." and the like are not recognised. The verdict
+  note names the verify lane and the runners, says no test ran, names drops
+  as `"name" (file)` and stays under 2000 chars for 40 long names.
+- Declarations: JS/TS `.skip`, `.todo`, `x`-names, a skipped `describe` and
+  comments are not active tests, and `.skipIf` / `.if` / `describe.skipIf`
+  ones are conditional; `.each` and template titles are active; a `.only`
+  silences its file's other tests. pytest skip decorators (multi-line too;
+  `skip` off, `skipif` and a module `pytestmark` skipif conditional),
+  `Test*` classes, a skipped class, docstrings and comments; Go
+  `TestX(t *testing.T)` outside comments; Rust `#[test]` /
+  `#[tokio::test]` with `#[ignore]` off, comments and lifetimes ignored.
+  Test-file paths per language. `droppedTests`: a move or a renamed file is
+  not a drop, a retitle and a removed duplicate are; deleting an already-off
+  test is a drop and keeping it off is not; a conditional test deleted or
+  turned off, or a running one made conditional, is a drop, and one kept
+  conditional, made to run or moved is not (one match per declaration,
+  strongest first); drops come back in baseline order.
+- The gate in temp git repos (stub lanes): no recognised summary → not
+  verified, the retry's feedback starts with the note, both `VerifyResult`
+  events `success: false` with the note; all-skipped lane → "no test ran";
+  tests ran and none deleted → `done` verified with `Verify gate: 12 test(s)
+  ran (bun test: 12), and none were deleted.`; a deleted test named in the
+  feedback and a retry that restores it verified; deleting the file, `.skip`,
+  `.todo`, a sibling `.only`, a retitle and commenting out each named;
+  deleting a `.skipIf` test, a test in a `describe.skipIf` suite and a
+  `.skip` test each named, while touching their file and keeping them is
+  verified; a renamed / moved file and a test moved to another file verified; a deletion
+  committed through a shell seen; a test file dirty before the run compared
+  with its start text (untouched: verified; its extra test removed: named);
+  a run in a subdirectory sees a test deleted outside it (root-wide); a
+  carried talk whose blocked run deleted a test re-runs the lane on each
+  later turn and stays unverified; a tracker whose baseline git cannot give
+  (no base branch, a missing commit) returns null.
+- Non-git: a `.skip` in a plain project is named; a renamed file is verified;
+  a walk over its entry cap and a missing dir return null.
+- The real CLI in a carried talk worktree with a fake `fledge`: exit 0 with
+  no summary → exit 1, `failed`; a `bun test` summary on stderr → exit 0,
+  `done` verified.
+- `tests/agent.verify-gate.test.ts`: a talk whose base branch cannot be
+  found still runs the lane, and now ends `failed` (not verified) with the
+  "could not read the test files" note.
+- Stub lanes that pass print a `bun test` summary
+  (`tests/fixtures/lane-output.ts` `LANE_PASS_OUTPUT`); in-process runs that
+  use tool-reported files run in an empty scratch dir (`NON_GIT_CWD`), not
+  `/tmp`, whose walk can be over its cap.
+- Fail on base: with the base's (156cfa9) `src/agent/{loop,workspace-diff,types,index}.ts`
+  and `src/work/pr.ts` swapped in (the new `src/agent/test-evidence.ts`
+  kept so the file loads), 20 tests fail across `tests/agent.test-evidence.test.ts`
+  (every gate, non-git, CLI and /work case) and `tests/agent.verify-gate.test.ts`
+  (the no-base talk ends verified on the base); the pure summary and
+  declaration units pass on both. Restored, all pass.
 ## AUTONOMY-11 sentence (REQ-agent-097)
 
 `tests/must-ask.boundary.test.ts` — `ASK_AGENT_SYSTEM_INSTRUCTIONS` carries

@@ -43,6 +43,7 @@ import {
   type OpenWorkPrInput,
   type WorkPrOutcome,
 } from "../src/work/pr.ts";
+import { LANE_PASS_OUTPUT } from "./fixtures/lane-output.ts";
 
 const ENV_KEYS = [
   "GIT_CONFIG_GLOBAL",
@@ -117,7 +118,7 @@ function remoteRef(bare: string, branch: string): string | null {
 }
 
 const ALL_ALLOWED = new Set<string>(WORK_PR_PLUGINS);
-const passVerify: VerifyRunner = async () => ({ success: true, output: "ok" });
+const passVerify: VerifyRunner = async () => ({ success: true, output: LANE_PASS_OUTPUT });
 const failVerify: VerifyRunner = async () => ({ success: false, output: "tests failed" });
 const allowAcme = () => ({ ok: true as const, repo: "acme/widget" });
 
@@ -462,7 +463,7 @@ describe("openWorkPr ships through the git + github plugins (AUTONOMOUS-3, GITHU
         allowlist: new Set(["git-push", "github-pr-create"]),
         verify: async () => {
           verifyCalls += 1;
-          return { success: true, output: "" };
+          return { success: true, output: LANE_PASS_OUTPUT };
         },
       }),
     );

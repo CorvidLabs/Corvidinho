@@ -31,6 +31,7 @@ import {
   LANE_FAILED_LINE,
   noisyFailingLaneLog,
 } from "./fixtures/verify-lane-log.ts";
+import { LANE_PASS_OUTPUT, NON_GIT_CWD } from "./fixtures/lane-output.ts";
 
 /** The model-facing verify feedback cap (`VERIFY_FEEDBACK_MAX_CHARS`, AGENT-4.a). */
 const FEEDBACK_CAP = 4000;
@@ -613,7 +614,7 @@ describe("provider failures are errors, not done (AGENT-4/8, REQ-agent-242)", ()
     });
     let verifyRuns = 0;
     const result = await runTask({
-      cwd: "/tmp",
+      cwd: NON_GIT_CWD,
       maxRetries: 2,
       verifyRunner: async () => {
         verifyRuns += 1;
@@ -790,11 +791,11 @@ describe("verify retry feedback reaches the model as the failing step's output (
     const { log } = failingLaneLog();
     let verifyN = 0;
     const result = await runTask({
-      cwd: "/tmp",
+      cwd: NON_GIT_CWD,
       maxRetries: 2,
       verifyRunner: async () => {
         verifyN += 1;
-        return verifyN === 1 ? { success: false, output: log } : { success: true, output: "ok" };
+        return verifyN === 1 ? { success: false, output: log } : { success: true, output: LANE_PASS_OUTPUT };
       },
       // The model's edit is not the point here: report one so verify runs.
       execute: async (ctx) => ({ ...(await execute(ctx)), filesChanged: ["src/sum.ts"] }),

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "verified-requires-that-tests-actually-ran-and-none-were-deleted-agent-15-a-passing-verify-lane-counts-only-when-its",
+  "implementation_commit": "87cac5aa913aacae2070338f1f2fd80b9308143a",
+  "implementation_tree": "633ec4a1c81b9199d353395fec6e4aae23e3dc4b",
+  "contract_digest": "1e45da100ab8f1c405817e20417b0c15d8c095db356883409b606babfa1a4ab9",
+  "workspace_digest": "b416a605bfb2b09d9dc8dbf800d52d2f8c3fa1cb85ccb55f11661be747ede9d5",
+  "closing_digest": "225b9716604a97f13661a35434555afc3b5b8f2adc34c6fb84f5494a1e3f9344",
+  "review_digest": "81071c4840108ae944c21cddc1ed998b61c351ad2d5e566fe39188a0b5acf854",
+  "finalization_digest": "f87471ceee146e1604e5c68204d996eef05dd33dea81e4366c686121d0dd0ff1",
+  "timestamp": 1790781491
+}

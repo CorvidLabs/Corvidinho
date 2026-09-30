@@ -155,6 +155,12 @@ export type AgentConfig = {
 };
 
 /**
+ * A test the run deleted or turned off (AGENT-15, REQ-agent-185): its name
+ * and the file (relative to the project root) that declared it before.
+ */
+export type TestDrop = { name: string; file: string };
+
+/**
  * The run's real on-disk changes for the verify gate (AGENT-4,
  * REQ-agent-085), measured from a git snapshot taken before the first attempt.
  */
@@ -164,6 +170,13 @@ export type WorkspaceDiffTracker = {
    * when git could not be read, so the gate verifies anyway (fail closed).
    */
   changed(): Promise<string[] | null>;
+  /**
+   * AGENT-15 (REQ-agent-185): tests at the baseline that are gone, or run
+   * less than they did, by name across the whole repo root (a test moved to
+   * another file keeps its name); null when git or a test file could not be
+   * read, so the run is not verified (fail closed).
+   */
+  testDrops(): Promise<TestDrop[] | null>;
   /**
    * AGENT-15.a (REQ-agent-015): the last run in this talk worktree did not
    * end verified, so the baseline is the talk branch's merge-base and every

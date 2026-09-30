@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "verified-requires-that-tests-actually-ran-and-none-were-deleted-agent-15-a-passing-verify-lane-counts-only-when-its",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "87cac5aa913aacae2070338f1f2fd80b9308143a",
+  "contract_digest": "1e45da100ab8f1c405817e20417b0c15d8c095db356883409b606babfa1a4ab9",
+  "execution_digest": "ab959de21e904fe8690725e7760c48c5304eb3d7477bbab184546a623e44e6bd",
+  "workspace_digest": "b416a605bfb2b09d9dc8dbf800d52d2f8c3fa1cb85ccb55f11661be747ede9d5",
+  "timestamp": 1790781475
+}

@@ -45,6 +45,17 @@
  * worker in its lead's cwd) never takes or writes the marker and keeps its
  * own run-start snapshot: the lead holds the marker for the whole run and
  * its own gate covers the combined change.
+ *
+ * None deleted (AGENT-15, REQ-agent-185): `testDrops()` compares the tests
+ * declared in the test files that differ from the same baseline, across the
+ * whole repo root (not only the cwd's subtree), by name
+ * (`src/agent/test-evidence.ts`): the baseline side comes from the baseline
+ * commit's blobs, or, for a test file already dirty at the start, from its
+ * text read at the start; the other side from the working tree. A test file
+ * dirty at the start and untouched since is skipped by stat identity.
+ * Anything git or the files cannot give makes it null (fail closed).
+ * `startWorkspaceDiffFrom(cwd, commit)` is a tracker from a given commit with
+ * no dirt, for /work's merge-base check before commit and push.
  */
 
 import { createHash } from "node:crypto";
@@ -69,6 +80,17 @@ import {
   talkWorktreeGitDir,
 } from "../worktree/base.ts";
 import { findProjectRoot } from "./project-instructions.ts";
+import {
+  droppedTests,
+  isTestFilePath,
+  snapshotTestFile,
+  statIdentity,
+  TEST_NAMES_BUDGET_BYTES,
+  TEST_NAMES_MAX_FILES,
+  testDeclarations,
+  type FileTests,
+  type TestFileSnapshot,
+} from "./test-evidence.ts";
 import type { WorkspaceDiffTracker } from "./types.ts";
 
 /** Cap on one git listing (status / diff); a listing over it is unreadable. */
@@ -271,6 +293,149 @@ function tracker(
 }
 
 /**
+ * Test files (by `isTestFilePath`) among the dirty or untracked paths of a
+ * root-wide listing, each snapshotted now (stat identity + its tests).
+ */
+function snapshotTestDirt(
+  root: string,
+  entries: { path: string }[],
+): Map<string, TestFileSnapshot> {
+  const out = new Map<string, TestFileSnapshot>();
+  const budget = { left: TEST_NAMES_BUDGET_BYTES };
+  for (const e of entries) {
+    if (isTestFilePath(e.path)) out.set(e.path, snapshotTestFile(root, e.path, budget));
+  }
+  return out;
+}
+
+/** Paths in `paths` that are blobs in `commit` (root-relative); null when unreadable. */
+async function blobsAt(git: Git, commit: string, paths: string[]): Promise<Set<string> | null> {
+  const out = new Set<string>();
+  for (let i = 0; i < paths.length; i += 200) {
+    const r = await git(["ls-tree", "-r", "-z", commit, "--", ...paths.slice(i, i + 200)]);
+    if (!ok(r)) return null;
+    for (const rec of r.stdout.split("\0")) {
+      const tab = rec.indexOf("\t");
+      if (tab < 0) continue;
+      if (rec.slice(0, tab).split(" ")[1] === "blob") out.add(rec.slice(tab + 1));
+    }
+  }
+  return out;
+}
+
+/**
+ * AGENT-15 none-deleted check (REQ-agent-185) against a baseline:
+ * `baseHead` (null = unborn) plus the test files dirty at that point
+ * (`dirt`; null = could not list them, so always unreadable). Root-wide.
+ */
+function testDropsFrom(
+  git: Git,
+  root: string,
+  baseHead: string | null,
+  dirt: Map<string, TestFileSnapshot> | null,
+): WorkspaceDiffTracker["testDrops"] {
+  return async () => {
+    if (!dirt) return null;
+    try {
+      const now = await listing(git, []);
+      if (!now) return null;
+      const paths = new Set<string>(dirt.keys());
+      if (now.head !== baseHead) {
+        const moved = await headDiff(git, baseHead, now.head, []);
+        if (!moved) return null;
+        for (const p of moved) paths.add(p);
+      }
+      for (const e of now.entries) paths.add(e.path);
+      const tests = [...paths].filter(isTestFilePath).sort();
+      if (tests.length > TEST_NAMES_MAX_FILES) return null;
+      const fromBase =
+        baseHead === null
+          ? new Set<string>()
+          : await blobsAt(
+              git,
+              baseHead,
+              tests.filter((p) => !dirt.has(p)),
+            );
+      if (!fromBase) return null;
+      const budget = { left: TEST_NAMES_BUDGET_BYTES };
+      const before: FileTests[] = [];
+      const after: FileTests[] = [];
+      for (const p of tests) {
+        const was = dirt.get(p);
+        if (was) {
+          // Dirty at the baseline and untouched since: nothing to compare.
+          if (statIdentity(join(root, p)) === was.fp) continue;
+          if (!was.decls) return null;
+          before.push({ file: p, decls: was.decls });
+        } else if (fromBase.has(p)) {
+          const blob = await git(["cat-file", "blob", `${baseHead}:${p}`]);
+          if (!ok(blob)) return null;
+          budget.left -= blob.stdout.length;
+          if (budget.left < 0) return null;
+          before.push({ file: p, decls: testDeclarations(p, blob.stdout) });
+        }
+        const cur = snapshotTestFile(root, p, budget);
+        if (!cur.decls) return null;
+        after.push({ file: p, decls: cur.decls });
+      }
+      return droppedTests(before, after);
+    } catch {
+      return null;
+    }
+  };
+}
+
+type Project = {
+  root: string;
+  pathspec: string[];
+  git: Git;
+  toCwd: (p: string) => string;
+};
+
+/** The git project around `cwd`; null when there is no `.git` at or above it. */
+function openProject(cwd: string): Project | null {
+  const real = realpathSync(cwd);
+  const root = findProjectRoot(real);
+  if (!existsSync(join(root, ".git"))) return null;
+  const prefix = relative(root, real);
+  const git: Git = (args) =>
+    runGit(root, ["-c", "core.fsmonitor=false", ...args], {
+      maxStdoutBytes: WORKSPACE_DIFF_MAX_OUTPUT_BYTES,
+    });
+  return {
+    root,
+    pathspec: prefix ? ["--", prefix] : [],
+    git,
+    toCwd: (p: string) => (prefix ? relative(prefix, p) : p),
+  };
+}
+
+/** A tracker whose baseline is `commit` with no dirt. */
+function fromCommit(p: Project, commit: string): WorkspaceDiffTracker {
+  return {
+    changed: tracker(p.git, p.root, p.pathspec, p.toCwd, commit, new Map()),
+    testDrops: testDropsFrom(p.git, p.root, commit, new Map()),
+  };
+}
+
+/**
+ * A tracker from `commit` (no dirt: every path that differs from it counts),
+ * for /work's merge-base none-deleted check before commit and push
+ * (REQ-discord-185). Null when `cwd` is not in a git work tree. Never throws.
+ */
+export async function startWorkspaceDiffFrom(
+  cwd: string,
+  commit: string,
+): Promise<WorkspaceDiffTracker | null> {
+  try {
+    const p = openProject(cwd);
+    return p ? fromCommit(p, commit) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Snapshot the git project around `cwd` for the verify gate (REQ-agent-085).
  * Null when `cwd` is not in a git work tree or git cannot read it: the gate
  * then uses tool-reported files only. In a talk worktree whose last run did
@@ -283,16 +448,9 @@ export async function startWorkspaceDiff(
   role: WorkspaceDiffRole = {},
 ): Promise<WorkspaceDiffTracker | null> {
   try {
-    const real = realpathSync(cwd);
-    const root = findProjectRoot(real);
-    if (!existsSync(join(root, ".git"))) return null;
-    const prefix = relative(root, real);
-    const pathspec = prefix ? ["--", prefix] : [];
-    const git: Git = (args) =>
-      runGit(root, ["-c", "core.fsmonitor=false", ...args], {
-        maxStdoutBytes: WORKSPACE_DIFF_MAX_OUTPUT_BYTES,
-      });
-    const toCwd = (p: string) => (prefix ? relative(prefix, p) : p);
+    const project = openProject(cwd);
+    if (!project) return null;
+    const { root, pathspec, git, toCwd } = project;
     // AGENT-15.a: a talk worktree without the verified marker carries every
     // edit since the talk started (the marker is taken away for this run).
     const talkGitDir = talkWorktreeGitDir(root);
@@ -306,13 +464,9 @@ export async function startWorkspaceDiff(
     if (talkGitDir && !role.nested && !takeTalkVerified(talkGitDir)) {
       const based = await resolveBase((_cwd, args) => git(args), root);
       if (!based) {
-        return { carried: true, settle, changed: async () => null };
+        return { carried: true, settle, changed: async () => null, testDrops: async () => null };
       }
-      return {
-        carried: true,
-        settle,
-        changed: tracker(git, root, pathspec, toCwd, based.mergeBase, new Map()),
-      };
+      return { carried: true, settle, ...fromCommit(project, based.mergeBase) };
     }
     const first = await listing(git, pathspec);
     if (!first) return null;
@@ -324,9 +478,13 @@ export async function startWorkspaceDiff(
       budget -= f.hashed;
       start.set(e.path, { xy: e.xy, kind, fp: f.fp });
     }
+    // AGENT-15 (REQ-agent-185): test files dirty at the start, root-wide.
+    const whole = pathspec.length === 0 ? first : await listing(git, []);
+    const dirt = whole ? snapshotTestDirt(root, whole.entries) : null;
     return {
       ...(settle ? { settle } : {}),
       changed: tracker(git, root, pathspec, toCwd, first.head, start),
+      testDrops: testDropsFrom(git, root, first.head, dirt),
     };
   } catch {
     return null;
