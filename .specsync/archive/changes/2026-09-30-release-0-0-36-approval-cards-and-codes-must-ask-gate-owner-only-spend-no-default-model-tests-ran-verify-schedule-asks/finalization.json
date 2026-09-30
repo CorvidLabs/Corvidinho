@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-36-approval-cards-and-codes-must-ask-gate-owner-only-spend-no-default-model-tests-ran-verify-schedule-asks",
+  "implementation_commit": "9e7566c8402e3526e8c8a017cb41cb560ebcf950",
+  "implementation_tree": "e2c0a696f3cd534c44f976b5434a9d1ea7da6065",
+  "contract_digest": "53cac4404a63dcae574c69c84952d5cda97818781c843ba9814c6cb17c290c97",
+  "workspace_digest": "dccd5f87d4b5e9f7cb0613287be16e01b7561da2e22b61fe5b84299ad633280b",
+  "closing_digest": "a7454d287a9a7e3896d590475bc652959c7a9399337615982879540730130a1b",
+  "review_digest": "9ad91fc97916a85ff2b0494ffb8e79f784e45fee0b55838464c1fd794b5ac38e",
+  "finalization_digest": "df439b6845e99e6c0ed0192344c6bb174a4176e46e8f76a9b2ee0d51a2c9e089",
+  "timestamp": 1790785942
+}
