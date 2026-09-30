@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "scheduled-runs-read-and-act-only-on-repos-the-owner-allowlists-even-public-ones-discord-schedule-3-a-in-a-schedule-run",
+  "implementation_commit": "7401bccdfae1dbca1743d7d310e418092d99f46b",
+  "implementation_tree": "4a62743c58cb430bccdeb642fa551fca9c1843cc",
+  "contract_digest": "478672dac5e779aa068f17cb3538d8a1c91cdda3d3c26b4a9d5f16851df1176c",
+  "workspace_digest": "603bab09d366bf8668e1cd3fe87b93d39538af9b91eda2e5a186fc15eb10cc94",
+  "closing_digest": "44c6bbd65558d36a3ef7f2e48b99867e2e23cad3828e5a6fc5abdfe3cb62e692",
+  "review_digest": "9c386a9f172069fba0bf0e0d7b2ed156d8d6a6d957a3380fe4e7ad0cc2892ffa",
+  "finalization_digest": "9f406c5a5171a9a75baecc9b03ff3d38a89eb0c8a3d578fd7003fb44d545a726",
+  "timestamp": 1790743175
+}

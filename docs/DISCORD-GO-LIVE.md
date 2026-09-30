@@ -268,6 +268,12 @@ Run the daemon when schedules should tick without the bridge. Full guide and uni
   and the bridge's next scheduler tick posts it to the schedule's channel once (see
   [`DAEMON.md`](DAEMON.md)).
 - Scheduled runs are never ADMIN (read/chat tools only, E.6) and always non-interactive (E.3).
+- Scheduled runs read and act only on GitHub-allowlisted repos, even public ones
+  (DISCORD-SCHEDULE-3.a): the GitHub tools refuse any other repo, `web-fetch` refuses GitHub
+  URLs outside the allowlist (every redirect too), and a schedule's project inside the bridge
+  root that is its own git checkout needs an allowlisted origin. An existing schedule on such
+  a checkout off the allowlist starts failing at its next tick: allowlist the repo or delete
+  the schedule.
 - Stop is SIGTERM: it waits up to 30 s for in-flight runs, so keep `TimeoutStopSec` above that
   (the example uses 60). Runs still going after the wait are recorded as failed and their whole
   process trees are killed (`daemon.abandoned`); a second signal skips the wait. Restarts are
@@ -356,7 +362,8 @@ Community sessions (every non-owner who is not team, plus all WATCH and schedule
   all keeps the plain "not offered" refusal and adds no line. ADMIN is re-checked on every
   call against the live owner config; the prompt never grants it.
 - **Public Q&A (ROLES-CHAT-8):** GitHub reads work for any **public** repo. Private repos, and
-  repos whose visibility cannot be confirmed, are refused; deny lists still win. Secret-looking
+  repos whose visibility cannot be confirmed, are refused; deny lists still win. Scheduled
+  runs read only public repos that are also on the GitHub allowlist (DISCORD-SCHEDULE-3.a). Secret-looking
   paths (`.env*`, `.ssh`, keystores, `credentials`, `id_rsa`, `id_ed25519`, `*.pem`) are
   refused when named to `files-read`, `files-list`, `search-grep` or `git-diff`, and left out
   of `files-glob` / `files-list` results, recursive `search-grep` output and `git-diff`.

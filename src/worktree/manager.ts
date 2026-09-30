@@ -65,6 +65,13 @@ export type ResolveProjectOptions = {
    * (default-deny, REQ-discord-202).
    */
   github?: GithubAllowlists;
+  /**
+   * A schedule's project (`/schedule create` and every tick;
+   * DISCORD-SCHEDULE-3.a): a directory inside `defaultProjectRoot` that lies
+   * in a git checkout nested there (its top is not the bridge root's own
+   * checkout) is allowed only when that checkout's `origin` passes `github`.
+   */
+  schedule?: boolean;
 };
 
 /**
@@ -138,16 +145,49 @@ function projectDenied(raw: string): string {
 }
 
 /**
+ * DISCORD-SCHEDULE-3.a: `realDir` is inside the bridge root. When it lies in
+ * a git checkout nested there (the checkout's top is inside the root and is
+ * not the root), that checkout's `origin` must pass the GitHub allowlist, so a
+ * schedule never reads a repo off the allowlist by way of a clone placed under
+ * the root. The root's own checkout, or one enclosing it, and plain folders
+ * are unchanged.
+ */
+function nestedCheckoutError(
+  raw: string,
+  realDir: string,
+  realRoot: string,
+  github: GithubAllowlists | undefined,
+): string | null {
+  const top = gitStdout(realDir, ["rev-parse", "--show-toplevel"]);
+  if (!top) return null;
+  let realTop: string;
+  try {
+    realTop = realpathSync(top);
+  } catch {
+    return projectDenied(raw);
+  }
+  if (realTop === realRoot || !isWithin(realTop, realRoot)) return null;
+  const nested = `not authorized: project "${raw}" is a repo checkout inside the bridge project root whose origin is not on the GitHub allowlist (scheduled runs use allowlisted repos only)`;
+  const slug = github ? checkoutOriginSlug(realTop) : null;
+  if (!github || !slug) return nested;
+  const gate = isRepoAllowed(slug, github);
+  return gate.ok ? null : `${gate.error} (project "${raw}"; scheduled runs use allowlisted repos only)`;
+}
+
+/**
  * REQ-discord-202 (ALLOW-2/6, SAFE-3, DISCORD-SCHEDULE-3): a project picked
  * from chat or a schedule must be the bridge project root, a directory inside
  * it, or a sibling checkout (same parent) whose origin is GitHub-allowlisted.
- * Checked on real paths so `..` and symlinks cannot leave that set.
+ * Checked on real paths so `..` and symlinks cannot leave that set. For a
+ * schedule, a directory inside the root must not lie in a nested checkout
+ * whose origin is off the allowlist (DISCORD-SCHEDULE-3.a).
  */
 function projectScopeError(
   raw: string,
   dir: string,
   root: string,
   github: GithubAllowlists | undefined,
+  schedule = false,
 ): string | null {
   const denied = projectDenied(raw);
   let realDir: string;
@@ -160,7 +200,9 @@ function projectScopeError(
   } catch {
     return denied;
   }
-  if (isWithin(realDir, realRoot)) return null;
+  if (isWithin(realDir, realRoot)) {
+    return schedule ? nestedCheckoutError(raw, realDir, realRoot, github) : null;
+  }
   if (!github || dirname(realDir) !== realWorkspace) {
     return denied;
   }
@@ -175,7 +217,9 @@ function projectScopeError(
  * Empty → defaultProjectRoot. Otherwise the first existing of
  * `defaultProjectRoot/<project>` and `dirname(defaultProjectRoot)/<project>`
  * (absolute paths as-is), then the REQ-discord-202 scope gate: inside the
- * default root, or a sibling checkout whose origin passes `opts.github`.
+ * default root, or a sibling checkout whose origin passes `opts.github`; with
+ * `opts.schedule`, a checkout nested inside the root needs an allowlisted
+ * origin too (DISCORD-SCHEDULE-3.a).
  */
 export function resolveProjectDir(
   project: string | undefined | null,
@@ -206,7 +250,7 @@ export function resolveProjectDir(
   }
   for (const dir of tries) {
     if (existsSync(dir) && statSync(dir).isDirectory()) {
-      const error = projectScopeError(raw, dir, fallback, opts.github);
+      const error = projectScopeError(raw, dir, fallback, opts.github, opts.schedule === true);
       return error ? { ok: false, error } : { ok: true, dir };
     }
   }

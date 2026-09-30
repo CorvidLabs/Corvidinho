@@ -48,6 +48,24 @@ export const ACTING_ROLE_ENV = "CORVIDINHO_ACTING_ROLE";
 export const ACTING_WORK_TASK_ENV = "CORVIDINHO_ACTING_WORK_TASK";
 
 /**
+ * Prefix of a scheduled run's session id (`schedule_<schedule id>`): the
+ * scheduler builds its `sessionId` from it and the spawn client writes it to
+ * `CORVIDINHO_DISCORD_SESSION_ID`. Chat talks are `sess_*`, `/work` runs
+ * `work_*`.
+ */
+export const SCHEDULE_SESSION_PREFIX = "schedule_";
+
+/**
+ * True in a scheduled run's process (DISCORD-SCHEDULE-3.a):
+ * `CORVIDINHO_DISCORD_SESSION_ID` starts with {@link SCHEDULE_SESSION_PREFIX}.
+ * `delegate` / `council` workers inherit that key (the worker env drops only
+ * `DISCORD_*`, `CORVIDINHO_ACTING_*` and token keys), so they count too.
+ */
+export function isScheduleRunEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (env.CORVIDINHO_DISCORD_SESSION_ID ?? "").startsWith(SCHEDULE_SESSION_PREFIX);
+}
+
+/**
  * Team reviews (IDENTITY-10): comment on issues/PRs and submit PR reviews.
  * Still dangerous (SAFE-1 allowlist, SAFE-5 audit) and, for team, allowlisted
  * repos only (GITHUB-6, `checkRepoGateForActingRole`).

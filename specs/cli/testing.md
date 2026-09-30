@@ -73,3 +73,12 @@ numeric id" — the real CLI with a clean env and a temp allowlist file: an
 person ids only (no Discord id, GitHub id or login printed) and doctor still
 passes; with `[owner] github_id` and `github_ids` there is no such line. Both
 fail on the base sources (no line) and pass after.
+
+## The test preload clears a scheduled run's session id (REQ-cli-262 modified, DISCORD-SCHEDULE-3.a)
+
+`tests/preload.operator-data-dir.test.ts` › "bot run settings … a scheduled
+run's session id do not reach the suite" — a child `bun test` of
+`tests/fixtures/preload-probe.ts` started with
+`CORVIDINHO_DISCORD_SESSION_ID=schedule_…` (as a scheduled run's verify lane
+inherits it) sees no such key. Without the preload line the probe reports it,
+and the full suite run under that key fails 13 ROLES-CHAT-8 / team gate tests.

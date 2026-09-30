@@ -8,6 +8,12 @@
  * Team (IDENTITY-10, #65): reads pass on an allowlisted repo (GITHUB-6) or a
  * confirmed-public one, like community; writes (reviews, comments) pass on
  * allowlisted repos only.
+ *
+ * Scheduled runs (DISCORD-SCHEDULE-3.a) and their `delegate` / `council`
+ * workers read and act only on GITHUB-6-allowlisted repos, even public ones:
+ * a repo off the allowlist is refused with no visibility lookup, whatever the
+ * role. The role rules above still apply on top (a community run's reads
+ * still need a public repo, its writes are still refused).
  */
 
 import {
@@ -16,7 +22,7 @@ import {
   type AllowlistConfig,
 } from "../allowlist/index.ts";
 import { createOctokit, splitOwnerRepo } from "../../plugins/github/api.ts";
-import { ROLE_REFUSED_MESSAGE, resolveActingRole } from "./roles.ts";
+import { ROLE_REFUSED_MESSAGE, isScheduleRunEnv, resolveActingRole } from "./roles.ts";
 import { allowlistFileRefusal, type RepoGateResult } from "./githubDeny.ts";
 
 export type RepoVisibility = "public" | "private" | "unknown";
@@ -46,10 +52,12 @@ export function createOctokitVisibilityLookup(
 }
 
 /**
- * Deny always wins. For community role sessions: allow only when the repo is
- * confirmed public (ROLES-CHAT-8). For team: GITHUB-6 allowlist, or (reads
- * only) a confirmed-public repo; `write` ⇒ allowlist only. Otherwise GITHUB-6
- * allowlist (owner / CLI).
+ * Deny always wins. In a scheduled run (`isScheduleRunEnv`): the GITHUB-6
+ * allowlist next, for every role and with no visibility lookup
+ * (DISCORD-SCHEDULE-3.a). For community role sessions: allow only when the
+ * repo is confirmed public (ROLES-CHAT-8). For team: GITHUB-6 allowlist, or
+ * (reads only) a confirmed-public repo; `write` ⇒ allowlist only. Otherwise
+ * GITHUB-6 allowlist (owner / CLI).
  */
 export async function checkRepoGateForActingRole(
   repo: string | undefined,
@@ -103,6 +111,21 @@ export async function checkRepoGateForActingRole(
         ok: false,
         repo,
         error: `GITHUB-6: not authorized: repo "${repo}" is denied`,
+      };
+    }
+  }
+
+  // DISCORD-SCHEDULE-3.a: a scheduled run (and its workers, which inherit
+  // the marker) reads and acts only on allowlisted repos, even public ones.
+  // No visibility lookup: a repo off the allowlist is refused here, before
+  // the role rules below, which still apply to what passes.
+  if (isScheduleRunEnv(env)) {
+    const r = checkGithubRepo(repo, cfg);
+    if (!r.ok) {
+      return {
+        ok: false,
+        repo,
+        error: `${r.error} — scheduled runs use allowlisted repos only, even public ones (DISCORD-SCHEDULE-3.a)`,
       };
     }
   }

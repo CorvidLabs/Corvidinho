@@ -60,6 +60,7 @@ import type { SpendAlertOutbox } from "../agent/spend-outbox.ts";
 import type { HumanAsk, HumanAskReason, SpendWarning } from "../agent/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import { loadDeclaredPeople, type PersonRole } from "../identity/people.ts";
+import { SCHEDULE_SESSION_PREFIX } from "../plugins/roles.ts";
 import type { BackupTicker } from "../store/backup.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import {
@@ -690,14 +691,16 @@ export class SchedulerService {
 
       // SESSION-WORKTREE: resolve schedule.project → isolated cwd.
       if (this.useWorktrees) {
-        // REQ-discord-202: same project scope as /work (DISCORD-SCHEDULE-3).
-        // A step that throws (EACCES, ENOSPC) fails the run the same way as
-        // one that returns an error (REQ-discord-353).
+        // REQ-discord-202: same project scope as /work (DISCORD-SCHEDULE-3),
+        // plus an allowlisted origin for a checkout nested inside the root
+        // (DISCORD-SCHEDULE-3.a). A step that throws (EACCES, ENOSPC) fails
+        // the run the same way as one that returns an error (REQ-discord-353).
         let resolved: ReturnType<typeof resolveProjectDir>;
         try {
           resolved = resolveProjectDir(schedule.project, {
             defaultProjectRoot: this.defaultProjectRoot,
             github: this.allowlist.github,
+            schedule: true,
           });
         } catch (err) {
           resolved = { ok: false, error: errorLine(err) };
@@ -762,7 +765,8 @@ export class SchedulerService {
       // MEMORY scope to schedule creator; forget/override stay deny without live ADMIN re-check.
       const result = await this.agent.runChat({
         prompt,
-        sessionId: `schedule_${schedule.id}`,
+        // The schedule-run marker (DISCORD-SCHEDULE-3.a, `isScheduleRunEnv`).
+        sessionId: `${SCHEDULE_SESSION_PREFIX}${schedule.id}`,
         resume: false,
         actingUserId: schedule.createdByUserId,
         actingIsAdmin: false,
