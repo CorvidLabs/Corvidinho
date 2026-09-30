@@ -7,10 +7,11 @@
   "title": "REQ-discord-212 says where a parent deny reaches its threads: a deny-listed thread is refused on every path, while a deny on the parent alone refuses a thread allowlisted by its own id only where the bridge knows the parent (MessageCreate, and a message-started thread session's ask buttons, restart rows and discord-send-file); slash, schedule and discord-post-message gate the id they are given; tests pin both cases",
   "description": "REQ-discord-212 says where a parent deny reaches its threads: a deny-listed thread is refused on every path, while a deny on the parent alone refuses a thread allowlisted by its own id only where the bridge knows the parent (MessageCreate, and a message-started thread session's ask buttons, restart rows and discord-send-file); slash, schedule and discord-post-message gate the id they are given; tests pin both cases",
   "kind": "bug_fix",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "7697caf0f4ac4634c2cf2e1d3b848e11bd15c3b5",
   "created_at": 1790744855,
-  "updated_at": 1790744859,
+  "updated_at": 1790745131,
   "affected_specs": [
     "discord"
   ],

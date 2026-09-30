@@ -1,6 +1,6 @@
 ---
 id: req-discord-212-says-where-a-parent-deny-reaches-its-threads-a-deny-listed-thread-is-refused-on-every-path-while-a-deny
-state: draft
+state: implementing
 type: bug_fix
 base_commit: 7697caf0f4ac4634c2cf2e1d3b848e11bd15c3b5
 ---
