@@ -14,21 +14,27 @@
  * waiting open or append could be passed over for the whole busy_timeout (on
  * a slow disk the concurrent appenders lost a row). The open and the append
  * now try every millisecond (retryWhileBusy); a lock freed only briefly
- * after a long wait must be taken.
+ * after a long wait must be taken. The open takes the write lock first
+ * (BEGIN IMMEDIATE), so processes opening a new file, or one with a re-scrub
+ * due, at once take turns instead of failing part way.
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendAudit, argsDigest, verifyAudit } from "../src/audit/index.ts";
-import { openCorvidinhoDb } from "../src/store/db.ts";
-import { rescrubDatabase } from "../src/store/scrub.ts";
+import { openCorvidinhoDb, SCHEMA_VERSION } from "../src/store/db.ts";
+import { rescrubDatabase, SCRUB_RULES_VERSION } from "../src/store/scrub.ts";
 
 const LOG_TS = join(import.meta.dir, "..", "src", "audit", "log.ts");
 const DB_TS = join(import.meta.dir, "..", "src", "store", "db.ts");
 const HOLD_MS = 750;
 const APPENDERS = 4;
 const APPENDS_EACH = 40;
+// Processes that open a new DB file at once.
+const OPENERS = 6;
+// Rows a re-scrub due on open reads (tens of ms), so concurrent opens overlap.
+const RESCRUB_ROWS = 10_000;
 
 // Child: open the same file, take the write lock, append one audit row inside
 // it, report "locked", hold the lock, then commit.
@@ -112,6 +118,42 @@ function tempDbPath(): string {
   const dir = mkdtempSync(join(tmpdir(), "corvidinho-busy-lock-"));
   dirs.push(dir);
   return join(dir, "corvidinho.sqlite");
+}
+
+/**
+ * Run `count` APPENDER children on `path`, all starting at the same moment,
+ * each opening the file, appending one row and closing it `appendsEach`
+ * times; resolve with what each reports.
+ */
+async function runAppenders(
+  path: string,
+  count: number,
+  appendsEach: number,
+): Promise<Array<{ ok: number; errors: string[] }>> {
+  const startAt = Date.now() + 400;
+  const procs = Array.from({ length: count }, () =>
+    Bun.spawn(["bun", "-e", APPENDER], {
+      env: {
+        ...process.env,
+        HOLD_DB: path,
+        APPENDS_EACH: String(appendsEach),
+        START_AT: String(startAt),
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    }),
+  );
+  return Promise.all(
+    procs.map(async (p) => {
+      const [out, err, code] = await Promise.all([
+        new Response(p.stdout).text(),
+        new Response(p.stderr).text(),
+        p.exited,
+      ]);
+      if (code !== 0) throw new Error(`appender exited ${code}: ${err}`);
+      return JSON.parse(out) as { ok: number; errors: string[] };
+    }),
+  );
 }
 
 /** Start the lock holder and resolve once it holds the write lock. */
@@ -299,30 +341,7 @@ describe("shared DB writers wait for another process's write lock", () => {
     async () => {
       const path = tempDbPath();
       openCorvidinhoDb({ path }).close();
-      const startAt = Date.now() + 400;
-      const procs = Array.from({ length: APPENDERS }, () =>
-        Bun.spawn(["bun", "-e", APPENDER], {
-          env: {
-            ...process.env,
-            HOLD_DB: path,
-            APPENDS_EACH: String(APPENDS_EACH),
-            START_AT: String(startAt),
-          },
-          stdout: "pipe",
-          stderr: "pipe",
-        }),
-      );
-      const results = await Promise.all(
-        procs.map(async (p) => {
-          const [out, err, code] = await Promise.all([
-            new Response(p.stdout).text(),
-            new Response(p.stderr).text(),
-            p.exited,
-          ]);
-          if (code !== 0) throw new Error(`appender exited ${code}: ${err}`);
-          return JSON.parse(out) as { ok: number; errors: string[] };
-        }),
-      );
+      const results = await runAppenders(path, APPENDERS, APPENDS_EACH);
       for (const r of results) expect(r).toEqual({ ok: APPENDS_EACH, errors: [] });
       const db = openCorvidinhoDb({ path });
       try {
@@ -333,4 +352,66 @@ describe("shared DB writers wait for another process's write lock", () => {
     },
     30_000,
   );
+
+  test("processes that open a new shared DB file at once all get in and append (SAFE-5)", async () => {
+    // Opening a new file creates the schema. Each open takes the write lock
+    // first, so the others wait for the one creating it; in a deferred
+    // transaction their CREATE TABLE failed with SQLITE_BUSY, a
+    // multi-statement exec reported only its last statement's error ("no
+    // such table"), and the open failed for good.
+    const path = tempDbPath();
+    const results = await runAppenders(path, OPENERS, 1);
+    for (const r of results) expect(r).toEqual({ ok: 1, errors: [] });
+    const db = openCorvidinhoDb({ path });
+    try {
+      expect(db.query("SELECT value FROM schema_meta WHERE key = 'version'").get()).toEqual({
+        value: String(SCHEMA_VERSION),
+      });
+      expect(verifyAudit(db)).toMatchObject({ ok: true, count: OPENERS });
+    } finally {
+      db.close();
+    }
+  }, 30_000);
+
+  test("processes that open a shared DB file with a re-scrub due at once all get in and append (SAFE-6)", async () => {
+    // One open re-scrubs under the write lock while the others wait; in a
+    // deferred transaction each open's re-scrub read the rows, then found
+    // another holding the lock, and the one holding it could not commit past
+    // their reads: the opens failed with "database is locked".
+    const path = tempDbPath();
+    const secret = "gh" + "p_" + "a1B2c3D4e5".repeat(4).slice(0, 36);
+    const db = openCorvidinhoDb({ path });
+    try {
+      const text = "lorem ipsum dolor sit amet ".repeat(20);
+      db.transaction(() => {
+        const insert = db.prepare(
+          `INSERT INTO discord_work_tasks (id, description, user_id, channel_id, status, created_at, updated_at, summary)
+           VALUES (?, ?, 'u1', 'c1', 'done', 1, 1, ?)`,
+        );
+        for (let i = 0; i < RESCRUB_ROWS; i++) {
+          insert.run(`t${i}`, i === 0 ? `deploy with ${secret}` : `${text}${i}`, text);
+        }
+      })();
+      // As if the rows were written under older scrub rules.
+      db.run("UPDATE schema_meta SET value = '0' WHERE key = 'scrub_rules_version'");
+    } finally {
+      db.close();
+    }
+    const results = await runAppenders(path, APPENDERS, 1);
+    for (const r of results) expect(r).toEqual({ ok: 1, errors: [] });
+    const after = openCorvidinhoDb({ path });
+    try {
+      expect(
+        after.query("SELECT value FROM schema_meta WHERE key = 'scrub_rules_version'").get(),
+      ).toEqual({ value: String(SCRUB_RULES_VERSION) });
+      const row = after.query("SELECT description FROM discord_work_tasks WHERE id = 't0'").get() as {
+        description: string;
+      };
+      expect(row.description).not.toContain(secret);
+      expect(row.description).toContain("[redacted:");
+      expect(verifyAudit(after)).toMatchObject({ ok: true, count: APPENDERS });
+    } finally {
+      after.close();
+    }
+  }, 30_000);
 });

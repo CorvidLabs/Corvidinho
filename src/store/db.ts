@@ -558,8 +558,11 @@ function isBusy(err: unknown): boolean {
  * over for the whole busy_timeout and fail with "database is locked" although
  * the lock was free many times; a SAFE-5 row was lost that way
  * (REQ-plugins-287). `fn` must leave nothing behind when it fails with
- * SQLITE_BUSY: one statement, a BEGIN, or a whole transaction. With
- * busy_timeout 0 it runs once, as before.
+ * SQLITE_BUSY: one statement or a BEGIN IMMEDIATE, not a deferred
+ * transaction (a write after a read in it fails with SQLITE_BUSY at once,
+ * and code that ignores an error, or a multi-statement exec that reports
+ * only its last statement's error, goes on past it). With busy_timeout 0 it
+ * runs once, as before.
  */
 export function retryWhileBusy<T>(db: Database, fn: () => T): T {
   const { timeout } = db.query("PRAGMA busy_timeout").get() as { timeout: number };
@@ -601,13 +604,24 @@ export function openCorvidinhoDb(opts: OpenDbOptions = {}): Database {
   db.exec("PRAGMA foreign_keys = ON;");
   // One transaction, so an open waits for the lock once, not once per
   // statement (each would need its own free moment), with retryWhileBusy's
-  // tries instead of SQLite's back-off.
-  retryWhileBusy(db, () =>
-    db.transaction(() => {
-      migrateCorvidinhoDb(db);
-      // SAFE-6: re-scrub stored rows once whenever the scrub rules tighten.
-      ensureScrubbed(db);
-    })(),
-  );
+  // tries instead of SQLite's back-off. It takes the write lock up front
+  // (BEGIN IMMEDIATE), as appendAudit does, and only the BEGIN is retried:
+  // in a deferred transaction a write after a read fails with SQLITE_BUSY at
+  // once, and the migration (an ignored ALTER error, a multi-statement exec
+  // that reports only its last statement's error) and the re-scrub (a
+  // memory key collision) would take that for something else. The body and
+  // the COMMIT keep busy_timeout: holding the write lock, nothing in the
+  // body waits, and the COMMIT (only an open that wrote needs the file to
+  // itself) waits only for current readers.
+  retryWhileBusy(db, () => db.exec("BEGIN IMMEDIATE"));
+  try {
+    migrateCorvidinhoDb(db);
+    // SAFE-6: re-scrub stored rows once whenever the scrub rules tighten.
+    ensureScrubbed(db);
+    db.exec("COMMIT");
+  } catch (err) {
+    if (db.inTransaction) db.exec("ROLLBACK");
+    throw err;
+  }
   return db;
 }

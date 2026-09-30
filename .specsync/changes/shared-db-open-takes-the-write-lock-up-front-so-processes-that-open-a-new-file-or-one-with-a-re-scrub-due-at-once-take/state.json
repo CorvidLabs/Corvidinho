@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "shared-db-open-takes-the-write-lock-up-front-so-processes-that-open-a-new-file-or-one-with-a-re-scrub-due-at-once-take",
+  "slug": "shared-db-open-takes-the-write-lock-up-front-so-processes-that-open-a-new-file-or-one-with-a-re-scrub-due-at-once-take",
+  "title": "Shared DB open takes the write lock up front, so processes that open a new file or one with a re-scrub due at once take turns instead of failing part way",
+  "description": "Shared DB open takes the write lock up front, so processes that open a new file or one with a re-scrub due at once take turns instead of failing part way",
+  "kind": "bug_fix",
+  "state": "approved",
+  "base_commit": "24f70ecdca39ffa74e1645185baf7cc9882982ca",
+  "created_at": 1790786556,
+  "updated_at": 1790786959,
+  "affected_specs": [
+    "discord",
+    "plugins"
+  ],
+  "affected_paths": [
+    "src/store/db.ts",
+    "tests/store.busy-lock.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Six processes that open a new shared DB file at once and append one SAFE-5 row each all get in and the file ends at the current schema version with the chain verified (before the fix five of them failed with no such table)",
+    "Four processes that open a shared DB file with a re-scrub due at once and append one row each all get in and the re-scrub redacts the stored secret and records the rules version with the chain verified (before the fix three of them failed with database is locked after 5 s)",
+    "The brief-release open and append tests and the concurrent appenders test still pass also with every fsync 20 ms longer"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "no"
+  }
+}
