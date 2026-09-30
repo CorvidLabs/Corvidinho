@@ -438,7 +438,8 @@ What one search does:
   with `contentfilter=medium` every time. GIPHY documents `medium` as GIFs rated G and PG. The
   filter is fixed: no flag changes it (`--rating` and `--contentfilter` are refused), and query
   text is only ever the search words. `--limit` is a whole number from 1 to 10 (default 5), and
-  the query is at most 50 characters (GIPHY's limit).
+  the query is at most 50 characters (GIPHY's limit). A flag given twice is refused rather than
+  half used.
 - GIPHY takes the key in the request URL. That URL is never shown in a reply, an error, an audit
   row or a log line, and the key is scrubbed from everything the tool returns. Delegate workers,
   the verify lane, the shell, the language runners and Fledge plugins never get the key.
@@ -446,14 +447,20 @@ What one search does:
   addresses must be public (SAFE-7), as for `web-fetch`.
 - It returns each GIF's title and its GIPHY media links (`GIF:` and `Small GIF:`), in GIPHY's
   order. A link is kept only when it is https on a GIPHY media host (`media.giphy.com`,
-  `media0.giphy.com` to `media4.giphy.com`, `i.giphy.com`). Nothing else is filtered or
-  reordered.
+  `media0.giphy.com` to `media4.giphy.com`, `i.giphy.com`) and its path and query are plain URL
+  characters, so a pasted link cannot turn into Discord markdown pointing somewhere else; a
+  fragment is cut off. A result without such a link is left out, and the tool result says how
+  many were, so a search where every result was left out never looks like an empty one. Nothing
+  else is filtered or reordered. These media hosts come from GIPHY's usual CDN names; the live
+  smoke below confirms them.
 - Titles and links reach the model only inside the untrusted web fence. A title that looks like
   a prompt-injection attempt turns off every mutating tool for the rest of the run,
   `gif-search`, `web-search` and `web-fetch` included, and the owner is told (SAFE-13, E.6.a).
-- Posting: the run puts the GIF's link in its reply, and Discord shows it from GIPHY. The GIF is
-  never downloaded, re-hosted or attached with `discord-send-file` (GIPHY's terms forbid caching
-  or re-hosting its media). `gif-search` itself never posts, so it has no must-ask entry
+- Posting: only when someone asks for a GIF, the run puts its link in the reply, and Discord
+  shows it from GIPHY. The link stays in the message text: a long reply that holds a GIPHY link is
+  split into messages rather than sent as one embed, because Discord never unfurls a link inside
+  an embed. The GIF is never downloaded, re-hosted or attached with `discord-send-file` (GIPHY's
+  terms forbid caching or re-hosting its media). `gif-search` itself never posts, so it has no must-ask entry
   (AUTONOMY-11); a `discord-post-message` a GIF run makes still waits for your OK like any post
   (AUTONOMY-10.a).
 - Spend (SAFE-8): GIPHY's API is free-tier, so with `CORVIDINHO_DAILY_SPEND_CAP_USD` set each
@@ -465,6 +472,9 @@ What one search does:
   `.env.example` and in the tool result the model reads (its summary line and
   `data.attribution`). Nothing adds it to the reply people see yet; whether replies should show
   it is still open for you.
+- Live smoke (not done yet): with a real key on the VPS, ask for a GIF in an allowlisted channel,
+  and check that the link unfurls beside the reply footer, that its host is one of the media
+  hosts above, and that a $0 `spend_ledger` row appears when a spend cap is set.
 
 `fledge-plugin-gif` (`corvid-agent/fledge-plugin-gif`) is not a working path for GIFs: it calls
 Tenor's v2 API, which is shut down (no new keys since 2026-01-13, every API agreement ended

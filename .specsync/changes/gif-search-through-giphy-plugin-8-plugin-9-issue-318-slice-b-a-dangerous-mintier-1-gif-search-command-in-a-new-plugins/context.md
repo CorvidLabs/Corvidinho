@@ -38,8 +38,11 @@ Constraints: no network in `bun test` (fake resolver and transport); no key
 anywhere in the repo (fake keys only; fledge-plugin-gif's hardcoded Google
 key was not read into or copied anywhere); the must-ask gate (#319, on main)
 is another session's work: `gif-search` never posts, so `mustAsk` stays
-unset (AUTONOMY-11) and this change does not touch that gate. `web-fetch` and
-`web-search` keep their behaviour.
+unset (AUTONOMY-11) and this change does not touch that gate. `web-fetch`
+keeps its behaviour for any public host, and `web-search` keeps its
+behaviour except that a flag given twice is now a usage error (a review
+finding: before, the last value silently won); both have shorter
+descriptions (see the budget note below).
 
 Provider research (developers.giphy.com, 2026-09-30): the native search is
 `GET https://api.giphy.com/v1/gifs/search` (`api_key`, `q` up to 50
@@ -51,26 +54,32 @@ Tenor-compatible layer is `GET https://api.giphy.com/v2/search` (`key`,
 R; low - G, PG, PG-13; medium - G, PG; high - G"; known errors can come back
 as HTTP 200 with an `error` field. This change uses the Tenor-compatible
 layer because `contentfilter=medium` is Leif's "safety filter at medium"
-word for word with a documented meaning (G and PG). Media links come from
-GIPHY's CDN shards (`media.giphy.com`, `media0`-`media4.giphy.com`,
-`i.giphy.com`). A new key is a beta key limited to 100 calls an hour.
+word for word with a documented meaning (G and PG). Media links are
+expected on GIPHY's CDN shards (`media.giphy.com`, `media0`-`media4.giphy.com`,
+`i.giphy.com`); GIPHY's Tenor-migration guide names no media hostnames, so
+this list is an assumption the live smoke must confirm, and a result left
+out for its link is counted and said (`data.dropped` and a summary line) so
+a wrong list shows instead of quietly emptying every search. A new key is a
+beta key limited to 100 calls an hour.
 
 Tool-surface budget: with `gif-search`, every builtin (all three language
 runners on PATH) plus the small fake Fledge plugin in
 `tests/fledge.plugins.test.ts` is about 8076 tokens, over the 8000 default
 budget (REQ-plugins-114) by ~76. The tool definition's shared `argv` schema
 alone is ~60 tokens, so no `gif-search` fits under 8000 (the base was at
-7973). This change keeps the description short and raises the default budget
-to 8500 (a report flag, not a limit; REQ-plugins-114 modified). Leif may want
-a different number.
+7973). The budget (FLEDGE-5 / PLUGIN-6, REQ-plugins-114) is Leif's number, so
+this change keeps it at 8000: the `web-fetch` and `web-search` descriptions
+say the same rules in fewer words, and `gif-search`'s own is short, bringing
+the total to 7991 (measured the same way). If Leif prefers a higher budget
+to trimmed descriptions, that is his call.
 
 Ordering and approval: this change depends on PR A's change (`specsync
 change depend`), because every REQ both modify here starts from PR A's
 text. `specsync change check` for this change refuses to start until PR A's
 change is accepted ("dependency … is draft"), so PR A's definition goes
-first. The slice B brief says to record this definition's approval as
-corvid-agent (the repo's approving actor, PROCESS-3). The #318 orc comment
-says definition approvals are recorded only on Leif's go, and PR A's
-definition is still unapproved for that reason. This definition's approval
-is therefore its own commit, easy to drop or reopen if that rule still
-holds. Nothing is recorded as Leif.
+first. The #318 orc comment (Leif's latest decisions) says SpecSync
+definition approvals are recorded only on Leif's go, and PR A's definition
+is still a draft for that reason. This definition stays a draft too, with no
+approval recorded: once Leif gives his go on #318 (after PR A's), the
+approval is recorded with actor corvid-agent (the repo's approving actor,
+PROCESS-3) and a note citing that comment. Nothing is recorded as Leif.

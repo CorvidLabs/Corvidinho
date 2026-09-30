@@ -818,7 +818,10 @@ the closing notes — the AGENT-11 `(model fallback: …)` note and the role not
 kept whole in the last part), `readsBetterAsEmbed` /
 `planAnswerParts` (scrub first, SAFE-6, then cut to `DISCORD_ANSWER_MAX`
 keeping a role note; one plain message within 2000, one
-embed for long plain prose with no fence or mention, else split parts with the
+embed for long plain prose with no fence, mention or GIPHY media link
+(`hasGiphyMediaLink` from `plugins/gif/hosts.ts`: a GIF posted as a link,
+PLUGIN-8, shows only when Discord unfurls it, never inside an embed), else
+split parts with the
 footer on the last), `postAnswerParts` (fresh-reply paths: first part replies
 with the answer's mentions, later parts reply to nothing and allow only users
 first mentioned in them, so a mention past the first part still pings once;
@@ -1454,6 +1457,7 @@ owner nothing waiting is posted. Fixed harness text never waits.
 
 - MEMORY store (`src/memory`) / REQ-discord-021
 - Agent spawn client (`agent-client.ts`)
+- GIPHY media hosts (`plugins/gif/hosts.ts`, `hasGiphyMediaLink`) / REQ-discord-075
 
 ## Change Log
 

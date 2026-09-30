@@ -5,7 +5,7 @@ artifact: testing
 
 # Testing
 
-New `tests/gif.search.test.ts` (30 tests; no network: a fake resolver, a fake
+New `tests/gif.search.test.ts` (33 tests; no network: a fake resolver, a fake
 transport answering like GIPHY's Tenor-compatible search, the fake key
 `test-key-not-real`, in-memory ledger DBs):
 
@@ -22,12 +22,17 @@ transport answering like GIPHY's Tenor-compatible search, the fake key
   `contentfilter=medium`, and only the fixed API headers; query text never
   overrides the filter (`cats&contentfilter=off&rating=r` and variants stay
   `q`); `--contentfilter`, `--rating`, `--media-filter`, `--download`,
-  bad limits, words with `--query`, missing / 51-character queries are usage
-  errors that send nothing; no / blank / spaced / short key →
+  bad limits, words with `--query`, `--query` / `--limit` given twice,
+  missing / 51-character queries are usage errors that send nothing; no / blank / spaced / short key →
   `not-configured`; secret-carrying queries refused before anything is sent.
 - Output: fenced titles and GIPHY media links in GIPHY's order, nothing of a
-  result outside the fence, `postAs: "link"`, the link-only guidance and
-  "Powered By GIPHY"; media-host validation (drops only); `(no results)`;
+  result outside the fence, `postAs: "link"`, `dropped`, the guidance to
+  post one only when someone asks (also in the description) and "Powered By
+  GIPHY"; media-link validation (drops only: off-host, http, credentials,
+  port, trailing dot, length, and Discord markdown or a mention after the
+  host; a fragment is cut off; GIPHY's own `?cid=…&rid=…&ct=g` links kept);
+  results that all fail the check are an ok `(no results)` that says how
+  many were left out; a real `(no results)` says nothing of the kind;
   `api-error` / `bad-response`.
 - SAFE-13 through `createTaskExecute`: a hostile GIF title drops
   `gif-search`, `web-search`, `web-fetch` and `files-write` for the rest of
@@ -37,11 +42,16 @@ transport answering like GIPHY's Tenor-compatible search, the fake key
   redirect and DNS echoes; split keys; through `runPlugin` and the audit
   rows); env drop lists and `formatErrorLine`.
 - Transport: non-public answer and redirect refused (exit 2); GIPHY error
-  mapping; abort, timeout, stopped run; unexpected failure line.
+  mapping (401 / 403 / 400 / 422 / 429 / 503, `text/html`, malformed JSON);
+  a body over the byte cap is `too-large` and a failed connection is
+  `network` (host and fixed reason only, never the transport's text); abort,
+  timeout, stopped run; unexpected failure line.
 - SAFE-8: no cap, no DB; a $0 `reserved` row before the request settling
-  `actual` / `failed` / `estimated` at 0; a stopped run writes no row; past
-  the cap or with an unavailable ledger nothing is sent and the ask rides
-  `spendAsk`; the tool loop ends the attempt with `SPEND_CAP_SUMMARY`.
+  `actual` / `failed` / `estimated` at 0 (`actual` also for a 2xx `error`
+  body and a 2xx body without `results`); a stopped run writes no row; past
+  the cap, with an invalid cap value (no row either) or with an unavailable
+  ledger nothing is sent and the ask rides `spendAsk`; the tool loop ends
+  the attempt with `SPEND_CAP_SUMMARY`.
 - Docs: `.env.example` and `docs/DISCORD-GO-LIVE.md` carry the key, the
   table row, `contentfilter=medium` and "Powered By GIPHY".
 
@@ -49,9 +59,18 @@ Updated: `tests/roles.team.test.ts` and `tests/web.search.test.ts`
 (`TEAM_SEARCH_TOOLS` = `gif-search`, `web-search`; team catalog offers
 `gif-search`), `tests/preload.operator-data-dir.test.ts` +
 `tests/fixtures/preload-probe.ts` (a child `bun test` never sees
-`GIPHY_API_KEY`). `tests/fledge.plugins.test.ts` is unchanged: every
-builtin plus a small fake Fledge plugin is 8076 tokens with `gif-search`
-(7973 on the base), under the new 8500 default budget.
+`GIPHY_API_KEY`), `tests/web.search.test.ts` again (REQ-plugins-318:
+`--query`, `--count` or `--freshness` given twice is a usage error) and
+`tests/discord.rich-reply.unit.test.ts` (REQ-discord-075: an answer
+holding a GIPHY media link is never one embed; a short one is plain content
+with the footer embed; another link, a `giphy.com` page URL or a look-alike
+host keeps the embed path). `tests/fledge.plugins.test.ts` and the 8000
+default budget are unchanged. Measured in that test's own setup (every
+builtin, all three language runners on PATH, the small fake Fledge plugin):
+7973 tokens on the base, 8076 with `gif-search` and the old descriptions,
+7991 with the shorter `web-fetch` / `web-search` / `gif-search`
+descriptions (`gif-search` 92, `web-fetch` 191 → 143, `web-search` 127 →
+101).
 
 ## Fail on the base (PR A's head d768396, a detached worktree)
 
@@ -67,30 +86,54 @@ builtin plus a small fake Fledge plugin is 8076 tokens with `gif-search`
    SAFE-6 query check (the key is not a secret env name there), SAFE-13, the
    echo and split-key tests (the key comes back unredacted), the env drop
    lists, and the docs.
-3. `src/plugins/builtins.ts` loading `gif-search` with the base
-   `TOOL_SURFACE_BUDGET_TOKENS` (8000): `tests/fledge.plugins.test.ts`
-   "per-command cost …" fails (`overBudget` true); with 8500 it passes.
+3. The pre-review head 7ae5892 (`gif-search` loaded, old descriptions) with
+   `TOOL_SURFACE_BUDGET_TOKENS` at 8000: `tests/fledge.plugins.test.ts`
+   "per-command cost …" fails (`overBudget` true, 8076 tokens); on this
+   branch, with the shorter descriptions, it passes at 8000 (7991).
+
+## Review fixes fail on the pre-review head (7ae5892, a detached worktree)
+
+The branch's `tests/gif.search.test.ts`, `tests/web.search.test.ts` and
+`tests/discord.rich-reply.unit.test.ts` copied onto 7ae5892's sources: 78
+pass, 8 fail. The 8 are the review fixes: the GIF link kept out of an
+embed; the description's "only when someone asks"; `--query` / `--limit`
+given twice; the summary's new guidance and `dropped: 0`; the markdown /
+mention / fragment link cases; results that all fail the link check being
+said; `dropped: 0` on a real empty search; web-search's `--query` /
+`--count` / `--freshness` given twice. The added error and spend tests
+(422, `too-large`, `network`, an invalid cap, the 2xx settle rows) pass on
+7ae5892 too: they pin paths that already behaved, which no test ran before.
+On PR A's head d768396 the same files give 50 pass, 4 fail: the GIF file
+cannot load (`Cannot find module '../plugins/gif/index.ts'`), and the GIF
+embed test, web-search's PLUGIN-9 team test and its repeated-flag test fail.
 
 ## Gates (macOS, Darwin 25.5.0, bun 1.4.0)
 
-- `bunx tsc --noEmit`: clean. `hi check`: clean. `specsync check
-  --require-coverage 100`: 5 specs passed, 209/209 files (100%).
-- `bun test`: 3054 pass, 1 skip, 96 fail, 7 errors (3151 tests, 210 files).
-  95 of the 96 failures are the same tests that fail on an untouched main
-  507d97b worktree (2991 pass, 95 fail, 7 errors): Linux-only process-tree,
-  `/proc`, fledge-binary and fake-box tests (list below). The 96th, `schedule
-  tick uses project worktree … > tick spawns with cwd under schedule project
-  worktree then parks` (`tests/discord.session-worktree.test.ts`), is a
-  timing flake that also fails on untouched main (5 of 12 runs) and on PR A's
-  head (4 of 12).
-- `fledge lanes run verify --non-interactive`: lint and smoke pass; the
-  `test` step fails on macOS (3055 pass, 95 fail, 7 errors), and its 95
-  failures are exactly main 507d97b's set (the flaky schedule-tick test
-  passed in that run), so the lane stops before `spec-check`, which passes
-  on its own. Linux CI / the VPS is the real verify.
-- `specsync change check`: blocked by design until PR A's change is
-  accepted (`dependency … is draft; it must be accepted before … can
-  start`).
+These are macOS results. Linux CI (the `smoke` job runs `bun test` and
+`tsc`) or the VPS is the real verify; replace this section with those
+results before the change is finalized.
+
+- `bunx tsc --noEmit`: clean. `hi check`: 182 criteria, 20 families.
+  `specsync check --require-coverage 100 --no-cache`: 5 specs passed,
+  210/210 files (100%), LOC 100%.
+- `bun test`: 3059 pass, 1 skip, 95 fail, 7 errors (3155 tests, 210 files).
+  An untouched main 507d97b worktree on the same host, run right after:
+  2991 pass, 1 skip, 95 fail, 7 errors. The two sets of `(fail)` names are
+  identical (`comm` of the sorted lists is empty), and none is a GIF,
+  web-search, rich-reply, role, spend, preload or injection test: they are
+  Linux-only process-tree, signal, `/proc`, fledge-binary and fake-box tests
+  (list below). The schedule-tick worktree test that flaked in an earlier
+  run passed in both.
+- `fledge lanes run verify --non-interactive`: lint (tsc) and smoke pass;
+  step 3 (`test`) fails with 3059 pass, 95 fail, 7 errors, the same 95 as
+  main (`comm` empty), so the lane stops before `spec-check`;
+  `fledge run spec-check --non-interactive` alone passes (210/210).
+- `specsync change check --commit`: refused, nothing written: this
+  definition is a draft (`cannot check the change while … is draft`), and
+  it depends on PR A's change, also a draft. Both wait for Leif's go on
+  #318 (PR A's first). `specsync change audit`, which the Spec Sync CI job
+  runs, fails for the same reason ("meaningful changed paths are not
+  covered by an active change"), so that CI job stays red until then.
 
 ### macOS-only failures (the same set on this branch and on main 507d97b)
 
@@ -194,14 +237,16 @@ builtin plus a small fake Fledge plugin is 8076 tokens with `gif-search`
 
 | Requirement | Test | Evidence |
 |---|---|---|
-| `REQ-plugins-3182` | `tests/gif.search.test.ts` | Registration, gating, request shape and fixed filter, usage / not-configured / SAFE-6, fenced output and host validation, SAFE-13, key and URL never returned, transport refusals and error mapping, abort / timeout, $0 spend, docs. New module (cannot load on the base); behaviour failures with the module present shown in step 2 above. |
+| `REQ-plugins-3182` | `tests/gif.search.test.ts` | Registration, gating, request shape and fixed filter, usage (repeated flags included) / not-configured / SAFE-6, fenced output, link validation and the left-out count, "only when someone asks", SAFE-13, key and URL never returned, transport refusals and error mapping, abort / timeout, $0 spend, docs. New module (cannot load on the base); behaviour failures with the module present shown in step 2 above; the review fixes fail on 7ae5892. |
+| `REQ-plugins-318` | `tests/web.search.test.ts` | `--query`, `--count` or `--freshness` given twice is a usage error with nothing sent. Fails on PR A's head and on 7ae5892. |
+| `REQ-plugins-3181` | `tests/gif.search.test.ts`, `tests/web.search.test.ts` | `gif-search` on the keyed JSON GET: `api.giphy.com` only, non-public answers and redirects refused, fixed codes (`too-large`, `network` included) without server or transport text, no request URL or key in any output. |
 | `REQ-plugins-065` | `tests/roles.team.test.ts`, `tests/gif.search.test.ts`, `tests/web.search.test.ts` | `TEAM_SEARCH_TOOLS` is `gif-search` and `web-search`; team catalog offers `gif-search`, community never; community role session refused at `runPlugin`, team reaches the handler. Fails on the base. |
 | `REQ-plugins-113` | `tests/gif.search.test.ts` | `fledgeChildEnv` drops `GIPHY_API_KEY` and keeps `PATH`. Fails on the base. |
-| `REQ-plugins-114` | `tests/fledge.plugins.test.ts` | Every builtin plus a fake Fledge plugin under the 8500 default budget; over the old 8000 with `gif-search` loaded (step 3). |
 | `REQ-agent-002` | `tests/gif.search.test.ts`, `tests/agent.verify-env.test.ts` | `isVerifyEnvDropped` / `buildVerifyEnv` drop `GIPHY_API_KEY`. Fails on the base. |
 | `REQ-agent-117` | `tests/gif.search.test.ts`, `tests/autonomous.delegate.test.ts` | `isWorkerEnvDropped` and `buildDelegateSpawn` drop `GIPHY_API_KEY`. Fails on the base. |
 | `REQ-agent-071` | `tests/gif.search.test.ts`, `tests/safe.injection.test.ts` | `gif-search` in `INJECTION_SCAN_TOOLS`; a hostile title drops the web / GIF tools and `files-write`; an ordinary result trips nothing. Fails on the base. |
 | `REQ-agent-086` | `tests/gif.search.test.ts`, `tests/agent.loop-guards.test.ts` | `gif-search` in `NO_STATE_CHANGE_TOOLS` only. Fails on the base. |
-| `REQ-agent-098` | `tests/gif.search.test.ts` | $0 row reserved before the request and settled at 0; stopped past the cap / unavailable ledger; tool loop ends with the ask. |
+| `REQ-agent-098` | `tests/gif.search.test.ts` | $0 row reserved before the request and settled at 0 (`actual` also for a 2xx `error` body or a body without `results`); stopped past the cap, with an invalid cap value (no row) or an unavailable ledger; tool loop ends with the ask. |
+| `REQ-discord-075` | `tests/discord.rich-reply.unit.test.ts` | An answer holding a GIPHY media link is never one embed: short, plain content with the footer embed; long prose, split parts with the link in a part's content; other links keep the embed path. Fails on PR A's head and on 7ae5892. |
 | `REQ-discord-417` | `tests/gif.search.test.ts` | `redactSecretEnvValues` and `formatErrorLine` redact the `GIPHY_API_KEY` value (a GIPHY URL keeps `key=[redacted:env-secret]`). Fails on the base. |
 | `REQ-cli-262` | `tests/preload.operator-data-dir.test.ts` | A child `bun test` started with `GIPHY_API_KEY` set sees none of the run settings. Fails on the base. |

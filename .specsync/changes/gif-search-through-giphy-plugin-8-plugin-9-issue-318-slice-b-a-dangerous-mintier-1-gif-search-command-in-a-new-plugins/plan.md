@@ -17,12 +17,18 @@ artifact: plan
 6. Tests: `tests/gif.search.test.ts`; update `tests/roles.team.test.ts`,
    `tests/web.search.test.ts` (team rule), `tests/preload.operator-data-dir.test.ts`
    + probe (preload unset).
-7. Tool-surface budget 8000 → 8500 (REQ-plugins-114), measured.
+7. Tool-surface budget kept at 8000 (REQ-plugins-114 unchanged): shorter
+   `web-fetch` / `web-search` descriptions make room, measured.
 8. Docs (`.env.example`, `docs/DISCORD-GO-LIVE.md` E.3 / E.3.b / E.6,
    `docs/discord.md`), spec prose and testing notes, deltas; declare the
    dependency on PR A's change.
 9. `specsync check --require-coverage 100`, `hi check`, `bun test`, fledge
    verify; fail-on-main proof against PR A's head (the base of this branch).
-10. Definition approval (actor corvid-agent), `specsync change check
-    --commit`; later, after PR A: review and finalize. No push or PR from
-    this session; never merge.
+10. Review fixes (#318 slice B review): media-link characters, left-out
+    count, "only when asked", repeated flags (both searches), a GIF link kept
+    out of embeds, the extra error / spend tests, REQ-plugins-3181 naming
+    `gif-search`.
+11. Draft PR stacked on PR A. After Leif's go on #318 (PR A's first):
+    definition approval (actor corvid-agent, citing the go), `specsync
+    change check --commit`, scoped review, finalize. Never merge before
+    finalize.

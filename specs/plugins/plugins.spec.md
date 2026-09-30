@@ -93,6 +93,7 @@ files:
   - tests/web.transport.test.ts
   - tests/web.search.test.ts
   - plugins/gif/giphy.ts
+  - plugins/gif/hosts.ts
   - plugins/gif/commands.ts
   - plugins/gif/index.ts
   - tests/gif.search.test.ts
@@ -227,7 +228,10 @@ GIPHY constants (`GIPHY_API_KEY_ENV`, `GIPHY_API_HOST`, `GIPHY_SEARCH_PATH`,
 `GIPHY_CONTENT_FILTER`, `GIPHY_ALLOWED_RATINGS`, `GIPHY_MEDIA_FILTER`,
 `GIPHY_CLIENT_KEY`, `GIPHY_MEDIA_HOSTS`, `GIPHY_ATTRIBUTION`,
 `GIF_POST_GUIDANCE`, `GIPHY_SEARCH_COST_MICRO_USD`, `GIPHY_SEARCH_SPEND_MODEL`,
-the limit / query caps; REQ-plugins-3182), `src/plugins/roles.ts` exports
+the limit / query caps; REQ-plugins-3182), `plugins/gif/hosts.ts` (no
+imports) exports `GIPHY_MEDIA_HOSTS` and `hasGiphyMediaLink`, which
+`giphy.ts` re-exports and the Discord reply path uses so a GIF link is never
+put in an embed (REQ-discord-075), `src/plugins/roles.ts` exports
 `TEAM_SEARCH_TOOLS` (PLUGIN-9: `web-search` and `gif-search`) and `PluginHandlerResult.spendAsk` carries a
 flat-priced call's SAFE-8 ask (REQ-agent-098),
 `githubRepoOfUrl(url)` says whether a URL is on a GitHub host and which
@@ -467,19 +471,24 @@ missing is a `not configured` error). It sends one `GET
 https://api.giphy.com/v2/search` (GIPHY's Tenor-compatible search) through
 the keyed JSON GET with `api.giphy.com` as the only host and
 `contentfilter=medium` (G and PG) always: the URL is built from scratch, so
-query text is only ever `q`, and `--rating` / `--contentfilter` are usage
-errors. GIPHY takes the key in the URL, so the request URL is never returned,
+query text is only ever `q`, and `--rating` / `--contentfilter` (and a flag
+given twice) are usage errors. GIPHY takes the key in the URL, so the request URL is never returned,
 shown or audited, and every returned string is scrubbed last (GIPHY echoing
 the URL comes back as `key=[redacted:env-secret]`). Titles and the `gif` /
 `tinygif` links reach the model only inside the untrusted web fence, in
 GIPHY's order; a link is kept only when it is https on an exact GIPHY media
-host (`media.giphy.com`, `media0`–`media4.giphy.com`, `i.giphy.com`), and a
-result with no such link is dropped; nothing else is filtered or reordered.
-The run posts a GIF as a link in its reply; `gif-search` never downloads or
-attaches one and never posts (no must-ask entry, AUTONOMY-11). Each search
+host (`media.giphy.com`, `media0`–`media4.giphy.com`, `i.giphy.com`) whose
+path and query hold only plain URL characters (so a pasted link cannot turn
+into Discord markdown pointing elsewhere), its fragment dropped, and a result
+with no such link is dropped and counted (`data.dropped` and a summary line),
+so a search whose every result was left out never reads like a real empty
+one; nothing else is filtered or reordered. Only when someone asks for a GIF
+does the run post one, as a link in its reply (the description and the
+summary say so); `gif-search` never downloads or attaches one and never
+posts (no must-ask entry, AUTONOMY-11). Each search
 is recorded at $0 against the SAFE-8 total cap (GIPHY is free-tier), and is
 stopped with the spend-cap ask only when the window is already past the cap.
-The summary carries the link-only guidance and "Powered By GIPHY", and
+The summary carries that guidance and "Powered By GIPHY", and
 SAFE-13 scans the result (one hostile title switches off `gif-search`,
 `web-search` and `web-fetch` with every other mutating tool).
 Git plugins (REQ-plugins-182) spawn `git` with argv arrays only (no shell),
@@ -1115,7 +1124,7 @@ command line.
 
 - **Given** `GIPHY_API_KEY` is set and `gif-search` is allowlisted, in the owner's or a team member's run
 - **When** the model runs `gif-search happy cat` (or `gif-search --query "cat&contentfilter=off"`)
-- **Then** one GET goes to `api.giphy.com/v2/search` with `contentfilter=medium` (the query text is only the `q` value); titles and GIPHY media links come back only between the untrusted markers with "Powered By GIPHY" and the link-only guidance; the run puts one link in its reply, nothing is downloaded or attached, and no result, error or audit row contains the key or the request URL
+- **Then** one GET goes to `api.giphy.com/v2/search` with `contentfilter=medium` (the query text is only the `q` value); titles and GIPHY media links come back only between the untrusted markers with "Powered By GIPHY" and the guidance to post one only when someone asks, as a link; the run puts one link in its reply (as message text, never inside an embed), nothing is downloaded or attached, and no result, error or audit row contains the key or the request URL
 
 ### Scenario: web-search at the spend cap asks instead of spending
 
@@ -1225,7 +1234,7 @@ command line.
 | Scheduled run: web-fetch hop (first or redirect) to a GitHub host not naming an allowlisted OWNER/REPO, or with the allowlist unreadable (DISCORD-SCHEDULE-3.a) | Refuse before DNS (exit 2) |
 | web-fetch non-text or malformed content-type / compressed body / non-2xx / timeout / every checked address unreachable | Error (exit 1); nothing returned |
 | web-search with no, blank or malformed `BRAVE_SEARCH_API_KEY` | `not-configured` (exit 1) naming the env var, never its value; no DNS, request or spend (REQ-plugins-318) |
-| web-search usage error (count not a whole number 1–20, unknown freshness or flag, query words together with `--query`, missing / oversized query) | `usage` (exit 1); nothing sent |
+| web-search usage error (count not a whole number 1–20, unknown freshness or flag, query words together with `--query`, `--query` / `--count` / `--freshness` given twice, missing / oversized query) | `usage` (exit 1); nothing sent |
 | web-search query carrying a secret-looking value or a set secret env value | Refuse (exit 2, SAFE-6) before spend or request |
 | web-search at the SAFE-8 cap, invalid cap value or unavailable ledger | Refuse (exit 2, "Work is paused for budget."); nothing sent; the tool loop ends the attempt with the spend-cap ask (REQ-agent-098) |
 | web-search / keyed JSON GET: http, another host or port, URL credentials; a non-public answer; any redirect | Refuse (exit 2) before DNS / before connecting / without following (REQ-plugins-3181) |
@@ -1233,12 +1242,12 @@ command line.
 | web-search in a run already stopped, or stopped mid-request | `aborted` (exit 1); a stopped run reserves and sends nothing |
 | web-search unexpected failure | `unexpected` (exit 1), the fixed line `web-search unexpected: the search failed unexpectedly` |
 | gif-search with no, blank or malformed `GIPHY_API_KEY` | `not-configured` (exit 1) naming the env var, never its value; no DNS, request or spend (REQ-plugins-3182) |
-| gif-search usage error (`--rating`, `--contentfilter` or any other unknown flag, limit not a whole number 1–10, query words together with `--query`, missing / over-50-character query) | `usage` (exit 1); nothing sent |
+| gif-search usage error (`--rating`, `--contentfilter` or any other unknown flag, limit not a whole number 1–10, query words together with `--query`, `--query` / `--limit` given twice, missing / over-50-character query) | `usage` (exit 1); nothing sent |
 | gif-search query carrying a secret-looking value or a set secret env value | Refuse (exit 2, SAFE-6) before spend or request |
 | gif-search with the SAFE-8 window already past the cap, an invalid cap value or an unavailable ledger | Refuse (exit 2, "Work is paused for budget."); nothing sent; the tool loop ends the attempt with the spend-cap ask |
 | gif-search: a non-public answer for `api.giphy.com`, or any redirect | Refuse (exit 2) before connecting / without following |
 | gif-search GIPHY 401 / 403, 400 / 422, 429, other status; a 2xx `error` body or a 2xx body without `results`; non-JSON, oversized or malformed body; timeout; network error | `auth` / `bad-request` / `rate-limited` / `http-status` / `api-error` / `bad-response` / `content-type` / `too-large` / `invalid-json` / `timeout` / `network` (exit 1); no GIPHY text, key or URL in the error |
-| gif-search result link over http, off the GIPHY media hosts, with credentials or another port | Link dropped; a result with no valid link is dropped (no other filtering or reordering) |
+| gif-search result link over http, off the GIPHY media hosts, with credentials or another port, or with a path or query outside plain URL characters (Discord markdown, a mention) | Link dropped (a fragment is only cut off); a result with no valid link is dropped and counted in `data.dropped` and the summary (no other filtering or reordering) |
 | gif-search in a run already stopped, or stopped mid-request; unexpected failure | `aborted` (exit 1), nothing reserved or sent for a stopped run; `unexpected` (exit 1), the fixed line `gif-search unexpected: the GIF search failed unexpectedly` |
 | git plugin cwd not a repo top level | Refuse (exit 2, SAFE-3) |
 | git-commit stages protected delete / `.env*` / keystore / `.git` | Refuse (exit 2) |

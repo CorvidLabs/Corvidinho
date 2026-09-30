@@ -344,6 +344,9 @@ describe("web-search sends one Brave request (PLUGIN-7)", () => {
       ["q", "--deep"],
       ["dropped", "words", "--query", "real"],
       ["--query", "real", "trailing"],
+      ["--query", "a", "--query", "b"],
+      ["q", "--count", "2", "--count", "9"],
+      ["q", "--freshness", "pd", "--freshness", "pw"],
       ["what", "does", "--verbose", "do"],
       [],
       ["   "],
@@ -360,6 +363,10 @@ describe("web-search sends one Brave request (PLUGIN-7)", () => {
     expect(() => parseWebSearchArgs(["dropped", "words", "--query", "real"])).toThrow(
       "use either query words or --query, not both",
     );
+    // A repeated flag is refused, never half dropped.
+    expect(() => parseWebSearchArgs(["--query", "cute cat", "--query", "dog"])).toThrow("--query given twice");
+    expect(() => parseWebSearchArgs(["q", "--count", "2", "--count", "9"])).toThrow("--count given twice");
+    expect(() => parseWebSearchArgs(["q", "--freshness", "pd", "--freshness", "pw"])).toThrow("--freshness given twice");
     // A term that starts with -- goes in --query; the usage line says so.
     expect(() => parseWebSearchArgs(["what", "does", "--verbose", "do"])).toThrow("a term that starts with -- needs --query");
     expect(parseWebSearchArgs(["--query", "what does --verbose do"]).query).toBe("what does --verbose do");

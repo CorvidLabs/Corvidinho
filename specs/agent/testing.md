@@ -1010,8 +1010,8 @@ In `tests/gif.search.test.ts`:
   `web-search`, `web-fetch` and `files-write` from the next request, refuses
   the `files-write` call (nothing written), reports
   `{ source: "gif-search", reasons: ["ignore-rules"] }` once and ends the
-  summary with the note; an ordinary GIF result (link-only guidance and
-  "Powered By GIPHY" included) trips nothing and keeps `files-write`
+  summary with the note; an ordinary GIF result (the "only when someone
+  asks, as a link" guidance and "Powered By GIPHY" included) trips nothing and keeps `files-write`
   (REQ-agent-071).
 - `isWorkerEnvDropped` / `buildDelegateSpawn`, `isVerifyEnvDropped` /
   `buildVerifyEnv` drop `GIPHY_API_KEY` (REQ-agent-117 / -002).

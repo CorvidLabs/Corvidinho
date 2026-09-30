@@ -530,7 +530,7 @@ AGENT-18) with `web-search`'s short description (builtins alone: 8078 tokens,
 fake Fledge plugin) under `TOOL_SURFACE_BUDGET_TOKENS` with `web-search`'s
 short description (builtins alone: 7569 tokens, 7442 on main 507d97b).
 
-## GIF search through GIPHY (REQ-plugins-3182 added, REQ-plugins-065 / -113 / -114 modified, PLUGIN-8 / PLUGIN-9)
+## GIF search through GIPHY (REQ-plugins-3182 added, REQ-plugins-318 / -3181 / -065 / -113 modified, PLUGIN-8 / PLUGIN-9)
 
 `tests/gif.search.test.ts` (no network: a fake resolver and a fake transport
 that answers like GIPHY's Tenor-compatible search, the fake key
@@ -550,20 +550,28 @@ that answers like GIPHY's Tenor-compatible search, the fake key
   `media_filter=gif,tinygif` and `contentfilter=medium`, and only the fixed
   API headers; `cats&contentfilter=off&rating=r` and similar stay the `q`
   value with one `contentfilter=medium`; `--contentfilter`, `--rating`,
-  `--media-filter`, `--download`, bad limits, words with `--query` and
-  missing / 51-character queries are usage errors that send nothing; no /
+  `--media-filter`, `--download`, bad limits, words with `--query`,
+  `--query` / `--limit` given twice and missing / 51-character queries are
+  usage errors that send nothing; no /
   blank / spaced / 5-character key → `not-configured`; secret-carrying
   queries (the GIPHY and Brave keys, a Discord token, a `ghp_` token, the key
   split by a joiner) refused before anything is sent.
 - Output: titles and links only inside the fence, in GIPHY's order (a hostile
   title, a guessed end marker and control characters included), nothing of a
-  result outside it, `postAs: "link"`, the link-only guidance and "Powered By
-  GIPHY" in `data` / the summary; media-host validation (http, look-alike and
-  suffix hosts, `giphy.com` page URLs, `media5`, credentials, port 8443,
-  trailing dot, over 2048 characters dropped; `tinygif`-only results keep
-  their `Small GIF:` line; results without a valid link dropped; at most
-  `--limit`); `(no results)`; a 2xx `error` body → `api-error`, a body
-  without `results` → `bad-response`.
+  result outside it, `postAs: "link"`, the guidance to post one only when
+  someone asks, as a link, and "Powered By GIPHY" in `data` / the summary,
+  and a description that says `only when someone asks`; media-link
+  validation (http, look-alike and suffix hosts, `giphy.com` page URLs,
+  `media5`, credentials, port 8443, trailing dot, over 2048 characters, and
+  Discord markdown or a mention after the host — `)[click](…)` in the path or
+  query, `<@…>`, `**`, `|`, `@everyone` — dropped; a fragment cut off;
+  GIPHY's own `?cid=…&rid=…&ct=g` links kept whole; `tinygif`-only results
+  keep their `Small GIF:` line; results without a valid link dropped and
+  counted in `data.dropped` and the summary; at most `--limit`); results
+  that all fail the link check are an ok `(no results)` that says how many
+  were left out, while a real empty search says nothing of the kind;
+  `(no results)`; a 2xx `error` body → `api-error`, a body without
+  `results` → `bad-response`.
 - SAFE-6: GIPHY echoing the key or the request URL in titles, links, a 401 /
   500 / 2xx error body, a non-JSON body, a redirect Location, a transport
   error or a DNS error never brings back the key or the request's query
@@ -576,19 +584,35 @@ that answers like GIPHY's Tenor-compatible search, the fake key
   `redactSecretEnvValues` and `formatErrorLine`.
 - Transport: a non-public answer for `api.giphy.com` is refused before
   connecting (exit 2), a redirect after one dial (exit 2, Location not
-  echoed); 401 / 403 / 400 / 429 / 503, `text/html` and malformed JSON map to
-  fixed codes; the run's abort ends a pending search (`aborted`, the
+  echoed); 401 / 403 / 400 / 422 / 429 / 503, `text/html`, malformed JSON, a
+  body over the byte cap (`too-large`) and a failed connection (`network`,
+  host and fixed reason only) map to fixed codes; the run's abort ends a pending search (`aborted`, the
   transport's signal aborted), a stalled one times out, a run already stopped
   sends nothing; an unexpected failure is the fixed line.
+- SAFE-8 ($0 rows): a 2xx settles `actual` at 0, also for an `error` body
+  or a body without `results`; an HTTP error or a refusal before connecting
+  settles `failed`, a network failure `estimated`; an invalid
+  `CORVIDINHO_DAILY_SPEND_CAP_USD` stops the search with the spend-cap ask,
+  with no DNS, request or ledger row.
 - Docs: `.env.example` has `# GIPHY_API_KEY=`; `docs/DISCORD-GO-LIVE.md` has
   the `gif-search` table row, `GIPHY_API_KEY`, `contentfilter=medium` and
   "Powered By GIPHY".
 
 Updated: `tests/roles.team.test.ts` and `tests/web.search.test.ts`
 (REQ-plugins-065: `TEAM_SEARCH_TOOLS` is `gif-search` and `web-search`; the
+<<<<<<< HEAD
 team catalog offers `gif-search`, the community catalog does not).
 `tests/fledge.plugins.test.ts` (REQ-plugins-114, unchanged test) keeps the
 whole tool surface (builtins plus a fake Fledge plugin) under the default
 budget, now 8500: 8076 tokens with `gif-search` on a machine with all three
 language runners (7973 on the slice A base, where 8000 still held).
 >>>>>>> 7ae58923 (Add: gif-search through GIPHY for the owner and team (PLUGIN-8, PLUGIN-9))
+=======
+team catalog offers `gif-search`, the community catalog does not;
+REQ-plugins-318: `--query`, `--count` or `--freshness` given twice is a
+usage error). `tests/fledge.plugins.test.ts` (REQ-plugins-114, unchanged
+test and unchanged 8000-token default budget) keeps the whole tool surface
+(builtins plus a fake Fledge plugin) under the budget: `gif-search` adds
+about 92 tokens, and shorter `web-fetch` and `web-search` descriptions (the
+same rules, less wording) make room for it.
+>>>>>>> 5cfc3de6 (Fix: gif-search keeps its links plain, says what it left out, posts only when asked, and fits the 8000-token budget)
