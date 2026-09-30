@@ -982,6 +982,18 @@ In `tests/web.search.test.ts` › "a reply whose run used web-search ends with
   `chatBodyFromTaskResult` (1800) and `resultFrame` (4000, `truncated`) keep
   it at the end; `planAnswerParts` puts it at the end of the last part, once;
   `withReplyAttribution` adds it once and ignores unknown lines.
+- A line the model wrote itself (plain, padded, bold, `-#` subtext, doubled)
+  in a run with no search is dropped: the summary ends with the answer, no
+  closing note and no 1800 clip keeps it; a mention in the body or a line
+  with more text after it stays (`withoutReplyAttribution`).
+- Once per reply: a searched run whose model wrote the line (also without a
+  blank line, or twice) ends with it once; with an AGENT-11 fallback (a
+  retired first model, HTTP 404) the summary ends with the fallback note,
+  then the line, once, and no model request carries it; the same fallback
+  with no search ends with the note and no line.
+- Fail on base (review fixes): with `src/agent/execute.ts` and
+  `src/agent/task-summary.ts` from 674bbda swapped in, the two tests above
+  and the clip test fail (41 pass, 3 fail) and pass after.
 - Fail on base: with the pre-change `src/agent/execute.ts`,
   `src/agent/task-summary.ts` and `src/agent/spend.ts` swapped in, the six
   new attribution and SAFE-14 tests fail (36 pass, 6 fail) and pass on the

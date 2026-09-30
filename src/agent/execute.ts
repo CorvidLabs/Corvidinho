@@ -37,6 +37,7 @@ import { formatSpendWarningLine, SPEND_CAP_SUMMARY } from "./spend-notice.ts";
 import {
   REPLY_ATTRIBUTION_BY_TOOL,
   ROLE_REFUSED_SUMMARY_NOTE,
+  withoutReplyAttribution,
   withReplyAttribution,
 } from "./task-summary.ts";
 import { verifyFeedbackExcerpt } from "./verify.ts";
@@ -957,9 +958,12 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   // role note), so the reply says why there is no PR.
   // REQ-agent-318: once a tool whose provider asks for attribution succeeded
   // in this run (a Brave `web-search`), every summary after it ends with that
-  // line, once, after the failover note and before the role note.
+  // line, once, after the failover note and before the role note. Any such
+  // line the model's own answer ends with is dropped first, on every run
+  // (searched or not), so a reply only ever shows the line its run earned.
   return async (ctx) => {
     let result = spend.finish(await run(ctx));
+    result = { ...result, summary: withoutReplyAttribution(result.summary) };
     if (injection) result = { ...result, summary: withInjectionNote(result.summary, injection) };
     if (fallbacks.length > 0) {
       result = { ...result, summary: withModelFallbackNote(result.summary, fallbacks) };

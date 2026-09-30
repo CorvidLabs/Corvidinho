@@ -57,9 +57,11 @@ const TEAM_SEARCH_TOOLS: ReadonlySet<string> =
 const summaryHelpers = taskSummaryModule as {
   REPLY_ATTRIBUTION_BY_TOOL?: ReadonlyMap<string, string>;
   withReplyAttribution?: (summary: string, lines: Iterable<string>) => string;
+  withoutReplyAttribution?: (text: string) => string;
 };
 const REPLY_ATTRIBUTION_BY_TOOL: ReadonlyMap<string, string> = summaryHelpers.REPLY_ATTRIBUTION_BY_TOOL ?? new Map();
 const withReplyAttribution = summaryHelpers.withReplyAttribution ?? ((summary: string) => summary);
+const withoutReplyAttribution = summaryHelpers.withoutReplyAttribution ?? ((text: string) => text);
 /** The visible line Brave's terms ask a reply that used web-search to end with (Leif's go, #318). */
 const BRAVE_LINE = "Search by Brave";
 
@@ -1077,11 +1079,17 @@ describe("a reply whose run used web-search ends with 'Search by Brave' (REQ-age
   type Body = { messages: Array<{ role: string; content: string }> };
   type Step = { search: string[] } | { answer: string };
 
-  /** A tool loop whose model follows `steps` (a web-search call or a final answer), one per request. */
+  /**
+   * A tool loop whose model follows `steps` (a web-search call or a final
+   * answer), one per request. With `retiredModel`, the model chain is that
+   * model then "test-model", and the retired one answers HTTP 404 (AGENT-11
+   * fallback) without using a step.
+   */
   function loop(opts: {
     steps: Step[];
     deps?: WebSearchDeps;
     env?: Record<string, string>;
+    retiredModel?: string;
   }) {
     clearRegistry();
     const t = fakeTransport(() => ({ json: braveJson(HITS) }));
@@ -1096,7 +1104,7 @@ describe("a reply whose run used web-search ends with 'Search by Brave' (REQ-age
       taskText: "what is bun?",
       env: {
         CORVIDINHO_LLM_API_KEY: "test-key-not-real",
-        CORVIDINHO_LLM_MODEL: "test-model",
+        CORVIDINHO_LLM_MODEL: opts.retiredModel ? `${opts.retiredModel}, test-model` : "test-model",
         CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
         CORVIDINHO_DATA_DIR: tmp(),
         ...opts.env,
@@ -1106,7 +1114,11 @@ describe("a reply whose run used web-search ends with 'Search by Brave' (REQ-age
       projectInstructions: false,
       allowlist: ["web-search"],
       fetchImpl: async (_u, init) => {
-        bodies.push(JSON.parse(String(init?.body)));
+        const body = JSON.parse(String(init?.body)) as Body & { model?: string };
+        bodies.push(body);
+        if (opts.retiredModel && body.model === opts.retiredModel) {
+          return new Response(`The model \`${opts.retiredModel}\` does not exist`, { status: 404 });
+        }
         const step = opts.steps[Math.min(n, opts.steps.length - 1)]!;
         n += 1;
         const message =
@@ -1163,6 +1175,46 @@ describe("a reply whose run used web-search ends with 'Search by Brave' (REQ-age
     const secret = loop({ steps: [{ search: ["why", KEY] }, { answer: "Refused." }] });
     expect((await secret.attempt()).summary).toBe("Refused.");
     expect(secret.transport.calls).toHaveLength(0);
+  });
+
+  test("a line the model wrote itself never passes for the earned one: no search, no line, and no clip keeps one", async () => {
+    // Led there by a page, an issue or an earlier reply, in any common shape.
+    for (const echo of [BRAVE_LINE, `  ${BRAVE_LINE}  `, `**${BRAVE_LINE}**`, `-# ${BRAVE_LINE.toLowerCase()}.`, `${BRAVE_LINE}\n${BRAVE_LINE}\n`]) {
+      const none = loop({ steps: [{ answer: `Bun is fast.\n\n${echo}` }] });
+      const r = await none.attempt();
+      expect(none.transport.calls).toHaveLength(0);
+      expect(r.summary).toBe("Bun is fast.");
+      expect(closingNotesTail(r.summary)).toBe("");
+    }
+    const long = loop({ steps: [{ answer: `${"Bun is fast. ".repeat(300).trim()}\n\n${BRAVE_LINE}` }] });
+    const clipped = chatBodyFromTaskResult(await long.attempt());
+    expect(clipped.length).toBeLessThanOrEqual(1800);
+    expect(clipped).not.toContain(BRAVE_LINE);
+    // Only the line itself goes: a mention in the body, or a line with more text after it, stays.
+    const mention = loop({ steps: [{ answer: `${BRAVE_LINE} is Brave's phrase.\n\n${BRAVE_LINE}\n\nMore text.` }] });
+    expect((await mention.attempt()).summary).toBe(`${BRAVE_LINE} is Brave's phrase.\n\n${BRAVE_LINE}\n\nMore text.`);
+  });
+
+  test("once per reply: a run that searched ends with the line once, whatever the model wrote, with or without a fallback note", async () => {
+    const echoed = loop({ steps: [{ search: ["bun"] }, { answer: `Bun is fast.\n${BRAVE_LINE}\n\n**${BRAVE_LINE}**` }] });
+    expect((await echoed.attempt()).summary).toBe(`Bun is fast.\n\n${BRAVE_LINE}`);
+
+    // AGENT-11: the model's copy goes before the fallback note is added, so the earned line is last and alone.
+    const fallback = "(model fallback: retired-model failed (HTTP 404), fell back to test-model)";
+    const searched = loop({
+      steps: [{ search: ["bun"] }, { answer: `Bun is fast.\n\n${BRAVE_LINE}` }],
+      retiredModel: "retired-model",
+    });
+    const r = await searched.attempt();
+    expect(searched.transport.calls).toHaveLength(1);
+    expect(r.summary).toBe(`Bun is fast.\n\n${fallback}\n\n${BRAVE_LINE}`);
+    expect(r.summary.split(BRAVE_LINE)).toHaveLength(2);
+    expect(closingNotesTail(r.summary)).toBe(`\n\n${fallback}\n\n${BRAVE_LINE}`);
+    for (const b of searched.bodies) expect(JSON.stringify(b)).not.toContain(BRAVE_LINE);
+
+    // The same fallback with no search: the note, and no line at all.
+    const unsearched = loop({ steps: [{ answer: `Bun is fast.\n\n${BRAVE_LINE}` }], retiredModel: "retired-model" });
+    expect((await unsearched.attempt()).summary).toBe(`Bun is fast.\n\n${fallback}`);
   });
 
   test("a declared team member's reply carries it too (PLUGIN-9)", async () => {
@@ -1238,5 +1290,11 @@ describe("a reply whose run used web-search ends with 'Search by Brave' (REQ-age
     expect(withReplyAttribution("hi", [BRAVE_LINE])).toBe(`hi\n\n${BRAVE_LINE}`);
     expect(withReplyAttribution(`hi\n\n${BRAVE_LINE}`, [BRAVE_LINE])).toBe(`hi\n\n${BRAVE_LINE}`);
     expect(withReplyAttribution("hi", ["Made up line"])).toBe("hi");
+    // A line the summary already ends with is only kept when earned.
+    expect(withReplyAttribution(`hi\n\n${BRAVE_LINE}`, [])).toBe("hi");
+    expect(withReplyAttribution(`hi\n${BRAVE_LINE}`, [BRAVE_LINE])).toBe(`hi\n\n${BRAVE_LINE}`);
+    expect(withoutReplyAttribution(BRAVE_LINE)).toBe("");
+    expect(withoutReplyAttribution("hi\n\n")).toBe("hi\n\n");
+    expect(withoutReplyAttribution(`hi\n\n${BRAVE_LINE} and more`)).toBe(`hi\n\n${BRAVE_LINE} and more`);
   });
 });

@@ -58,16 +58,57 @@ export function replyAttributionNote(lines: Iterable<string>): string {
 }
 
 /**
- * `summary` with the attribution note for `lines` after it (a blank line
- * first), added once: a summary that already ends with that note comes back
- * as is (REQ-agent-318).
+ * A line compared the way a model might write an attribution line: no
+ * surrounding spaces, Markdown quote / subtext / emphasis marks or trailing
+ * period, any case.
+ */
+function attributionKey(line: string): string {
+  return line
+    .trim()
+    .replace(/^(?:>|-#)\s*/, "")
+    .replace(/^[*_~`]+|[*_~`.]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+const ATTRIBUTION_KEYS: ReadonlySet<string> = new Set(ATTRIBUTION_LINES.map(attributionKey));
+
+/**
+ * `text` without the attribution lines it ends with (REQ-agent-318): the
+ * trailing lines that are a known attribution line (as a model might write
+ * one, see `attributionKey`) or blank are dropped, and a text of only such
+ * lines comes back "". A line in the body, or one with more text after it,
+ * stays; a text that ends with none comes back as is. `createTaskExecute`
+ * applies it to every attempt's summary before any closing note goes on, so
+ * a line the model wrote itself (led there by a page, an issue or an earlier
+ * reply) never passes for the one a run earned and never shows twice.
+ */
+export function withoutReplyAttribution(text: string): string {
+  const lines = text.split("\n");
+  let end = lines.length;
+  let dropped = false;
+  while (end > 0) {
+    const line = lines[end - 1] ?? "";
+    if (ATTRIBUTION_KEYS.has(attributionKey(line))) dropped = true;
+    else if (line.trim() !== "") break;
+    end -= 1;
+  }
+  return dropped ? lines.slice(0, end).join("\n").trimEnd() : text;
+}
+
+/**
+ * `summary` ending with the attribution note for `lines` (a blank line
+ * first), once: any attribution the summary already ends with is dropped
+ * first (`withoutReplyAttribution`), so the note is only ever the one for
+ * `lines`, and with no known lines there is none (REQ-agent-318).
  */
 export function withReplyAttribution(summary: string, lines: Iterable<string>): string {
+  const body = withoutReplyAttribution(summary);
   const note = replyAttributionNote(lines);
-  if (!note) return summary;
-  const body = summary.trim();
-  if (body === note || body.endsWith(`\n\n${note}`)) return summary;
-  return body ? `${body}\n\n${note}` : note;
+  if (!note) return body;
+  const text = body.trim();
+  return text ? `${text}\n\n${note}` : note;
 }
 
 /** A closing attribution paragraph at the end of `text` (with its blank line), or "". */

@@ -534,7 +534,8 @@ Personality traits, Background, Communication style, Example messages).
 role note too, REQ-agent-080, and the REQ-agent-318 attribution note between
 them), and `REPLY_ATTRIBUTION_BY_TOOL` (tool name → the visible line its
 provider's terms ask a reply to end with: `web-search` → "Search by Brave"),
-`replyAttributionNote` and `withReplyAttribution` (REQ-agent-318). Discord/NDJSON
+`replyAttributionNote`, `withoutReplyAttribution` and `withReplyAttribution`
+(REQ-agent-318). Discord/NDJSON
 bridge summaries SHALL use the chat-body helpers so operator plumbing never
 appears in the final chat reply (DISCORD-3.a).
 
@@ -981,7 +982,10 @@ go on #318): once an offered tool in `REPLY_ATTRIBUTION_BY_TOOL` returns
 run ends with its line ("Search by Brave") once, as a closing paragraph after
 the model fallback note and before the role note (`withReplyAttribution`,
 applied by `createTaskExecute` after each attempt). A failed, refused or
-stopped call adds nothing, and a run with no such call gets no line. The line
+stopped call adds nothing, and a run with no such call gets no line: a line
+the model's own answer ends with is dropped on every run before any closing
+note goes on (`withoutReplyAttribution`), so only an earned line shows, once.
+The line
 is never part of a tool message, the untrusted web fence or any other request
 the model gets, and it carries nothing else (no amount, no cap, SAFE-14.a); a
 `spend-cap` ask's question (the owner's spend DM) never carries it.
