@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "a-non-owner-s-picked-choose-label-reaches-the-resumed-run-inside-the-untrusted-data-fence-like-their-typed-words-source",
+  "implementation_commit": "3121b7475bfaf5fa08df3116c7037f6cbf410809",
+  "implementation_tree": "fb07a5c0a28ef2d475740e1b8deafa524707a22b",
+  "contract_digest": "5ae21fbdb3cfbc5bbfa82e670121d4a99d09b25711c4bd1b19c6c778b817bcb4",
+  "workspace_digest": "23f8b3f3f85ea61e13afef2f2a2a3781ba9f51dfd9a7fff0bc0e2f750467f8b7",
+  "closing_digest": "6ebc36f6b5780c0352ed7a4db0b248b25829a121e82a65081e90ba307d894053",
+  "review_digest": "38840c4539b572107268988b2fada69852b4b781ea3f88e99a818a906319477b",
+  "finalization_digest": "9a7240ab48b4b5835c176b144e3bb9a4599d0adf3a96aff34689120dd4249cd3",
+  "timestamp": 1790741751
+}
