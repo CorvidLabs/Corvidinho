@@ -2505,8 +2505,9 @@ a `denied` audit row. A closed ask SHALL answer "already closed"; a press or
 code at or after expiry SHALL close it `expired` and delete nothing (a late
 answer is no). Deny SHALL close it `denied` (audited), delete nothing,
 answer the press, then tell the asker. Approve SHALL re-check that the
-targets and counts are still the ones the card showed — else delete nothing,
-close the card as changed and send a fresh one — then answer the press with
+targets and counts are still the ones the card showed — a card sent before
+v14 recorded none and counts as changed — else delete nothing, close the
+card as changed and send a fresh one — then answer the press with
 Enter code / Deny and DM the one-time code apart (REQ-discord-096). The right
 code, typed into the form, SHALL be used up first; then the SAFE-5
 `memory-forget-approve` `started` row SHALL be appended and, when it cannot be
@@ -2537,7 +2538,7 @@ Acceptance Criteria
 - A v11 DB migrates to v12 keeping its data; `forget_requests` has no free-text column and one pending ask per subject; re-running is a no-op.
 - `tests/discord.forget-card.test.ts` and `tests/memory.profiles.test.ts` cover each and fail on the stacked base sources.
 - The card shows `Action:`, `Target:` and `Amount:` one line each (e.g. `6 memories (5 stored, 1 earlier versions), 1 session turns and 0 kept conversations`); Approve answers the press with Enter code / Deny and DMs the one-time code apart, deleting nothing; only the code typed into the form deletes (SAFE-19, REQ-discord-096), and the Discord, GitHub (`tests/watch.forget-me.test.ts`) and `/admin people forget` (`tests/discord.admin-forget.test.ts`) asks keep every other behaviour.
-- A card whose counts changed since it went out is closed as changed on Approve, nothing is deleted and no code sent, and a fresh card with the new count follows; the engine's own poll delivers a card recorded while no bridge ran, with the scheduler off, and a card sent before a restart still works (`tests/discord.approval-cards.test.ts`).
+- A card whose counts changed since it went out, or one sent before v14 (no action hash), is closed as changed on Approve, nothing is deleted and no code sent, and a fresh card with the current count follows; the engine's own poll delivers a card recorded while no bridge ran, with the scheduler off, and a card sent before a restart still works (`tests/discord.approval-cards.test.ts`).
 
 ### REQ-discord-680
 
