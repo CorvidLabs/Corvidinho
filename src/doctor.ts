@@ -11,6 +11,8 @@
  * - The project files `task run`'s verify gate reads in the current dir
  *   (`fledge.toml`, its verify lane with spec-check, `.specsync/`, `specs/`),
  *   shared with the report-only `corvidinho init`.
+ * - Declared people and the owner with a GitHub login but no GitHub numeric
+ *   id (IDENTITY-7.a): not recognised on GitHub until an id is linked.
  * Secret and list values are never printed (SAFE-6).
  */
 
@@ -40,6 +42,11 @@ import type { AllowlistConfig } from "./allowlist/types.ts";
 import { AnnounceStore } from "./discord/announce-store.ts";
 import { mergeChannelIds } from "./discord/config.ts";
 import {
+  OWNER_PERSON_ID,
+  peopleWithoutGithubId,
+  type PeopleDirectory,
+} from "./identity/people.ts";
+import {
   BACKUP_DIR_ENV,
   BACKUP_HOUR,
   BACKUP_KEEP,
@@ -59,6 +66,30 @@ export type DoctorCheck = {
   /** Printed label override (informational checks never fail doctor). */
   mark?: string;
 };
+
+/**
+ * IDENTITY-7.a — `[warn] people-github` naming (by person id only, never an
+ * account id or login) the owner and declared people who have a GitHub login
+ * but no GitHub numeric id: on GitHub people match only by that id, so they
+ * read as undeclared (community) there until one is linked. Null when nobody
+ * is affected. Never fails doctor.
+ */
+export function peopleGithubDoctorCheck(dir: PeopleDirectory): DoctorCheck | null {
+  const missing = peopleWithoutGithubId(dir);
+  if (missing.length === 0) return null;
+  const names = missing.map((id) =>
+    id === OWNER_PERSON_ID ? "the owner" : id === dir.ownerPersonId ? `${id} (the owner)` : id,
+  );
+  return {
+    name: "people-github",
+    ok: true,
+    mark: "warn",
+    detail:
+      `${names.join(", ")}: a GitHub login but no GitHub numeric id — on GitHub people match only by that id, ` +
+      "so they read as undeclared (community) there until one is linked: set [owner] github_id / github_ids in " +
+      "the allowlist file, or /admin people link person:<id> github:<login> (IDENTITY-7.a)",
+  };
+}
 
 /** Where usable allowlist entries came from. */
 export type AllowlistSource = "file" | "env";

@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 85
+version: 86
 status: draft
 files:
   - src/discord/types.ts
@@ -17,7 +17,9 @@ files:
   - src/identity/owner.ts
   - src/identity/people.ts
   - src/identity/index.ts
+  - src/identity/github-user.ts
   - tests/identity.people.test.ts
+  - tests/identity.github-numeric-id.test.ts
   - tests/identity.recognise.test.ts
   - tests/identity.owner.test.ts
   - tests/discord.owner.test.ts
@@ -114,6 +116,7 @@ files:
   - tests/scheduler.never-stuck.test.ts
   - tests/scheduler.ask-outbox.test.ts
   - tests/scheduler.actor-gate.test.ts
+  - tests/scheduler.injection.test.ts
   - src/discord/requester-perms.ts
   - src/discord/index.ts
   - plugins/discord/index.ts
@@ -131,6 +134,7 @@ files:
   - tests/discord.ask-buttons.test.ts
   - tests/discord.ask-answer-modal.test.ts
   - tests/discord.ask-ephemeral.test.ts
+  - tests/discord.ask-scrub-first.test.ts
   - src/discord/inflight-replies.ts
   - tests/discord.inflight-replies.test.ts
   - src/discord/allowed-mentions.ts
@@ -238,10 +242,13 @@ constants/types from `src/discord/memory-inject.ts` (also re-exported via
 `formatPersonLink`, `PeopleAdminPlan` / `PeopleAdminRequest`
 (`admin-people.ts`, the only writer of people and roles; `op: "role"` sets
 team / community, ADMIN-3.b). Declared people
-(IDENTITY-13/14/7, `src/identity/people.ts`): `resolvePerson(dir, { discordId,
+(IDENTITY-13/14/7/7.a, `src/identity/people.ts`): `resolvePerson(dir, { discordId,
 githubLogin, githubId })` → `{ personId, displayName?, role?, person }` | null
-(the one resolver; stable ids only; `role` is `owner` for the configured
-owner, else the declared `team` / `community`), `roleOfPerson` (effective
+(the one resolver; stable ids only — the Discord user id and, on GitHub, the
+numeric id only; `githubLogin` is accepted and ignored, REQ-discord-367;
+`role` is `owner` for the configured owner, else the declared `team` /
+`community`), `peopleWithoutGithubId(dir)` (person ids with a GitHub login
+but no numeric id, for doctor), `roleOfPerson` (effective
 role: undeclared or no `role` key ⇒ community, IDENTITY-8/12),
 `normalizePersonRole`, `PersonRole` / `DeclarableRole`, `PERSON_ROLES`,
 `DECLARABLE_ROLES`, `DEFAULT_PERSON_ROLE`, `loadDeclaredPeople({ allowlist, owner })`
@@ -251,7 +258,13 @@ role: undeclared or no `role` key ⇒ community, IDENTITY-8/12),
 `normalizeDiscordUserId`, `normalizeGithubId`, `validGithubLogin`,
 `cleanPersonLabel`, `PERSON_ID_RE`, `OWNER_PERSON_ID`, `PERSON_KEYS`,
 `LINK_FIELD` and the `DeclaredPerson` / `PeopleDirectory` / `ResolvedPerson`
-types.
+types. Owner (`src/identity/owner.ts`): `OwnerRecord.githubId` from
+`[owner] github_id` (file only), `normalizeGithubId` (shared with people),
+`isOwnerGithub(owner, githubId)` (the numeric id only, IDENTITY-7.a).
+`/admin people link github:` lookup (REQ-discord-367,
+`src/identity/github-user.ts`): `createGithubUserLookup(env)` →
+`GithubUserLookup` (`GET /users/{login}`, `GITHUB_USER_LOOKUP_TIMEOUT_MS`),
+`GithubUserLookupResult`; `SlashContext.lookupGithubUser` injects it.
 `flattenSlashOptions` (`gateway.ts`); `buildChannelAutocompleteChoices` / `matchChannels` / `resolveChannelOption` (`channel-autocomplete.ts`); `SlashInteraction.subcommandGroup` and
 `SlashContext.recordAudit`.
 
@@ -276,7 +289,13 @@ an ephemeral button UI on press (`ASK_BUTTON_TTL_MS` ~30m; late press →
 Thinking collapses into the Choose stub (DISCORD-ASK-6); done/pick and slash
 `/session start` / `/work` prefer editing that message into the final answer
 (DISCORD-ASK-7) via `ThinkingStatus.finalizeContent` (`finishSlashWithThinking`). The bridge wires `SlashContext.trackBotMessage`, so that answer message (the collapsed thinking message, or the deferred reply whose id `SlashInteraction.editReply` may resolve with as `{ messageId }`) maps to its session and the session's own user continues it by replying (DISCORD-2 / REQ-discord-002); the tracking write is best effort, so a DB error is logged and never keeps the slash run from resolving its deferred reply. After an ephemeral pick, buttons clear and the Got-it ephemeral is deleted when resume finishes (DISCORD-ASK-8).
-`src/agent/ask-options.ts` exports `resolveAskOptions` / `parseChoicesFromQuestion`.
+`src/agent/ask-options.ts` exports `resolveAskOptions` / `parseChoicesFromQuestion`
+and `cleanAskLabel` (whitespace collapsed, SAFE-6 scrubbed, then cut at 80, a cut
+label scrubbed once more), which
+every option label and every Choose-pick button label (`buildChoiceComponents`)
+goes through; the ask question is scrubbed before its 1500 cut
+(`normalizeQuestion`), so a question or label that held a secret shows
+`[redacted:<kind>]` even when the cut falls inside it (SAFE-6.a / REQ-discord-066).
 Gateway `reply` accepts optional `components`; `onComponent` handles button
 custom ids. Sessions persist their open asks in `discord_sessions.pending_ask`
 (schema v8), keyed by askId (SESSION-MULTI-3 / REQ-discord-044): `pendingAsk`
@@ -362,7 +381,17 @@ submit gets the ephemeral `ASK_ANSWER_ACK`, and the session resumes like a
 pick in the stub (`existingMessageId`) with the prompt a reply that answers
 the ask gets (`[Prior clarifying question you asked (the human is answering
 it now): …]` + `Human answer:`), `humanText` and the thread turn being the
-scrubbed answer; the ack is deleted when the run ends (DISCORD-ASK-8). A
+scrubbed answer; the ack is deleted when the run ends (DISCORD-ASK-8). The
+answer reaches the model as the same words in a reply would (SAFE-12/13,
+REQ-discord-071): the presser's role is resolved first (with their Discord
+role ids, as in chat, so a team member allowlisted by role is team here too); a team or community
+answer goes through `fenceSpeakerText` (`source=ask-answer`), and one that
+`inboundInjection` flags is refused before the ask is cleared
+(`refuseInjectedAnswer`: no run, ask and session kept, ephemeral refusal, one
+post in the session's channel replying to the stub that pings only the owner
+and is tracked on the session, one `injection-suspected` / `denied` row with
+surface `discord:<session>`); the owner's answer is neither fenced nor
+scanned. A pick's model-written option label is neither. A
 thin or blank submit (`isThinAck`, AUTONOMY-5) is not an answer: the ask
 stays, nothing runs and the question is restated in an ephemeral
 `formatAskReply` with the Answer button; a cancel submit (`isCancelAsk`,
@@ -635,9 +664,11 @@ the configured owner.
 Untrusted text on Discord (SAFE-11/12/13, #71, REQ-discord-071):
 `src/discord/injection-guard.ts` exports `fenceSpeakerText(text, role,
 source, id?)` / `speakerFenceHeader(role)` / `SpeakerSurface`
-(`chat-message`, `session-topic`, `work-task`), `inboundInjection(text,
+(`chat-message`, `session-topic`, `work-task`, `ask-answer`), `inboundInjection(text,
 role)`, `injectionRefusalHead`, `formatInjectionRefusal(reasons, owner)`,
 `refuseInjectedSlash(ctx, interaction, verdict, source)`,
+`refuseInjectedAnswer(ctx, interaction, verdict, { sessionId, channelId,
+stubMessageId? })` (the Answer form's refusal; returns the owner post),
 `formatInjectionOwnerLine(notice, owner)`, `withInjectionNotice(post, notice,
 owner, max?)` (`max` defaults to `ASK_REPLY_MAX`; the chat and button-pick
 answers pass `DISCORD_ANSWER_MAX`, so the line never cuts a split answer,
@@ -707,9 +738,10 @@ Schedule ticks are safe with a bridge and `corvidinho daemon` on one data dir: e
 Needs-human outbox for schedule runs (REQ-discord-347, AUTONOMY-2 / AUTONOMOUS-7): `markRunFinished` also stores the run's ask on its row (`schedule_runs.ask_reason`, `ask_question` scrubbed and capped at `ASK_QUESTION_MAX`, `ask_posted_at`; schema v11, `SCHEMA_VERSION` 11, partial index `idx_schedule_runs_pending_ask`; `ask_question` is in `SCRUB_TARGETS`), and `ScheduleRun` gains optional `ask` / `askPostedAt`. `ScheduleStore.pendingAsks()` returns, per schedule, the newest finished run's ask when no ticker took it (`PendingScheduleAsk`; an older one is moot once a later run finished, a deleted schedule's runs are gone); `claimRunAsk(runId)` takes an ask with a compare-and-set on `ask_posted_at IS NULL` that also re-checks the run is still its schedule's newest finished run (so an ask made moot while a pass is posting is skipped) and `releaseRunAsk(runId)` hands it back. A `SchedulerService` with an outbound (the bridge) takes its own run's ask before posting it (not retried when that post fails, as before, except the auto-pause ask of REQ-discord-353), and each `tick()` starts one fire-and-forget delivery pass (`settleAskDelivery(timeoutMs?)` awaits it; after `stop()` a pass takes no further ask, and the bridge's stop waits ≤3 s, `ABANDONED_SETTLE_MS`, for a post in flight before closing the gateway) that posts pending asks — a run `corvidinho daemon` claimed — for schedules whose creator and channel pass the live DISCORD-SCHEDULE-3 gate (`gateTick`; a refused one stays pending) through the same ask post (`formatAskReply` with the schedule prefix; owner for stuck / spend-cap, creator for clarify; `askPingKey` and `claimCapPing` dedupe; pending 80% warning), handing the ask back when the post resolves `false` or throws (`[scheduler] ask failed: …`). The daemon (no outbound) never takes or posts an ask and keeps its `run.needs_human` log line.
 Nightly backup on the scheduler tick (OPS-1/2, REQ-discord-680): `SchedulerServiceOpts.backup` (a `BackupTicker`, `src/store/backup.ts`, REQ-cli-680) is called with the tick's clock after the due runs are claimed and never throws. The bridge builds it over its shared DB with `consoleBackupLog` (`[backup] <event> {json}`, scrubbed) and a `notify` that posts the pending owner notice (`formatBackupNotice`, fixed text, no path or error) to the `/announce` channel through the gateway reply, prefixed `<@owner>` with `mentionUserIds` [owner] (REQ-discord-205), and resolves false when no channel is set, no gateway reply exists or the post fails, so the notice is handed back and retried each tick (`…owner_not_told` logged once) and nothing is posted elsewhere; notices a daemon recorded are delivered the same way, once per failure streak. The bridge's `stop()` stops the backup ticker (no further notice is taken) and waits ≤3 s (`ABANDONED_SETTLE_MS`, `settle(timeoutMs)`) for a notice post in flight before closing the gateway; one still in flight then is handed back, so the next start posts it instead of it being lost. `SchedulerServiceOpts.backup` needs only `tick`. `StartBridgeOptions.schedulerNow` is the scheduler / backup clock test seam.
 Schedules never stop or fail to start silently (REQ-discord-353, AUTONOMY-2): a run whose project cannot be resolved or whose worktree cannot be created (also when that step throws) is still recorded failed with the full error (`project resolve failed: …` / `worktree failed: …`), and `failBeforeRun` also records a `stuck` ask whose question is fixed, path-free text (`PROJECT_RESOLVE_FAILED_QUESTION` / `WORKTREE_FAILED_QUESTION`, exported from `src/scheduler/service.ts`; REQ-discord-418). `ScheduleStore.markRunFinished` takes an optional `autoPause: { at, ask }` and, when the run failed and the SQL `consecutive_failures` reaches `at` in the same transaction, stores that ask instead of the run's own; `finish()` passes `{ at: FAILURE_AUTO_PAUSE, ask: autoPauseAsk(runAsk) }` (`autoPauseAsk(last?)`: `Paused after 5 failed runs in a row. Fix the cause, then resume it with /schedule resume.` plus `Last failure: <question>`) and returns the run's effective ask (the pause ask when `maybeAutoPause` paused), which `onRunFinished.askReason` reports. The bridge posts it through `postOwnRunAsk` (the REQ-discord-347 in-process gate, take and `postRunAsk`; the pausing run's ask replaces its `❌` post and, when the run had no ask of its own, carries only its `failed (exit N)` line as context; a run that throws posts its pause ask at once with no context; `handBack` releases a pause ask whose post did not go out, since a paused schedule has no next run) and a daemon run's through the next delivery pass; a DISCORD-SCHEDULE-3 refusal records no ask of its own, and the pause ask of refused runs waits for the gate. No schema change.
-Every schedule post — the `✅` / `❌` result line and each ask post (in-process or from the delivery pass, including these stuck asks) — starts with `scheduleTitle` (`Schedule **<name>** (<id>) on <project>`), where the project is `projectLabel(schedule.project)` (`src/discord/list-scope.ts`: the last segment of an absolute path, a relative name as given), never an absolute host path, since the whole channel reads it (REQ-discord-353, REQ-discord-418, SAFE-6). The run row keeps the full error and the model's prompt keeps the stored project.
+Every schedule post — the `✅` / `❌` result line and each ask post (in-process or from the delivery pass, including these stuck asks) — starts with `scheduleTitle` (`Schedule **<name>** (<id>) on <project>`; an ask about a non-owner's schedule whose stored name trips the SAFE-13 detector leaves the name out, REQ-discord-713), where the project is `projectLabel(schedule.project)` (`src/discord/list-scope.ts`: the last segment of an absolute path, a relative name as given), never an absolute host path, since the whole channel reads it (REQ-discord-353, REQ-discord-418, SAFE-6). The run row keeps the full error and the model's prompt keeps the stored project.
 Schedule ticks are safe with a bridge and `corvidinho daemon` on one data dir: each tick `refresh()`es the schedules table, `claimRun()` compare-and-sets a due run so it fires once, and store updates write only their own columns so a finishing run never undoes a pause/resume made elsewhere; each run outcome is recorded once (`onRunFinished`, `drain`, `abandonInFlight` for shutdown) and an abandoned run's spawned agent is killed with its whole process tree through `AgentRunChatOpts.signal` (the spawn client runs each agent in its own process group, AGENT-3) (CLI-8 / AUTONOMOUS-4 / REQ-discord-108). A run never stays "running" forever (REQ-discord-346): `finish()` counts a run recorded only after `markRunFinished` (one IMMEDIATE transaction) succeeds, retrying a throwing write once and otherwise logging `[scheduler] run failed: could not record run …` and counting it failed; the bridge's `stop()` abandons in-flight runs like the daemon (`interrupted: bridge shutdown`); both stops wait ≤3 s (`settleAbandoned`, `ABANDONED_SETTLE_MS`) for aborted runs to park their worktree; each claimed run records its runner (`schedule_runs.runner` = `<pid>:<proc start>`, schema v10, `SCHEMA_VERSION` 10), and the bridge and daemon start with `recoverAbandoned()`, which fails runs whose runner is gone (`interrupted: process restarted`, `RUN_INTERRUPTED_BY_RESTART`) and parks leftover `talk-schedule_<schedule>_<run>` worktrees of runs this data dir recorded as no longer running, deleting a branch only when it has no commits of its own; a live runner's run and worktree are left alone, and a schedule-run worktree whose run this data dir does not know (another data dir's, e.g. `bun test` run inside it) is never touched.
 Each schedule run is gated against the live allowlist before any worktree or agent run and again before its post (DISCORD-SCHEDULE-3 / REQ-discord-020): `SchedulerService` checks the creator with `gateActor` (REQ-discord-201: deny wins; a non-empty user/role list must list the creator's id unless it is the configured `owner`; a tick has no member roles) and the channel with `checkChannel`. A refused run spawns nothing, posts nothing and is recorded failed (`creator not allowlisted: …` / `channel not allowlisted: <id>`), counting toward the 5-failure auto-pause. The bridge ticker shares the allowlist `/admin` edits in place; the daemon reloads it before each tick (REQ-cli-108).
+A schedule's text is its creator's words (SAFE-12 / SAFE-13, #71, REQ-discord-713): `src/scheduler/service.ts` exports `scheduleInjection(text, role)` (the detector over the name, description and prompt; null for the owner or when nothing trips) and `injectedScheduleQuestion(reasons)`; `SpeakerSurface` gains `schedule-prompt`; `SchedulerServiceOpts` gains optional `recordAudit` (the bridge wires its SAFE-5 trail) and `mutedUsers` (the bridge's live mute set). `/schedule create` resolves the requester's role before the ADMIN gate (as `/work` does) and a non-owner's `name` or `prompt` that trips the detector is refused through `refuseInjectedSlash` with an ephemeral reply (the owner pinged in one fresh channel post, one `injection-suspected` / `denied` row with surface `discord:/schedule`); nothing is stored, and a non-owner create that trips nothing is still the ephemeral `NOT_AUTHORIZED`. Every tick, after the DISCORD-SCHEDULE-3 gate and before any worktree, re-resolves the creator's role (`resolveDiscordActingRole`: live allowlist, owner, mute set, people list; no Discord role ids): stored non-owner text that trips the detector runs nothing — one `denied` row (surface `scheduler:<id>`), the run recorded failed with the stuck ask `injectedScheduleQuestion` (never the text), the schedule paused, and the ask posted through the usual ask path (owner pinged once; a daemon tick leaves it pending for a bridge; titled by id alone when the name is what tripped); otherwise a non-owner creator's run gets `Scheduled work on project: <project>` and its name and prompt inside `fenceSpeakerText(…, role, "schedule-prompt")`, while the owner's schedule keeps its prompt exactly as before. Runs stay `actingIsAdmin: false` with no acting role (SAFE-3.a); posts and asks are otherwise unchanged.
 When `memoryStore` is available on the bridge, every routed chat spawn SHALL
 recall for `msg.authorId` (limit ~20) and prepend the inject block before
 `agent.runChat`. Empty recall still prepends the empty one-liner. Missing store
@@ -767,16 +799,19 @@ the owner's and shown as configured), and when that shown Discord name reads
 like the owner's display or another declared person's display or nickname
 (`namesLookAlike`) it adds one `name_clash` line saying this Discord user id
 is someone else; recognition and role stay on declared ids only (IDENTITY-7 /
-IDENTITY-12). Chat, `/session start` and `/work` resolve the speaker's role
-before the run: for team and community, `inboundInjection` runs over the
+IDENTITY-12). Chat, `/session start`, `/work` and an answer typed in an ask's
+private Answer form resolve the speaker's role before the run: for team and community, `inboundInjection` runs over the
 speaker's own text, and a hit starts no run — chat: one public reply
 (`formatInjectionRefusal`, allowed mentions the owner only, replying to the
 message; a session the message started is ended and the turn is not
 recorded); slash: the interaction's public refusal, then a fresh channel post
 pinging only the owner (`refuseInjectedSlash`; no session, worktree or work
-task) — plus an `injection-suspected` / `denied` audit row (actor, surface
-`discord:<session>` or `discord:/<command>`, digest of the source and reason
-ids; never the text). Otherwise the team / community speaker's words go to
+task); Answer form: as the same words in a chat reply in that session — the
+ask and session stay, the submit gets an ephemeral refusal and the owner one
+post in the session's channel replying to the stub that pings only them
+(`refuseInjectedAnswer`) — plus an `injection-suspected` / `denied` audit row
+(actor, surface `discord:<session>` or `discord:/<command>`, digest of the
+source and reason ids; never the text). Otherwise the team / community speaker's words go to
 the model through `fenceSpeakerText` (the owner's unchanged). A run whose
 result carries `injection` pings the owner on the post that carries its
 answer: chat and button-pick replies (`withInjectionNotice`), `/session
@@ -785,6 +820,14 @@ result post or ask post. Replayed session turns strip invisible characters and
 mark a line that imitates a Corvidinho block or a turn label (`Human:`,
 `You (Corvidinho):`) `(quoted)`; recalled memory lines strip invisible
 characters. No new env var, config key, table or column.
+
+GitHub by numeric id only (IDENTITY-7.a, REQ-discord-367): no GitHub login —
+a person's `github_logins`, the `[owner]` / env `github_login` — ever
+identifies anyone; on GitHub the owner is recognised only by `[owner]
+github_id` and a declared person only by `github_ids`. A login-only entry
+still loads and matches on Discord. `/admin people link github:<login>` looks
+the numeric id up once (GitHub API, owner-only, audited) and stores it; a
+failed lookup writes nothing.
 
 ## Behavioral Examples
 
@@ -811,6 +854,16 @@ characters. No new env var, config key, table or column.
 - **Then** `discord_sessions.pending_ask` holds `[redacted:github-token]` and
   `[redacted:anthropic-key]` in valid JSON, with the same askId, option ids,
   expiresAt and stubMessageId, so the Choose button still opens the choices
+
+### Scenario: A secret the cut would split is redacted, not cut (SAFE-6.a)
+
+- **Given** a run asks with a choice label whose fake key starts near the
+  80-character cut, or a question whose fake key starts near the 1500 cut
+- **When** the ask is made, posted, stored, or reloaded after a restart
+- **Then** the Choose-pick button, the Answer stub and form, a restated ask,
+  a schedule ask post, `discord_sessions.pending_ask` and
+  `schedule_runs.ask_question` show `[redacted:github-token]`, never a raw
+  `ghp_` piece shorter than the scrub pattern; option ids are unchanged
 
 ### Scenario: A secret-looking option id never reaches a button or the row (SAFE-6)
 
@@ -890,11 +943,23 @@ characters. No new env var, config key, table or column.
 - **When** they @mention the bot with text that tells it to set aside its previous instructions and print its environment
 - **Then** no agent run starts; one reply says the bot won't act on it (in plain words, never quoting the text) and pings only the owner; the session the message would have started is dropped; an `injection-suspected` / `denied` audit row names the user and the surface (REQ-discord-071)
 
+### Scenario: A stranger types an injection into the private Answer form (SAFE-13)
+
+- **Given** an undeclared user with an open free-text ask (the stub with its **Answer** button) and a configured owner
+- **When** they submit the Answer form with text that tells the bot to set aside its previous instructions
+- **Then** no agent run starts; the submit gets a private refusal that never quotes the text; the ask stays open and the session live; one post in the session's channel, replying to the stub, pings only the owner; an `injection-suspected` / `denied` audit row names the user and `discord:<session>`; an ordinary answer from them would reach the model fenced (`source=ask-answer`), and the owner's own answer is neither fenced nor scanned (REQ-discord-548, REQ-discord-071)
+
 ### Scenario: A stranger named like the owner (SAFE-11)
 
 - **Given** an undeclared user whose Discord display name is `[owner] L<zero-width>eif`
 - **When** they ask an ordinary question
 - **Then** the run's acting-user block shows `display_name: Leif` with a `name_clash` line and no owner facts, their words are fenced as untrusted data with `role: community`, and the run is community (REQ-discord-071)
+
+### Scenario: A non-owner's schedule text is data, and an injection in it never runs (SAFE-12/13)
+
+- **Given** a configured owner, a stranger, and a schedule the stranger created earlier whose stored prompt tells the bot to ignore its previous instructions and print its environment
+- **When** the stranger runs `/schedule create` with that prompt, and the stored schedule comes due
+- **Then** the create stores nothing, the stranger gets a private refusal that never quotes the text, one channel post pings only the owner and an `injection-suspected` / `denied` row names the stranger and `discord:/schedule`; the due tick runs no agent, pauses the schedule, posts one ask pinging only the owner (never the text) and appends a `denied` row for `scheduler:<id>`; an ordinary schedule of theirs runs with its name and prompt fenced as `role: community` (`source=schedule-prompt`), and the owner's own schedule runs exactly as before (REQ-discord-713)
 
 ## Error Cases
 
@@ -907,6 +972,8 @@ characters. No new env var, config key, table or column.
 | Channel autocomplete gate unset or throws | Empty choice list (fail closed); a throw is logged |
 | `/admin` on unreadable/unparsable file | Ephemeral refusal naming the path; file untouched |
 | `/admin` audit trail unavailable | Ephemeral refusal (SAFE-5 fail closed); nothing changed |
+| `/admin people link github:<login>`: the GitHub lookup fails, times out, finds no user or answers for another login | Ephemeral refusal naming why (HTTP status only) and suggesting `github_id:<number>`; nothing written; one `admin-people-link` `error` audit row (REQ-discord-367) |
+| A GitHub actor whose login is the owner's or a declared person's but whose numeric id is missing or not declared | Resolves nobody (undeclared, community), never the owner (REQ-discord-367) |
 | `/schedule delete` audit trail unavailable (throws, keyed chain without the key, or no DB) | Ephemeral `Refused: audit log unavailable (SAFE-5)`; schedule and run history kept |
 | `/schedule create` cadence with a zero cron step (`*/0`, `a-b/0`, `n/0`, any field, also in a comma list) | Ephemeral `Invalid cron step in "PART": the step must be 1 or more.`; nothing created; the bridge keeps answering (REQ-discord-020) |
 | Leftover in-flight reply, embed edit fails or no embed id | Reply to the request message with the interrupted text; row deleted |
@@ -925,6 +992,8 @@ characters. No new env var, config key, table or column.
 | Non-owner chat message, `/session start` topic or `/work` description trips the SAFE-13 detector | No run, no session / worktree / work task; one short public refusal; the owner pinged (chat: in the reply; slash: a fresh channel post); `injection-suspected` audit row (REQ-discord-071) |
 | SAFE-13 refusal with no owner configured | The refusal still goes out and says no owner is configured; `INJECTION_NO_OWNER_WARNING` logged (REQ-discord-071) |
 | SAFE-13 audit trail unavailable (no DB, keyed chain without the key) | Refusal still sent; one `[discord] SAFE-13 audit row failed` warning (REQ-discord-071) |
+| Non-owner `/schedule create` name or prompt trips the SAFE-13 detector | Nothing stored; ephemeral refusal; one fresh channel post pinging only the owner; `injection-suspected` row, surface `discord:/schedule` (REQ-discord-713) |
+| A due schedule's stored non-owner name, description or prompt trips the SAFE-13 detector | No worktree, no agent run; one `[scheduler] SAFE-13: schedule <id> not run …` log line (reason ids, never the text); run recorded failed with a stuck ask (never the text); schedule paused; the ask pings the owner once through the usual ask path (a daemon tick leaves it pending for a bridge); `injection-suspected` row, surface `scheduler:<id>`, when a trail is wired (REQ-discord-713) |
 
 ## Dependencies
 
@@ -1053,3 +1122,8 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-29 | discord-rich-final-replies-answer-footer-with-model-tokens-cost-and-time-tokens-and-cost-owner-only-and-fence-safe: Discord rich final replies: answer footer with model, tokens, cost and time (tokens and cost owner-only) and fence-safe splits at 2000 (DISCORD-15/15.a/16) |
 | 2026-09-29 | condense-long-chats-at-about-80-of-the-model-s-window-with-the-task-and-latest-instruction-pinned-resume-from-the: Condense long chats at about 80% of the model's window with the task and latest instruction pinned, resume from the summary after the soft TTL, and keep each thread's summary 30 days (SESSION-5/6, SESSION-3.a, AGENT-6.a; #72) |
 | 2026-09-30 | forget-from-github-and-from-admin-approved-on-the-card-a-declared-person-matched-by-github-numeric-id-who-comments: Forget from GitHub and from /admin, approved on the card: a declared person (matched by GitHub numeric id) who comments 'forget me' to the watch user raises the owner's existing Approve/Deny forget card with no model run and gets a reply on the thread (an undeclared sender is told nothing is kept, no card), the outcome is posted on that thread; the owner can start a forget for any declared person with owner-only, SAFE-5 audited /admin people forget, the same card; either way nothing is forgotten until the owner approves, and Approve also deletes the person's kept WATCH conversations by the GitHub login and numeric id the ask came from, never the owner who started it (MEMORY-ACL-6.a, #101) |
+| 2026-09-30 | on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a: On GitHub people match only by their numeric user id: a renamed or re-registered login never counts as the owner or a declared person on WATCH (prompt, memory scope, SAFE-13 exemption); [owner] github_id declares the owner's id; /admin people link github stores the looked-up numeric id; doctor warns about logins without an id (IDENTITY-7.a, #36) |
+| 2026-09-30 | safe-2-a-the-file-tools-refuse-fledge-like-fledge-toml-and-specs-so-a-run-cannot-weaken-the-verify-lane-it-is-judged-by: SAFE-2.a: the file tools refuse .fledge/ like fledge.toml and specs/, so a run cannot weaken the verify lane it is judged by |
+| 2026-09-29 | an-answer-typed-in-the-private-answer-form-is-fenced-and-scanned-like-a-chat-reply-a-non-owner-s-submit-that-looks-like: An answer typed in the private Answer form is fenced and scanned like a chat reply: a non-owner's submit that looks like an injection starts no run, keeps the ask open, pings only the owner once and appends an injection-suspected audit row; an ordinary non-owner answer reaches the model inside the untrusted-data fence; the owner's answer is unchanged (SAFE-12/13, DISCORD-ASK-4.a) |
+| 2026-09-30 | ask-questions-and-choice-labels-are-secret-scrubbed-before-they-are-cut-or-posted-safe-6-a: Ask questions and choice labels are secret-scrubbed before they are cut or posted (SAFE-6.a) |
+| 2026-09-30 | a-non-owner-s-schedule-text-is-scanned-at-schedule-create-and-fenced-at-every-tick-a-non-owner-s-create-whose-name-or: A non-owner's schedule text is scanned at /schedule create and fenced at every tick: a non-owner's create whose name or prompt looks like an injection stores nothing, gets a private refusal, pings only the owner and appends an injection-suspected audit row; each tick re-resolves the creator's role, fences a non-owner's stored name and prompt as untrusted data, and stored text that trips the detector runs nothing, pauses the schedule and tells the owner once; the owner's own schedules are unchanged (SAFE-12/13) |

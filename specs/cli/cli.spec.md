@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 66
+version: 67
 status: draft
 files:
   - src/cli.ts
@@ -69,6 +69,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `dataDirDoctorCheck` | `env?, home?` | `DoctorCheck` | Doctor `data-dir` line: exists + writable / creatable / `fail` |
 | `projectFilesDoctorChecks` | `cwd?` | `DoctorCheck[]` | Doctor / `init` project-file lines for `cwd` (CLI-4, REQ-cli-430): `fledge.toml`, `verify-lane` (runs spec-check), `.specsync`, `specs`; each missing one `[missing]` in plain language; reads only |
 | `backupDoctorCheck` | `env?, opts?: { db? }` | `DoctorCheck` | Doctor `backup` line (OPS-1/2, REQ-cli-680): `[warn]` off / unusable dir / failing job (reason, owner told or not) / no `/announce` channel set, `[ok]` dir + snapshots + last backup and restore test; never fails doctor; creates nothing |
+| `peopleGithubDoctorCheck` | `dir: PeopleDirectory` | `DoctorCheck \| null` | Doctor `people-github` line (IDENTITY-7.a, REQ-cli-367): `[warn]` naming (person ids only) the owner and declared people with a GitHub login but no GitHub numeric id; null when nobody is affected; never fails doctor |
 | `resolveBackupConfig` | `env?` | `BackupConfig` | `CORVIDINHO_BACKUP_DIR`: unset → `off`, relative → `invalid`, absolute → `on` + resolved dir (src/store/backup.ts) |
 | `gitWorkTreeAbove` / `backupDirRefusal` | `dir` | `string or null` | Nearest dir holding `.git`; why a dir cannot hold backups (in a git work tree as given or with symlinks resolved, not a directory, unreadable) |
 | `snapshotName` | `now: number` | `string` | `corvidinho-<YYYYMMDD>T<HHMMSS>Z.db` (UTC) |
@@ -208,6 +209,7 @@ Nightly backup (OPS-1/2, REQ-cli-680, `src/store/backup.ts`): with `CORVIDINHO_B
 | Doctor: allowlists only in the allowlist file | `[ok] discord` / `[ok] github-watch` naming source `file` (values not shown) |
 | Doctor: every allowlisted channel / repo also deny-listed, or allowlist file does not load | `[missing] discord` / `[missing] github-watch`; exit 1 |
 | Doctor: no LLM key | `[warn] llm` (task run uses the demo stub); exit code unchanged |
+| Doctor: the owner or a declared person has a GitHub login but no GitHub numeric id | `[warn] people-github` naming person ids only (on GitHub they read as undeclared until an id is linked); exit code unchanged (REQ-cli-367) |
 | Doctor: data dir not a directory, a symlink to nothing, not creatable or not writable | `[fail] data-dir`; exit 1 |
 | Doctor: blank (whitespace-only) Discord / GitHub token or watch login | `[missing] discord` / `[missing] github` / `[missing] github-watch` (bridge / WATCH / Octokit trim them); exit 1 |
 | Doctor / `init`: no `fledge.toml`, no verify lane or one without spec-check, no `.specsync/` or `specs/` in the current dir | `[missing]` line per item in plain language; exit 1; nothing is created |
@@ -285,3 +287,5 @@ Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), 
 | 2026-09-29 | docs-operator-docs-match-the-code-help-and-the-go-live-checklist-say-empty-discord-user-role-allowlists-admit-anyone-in: Docs: operator docs match the code - --help and the go-live checklist say empty Discord user/role allowlists admit anyone in an allowlisted channel (not deny-all), and docs/DAEMON.md lists daemon.start_failed and spend.warning |
 | 2026-09-29 | verify-retry-feedback-never-ends-on-half-a-surrogate-pair-a-non-git-lead-verifies-after-a-delegate-worker-that-returned: Verify retry feedback never ends on half a surrogate pair; a non-git lead verifies after a delegate worker that returned no result frame; github-pr-create attribution check is exact; doctor and the Octokit plugins treat a blank GITHUB_TOKEN / GH_TOKEN as missing |
 | 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |
+| 2026-09-30 | on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a: On GitHub people match only by their numeric user id: a renamed or re-registered login never counts as the owner or a declared person on WATCH (prompt, memory scope, SAFE-13 exemption); [owner] github_id declares the owner's id; /admin people link github stores the looked-up numeric id; doctor warns about logins without an id (IDENTITY-7.a, #36) |
+| 2026-09-29 | release-0-0-34-declared-people-and-roles-person-and-project-memory-with-forget-me-github-memory-and-ranked-recall: Release 0.0.34: declared people and roles, person and project memory with forget-me, GitHub memory and ranked recall, condensed chats kept 30 days and resumed after the TTL (schema v13), answer footer and fence-safe 2000-char splits, nightly backup, discord-send-file, private Answer form, injection guards, W12 sweep |

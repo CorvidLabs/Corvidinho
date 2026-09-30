@@ -673,6 +673,22 @@ or slash surface is added. Outbound reply scrubbing beyond the
 spawned-run summary text (REQ-agent-232) and a Discord-admin re-scrub command
 are draft SAFE-10 and out of scope until captured.
 
+An ask's question and each of its choice labels SHALL be scrubbed before
+they are cut or posted (SAFE-6.a): the question before its `ASK_QUESTION_MAX`
+(1500) cut (`normalizeQuestion`, which every ask the tool loop makes, the
+spawn client reads from a result frame and a stored ask reloads through), and
+each label before its 80-character cut (`cleanAskLabel`, which every option
+`resolveAskOptions` returns goes through, and again every Choose-pick button
+label `buildChoiceComponents` posts). A question or label that held a secret
+SHALL show `[redacted:<kind>]` (a marker the cut itself falls inside is cut
+like other text), so a secret the cut would split never survives as a raw
+piece shorter than its scrub pattern's minimum, in what is posted (the
+Choose-pick buttons, the Answer stub and its form, an ask restated after a
+restart, a schedule ask post) and in what is stored
+(`discord_sessions.pending_ask`, `schedule_runs.ask_question`). Option ids
+keep the behaviour above. No env var, config key, flag, command, data field,
+schema or `SCRUB_RULES_VERSION` change.
+
 Acceptance Criteria
 - Each vendor shape is redacted; ordinary text is untouched; scrub is idempotent.
 - Hostile input (many private-key or JWT openers with no closer) scrubs in linear time.
@@ -685,6 +701,11 @@ Acceptance Criteria
 - A model-chosen option id that looks like a secret is replaced by its position when the ask is made, so neither the button nor the stored row carries it; an id that reaches the row another way is stored redacted, and an older row's secret-looking option id is redacted by the re-scrub while its other ids stay byte-identical.
 - Fixture tests use runtime-built fake secrets only.
 - A fake vendor key written raw, before the current rules, into any one of the listed text columns — session topic, work task description and summary, schedule name, description and prompt, schedule run summary and error, memory key and content — reads `[redacted:<kind>]` after the next open that re-scrubs; `SCRUB_TARGETS` lists each of these columns.
+- A choice label whose fake key starts where the whole marker fits before the 80-character cut is `…[redacted:github-token]…` on the Choose-pick buttons, in the stored `pending_ask` row and in the resumed pick's human text, with ids `1` / `2` unchanged; after a restart the reloaded ask posts the same labels, and a stored label past the cut with the key across it loads scrubbed before it is cut (its id unchanged).
+- A free-text question whose fake key straddles the 1500-character cut is stored as `…[redacted:github-token]…`; nothing the Answer stub, its form or a restated ask posts carries a raw piece of the key.
+- A schedule run's question whose fake key straddles the cut is stored in `schedule_runs.ask_question` as `…[redacted:github-token]…` for a daemon-claimed and a bridge-claimed run; neither the run summary nor the posts carry a raw piece.
+- `buildChoiceComponents` posts a label that holds a whole or a straddling key as `[redacted:<kind>]`, at most 80 characters, with custom_ids unchanged.
+- These tests fail on the base sources and pass on the branch.
 
 ### REQ-discord-024
 
@@ -707,10 +728,12 @@ Corvidinho SHALL load a durable owner record from bot-VM config (IDENTITY-1,
 ALLOW-4): a Discord user snowflake plus optional GitHub login and display
 name, from env `CORVIDINHO_OWNER_DISCORD_ID`, `CORVIDINHO_OWNER_GITHUB_LOGIN`,
 `CORVIDINHO_OWNER_DISPLAY` and/or an `[owner]` section (`discord_id`,
-`github_login`, `display`) in the allowlist file. Env SHALL override the file
-per field. The record is re-read on every start, so it survives restarts.
-The owner SHALL be matched only by Discord snowflake or case-insensitive
-GitHub login, never by display name.
+`github_login`, `display`) in the allowlist file, plus an optional GitHub
+numeric user id from `[owner] github_id` (file only, REQ-discord-367). Env
+SHALL override the file per field. The record is re-read on every start, so
+it survives restarts. The owner SHALL be matched only by Discord snowflake
+and, on GitHub, by the `[owner] github_id` numeric user id (IDENTITY-7.a) —
+never by GitHub login or display name; the login is kept for @mentions.
 
 ADMIN SHALL be owner-only (IDENTITY-2, Leif decision on #42). At handler time
 (ADMIN-4 / DISCORD-7) `resolvePermissionLevel` SHALL return ADMIN only for
@@ -726,7 +749,7 @@ configured plus the display name only, never ids, logins, or tokens.
 
 Acceptance Criteria
 - Env and allowlist-file `[owner]` load the owner; env wins per field; reloading the same config yields the same owner.
-- The owner matches by Discord snowflake or lowercased GitHub login; the display name never matches.
+- The owner matches by Discord snowflake or the `[owner] github_id` numeric id (`isOwnerGithub(owner, githubId)`); the GitHub login and the display name never match.
 - The owner resolves to ADMIN; a muted or deny-listed owner does not.
 - Admin user/role lists never resolve to ADMIN, with or without an owner; no owner ⇒ nobody ADMIN and admin slash (/mute) is refused for everyone.
 - Bridge start warns when the legacy admin lists are set or no owner is configured.
@@ -2114,7 +2137,7 @@ WebP image whose magic bytes match its extension, or UTF-8 text with a
 extension; text (and the optional caption) SHALL be secret-scrubbed (SAFE-6:
 vendor-key shapes and set secret env values, `redactSecretEnvValues`) before
 upload, and the caption SHALL parse no mentions (REQ-discord-205). SAFE-2
-protected paths (`.env*`, `.git`, `fledge.toml`, `bunfig.toml`,
+protected paths (`.env*`, `.git`, `fledge.toml`, `.fledge/`, `bunfig.toml`,
 `specs`, `*.spec.md`, keystores), any `.specsync` path and secret paths
 (`.ssh`, keys, credentials) SHALL be refused, judged on the path as given and
 on where it resolves inside the project root with symlinks followed; a path
@@ -2165,6 +2188,7 @@ Acceptance Criteria
 - A file whose size, as first taken, is under 8 MB but which is over it when read is refused with the upload-limit error after at most 8 MB + 1 byte is read: no requester check runs and nothing is uploaded.
 - A checked file swapped for a link to `.env`, or whose folder is swapped for a link into `.ssh`, after the path checks is refused (SAFE-2): no requester check runs and nothing is uploaded.
 - An ask-button pick in a thread resumes with `replyChannelId` = the thread and `replyParentChannelId` = its parent.
+- A file under `.fledge/` (`.fledge/lanes/notes.md`) and a link to it are refused like the rest of the SAFE-2 set (SAFE-2.a); nothing is uploaded (fails on main's `isProtectedPath`).
 
 ### REQ-discord-734
 
@@ -2212,7 +2236,8 @@ People SHALL be read from the allowlist file this process loaded (the file
 `[owner]` comes from, `AllowlistConfig.sourcePath`), re-read on every use, so
 a VM edit or an `/admin people` change applies on the next message, slash run
 or WATCH event without a restart; no file loaded means nobody declared. There
-SHALL be no second store, env var, config key, table or column, and the
+SHALL be no second store, env var, config key, table or column (the one later
+key, the owner's `[owner] github_id`, is REQ-discord-367), and the
 allowlist loader and `[owner]` reader SHALL read a file with people sections
 exactly as before.
 
@@ -2224,14 +2249,15 @@ plain-language problem naming the person id and key, never an account id.
 `resolvePerson(directory, { discordId, githubLogin, githubId })` SHALL be the
 one resolver (for later slices too) and SHALL return `{ personId,
 displayName?, role?, person }` or null. It SHALL match only on stable ids —
-the Discord user id (or `<@id>`), the GitHub numeric id and the
-case-insensitive GitHub login — and never on a display name or nickname
-(IDENTITY-7). A login SHALL NOT match when the GitHub numeric id is known and
-the person declared other GitHub ids; ids that point at two different people,
-and an id declared for two people, SHALL match nobody. The configured owner
-(IDENTITY-1) SHALL always be a person: the declared entry holding the owner's
-Discord id (the owner's GitHub login added to it), else a built-in `owner`
-entry from `[owner]` / env; its `role` SHALL be `owner`. No other role is read
+the Discord user id (or `<@id>`) and the GitHub numeric id — and never on a
+display name, nickname or GitHub login (IDENTITY-7; on GitHub the numeric id
+only, IDENTITY-7.a, REQ-discord-367: `githubLogin` is accepted and ignored,
+so a renamed or re-registered login never counts as anyone); ids that point
+at two different people, and an id declared for two people, SHALL match
+nobody. The configured owner (IDENTITY-1) SHALL always be a person: the
+declared entry holding the owner's Discord id (the owner's `[owner]` GitHub
+id and login added to it), else a built-in `owner` entry from `[owner]` /
+env; its `role` SHALL be `owner`. No other role is read
 yet (#65 adds roles). No AlgoChat or wallet ids.
 
 Recognised on Discord (IDENTITY-14): every interactive run (chat message,
@@ -2276,8 +2302,8 @@ without a file SHALL read the file its first `/admin people` change writes.
 Acceptance Criteria
 - `[people.<id>]` TOML (plural and singular keys) and the JSON `people` object parse to people; the allowlist loader and `[owner]` reader load the same file unchanged.
 - Unreadable entries are skipped whole with problems that name the person and key but no account id; `owner` is a reserved id.
-- `resolvePerson` resolves by Discord id, `<@id>`, GitHub login (any case, `@`) and GitHub numeric id (number or string); display names and nicknames resolve nobody; a login with a different known numeric id resolves nobody; ids of two different people, and an id declared twice, resolve nobody.
-- The owner resolves with `role: owner` as the built-in entry (by Discord id and `[owner]` GitHub login) or as the declared person holding the owner's Discord id; no owner configured ⇒ no owner person.
+- `resolvePerson` resolves by Discord id, `<@id>` and GitHub numeric id (number or string); GitHub logins (alone, or with another numeric id), display names and nicknames resolve nobody; ids of two different people, and an id declared twice, resolve nobody.
+- The owner resolves with `role: owner` as the built-in entry (by Discord id and `[owner]` GitHub id, never the `[owner]` login) or as the declared person holding the owner's Discord id; no owner configured ⇒ no owner person.
 - People are re-read per call from the loaded file; a missing / unreadable file reads as nobody declared, never a throw.
 - A declared chat speaker's prompt names `declared_person`, the declared display (not the Discord one), nicknames and GitHub logins; a stranger with a declared person's display name gets `declared_person: none`; the undeclared owner's and everyone's block with nobody declared are byte-identical to before.
 - Through `startBridge`: an `/admin people add` + `link` by the owner and a VM edit of the file change who the next chat message is recognised as, without a restart; a chat message asking to change links changes nothing.
@@ -2287,6 +2313,7 @@ Acceptance Criteria
 - Only `src/discord/command-handlers/admin.ts` imports the people writer; nothing under `src/` or `plugins/` else does.
 - Regression tests `tests/identity.people.test.ts`, `tests/discord.admin-people.test.ts` and `tests/identity.recognise.test.ts` fail on the base sources and pass after.
 - SAFE-11 (REQ-discord-071): a stranger named `[owner] L<zero-width>eif` is shown as `display_name: Leif` with a `name_clash` line naming the owner and no owner facts; a stranger named like a declared person gets a `name_clash` line naming that person; the owner and a declared person shown by their own declared display get none; with nobody declared a clean, non-clashing name leaves the block byte-identical to before (`tests/safe.injection.test.ts`, `tests/identity.recognise.test.ts`).
+- IDENTITY-7.a (REQ-discord-367): an entry with `github_logins` but no `github_ids` loads without an issue and still matches on Discord, but resolves nobody on GitHub until an id is linked (`tests/identity.github-numeric-id.test.ts`).
 
 ### REQ-discord-065
 
@@ -2449,19 +2476,23 @@ When a clarify or stuck ask's choices cannot be listed (the free-text ask of REQ
 - The live gateway SHALL route a MODAL_SUBMIT to the component handler with the form's text input values by input custom_id (`modalValues`); its replies parse no mentions and an ephemeral reply is flag 64. Only the form's `answer` custom_id with typed text is taken; a press id with typed text or the form id without it is ignored.
 - The submit SHALL pass, in order, the channel gate (REQ-discord-212), the actor gate with deny lists and a non-empty user/role allowlist (REQ-discord-201), mute/rate (REQ-discord-010), the not-yours / already-answered check and the expiry check, exactly as a press; every refusal is ephemeral only (zero-width ack, the admin allowlist tip, `MUTED` / `RATE_LIMITED`, "This choice isn't for you (or it was already answered)", `ASK_CHOICE_EXPIRED`), with no agent run, nothing posted or edited and the ask left pending (DISCORD-DENY). A submit on a Choose ask gets the not-for-you reply.
 - A submit whose scrubbed text is thin or an explicit cancel SHALL be handled as the same text in a reply is (AUTONOMY-5/6): a thin or blank answer (`isThinAck`: `ok`, `sure`, emoji-only, whitespace and similar) SHALL NOT clear the ask or run the agent — the question is restated once, privately (an ephemeral `formatAskReply` with `ASK_ANSWER_HINT` and the Answer button); an explicit cancel (`isCancelAsk`: `cancel`, `never mind`, `forget it`, `stop asking`, `nm`) SHALL clear every open ask of the session, as a cancel reply does (SESSION-MULTI-3), with the ephemeral `ASK_CANCELLED_ACK` and no run. Neither posts or edits anything in the channel.
-- An accepted submit SHALL be SAFE-6 scrubbed, control characters dropped, trimmed and cut at `ASK_ANSWER_MAX` (`normalizeAskAnswer`); the ask SHALL be cleared first (a reply or second submit cannot resume twice); the submit gets the ephemeral `ASK_ANSWER_ACK`, deleted when the resumed run ends (DISCORD-ASK-8); the session SHALL resume (`resume: true`) with its thread replayed and the prompt `[Prior clarifying question you asked (the human is answering it now):\n<question>]\n\nHuman answer:\n<answer>` — the block a reply that answers the ask gets — with `humanText` and the recorded human turn the scrubbed answer, the presser's identity, memory and acting role as on a button pick, and the stub as the progress surface (content and button cleared) edited into the answer (DISCORD-ASK-7). The typed text SHALL NOT be posted.
+- An accepted submit SHALL be SAFE-6 scrubbed, control characters dropped, trimmed and cut at `ASK_ANSWER_MAX` (`normalizeAskAnswer`); the ask SHALL be cleared first (a reply or second submit cannot resume twice); the submit gets the ephemeral `ASK_ANSWER_ACK`, deleted when the resumed run ends (DISCORD-ASK-8); the session SHALL resume (`resume: true`) with its thread replayed and the prompt `[Prior clarifying question you asked (the human is answering it now):\n<question>]\n\nHuman answer:\n<answer>` — the block a reply that answers the ask gets, `<answer>` being the answer as the same words in a reply reach the model: inside the `fenceSpeakerText` untrusted-data fence (header naming the role, `source=ask-answer`) for a team or community requester, unchanged for the owner (SAFE-12, REQ-discord-071) — with `humanText`, the memory query and the recorded human turn the scrubbed answer (not the fence), the presser's identity, memory and acting role as on a button pick, and the stub as the progress surface (content and button cleared) edited into the answer (DISCORD-ASK-7). The typed text SHALL NOT be posted.
+- Before the ask is cleared, a team or community requester's scrubbed answer (not thin, not a cancel) SHALL be scanned by `inboundInjection` exactly as the same words in a chat reply in that session are, and a hit SHALL be refused as that reply is (SAFE-13, REQ-discord-071; `refuseInjectedAnswer`): no agent run, the ask left pending and the session live, nothing added to the thread; the submit gets an ephemeral refusal (`injectionRefusalHead` plus "I've flagged it to the owner", never the text; without an owner or a post function the `formatInjectionRefusal` line, ephemeral); the owner gets one fresh post in the session's channel (thread first), replying to the ask's stub, that pings only them (allowed mentions the owner only) and says an answer typed in the private Answer form looked like a prompt-injection attempt and why; that post is tracked on the session as a chat refusal is; and one `injection-suspected` / `denied` SAFE-5 row is appended (actor the requester, surface `discord:<session>`, digest of `ask-answer` and the reason ids). The owner's own answer is neither scanned nor fenced. The presser's acting role SHALL be resolved before this check by `resolveDiscordActingRole` with the presser's Discord role ids, as on the chat path (the same role a button pick runs with), so a declared team member allowlisted only by a Discord role is team on the form as in chat (REQ-discord-065).
+- A button pick's answer is the label of an option the model wrote (or the bot's own option id from the pressed button), not text the presser typed: it SHALL reach the run as before, neither fenced nor scanned.
 - A press or submit on a free-text ask past its ~30-minute timeout SHALL get `ASK_CHOICE_EXPIRED` and run nothing, and the ask SHALL stay pending so a reply still answers it with the prior-question block (unlike a Choose ask, which a late press clears, REQ-discord-045). A reply that answered the ask leaves the Answer button answering "already answered".
 - No new env var, config key, slash command, table, column or schema version.
 
 Acceptance Criteria
 - A chat clarify ask without listable options: the collapsed stub quotes the question, carries `ASK_ANSWER_HINT` (not `ASK_REPLY_HINT`), exactly one Answer button (`open` custom_id) and a footer embed; the pending ask is free text with the stub as `stubMessageId`. A spend-cap stop has no button and no pending ask.
 - The requester's Answer press calls `showModal` with `buildAnswerModal` (title ≤45, one type 18 label ≤45 with the question as description, one required type 4 paragraph input, `max_length` `ASK_ANSWER_MAX` ≤ 4000); nothing is posted, no run, the ask stays. Another user's press gets the not-for-you reply and no form.
-- The requester's submit resumes the same session with the reply's prior-question block and the trimmed answer; ephemeral `ASK_ANSWER_ACK` then deleted; the stub is thin-updated and edited into the answer; the typed text is never posted; the ask is cleared and a second submit is "already answered". A secret in the text never reaches the run or the thread.
+- The requester's submit resumes the same session with the reply's prior-question block and the trimmed answer (a community requester's inside the untrusted-data fence, `source=ask-answer`); ephemeral `ASK_ANSWER_ACK` then deleted; the stub is thin-updated and edited into the answer; the typed text is never posted; the ask is cleared and a second submit is "already answered". A secret in the text never reaches the run or the thread.
 - Another user's, a muted, a deny-listed (user or role), an off-channel, a rate-limited and a late submit (and the same presses) are refused ephemerally with no run and the ask kept; after the late one a thin reply restates without a button and a reply still answers it.
 - A reply to the stub answers the ask as before; a later Answer press or submit is "already answered". A thin reply restates with the live Answer button.
 - A thin or blank submit (`ok`, whitespace, `👍`, `sure!`) gets only the private restatement with the Answer button: no run, nothing posted, ask kept, nothing added to the thread; a real submit afterwards resumes. A `never mind` / `cancel` submit gets only the ephemeral `ASK_CANCELLED_ACK`, clears the free-text ask and an earlier open Choose ask of the session, runs nothing, and a later Answer press is "already answered".
 - `/work` without listable options answers with the Answer button and hint and records `stubMessageId`; its submit resumes that session in the answer message. A follow-up free-text ask from a resumed run gets its own Answer button in the same stub.
 - The live gateway routes a MODAL_SUBMIT with its text to the component handler; `adaptModalSubmit` maps text inputs by id, replies ephemerally with no parsed mentions.
+- Through `startBridge` with a memory DB: a community user's and a declared team member's submit that tells the bot to ignore its rules starts no run, gets one ephemeral refusal that never quotes it, leaves the ask pending and the session live (the refusal post continues it), adds nothing to the thread, posts once in the session's channel replying to the stub with allowed mentions only the owner, and appends one `injection-suspected` / `denied` row with the user as actor and surface `discord:<session>`; an ordinary community answer runs inside the fence with `humanText` and the thread turn the plain answer and no audit row; the owner's answer, injection-like words included, runs unfenced with no refusal and no row (`tests/safe.injection.test.ts`).
+- A declared team member allowlisted only by a Discord role (a non-empty user / role allowlist) whose chat run is team answers through the form as team too: the run's acting role is team and the fence header names `team` (`tests/safe.injection.test.ts`).
 - These tests fail on the base sources.
 
 ### REQ-discord-071
@@ -2474,7 +2505,8 @@ configured), and SHALL add one `name_clash` line when that shown Discord name
 reads like the owner's display or another declared person's display or
 nickname (`displayNameClash`, `namesLookAlike`); who the user is and their
 role come only from the Discord user id (IDENTITY-7 / IDENTITY-12). Chat
-messages, `/session start` and `/work` SHALL resolve the speaker's role
+messages, `/session start`, `/work` and an answer typed in an ask's private
+Answer form (REQ-discord-548) SHALL resolve the speaker's role
 (`resolveDiscordActingRole`) before the run. For team and community speakers
 (never the owner) `inboundInjection` SHALL scan the speaker's own words; a hit
 SHALL start no run: on chat one public reply to the message
@@ -2484,13 +2516,20 @@ owner it says nobody could be told and logs `INJECTION_NO_OWNER_WARNING`), a
 session the message started is ended and the turn is not recorded; on slash
 (`refuseInjectedSlash`) the interaction gets the public refusal and the owner a
 fresh channel post that pings only them, and no session, worktree or work task
-is created; either way one `injection-suspected` / `denied` SAFE-5 row is
-appended through the bridge's trail (actor, surface `discord:<session>` or
+is created; on the Answer form (`refuseInjectedAnswer`) as the same words in a
+chat reply in that session: the ask stays pending and the session live, the
+submit gets an ephemeral refusal (never the text) and the owner one fresh post
+in the session's channel, replying to the ask's stub, that pings only them and
+is tracked on the session as a chat refusal is; every way one
+`injection-suspected` / `denied` SAFE-5 row is appended through the bridge's
+trail (actor, surface `discord:<session>` for chat and the Answer form or
 `discord:/<command>`, digest of the source and reason ids; best effort).
 Otherwise a team / community speaker's words SHALL reach the model through
 `fenceSpeakerText` (the `UNTRUSTED_DATA` fence with a header naming their role
-and saying it is their request but data, not instructions); the owner's words
-are unchanged. The spawn client SHALL read the child's `result.injection`
+and saying it is their request but data, not instructions; source
+`chat-message`, `session-topic`, `work-task` or `ask-answer`); the owner's
+words are unchanged. A button pick's answer is a model-written option label,
+not typed text, and is neither fenced nor scanned. The spawn client SHALL read the child's `result.injection`
 with `injectionNoticeFromUnknown` into `AgentSpawnResult.injection`, and the
 post that carries a run's answer SHALL then ping the owner with
 `formatInjectionOwnerLine`: chat and button-pick replies (`withInjectionNotice`,
@@ -2511,6 +2550,7 @@ Acceptance Criteria
 - The replay block marks a turn line that imitates its footer or a turn label `(quoted)` and still ends with its own footer.
 - A schedule run reporting `injection` pings the owner with the SAFE-13 line on its result post and, when it ends with an ask, on its ask post.
 - A non-owner's free-text answer to a pending ask reaches the model inside the fence (`tests/discord.slash-pending-ask.test.ts`).
+- The private Answer form: a community user's and a declared team member's injected submit starts no run, gets an ephemeral refusal, keeps the ask and the session, pings only the owner once in a post replying to the stub and appends one `denied` row with surface `discord:<session>`; an ordinary community answer runs inside the fence (`source=ask-answer`); the owner's answer runs unfenced and unscanned (`tests/safe.injection.test.ts`, `tests/discord.ask-answer-modal.test.ts`).
 - Regression tests in `tests/safe.injection.test.ts` fail on the base sources and pass after.
 
 ### REQ-discord-067
@@ -2539,9 +2579,11 @@ likewise be searched for the work description
 blocks are the newest rows, as before.
 
 `memorySubjectForGithub(dir, { login, id })` SHALL resolve a GitHub
-commenter to their declared person's subject (the same scopes as on Discord;
-the configured owner not declared under `[people]` to their Discord-id
-subject; undeclared or ambiguous ⇒ null), and `projectScopeForRepo(repo)`
+commenter to their declared person's subject by the numeric `id` only (the
+`login` is ignored, IDENTITY-7.a, REQ-discord-367; the same scopes as on
+Discord; the configured owner not declared under `[people]`, recognised by
+`[owner] github_id`, to their Discord-id subject; no id, undeclared or
+ambiguous ⇒ null), and `projectScopeForRepo(repo)`
 SHALL give `project:<owner/repo>` lowercased for a valid `owner/repo` (else
 null). The Discord agent spawn SHALL always clear
 `CORVIDINHO_ACTING_GITHUB_LOGIN` / `_ID` / `_REPO`, so a Discord or
@@ -2551,7 +2593,7 @@ Acceptance Criteria
 - A question in plain words finds the fact it is about; a key hit outranks a newer passing mention; equal relevance goes to the newer row; a question-words-only query matches as one substring.
 - A multi-scope search keeps the newest of a key once and leaves private notes out.
 - The Discord inject holds an older fact the message is about although newer rows fill the block; an owner's `/work` run holds an older project fact its description is about although newer rows fill the block.
-- `memorySubjectForGithub` matches by numeric id or login, refuses a login whose numeric id differs, and maps the undeclared-under-`[people]` owner to their Discord id; `projectScopeForRepo` accepts only `owner/repo`.
+- `memorySubjectForGithub` matches by numeric id only (a login alone, or with a numeric id that differs, is nobody) and maps the undeclared-under-`[people]` owner, by `[owner] github_id`, to their Discord id; `projectScopeForRepo` accepts only `owner/repo`.
 - A Discord spawn clears inherited GitHub commenter keys.
 - `tests/memory.recall-github.test.ts` and `tests/memory.rank.test.ts` cover each and fail on the stacked base sources.
 
@@ -2782,4 +2824,132 @@ Acceptance Criteria
 - A GitHub ask's card names `@login (GitHub account id N) in owner/repo#n`; the bridge never DMs its asker and marks the card "They will be told on their GitHub thread."; Approve also deletes kept WATCH conversations by the ask's login and by `github-id:<n>`.
 - `forgetTargets` for a GitHub ask gives the declared Discord ids only, the declared and asking logins and the numeric id; for an `/admin` ask the person's Discord ids only; a Discord ask is unchanged.
 - `tests/discord.admin-forget.test.ts`, `tests/watch.forget-me.test.ts` and `tests/discord.admin-slash.test.ts` cover each and fail on main.
+### REQ-discord-713
+
+A schedule's text is its creator's words (SAFE-12 / SAFE-13, #71). A
+schedule's name, description and prompt SHALL be treated like the same words
+in the creator's chat message (REQ-discord-071): the owner's are the
+principal's and are neither scanned nor fenced; anyone else's are scanned by
+the same detector (`scheduleInjection`, `inboundInjection` over each of the
+name, description and prompt, reason ids merged in `INJECTION_REASONS`
+order) and reach the model only as untrusted data.
+
+- `/schedule create` SHALL resolve the requester's role before the ADMIN gate
+  (`resolveDiscordActingRole` with the requester's Discord role ids, the admin
+  lists, the owner, the live mute set and the declared people list, as
+  `/work` does). When the requester is not the owner and their `name` or
+  `prompt` trips the detector, the create SHALL be refused through
+  `refuseInjectedSlash` (source `schedule-prompt`) with the interaction's
+  reply ephemeral (every `/schedule` reply is): the requester gets
+  `injectionRefusalHead` plus "I've flagged it to the owner" (never the
+  text; without an owner or a post function the `formatInjectionRefusal`
+  line), the owner one fresh post in the command's channel that pings only
+  them ("a /schedule request here looked like a prompt-injection attempt"),
+  and the SAFE-5 trail one `injection-suspected` / `denied` row (actor the
+  requester, surface `discord:/schedule`, digest of `schedule-prompt` and the
+  reason ids). Nothing SHALL be stored. A non-owner create that trips nothing
+  gets the ephemeral `NOT_AUTHORIZED` as before (no post, no row). There is no
+  other create or edit path for a schedule's text (pause, resume and delete
+  take none).
+- On every tick, after the DISCORD-SCHEDULE-3 gate (REQ-discord-020) and
+  before any worktree or agent run, the scheduler SHALL resolve the creator's
+  role again (`resolveDiscordActingRole` with the creator's user id, the live
+  allowlist, the owner, the bridge's live mute set when wired
+  (`SchedulerServiceOpts.mutedUsers`) and the declared people list re-read
+  now; a tick has no Discord role ids; any failure reads as community), so a
+  schedule stored before this check, or by someone who is no longer the
+  owner, is judged by who its creator is at that tick.
+- When the creator is not the owner and the stored name, description or
+  prompt trips the detector, the tick SHALL run nothing (no worktree, no
+  agent): one `injection-suspected` / `denied` row through
+  `SchedulerServiceOpts.recordAudit` when wired (the bridge wires its trail;
+  actor the creator, surface `scheduler:<schedule id>`, digest of
+  `schedule-prompt` and the reason ids; best effort), the run recorded failed
+  (`not run: … prompt-injection attempt (<reason ids>) (SAFE-13)`) with a
+  stuck ask whose question is `injectedScheduleQuestion(reasons)` (what
+  happened and why in plain words, never the text), the schedule paused (so
+  no later tick runs it or posts again; an auto-pause from this failure keeps
+  its own pause ask), and that ask posted through the usual schedule ask path
+  (REQ-discord-347 / REQ-discord-353: live gate at post time, schedule title
+  prefix — `Schedule (<id>) on <project>`, without the name, when the
+  creator's stored name itself trips the detector, so the post never quotes
+  it — the owner pinged once with allowed mentions the owner only, handed
+  back for the next delivery pass when the post does not go out, left pending
+  by a ticker with no Discord for a bridge tick to post).
+- Otherwise a non-owner creator's run SHALL get the prompt
+  `Scheduled work on project: <project>` (no name on that line), the
+  worktree line, then `fenceSpeakerText("Schedule \"<name>\":\n<prompt>",
+  role, "schedule-prompt")` (the `UNTRUSTED_DATA` fence with a header naming
+  the creator's role), then the closing SAFE line; the owner's schedule keeps
+  exactly the prompt it had (`Scheduled work "<name>" on project: <project>`
+  and the stored prompt as written).
+- Schedule runs keep `actingIsAdmin: false` and no acting role (never the
+  shell or runners, SAFE-3.a); result posts, ask posts, ping keys, auto-pause
+  and the delivery pass are otherwise unchanged. `SpeakerSurface` gains
+  `schedule-prompt`. No new env var, config key, slash option, table, column
+  or schema version.
+
+Acceptance Criteria
+- A community user's and a declared team member's `/schedule create` whose prompt (or name alone) trips the detector stores no schedule, gets one ephemeral refusal that never quotes the text, and produces exactly one post in the channel with allowed mentions only the owner and one `injection-suspected` / `denied` row with the user as actor and surface `discord:/schedule` (`tests/scheduler.injection.test.ts`).
+- An ordinary non-owner `/schedule create` still gets only the ephemeral `NOT_AUTHORIZED` (no post, no row, nothing stored); the owner's create with injection-like words is stored unscanned.
+- A benign community schedule's tick runs with `Scheduled work on project:` and its name and prompt inside the fence (`role: community`, `source=schedule-prompt`), the name nowhere outside it; a declared team member's is fenced as `role: team`, and as `role: community` when muted; the owner's schedule's prompt is exactly as before (no fence) even with injection-like words.
+- A stored community (or team) schedule whose prompt or name trips the detector runs no agent, is paused, posts one ask with the schedule title (by id alone, without the name, when the name tripped) that pings only the owner and never quotes the text, and appends one `denied` row (surface `scheduler:<id>`); a later tick posts nothing more.
+- A ticker with no outbound (the daemon) leaves that ask pending on the run row and a bridge tick posts it once; through `startBridge` the row lands in the bridge's `audit_log` and the schedule is paused.
+- These tests fail on the base sources (the owner and ordinary-create guards pass on both).
+### REQ-discord-367
+
+GitHub matches people by numeric user id only (IDENTITY-7.a, #36; captured
+from Leif's 2026-09-28 interview, round 12: "On GitHub it matches people only
+by their numeric user id, so a renamed or re-registered login never counts as
+them."). On GitHub a person — the configured owner included — SHALL be
+recognised only by their GitHub numeric user id, never by a GitHub login.
+`resolvePerson` (REQ-discord-036) SHALL match the GitHub side on `githubId`
+alone (`PersonQuery.githubLogin` is accepted and ignored), and
+`memorySubjectForGithub(dir, { login, id })` (REQ-discord-067) on `id` alone.
+An actor with no numeric id, or an id nobody declared, SHALL resolve to
+nobody — undeclared, so community at most (IDENTITY-12), never the owner —
+whatever its login. GitHub logins (`github_logins`, `[owner] github_login`)
+SHALL stay labels: read, written and shown as before (the Discord identity
+block's `github` line, `/admin people list`), used to @mention the owner on
+GitHub and to find a person's kept GitHub threads on forget-me, and still
+refused on a second person by `/admin people link`, but never matched.
+
+The owner's GitHub id SHALL be declared as `github_id` in the allowlist file's
+`[owner]` section (TOML quoted or bare digits; JSON string or safe integer),
+read into `OwnerRecord.githubId` and added to the owner's person (the declared
+entry holding the owner's Discord id, else the built-in `owner` entry); an
+invalid value SHALL be ignored with a value-free issue. There is no env var
+for it; env still overrides the other owner fields. `isOwnerGithub(owner,
+githubId)` SHALL be true only for that numeric id.
+
+`/admin people link person:<id> github:<login>` SHALL, once the request plans
+without a refusal, defer its ephemeral reply and look the login's numeric id
+up once through the GitHub API (`createGithubUserLookup` in
+`src/identity/github-user.ts`: `GET /users/{login}` with `GITHUB_TOKEN` /
+`GH_TOKEN` when set, a 10 s timeout; `SlashContext.lookupGithubUser`
+overrides it), then link that id as a `github_id` next to the login — also
+when the login is already linked — so the id is stored in `github_ids`
+(`github_ids` stays the stored field); owner-only and audited like every
+`/admin people` change (REQ-discord-036). A lookup that fails, times out,
+finds no user or answers for another login SHALL link nothing, append one
+`admin-people-link` `error` row and reply why (the HTTP status only, never a
+token or response body), suggesting `github_id:<number>`. A refused request
+makes no GitHub call, and neither do `github_id:`, `discord:` or `nickname:`
+links. `unlink github:<login>` removes the label only; when GitHub ids stay
+linked the reply says they still match. The lookup module is not a writer of
+people.
+
+People entries with only `github_logins` SHALL keep loading (no issue, still
+matched on Discord) but SHALL NOT match on GitHub until an id is linked;
+`peopleWithoutGithubId(dir)` lists them, the owner's person included, by
+person id for `corvidinho doctor` (REQ-cli-367). No schema, table or column
+change; no package version bump.
+
+Acceptance Criteria
+- `resolvePerson` / `memorySubjectForGithub`: a GitHub login alone, or the owner's or a declared person's login with another numeric id, resolves nobody; the declared numeric id resolves the person whatever the login now is.
+- `[owner] github_id` is read from TOML and JSON (string or number), joins the owner's person (built-in or declared) and is the owner on GitHub; an invalid one is ignored with a value-free issue; an env-only owner login is not the owner on GitHub; `isOwnerGithub` matches the numeric id only.
+- A login-only people entry loads without an issue and still matches on Discord, but not on GitHub; with `github_ids` added it matches on GitHub under any login.
+- `/admin people link github:<login>` writes the looked-up id to `github_ids` (login kept), audits `started` / `ok`, defers the reply first and resolves the id at once; linking again is no change; a failed, missing or mismatched lookup writes nothing and audits `error`; a refused request and `github_id:` links make no lookup; unlinking a login says the id still matches.
+- `createGithubUserLookup` over a stubbed transport returns the numeric id and canonical login on 200, "no user" on 404, the status only otherwise (never the token), and refuses a payload without a numeric id.
+- `tests/identity.github-numeric-id.test.ts` fails on the base sources and passes after; `tests/identity.people.test.ts`, `tests/identity.owner.test.ts`, `tests/discord.admin-people.test.ts` and `tests/memory.rank.test.ts` hold the numeric-id rule.
 

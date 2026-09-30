@@ -22,8 +22,9 @@
  * GitHub (MEMORY-8, #67 / REQ-plugins-067): a WATCH run has no Discord actor;
  * the poller sets the commenter's GitHub login / numeric id and the thread's
  * repo (`CORVIDINHO_ACTING_GITHUB_LOGIN` / `_ID` / `_REPO`, never argv). The
- * commenter's declared person (people list re-read now, stable ids only)
- * saves and recalls their own profile, as on Discord; anyone undeclared
+ * commenter's declared person (people list re-read now, matched on the
+ * GitHub numeric id only — the login never counts, IDENTITY-7.a) saves and
+ * recalls their own profile, as on Discord; anyone undeclared (or with no id)
  * gets community scope: this repo's project memory read-only
  * (`memory-recall --project`) and nothing saved. Project writes, `--person`,
  * private notes and forget-me stay off on GitHub (a WATCH run is community

@@ -158,6 +158,37 @@ describe("update-helpers.sh", () => {
     expect(r.stdout).not.toContain("DISCORD-ANNOUNCE-4");
   });
 
+  test("extract_changelog_section stays fast on a large UTF-8 section", () => {
+    // A 400 KB section of multibyte text under a UTF-8 locale: the old
+    // "${out// }" emptiness check was quadratic there (seconds for 70 KB).
+    const dir = mkdtempSync(join(tmpdir(), "cl-big-"));
+    try {
+      const line = "- **Big** — a line with UTF-8 → and spaces to keep it honest.\n";
+      const body = line.repeat(Math.ceil(400_000 / line.length));
+      writeFileSync(join(dir, "CHANGELOG.md"), `# Changelog\n\n## 9.9.9\n\n${body}\n## 9.9.8\n\n- old\n`);
+      const t0 = Date.now();
+      const proc = Bun.spawnSync(
+        ["bash", "-c", `source "${helpers}"; extract_changelog_section "${join(dir, "CHANGELOG.md")}" 9.9.9`],
+        { cwd: root, stdout: "pipe", stderr: "pipe", env: { ...process.env, LC_ALL: "C.UTF-8" } },
+      );
+      const ms = Date.now() - t0;
+      expect(proc.exitCode).toBe(0);
+      expect(new TextDecoder().decode(proc.stdout)).toContain("a line with UTF-8");
+      expect(ms).toBeLessThan(2000);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("extract_changelog_section finds 0.0.34", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.34`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("forget_requests");
+    expect(r.stdout).toContain("CORVIDINHO_BACKUP_DIR");
+  });
+
   test("extract_changelog_section finds 0.0.33", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.33`,
@@ -889,10 +920,10 @@ describe("release tagging helpers", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.33", () => {
+  test("package.json is 0.0.34", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.33");
+    expect(pkg.version).toBe("0.0.34");
   });
 });

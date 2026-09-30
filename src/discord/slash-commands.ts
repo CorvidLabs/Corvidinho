@@ -373,13 +373,13 @@ export function buildSlashCommandBodies(): SlashCommandBody[] {
                 {
                   type: OPT_STRING,
                   name: "github",
-                  description: "GitHub login",
+                  description: "GitHub login — its numeric user id is looked up now and stored; only that id matches",
                   required: false,
                 },
                 {
                   type: OPT_STRING,
                   name: "github_id",
-                  description: "GitHub numeric user id",
+                  description: "GitHub numeric user id (what GitHub matching uses)",
                   required: false,
                 },
                 {
@@ -410,13 +410,13 @@ export function buildSlashCommandBodies(): SlashCommandBody[] {
                 {
                   type: OPT_STRING,
                   name: "github",
-                  description: "GitHub login",
+                  description: "GitHub login (a label; unlink github_id to stop GitHub matching)",
                   required: false,
                 },
                 {
                   type: OPT_STRING,
                   name: "github_id",
-                  description: "GitHub numeric user id",
+                  description: "GitHub numeric user id (what GitHub matching uses)",
                   required: false,
                 },
                 {

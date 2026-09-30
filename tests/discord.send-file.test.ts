@@ -418,7 +418,9 @@ describe("discord-send-file plugin (REQ-discord-476, DISCORD-17)", () => {
     put("specs/a/notes.md", "x\n");
     put(".ssh/config.txt", "x\n");
     put("fledge.toml", "x\n");
+    put(".fledge/lanes/notes.md", "x\n");
     symlinkSync(join(project, ".env"), join(project, "innocent.txt"));
+    symlinkSync(join(project, ".fledge", "lanes", "notes.md"), join(project, "lane-notes.md"));
     symlinkSync(join(outside, "leak.txt"), join(project, "escape.txt"));
     symlinkSync(join(project, ".git"), join(project, "gitlink"));
     for (const p of [
@@ -431,6 +433,8 @@ describe("discord-send-file plugin (REQ-discord-476, DISCORD-17)", () => {
       "specs/a/notes.md",
       ".ssh/config.txt",
       "fledge.toml",
+      ".fledge/lanes/notes.md",
+      "lane-notes.md",
       "innocent.txt",
       "escape.txt",
       "gitlink/notes.txt",

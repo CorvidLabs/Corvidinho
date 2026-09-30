@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "safe-2-a-the-file-tools-refuse-fledge-like-fledge-toml-and-specs-so-a-run-cannot-weaken-the-verify-lane-it-is-judged-by",
+  "slug": "safe-2-a-the-file-tools-refuse-fledge-like-fledge-toml-and-specs-so-a-run-cannot-weaken-the-verify-lane-it-is-judged-by",
+  "title": "SAFE-2.a: the file tools refuse .fledge/ like fledge.toml and specs/, so a run cannot weaken the verify lane it is judged by",
+  "description": "SAFE-2.a: the file tools refuse .fledge/ like fledge.toml and specs/, so a run cannot weaken the verify lane it is judged by",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "1d28c493ce59084e4a2a8cb09c3f7fc278289b0e",
+  "created_at": 1790727096,
+  "updated_at": 1790729865,
+  "affected_specs": [
+    "plugins",
+    "discord"
+  ],
+  "affected_paths": [
+    "hi/safe.md",
+    "INTENT.md",
+    "plugins/files/protectedPaths.ts",
+    "plugins/discord/send-file.ts",
+    "tests/files.plugins.test.ts",
+    "tests/git.plugins.test.ts",
+    "tests/discord.send-file.test.ts",
+    "docs/discord.md",
+    "specs/plugins/plugins.spec.md",
+    "specs/plugins/requirements.md",
+    "specs/plugins/testing.md",
+    "specs/discord/discord.spec.md",
+    "specs/discord/requirements.md",
+    "specs/discord/testing.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "files-write, files-edit and files-delete refuse any path with a .fledge component (existing lane and config files, a new lane file, a file planted as .fledge itself, ./ and ../ spellings, an absolute path, other letter case, a symlink to a lane file, a path through a symlink to .fledge/lanes, a dangling symlink to a missing lane file) with the same SAFE-2 refusal (exit 2) and the files unchanged or not created; files-read and files-list of .fledge/ still work; git-commit refuses to stage the deletion of a .fledge/ file (exit 2, SAFE-2) and nothing is staged; discord-send-file refuses a .fledge/ file and a link to one like the rest of the SAFE-2 set; each of these tests fails on main's source"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

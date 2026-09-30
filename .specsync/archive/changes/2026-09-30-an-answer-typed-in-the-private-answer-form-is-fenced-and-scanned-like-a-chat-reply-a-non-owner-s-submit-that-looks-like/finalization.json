@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "an-answer-typed-in-the-private-answer-form-is-fenced-and-scanned-like-a-chat-reply-a-non-owner-s-submit-that-looks-like",
+  "implementation_commit": "d4446fb70cbf56d05d9defab812249edcadd23e8",
+  "implementation_tree": "0b704b4edf6b92e74e8da61b87798ad2399e9f4b",
+  "contract_digest": "f76ddc6d7a31c369745f7e6b72c4a41dbcec8eb93236803fc411b1dd62f4e7e0",
+  "workspace_digest": "3db4a6f5b5002588bd9054d74d63a30f986c8c501c475cefb0fb5123457c6504",
+  "closing_digest": "8ed379a7cd70ec52731ea3de9fe83969387972bff1e61260407ae3d89bb694d2",
+  "review_digest": "5b60e82c43efe4c600e96b8790435b54af9b9f7dc631289b2aaea995f1e54239",
+  "finalization_digest": "0a9d7a181b874a6593a7007f1ace0fea084da3d0d418da5b31367ed128405452",
+  "timestamp": 1790727881
+}

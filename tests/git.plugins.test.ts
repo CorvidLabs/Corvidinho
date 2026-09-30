@@ -646,6 +646,25 @@ describe("git-commit", () => {
     expect(g(repo, "diff", "--cached", "--name-only").trim()).toBe("");
   });
 
+  test("SAFE-2.a: the deletion of a .fledge/ lane or config file is refused (REQ-plugins-083 / REQ-plugins-182)", async () => {
+    const repo = makeRepo();
+    mkdirSync(join(repo, ".fledge", "lanes"), { recursive: true });
+    writeFileSync(join(repo, ".fledge", "lanes", "verify.toml"), "[lanes.verify]\n");
+    writeFileSync(join(repo, ".fledge", "config.toml"), "x = 1\n");
+    g(repo, "add", ".fledge");
+    g(repo, "commit", "-q", "-m", "lanes");
+
+    for (const rel of [".fledge/lanes/verify.toml", ".fledge/config.toml"]) {
+      unlinkSync(join(repo, rel));
+      const r = await run("git-commit", ["-m", "drop lane", rel], repo);
+      expect(r.ok).toBe(false);
+      expect(r.exitCode).toBe(2);
+      expect(r.error).toContain("SAFE-2");
+      expect(g(repo, "ls-files", rel).trim()).toBe(rel);
+    }
+    expect(g(repo, "diff", "--cached", "--name-only").trim()).toBe("");
+  });
+
   test("keystore directories are never staged; a change id that mentions keystores archives (REQ-plugins-182, SPECSYNC-4)", async () => {
     const repo = makeRepo();
     mkdirSync(join(repo, "keystore"));

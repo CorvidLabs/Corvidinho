@@ -271,7 +271,10 @@ Acceptance Criteria
 
 `files-write`, `files-edit`, and `files-delete` SHALL hard-refuse protected
 project infra with no override (SAFE-2): `.env` / `.env.*`, `.git` components,
-basename `fledge.toml`, basename `bunfig.toml` / `.bunfig.toml` (Bun runtime
+basename `fledge.toml`, any `.fledge` path component (Fledge lane imports
+and config such as `.fledge/lanes/*.toml`, which the verify gate runs, so a
+run cannot weaken the checks it is verified by: SAFE-2.a; reads stay
+allowed), basename `bunfig.toml` / `.bunfig.toml` (Bun runtime
 config whose `preload` would run code in spawned agents), paths under `specs/`
 or ending in `.spec.md`, SpecSync state under `.specsync/` (config, registry,
 version, archive, and `.specsync/changes` / `.specsync/changes/<id>`
@@ -293,6 +296,8 @@ Acceptance Criteria
 - In a project whose root directory name contains `keystore`, files-write (relative or absolute path) and files-edit of ordinary files succeed, and `keystore/…` inside it is still refused.
 - git-commit refuses to stage the deletion of `.specsync/config.toml` (exit 2, SAFE-2) and stages the deletion of a `.specsync/changes/<id>/` file.
 - files-write, files-edit and files-delete of a file under `specs/` that does not end in `.spec.md` (`specs/agent/requirements.md`, `specs/agent/context.md`) and files-write of a new `specs/notes.md` are refused with SAFE-2 (exit 2); the files are unchanged and the new file is not created (the test fails with the `specs` component rule removed).
+- files-write, files-edit and files-delete of `.fledge/lanes/verify.toml` and `.fledge/config.toml` (also spelled `./.fledge/…`, `src/../.fledge/…`, `.FLEDGE/…` or as an absolute path, through a symlink to the lane file or a symlink to `.fledge/lanes`), files-write of a new `.fledge/lanes/extra.toml`, of a dangling symlink to a missing lane file and of `.fledge` itself in a project without one are refused with the SAFE-2 refusal (exit 2, text names `.fledge`); the files are unchanged and nothing is created; files-read and files-list of `.fledge/` still work (SAFE-2.a; the test fails with the `.fledge` component rule removed).
+- git-commit refuses to stage the deletion of a tracked `.fledge/lanes/verify.toml` or `.fledge/config.toml` (exit 2, SAFE-2); the path stays in `ls-files` and nothing is staged (SAFE-2.a; fails with the `.fledge` rule removed).
 
 ### REQ-plugins-084
 
@@ -1361,12 +1366,13 @@ ranked search (MEMORY-8 / MEMORY-9, #67). When a run has no Discord actor
 and the WATCH spawn set a GitHub commenter (`CORVIDINHO_ACTING_GITHUB_LOGIN`
 / `CORVIDINHO_ACTING_GITHUB_ID`, the thread's `CORVIDINHO_ACTING_GITHUB_REPO`;
 env only, never argv, REQ-watch-067), the acting subject SHALL be the
-commenter's declared person: their GitHub numeric id / login matched in the
+commenter's declared person: their GitHub numeric id matched in the
 owner's people list re-read at the call (`memorySubjectForGithub`, stable
-ids only, IDENTITY-7; a login whose known numeric id differs from the
-declared ones matches nobody), the same `person:<id>` profile and read
-scopes as on Discord; the configured owner not declared under `[people]`
-SHALL use their Discord-id scope. A Discord actor SHALL always win over the
+ids only, IDENTITY-7; the numeric id only, never the login, IDENTITY-7.a,
+REQ-discord-367 — a login alone, or with another numeric id, matches
+nobody), the same `person:<id>` profile and read scopes as on Discord; the
+configured owner not declared under `[people]` (recognised by `[owner]
+github_id`) SHALL use their Discord-id scope. A Discord actor SHALL always win over the
 GitHub keys.
 
 For a declared commenter `memory-store` / `memory-recall` /
@@ -1396,8 +1402,8 @@ does not know (MEMORY-9), and the `memory-store` / `memory-recall`
 descriptions SHALL say how they work on GitHub.
 
 Acceptance Criteria
-- In a GitHub-shaped env a declared commenter (numeric id or login, any case) stores into `person:<id>`, recalls with a plain-words `--query` and reads `memory-profile`; the same rows are read from Discord; the `[owner]` GitHub login recalls the owner's Discord-id memory.
-- On GitHub private notes, `memory-forget-me` and `--person` (any other ref) are refused and another person's rows never show; a login whose numeric id differs saves nothing.
+- In a GitHub-shaped env a declared commenter (by numeric id, under any login) stores into `person:<id>`, recalls with a plain-words `--query` and reads `memory-profile`; the same rows are read from Discord; the `[owner] github_id` recalls the owner's Discord-id memory and the `[owner]` login alone recalls nothing.
+- On GitHub private notes, `memory-forget-me` and `--person` (any other ref) are refused and another person's rows never show; a login whose numeric id differs, or with no id, saves nothing.
 - An undeclared commenter saves nothing (own or `--project`), has no personal recall and reads only the thread repo's project memory with `--project`.
 - A Discord actor wins over stale GitHub keys.
 - `tests/memory.recall-github.test.ts` covers each and fails on the stacked base sources.

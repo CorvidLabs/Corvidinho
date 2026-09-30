@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "719f95d66002280d0f4f52a6883d6c0fb932dea2",
+  "contract_digest": "9b102567f96220ac4f10bb554afc75a4fcbade21202d695ed9311697b33f2e8d",
+  "execution_digest": "018ebdbcfef2694b142d2378f0547e855a72b7614345f23a10932397044c525e",
+  "workspace_digest": "f17df25105affea56b09adde59e5575ab75a9fd530efe15d938cf9a63b3ec1b9",
+  "timestamp": 1790731616
+}

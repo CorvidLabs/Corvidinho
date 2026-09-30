@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "updater-changelog-extraction-stays-linear-on-a-large-utf-8-section-the-release-notes-check-no-longer-takes-seconds",
+  "slug": "updater-changelog-extraction-stays-linear-on-a-large-utf-8-section-the-release-notes-check-no-longer-takes-seconds",
+  "title": "Updater changelog extraction stays linear on a large UTF-8 section (the release notes check no longer takes seconds)",
+  "description": "Updater changelog extraction stays linear on a large UTF-8 section (the release notes check no longer takes seconds)",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "ba1f819eab26eb829d1f0018240eac860cdf09d2",
+  "created_at": 1790725194,
+  "updated_at": 1790725241,
+  "affected_specs": [],
+  "affected_paths": [
+    "scripts/lib/update-helpers.sh",
+    "tests/update-helpers.test.ts"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Performance fix in the bash updater helper: extract_changelog_section's emptiness check used ${out// }, which is quadratic in a UTF-8 locale; replaced by an equivalent linear regex. Behaviour and output are unchanged, so no requirement text changes.",
+  "acceptance_criteria": [
+    "extract_changelog_section returns the same section as before; on a 400 KB UTF-8 section under LC_ALL=C.UTF-8 it finishes in under 2 s (tests/update-helpers.test.ts), and the 0.0.34 section extracts well inside the 5 s test timeout on CI"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

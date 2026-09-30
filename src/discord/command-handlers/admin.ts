@@ -9,6 +9,10 @@
  *   /admin people add person:<id> [display:<name>]
  *   /admin people link|unlink person:<id> [discord:@x] [github:<login>]
  *                             [github_id:<n>] [nickname:<text>]
+ *                                         (link github: looks the login's
+ *                                         numeric user id up once and stores
+ *                                         it — GitHub matches on that id
+ *                                         only, IDENTITY-7.a)
  *   /admin people remove person:<id>      ADMIN-3.a add, change, remove people
  *                                         and their links (IDENTITY-6: only
  *                                         here or in the file on the VM)
@@ -43,12 +47,18 @@ import {
 import {
   DEFAULT_PERSON_ROLE,
   loadDeclaredPeople,
+  normalizeGithubId,
   OWNER_PERSON_ID,
+  validGithubLogin,
   type DeclaredPerson,
   type PeopleDirectory,
   type PersonLinkKind,
   type PersonRole,
 } from "../../identity/people.ts";
+import {
+  createGithubUserLookup,
+  type GithubUserLookupResult,
+} from "../../identity/github-user.ts";
 import {
   commitPeopleChange,
   formatPersonLink,
@@ -377,21 +387,54 @@ async function handlePeopleMutation(
     await interaction.reply({ content: PEOPLE_USAGE[op], ephemeral: true });
     return;
   }
-  const args = [
+  const argsNow = (): string[] => [
     ...route,
     person.toLowerCase(),
     ...(display !== undefined ? [`display:${display}`] : []),
     ...links.map((l) => `${l.kind}:${l.value}`),
     ...(role !== undefined ? [`role:${role.toLowerCase()}`] : []),
   ];
+  const planNow = (): ReturnType<typeof planPeopleChange> =>
+    planPeopleChange({
+      allowlist: ctx.allowlist,
+      owner: ctx.owner,
+      env: ctx.env ?? process.env,
+      request: { op, personId: person, display, links, ...(role !== undefined ? { role } : {}) },
+    });
 
   // Plan, audit intent, commit: all synchronous, so no interleaving.
-  const planned = planPeopleChange({
-    allowlist: ctx.allowlist,
-    owner: ctx.owner,
-    env: ctx.env ?? process.env,
-    request: { op, personId: person, display, links, ...(role !== undefined ? { role } : {}) },
-  });
+  let planned = planNow();
+
+  // IDENTITY-7.a: on GitHub people match only by numeric user id, so `link
+  // github:<login>` looks the login's id up once, now, and links it too (also
+  // for a login that is already linked). The request is planned first, so a
+  // refusal keeps its own reason; a failed lookup links nothing. The final
+  // plan and the commit stay synchronous.
+  const githubLogin = op === "link" ? validGithubLogin(links.find((l) => l.kind === "github")?.value) : undefined;
+  if (planned.ok && githubLogin) {
+    await interaction.deferReply?.({ ephemeral: true });
+    const lookup = ctx.lookupGithubUser ?? createGithubUserLookup(ctx.env ?? process.env);
+    let found: GithubUserLookupResult;
+    try {
+      found = await lookup(githubLogin);
+    } catch {
+      found = { ok: false, error: "GitHub lookup failed" };
+    }
+    if (!found.ok || found.login !== githubLogin) {
+      const why = found.ok ? `GitHub answered for @${found.login}` : found.error;
+      auditSoft(ctx, auditEntry(interaction, action, "error", argsNow()));
+      await interaction.reply({
+        content: `Refused: could not look up the GitHub numeric user id of @${githubLogin} (${why}). On GitHub people match only by that id (IDENTITY-7.a). Nothing changed — try again, or link github_id:<number>.`,
+        ephemeral: true,
+      });
+      return;
+    }
+    if (!links.some((l) => l.kind === "github_id" && normalizeGithubId(l.value) === found.id)) {
+      links.push({ kind: "github_id", value: found.id });
+    }
+    planned = planNow();
+  }
+  const args = argsNow();
   if (!planned.ok) {
     auditSoft(ctx, auditEntry(interaction, action, planned.kind === "refused" ? "denied" : "error", args));
     await interaction.reply({
@@ -578,6 +621,12 @@ function formatPeopleApplied(
         `${plan.op === "link" ? "Already linked" : "Not linked"} (unchanged): ${plan.unchanged.map(formatPersonLink).join(", ")}.`,
       );
     }
+    // IDENTITY-7.a: a login is a label; the numeric id is what matches.
+    if (plan.op === "unlink" && plan.changed.some((l) => l.kind === "github") && (plan.after?.githubIds.length ?? 0) > 0) {
+      lines.push(
+        `GitHub id ${plan.after!.githubIds.join(", ")} stays linked, so GitHub still recognises them — unlink github_id to stop that (IDENTITY-7.a).`,
+      );
+    }
   }
   lines.push(
     `File \`${plan.path}\`${plan.exists ? "" : " (created)"}: people ${plan.countBefore} → ${plan.countAfter}. Takes effect on the next message or comment — no restart.`,
@@ -620,7 +669,7 @@ export function formatPeopleList(ctx: SlashContext): string {
   const tail: string[] = [];
   if (dir.issues.length > 0) tail.push(`⚠️ ${dir.issues.length} problem(s): ${dir.issues.join("; ")}`);
   tail.push(
-    "Matched on Discord user ids and GitHub ids / logins only, never on names. Change with /admin people add|link|unlink|remove|role (audited) or in the file on the VM — never through chat. Roles: owner, team, community (IDENTITY-8); undeclared is community.",
+    "Matched on Discord user ids and GitHub numeric user ids only — never on GitHub logins or names (IDENTITY-7.a). Change with /admin people add|link|unlink|remove|role (audited) or in the file on the VM — never through chat. Roles: owner, team, community (IDENTITY-8); undeclared is community.",
   );
   const out = [...head];
   let used = [...head, ...tail].join("\n").length;
