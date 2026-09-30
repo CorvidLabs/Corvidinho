@@ -247,6 +247,25 @@
         "REQ-discord-065",
         "REQ-discord-088"
       ]
+    },
+    {
+      "timestamp": 1790733974,
+      "commit": "dd405b2e0cf60d9589a1cd2d6b4d6c3ab7656ccb",
+      "contract_digest": "2775ca182e6a19603fa0455693c6734d1cbef3c8aaa130450e74a029ae96dc50",
+      "execution_digest": "b3f028083142c265c870eaeb88b92523d6a8db9f2a276f928ab893289607261c",
+      "workspace_digest": "1573f6fd52f684186f4a2d29ebeef73d2796f0784fd20ffdcabb4537aebd6241",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-discord-065",
+        "REQ-discord-088"
+      ]
     }
   ]
 }
