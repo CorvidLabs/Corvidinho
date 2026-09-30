@@ -55,6 +55,7 @@ import { scrubSecrets } from "../../src/store/scrub.ts";
 import { isSecretPath } from "../files/protectedPaths.ts";
 import { isInsideRoot, realRoot } from "../files/resolvePath.ts";
 import { cleanText } from "./discover.ts";
+import { fledgeLanesRunMustAsk, fledgeRunMustAsk } from "./must-ask.ts";
 import { spawnCapped, type SpawnCappedResult } from "./spawn.ts";
 
 export const FLEDGE_CORE_COMMAND_NAMES = [
@@ -421,6 +422,8 @@ export function fledgeCoreCommands(opts: FledgeCoreOptions = {}): PluginCommand[
         'Run one of the project\'s Fledge lanes (fledge lanes run <lane>), e.g. ["verify"]. Runs the project\'s own commands: dangerous + minTier=code.',
       dangerous: true,
       minTier: 2,
+      // AUTONOMY-9/9.a: a lane whose commands touch prod or deploys asks first.
+      mustAsk: fledgeLanesRunMustAsk,
       async handler(ctx) {
         const name = "fledge-lanes-run";
         const lane = ctx.args[0];
@@ -439,6 +442,8 @@ export function fledgeCoreCommands(opts: FledgeCoreOptions = {}): PluginCommand[
         'Run one fledge.toml task (fledge run <task> -- <args>), e.g. ["test"] or ["test","--bail"]; args after the task go to its command verbatim. Runs the project\'s own commands: dangerous + minTier=code.',
       dangerous: true,
       minTier: 2,
+      // AUTONOMY-9/9.a: a task whose commands touch prod or deploys asks first.
+      mustAsk: fledgeRunMustAsk,
       async handler(ctx) {
         const name = "fledge-run";
         const task = ctx.args[0];

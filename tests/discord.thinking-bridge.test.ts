@@ -18,6 +18,12 @@ import {
   THINKING_COLORS,
   type DiscordEmbedPayload,
 } from "../src/discord/thinking-status.ts";
+import { useConfiguredModel } from "./fixtures/fake-llm.ts";
+
+// The footer names the configured model; there is no built-in default
+// (AGENT-13), so this file configures one (a priced id; the stub agent calls
+// no model).
+useConfiguredModel();
 
 /** DISCORD-15: an answer footer is `<before> | <time> [| <after>]` (time from the real clock). */
 function answerFooterText(before: string, after?: string) {

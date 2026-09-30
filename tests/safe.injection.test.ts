@@ -409,7 +409,7 @@ describe("SAFE-12: bodies are fenced as data; only the sender's role decides wha
       const bodies: Array<{ messages: Array<{ role: string; content: string }> }> = [];
       const exec = createTaskExecute({
         taskText: "hello",
-        env: { CORVIDINHO_LLM_API_KEY: "test-key-not-real", CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1" },
+        env: { CORVIDINHO_LLM_API_KEY: "test-key-not-real", CORVIDINHO_LLM_MODEL: "test-model", CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1" },
         tier,
         loadPlugins: false,
         projectInstructions: false,
@@ -438,6 +438,7 @@ describe("SAFE-12: bodies are fenced as data; only the sender's role decides wha
       cwd: d,
       env: {
         CORVIDINHO_LLM_API_KEY: "test-key-not-real",
+        CORVIDINHO_LLM_MODEL: "test-model",
         CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
         CORVIDINHO_ALLOWLIST_FILE: path,
         CORVIDINHO_ACTING_IS_ADMIN: "0",
@@ -1305,6 +1306,7 @@ describe("SAFE-12/13 in the tool loop: third-party results are fenced; a hit dro
       taskText: "triage the open issues",
       env: {
         CORVIDINHO_LLM_API_KEY: "test-key-not-real",
+        CORVIDINHO_LLM_MODEL: "test-model",
         CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
         CORVIDINHO_DATA_DIR: dataDir,
       },
@@ -1373,6 +1375,7 @@ describe("SAFE-13 through delegate / council workers and memory-store (review of
 
   const LLM_ENV = {
     CORVIDINHO_LLM_API_KEY: "test-key-not-real",
+    CORVIDINHO_LLM_MODEL: "test-model",
     CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
   };
   const call = (id: string, name: string, args: unknown) => ({

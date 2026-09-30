@@ -51,11 +51,56 @@ export type PluginHandlerResult = {
   privateText?: string;
 };
 
+/**
+ * Must-ask classes a command's call can fall in (AUTONOMY-9/10,
+ * src/plugins/must-ask.ts `MUST_ASK_POLICY`): `prod` touches prod or
+ * deploys (VPS, secrets, env, DNS; a push to a remote's default branch),
+ * `public` is a channel post it makes. Spend over a cap (AUTONOMY-8) is the
+ * SAFE-8 spend guard's, not a command class.
+ */
+export type MustAskClass = "prod" | "public";
+
+/** One call that must wait for the owner's Approve card, as its card shows it (SAFE-18). */
+export type MustAskAsk = {
+  class: MustAskClass;
+  /** One line: why this call must ask (the card's action and every refusal say it). */
+  why: string;
+  /** The card's exact target line. */
+  target: string;
+  /** The exact text or command, sent verbatim before the card. */
+  text?: string;
+};
+
+/**
+ * What a command's must-ask classifier says about one call: null runs it
+ * with no ask (AUTONOMY-11); `ask` waits for the owner's card; `refuse`
+ * returns that result as is (the command would refuse this call anyway, so
+ * nothing runs and no card is raised).
+ */
+export type MustAskVerdict = null | { ask: MustAskAsk } | { refuse: PluginHandlerResult };
+
+/**
+ * Classifies a call from its args and the files and config they name —
+ * never from model text about the call, so a prompt can't reclassify an
+ * action (#97).
+ */
+export type MustAskClassifier = (ctx: {
+  args: string[];
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+}) => MustAskVerdict | Promise<MustAskVerdict>;
+
 export type PluginCommand = {
   name: string;
   description: string;
   /** When true, blocked in non-interactive unless allowlisted (SAFE-1 / CLI-3). */
   dangerous?: boolean;
+  /**
+   * AUTONOMY-9/10: a class (every call asks) or a classifier (the call's
+   * args decide). Missing ⇒ never must-ask (AUTONOMY-11). Enforced in
+   * `runPlugin` (src/plugins/must-ask.ts).
+   */
+  mustAsk?: MustAskClass | MustAskClassifier;
   /**
    * When true, treated as mutating even if `dangerous` is false (ROLES-CHAT-5).
    * Non-ADMIN acting sessions never see or run mutating tools.

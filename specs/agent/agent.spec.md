@@ -55,6 +55,9 @@ files:
   - tests/agent.loop-guards.test.ts
   - tests/agent.test-evidence.test.ts
   - tests/fixtures/lane-output.ts
+  - src/agent/providers.ts
+  - tests/agent.providers.test.ts
+  - tests/fixtures/fake-llm.ts
 
 db_tables: []
 depends_on:
@@ -65,7 +68,17 @@ depends_on:
 
 ## Purpose
 
-Root guidance-only `agent.3md` + `@corvidlabs/agent3md` packaging (REQ-agent-260): validate/route/get smoke only; agent loop does not load planes for progressive disclosure until AGENT-13 is HI'd.
+Root guidance-only `agent.3md` + `@corvidlabs/agent3md` packaging (REQ-agent-260): validate/route/get smoke only; agent loop does not load planes for progressive disclosure until that is HI'd separately (the captured AGENT-13 is model providers, not this).
+
+Model providers (AGENT-13 / AGENT-10, REQ-agent-179; `src/agent/providers.ts`):
+the operator configures every model, and none is built in as a default.
+`CORVIDINHO_LLM_MODEL` and the per-tier keys hold `kind:model` entries
+(`openai`, `ollama`, `anthropic`; a bare or unknown prefix is
+OpenAI-compatible), each with its vendor endpoint and key, all over the one
+OpenAI-compatible chat transport and the SAFE-8 guard. Only a tier's first
+entry is called (the AGENT-11 fallback is a later change; no headless-CLI kind
+yet). With no usable provider for the run's tier the attempt calls nothing and
+fails with the no-provider notice; there is no demo stub.
 
 Agent execute tool-loop also carries MEMORY instructions (AGENT-7 / MEMORY-2/4)
 so Discord/CLI chats trust injected facts and call memory-store/recall
@@ -120,7 +133,10 @@ NDJSON event stream (REQ-agent-073, issue #73): `src/agent/events-ndjson.ts`
 owns `CORVIDINHO_PROTOCOL_VERSION` (2) and exports `frameFromEvent`,
 `usageFrame`, `resultFrame`, `serializeFrame`, `createNdjsonWriter`,
 `summarizeToolArgs`, `parseNdjsonLine`, `createNdjsonParser`,
-`readNdjsonStream`, `progressFromFrame`, `collectTaskRunStream`. Frames:
+`readNdjsonStream`, `progressFromFrame`, `collectTaskRunStream`,
+`MUST_ASK_WAIT_TEXT_RE` and `MUST_ASK_WAIT_STATUS` (`progressFromFrame` shows
+only one `Text` frame: the must-ask gate's wait line, as "waiting for the
+owner's OK on an Approve card" — REQ-agent-097). Frames:
 `{protocol, type}` with AgentEvent types `StateChanged` / `Text` / `ToolCall`
 (`name`, `argsSummary`) / `ToolResult` / `VerifyResult`, plus `usage`
 (running prompt / completion / total tokens) and a final `result`
@@ -132,12 +148,27 @@ it, DISCORD-15) and takes an optional `bodyMax` for the result-frame chat body
 and splits the answer itself, DISCORD-16).
 
 Per-tier model (REQ-agent-079, AGENT-5): `src/agent/tier.ts` exports
-`TIER_MODEL_ENV` (`CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`),
-`DEFAULT_LLM_MODEL` (`gpt-4o-mini`) and `modelForTier(env, tier)` (tier key,
-else `CORVIDINHO_LLM_MODEL`, else the default). `loadLlmEnv(env, tier?)` takes
-an explicit tier over `CORVIDINHO_LLM_TIER` and returns that tier's model;
-`createTaskExecute` passes its `tier` so `--tier` picks the model. Endpoint and
-key stay shared. `modelKeyForTier(env, tier)` names the key that set a tier's
+`TIER_MODEL_ENV` (`CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`) and
+`modelForTier(env, tier)` (the first entry of the tier key, else of
+`CORVIDINHO_LLM_MODEL`, without its `kind:` prefix; `""` when none — there is
+no default model, AGENT-13). `loadLlmEnv(env, tier?)` takes an explicit tier
+over `CORVIDINHO_LLM_TIER` and returns that tier's provider (`kind`,
+`baseUrl`, `apiKey`, `model`) and its no-provider `notice` (null when usable);
+`createTaskExecute` passes its `tier` so `--tier` picks the model.
+
+Providers (REQ-agent-179, AGENT-13 / AGENT-10): `src/agent/providers.ts`
+exports `PROVIDER_KINDS`, `parseModelEntry` / `parseModelChain` (comma list;
+split on the first `:` only for a known kind), `modelChainForTier` (`[]` when
+nothing is set), `resolveEntry` (openai: `CORVIDINHO_LLM_BASE_URL`, default
+`https://api.openai.com/v1`, key `CORVIDINHO_LLM_API_KEY` or
+`OPENAI_API_KEY`; ollama: `ollamaHostUrl` from `OLLAMA_HOST`, default
+`http://127.0.0.1:11434`, `/v1`, no key; anthropic: `ANTHROPIC_BASE_URL`,
+key `ANTHROPIC_API_KEY`; `usable` false when the kind's key is missing),
+`providerId` (the endpoint host, as the SAFE-8 ledger records it),
+`providerForTier`, `entryLabel`, `defaultProviderLabel`, `providerNotice(env,
+tiers?)` (starts with `NO_PROVIDER_NOTICE`, names the tiers and the missing
+setting or key, never a value), and `providerStatus`. The chat transport sends
+`authorization: Bearer <key>` only when the kind has a key. `modelKeyForTier(env, tier)` names the key that set a tier's
 model (the SAFE-8 unpriced ask names it via `createSpendGuard({ modelKey })`),
 and `perTierModels(env)` lists each tier's model when any per-tier key is set
 (doctor `[ok] llm`; `readSpendSnapshot` flags an unpriced tier model with its
@@ -304,7 +335,11 @@ Ask the human (REQ-agent-044, issue #44, AUTONOMY-1/2/7 / DISCORD-ASK):
 `src/agent/ask.ts` exports `ASK_TOOL_NAME` (`ask-human`), `withAskTool`,
 `askFromToolArguments`, `askFromUnknown`, `formatAskSummary`, `stuckAfterVerifyAsk`,
 `ASK_AGENT_SYSTEM_INSTRUCTIONS` (AUTONOMY-7 + prefer `options` / numbered choices
-for ephemeral Discord buttons). `src/agent/ask-options.ts` exports
+for ephemeral Discord buttons + the one AUTONOMY-11 sentence: anything inside
+its guardrails it just does and then says what it did; only prod or deploy
+contact and channel posts need the owner's OK, which the tool itself waits
+for on the Approve card, so it never calls ask-human for permission first and
+never repeats a call the owner denied — REQ-agent-097). `src/agent/ask-options.ts` exports
 `resolveAskOptions` / `parseChoicesFromQuestion` / `normalizeAskOptions`
 (option ids come out unique within an ask: a repeated id takes the first
 unused position number, and already-unique ids are kept byte-identical,
@@ -701,6 +736,12 @@ instructions for …" or a browser's developer mode do not count.
 - **When** an issue title reads like an instruction to set aside the previous instructions
 - **Then** the tool message starts with the SAFE-13 note and holds the result inside an `UNTRUSTED_DATA` fence, the next request offers no mutating tool, a `files-write` call is refused and writes nothing, `onInjection` gets `{ source: "github-issue-list", reasons: ["ignore-rules"] }`, an `injection-suspected` row is audited, and the summary ends with the "didn't act on it" note (REQ-agent-071)
 
+### Scenario: no model is configured
+
+- **Given** `task run` with an LLM key but no `CORVIDINHO_LLM_MODEL` (an old key-only setup)
+- **When** the run starts
+- **Then** the no-provider notice is the first stderr line (text output), no provider is called, and the run ends `failed` with that notice as its summary and no files; there is no `gpt-4o-mini` default and no demo answer (REQ-agent-179)
+
 ### Scenario: the model repeats a failing call
 
 - **Given** a tool-tier run whose model calls `files-read` on a missing file
@@ -727,6 +768,7 @@ instructions for …" or a browser's developer mode do not count.
 | Test names cannot be read (baseline git cannot give, a test file over 4 MiB or unreadable, over 2000 changed test files, a non-git walk over 20000 entries) | fail closed: not verified, with a "could not read the test files" note (REQ-agent-185) |
 | Real diff of thousands of paths (an install, a branch switch) | at most `WORKSPACE_DIFF_MAX_FILES` join filesChanged, the note counts them all, verify runs; the NDJSON result line stays under the parser cap (REQ-agent-085) |
 | Retry after a failed verify changes no files | filesChanged is the union across attempts, so verify runs again; never done unless it passes (REQ-agent-242) |
+| No usable provider for the run's tier (no entry, or the kind's key unset) | no provider call; `ExecuteResult.error` with the no-provider notice as summary; state failed, no files, no verify; `task run` exits 1 (REQ-agent-179) |
 | Provider / HTTP / network failure in execute | `ExecuteResult.error`; state failed, verified=false, summary is the provider error (then the earlier verify output when a verify already failed), `task run` exits 1 (REQ-agent-242) |
 | Model calls ask-human | state blocked, verifySkipped=true, `ask` reason clarify, summary `Needs your input: …` |
 | ask-human with empty question | ToolResult success=false fed back to the model; loop continues |
@@ -838,3 +880,5 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-30 | when-it-repeats-a-failing-call-it-is-steered-to-change-approach-then-asks-a-stuck-github-run-pings-the-owner-on-discord: When it repeats a failing call it is steered to change approach, then asks; a stuck GitHub run pings the owner on Discord (AGENT-16, AGENT-16.a) |
 | 2026-09-30 | only-the-owner-sees-spend-amounts-and-cap-settings-on-discord-everyone-else-sees-only-work-is-paused-for-budget-safe-14: Only the owner sees spend amounts and cap settings on Discord; everyone else sees only 'Work is paused for budget.' (SAFE-14.a): spend-cap posts, the /work PR line, the slash owner notice and SPEND_CAP_SUMMARY say only that; the question quote is dropped on every path including the daemon pending-ask pass; the 80% warning never rides a channel post and, with a cap stop's details, goes to the owner by DM (src/discord/spend-dm.ts, retried every scheduler tick); the /status spend line is owner-only |
 | 2026-09-30 | verified-requires-that-tests-actually-ran-and-none-were-deleted-agent-15-a-passing-verify-lane-counts-only-when-its: 'Verified' requires that tests actually ran and none were deleted (AGENT-15): a passing verify lane counts only when its output has a recognised test summary (bun test, jest, vitest, cargo test, pytest, go test) with at least one executed test and no test active at the baseline was deleted, retitled or turned off (skip, todo, silenced by only), by name across the repo root; non-git projects walk their test files at run start; /work checks the tree against the merge-base before commit and push |
+| 2026-09-30 | it-asks-me-on-an-approve-card-before-touching-prod-or-deploys-or-making-a-channel-post-anything-else-it-just-does-and: It asks me on an Approve card before touching prod or deploys or making a channel post; anything else it just does and tells me (AUTONOMY-9/9.a, AUTONOMY-10/10.a channel posts, AUTONOMY-11, #97) |
+| 2026-09-30 | i-configure-the-models-openai-compatible-ollama-anthropic-with-no-built-in-default-and-it-says-so-when-none-is-set: I configure the models (OpenAI-compatible, Ollama, Anthropic) with no built-in default, and it says so when none is set (AGENT-13, AGENT-10) |

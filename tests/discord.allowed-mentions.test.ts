@@ -28,6 +28,7 @@ import {
 import type { BridgeConfig } from "../src/discord/types.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { runPlugin } from "../src/plugins/run.ts";
+import { answerMustAsk } from "./fixtures/must-ask.ts";
 import { SchedulerService } from "../src/scheduler/service.ts";
 import { ScheduleStore } from "../src/scheduler/store.ts";
 import { teamPeopleFile } from "./fixtures/team-people.ts";
@@ -583,16 +584,25 @@ describe("discord-post-message parses no mentions (REQ-discord-205)", () => {
     }) as unknown as typeof fetch;
 
     loadBuiltins();
-    const r = await runPlugin({
-      name: "discord-post-message",
-      args: ["--channel", "999", "--content", HOSTILE],
-      nonInteractive: true,
-      allowlist: ["discord-post-message"],
-    });
+    // AUTONOMY-10/10.a: the post waits for the owner's OK (approved here);
+    // the card shows exactly the defanged text that is posted.
+    const card = answerMustAsk("approved");
+    let r;
+    try {
+      r = await runPlugin({
+        name: "discord-post-message",
+        args: ["--channel", "999", "--content", HOSTILE],
+        nonInteractive: true,
+        allowlist: ["discord-post-message"],
+      });
+    } finally {
+      card.restore();
+    }
     expect(r.ok).toBe(true);
     expect(bodies).toHaveLength(1);
     expect(bodies[0]!.allowed_mentions).toEqual({ parse: [] });
     expect(bodies[0]!.content).not.toMatch(/@(everyone|here)\b/i);
     expect(bodies[0]!.content).toContain(`<@&${ROLE_ID}>`);
+    expect(card.requests.map((q) => q.text)).toEqual([bodies[0]!.content]);
   });
 });

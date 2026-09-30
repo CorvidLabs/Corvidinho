@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "it-asks-me-on-an-approve-card-before-touching-prod-or-deploys-or-making-a-channel-post-anything-else-it-just-does-and",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "a678d26bb3426e5d70d8a81a0bc9d5537bab417c",
+      "contract_digest": "1c4177976a07bb53c9e2d9b1456525d5db531e9773d1f2e25985a2553de08e65",
+      "execution_digest": "f3ef2a8208c0c9d52ecc7acc6d0ec9656564b38818250d40214572912db3a642",
+      "workspace_digest": "580e1ef6a3c519bf47620fb8f5aef27df3d665c8bceda4c555a2926f1499a9f6",
+      "timestamp": 1790779711
+    }
+  ]
+}

@@ -5,6 +5,8 @@
  * SAFE-14.a: the spend line (amounts, cap, setting names) only for the owner
  * (ADMIN, re-checked here); anyone else sees at most "Work is paused for
  * budget." while runs stop at the cap.
+ * AGENT-10: the LLM line says when no model provider is configured; the
+ * setting names to fix it are for the owner only, like the spend line.
  */
 
 import { formatOwnerStatus } from "../../identity/owner.ts";
@@ -40,6 +42,12 @@ export type StatusReportInput = {
   env?: NodeJS.ProcessEnv;
   /** Optional precomputed LLM line (tests). */
   llmLine?: string;
+  /**
+   * AGENT-10 / SAFE-14.a: the invoker is the owner, who sees the
+   * no-provider notice's details (setting names); anyone else sees only that
+   * no provider is configured. Default false.
+   */
+  ownerView?: boolean;
   /** Optional git tip short SHA. */
   gitTipSha?: string;
   /** Slash names to list (defaults to registered set). */
@@ -61,7 +69,9 @@ export type StatusReportInput = {
 export function formatStatusReport(input: StatusReportInput): string {
   const now = input.now ?? Date.now();
   const uptimeSec = Math.max(0, Math.floor((now - input.startedAt) / 1000));
-  const llmLine = input.llmLine ?? formatLlmStatusLine(input.env ?? process.env);
+  const llmLine =
+    input.llmLine ??
+    formatLlmStatusLine(input.env ?? process.env, { ownerView: input.ownerView ?? false });
   const names = input.slashNames ?? SLASH_COMMAND_NAMES;
   const lines = [
     `**Corvidinho** v${input.version}`,
@@ -116,6 +126,7 @@ export async function handleStatusCommand(
   const workFailed = ctx.workStore.countByStatus("failed");
   const workBlocked = ctx.workStore.countByStatus("blocked");
 
+  const ownerView = isOwnerViewer(ctx, interaction);
   const content = formatStatusReport({
     version: ctx.version,
     protocolVersion: ctx.protocolVersion,
@@ -131,8 +142,10 @@ export async function handleStatusCommand(
     announceChannelId: ctx.announceStore?.getChannelId() ?? null,
     ownerLine: formatOwnerStatus(ctx.owner),
     auditLine: ctx.auditLine?.(),
-    // SAFE-14.a: amounts and cap settings for the owner only (IDENTITY-2).
-    spendLine: ctx.spendLine?.(isOwnerViewer(ctx, interaction)),
+    // SAFE-14.a: amounts and cap settings for the owner only (IDENTITY-2);
+    // AGENT-10: the no-provider notice's setting names too.
+    ownerView,
+    spendLine: ctx.spendLine?.(ownerView),
   });
 
   await interaction.reply({

@@ -1173,3 +1173,31 @@ summary, no plugin call; the same with a `bun test` summary → opened
 (`pre-push`), `git-commit` → `git-push` → `github-pr-create`. Both fail on
 the base (the PR opens). `tests/work.pr.test.ts`: the pre-push stub that
 must ship prints a `bun test` summary.
+## Must-ask cards and channel posts (REQ-discord-097, AUTONOMY-9.a / 10 / 10.a)
+
+`tests/must-ask.gate.test.ts` ("the bridge's card engine answers the gate's
+cards") — `mustAskApprovalKinds` on `createApprovalCards`: the gate's prod
+card goes out with its command first as quoted data, Approve alone runs
+nothing, Approve plus the one-time code runs it once; a channel-post card is
+plain (no code), one Approve runs the post and Deny runs nothing. ("a prompt
+can't reclassify an action") `discord-post-message` text claiming no OK is
+needed still raises the `mustask-post` card for `Discord channel 999` with the
+defanged text. `tests/discord.allowed-mentions.test.ts` — the card's text is
+exactly the body that is posted. `tests/discord.requester-perms.test.ts` —
+the DISCORD-8 checks run on an approved post (the refusals its own checks give
+raise no card).
+
+## No provider at start and in /status (REQ-discord-079, REQ-discord-015; AGENT-10)
+
+`tests/agent.providers.test.ts` — a dry-run bridge with no model warns
+`[discord] <notice>` once at start (none with a model); `/status` gives the
+owner the full notice and anyone else only "No model provider is
+configured." with no setting name; configured and partly configured lines.
+`tests/discord.slash.test.ts` ("/status reports metrics"), `tests/version.test.ts`
+(`formatLlmStatusLine` without `ownerView` gives the non-owner line, fail
+closed) and `tests/discord.spend.test.ts` (the non-owner body still has no
+`CORVIDINHO_`). Bridge footer tests configure a model for the file
+(`useConfiguredModel`, `tests/fixtures/fake-llm.ts`); the stub agent calls
+no model.
+- Fail on base: the startup and `/status` cases fail (no line; "demo stub").
+

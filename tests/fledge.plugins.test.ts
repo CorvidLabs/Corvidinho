@@ -553,7 +553,7 @@ describe("tool loop can call a Fledge plugin when dangerous tools are offered", 
     const exec = createTaskExecute({
       taskText: "x",
       cwd: fake.project,
-      env: { ...fake.env, CORVIDINHO_LLM_API_KEY: "k", CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1" },
+      env: { ...fake.env, CORVIDINHO_LLM_API_KEY: "k", CORVIDINHO_LLM_MODEL: "test-model", CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1" },
       fetchImpl,
       tier: "code",
       maxToolRounds: 2,

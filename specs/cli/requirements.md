@@ -47,10 +47,14 @@ WATCH trim them. This holds for the `github` line too: a
 blank `GITHUB_TOKEN` / `GH_TOKEN` is missing for the Octokit plugins, as
 they read it. An allowlist file that exists
 but does not load SHALL fail both checks, since the bridge and watch refuse to
-start on it. Doctor SHALL print an `llm` line: `[ok]` when
-`CORVIDINHO_LLM_API_KEY` or `OPENAI_API_KEY` is set (value not shown),
-otherwise `[warn]` saying `task run` uses the demo stub; the `llm` line
-SHALL NOT change the exit code. Doctor SHALL print a `data-dir` line for the
+start on it. Doctor (and the report-only `init`) SHALL print an `llm` line
+(AGENT-13 / AGENT-10, REQ-agent-179): `[ok]` naming the default tier's
+provider — its key env present (value not shown), or `no key needed` for an
+`ollama:` model — with the model and host, and each tier's model when a
+per-tier key is set; `[warn]` with the no-provider notice when the default
+tier has no usable provider (there is no demo stub or default model), and
+`[warn]` with the provider plus the notice when only some tier has none; the
+`llm` line SHALL NOT change the exit code. Doctor SHALL print a `data-dir` line for the
 shared data dir (`CORVIDINHO_DATA_DIR`, default
 `~/.local/share/corvidinho`, MEMORY-1): `[ok]` when it exists and is
 writable, `[info]` when it does not exist yet but its nearest existing parent
@@ -64,10 +68,12 @@ Acceptance Criteria
 - Env-only entries name source `env`; entries in both name `file + env`; the line gives the usable count.
 - A channel or repo that is allowlisted and also deny-listed (env deny over file allow, file deny over env allow) does not count: doctor prints `[missing]` naming deny wins and exits 1.
 - A malformed allowlist file fails `discord` and `github-watch` (the bridge / watch refuse to start) even when env allowlists are set.
-- No LLM key prints `[warn] llm` naming the demo stub without changing the exit code; `CORVIDINHO_LLM_API_KEY` or `OPENAI_API_KEY` prints `[ok] llm` without the value.
+- A model whose key is unset prints `[warn] llm: No model provider is configured: <model> needs CORVIDINHO_LLM_API_KEY or OPENAI_API_KEY, which is not set.`; a key with no model prints `[warn] llm: No model provider is configured: CORVIDINHO_LLM_MODEL is not set. Set CORVIDINHO_LLM_MODEL …`, never `gpt-4o-mini` or a demo stub; neither changes the exit code. `CORVIDINHO_LLM_MODEL` with `CORVIDINHO_LLM_API_KEY` or `OPENAI_API_KEY` prints `[ok] llm: CORVIDINHO_LLM_API_KEY/OPENAI_API_KEY present (value not shown); model <m> @ api.openai.com` without the value; per-tier keys add `; per tier: read …, tool …, code …`.
 - A writable data dir prints `[ok] data-dir`; a missing one under a writable parent prints `[info] data-dir` and is not created; a data dir that is a file, sits under a file, is a symlink to nothing or (as a non-root user) is not writable prints `[fail] data-dir` and doctor exits 1; the writable probe leaves nothing in the data dir.
 - Doctor output never contains the token, LLM key, channel ids or repo / org names.
 - A whitespace-only `GITHUB_TOKEN` and `GH_TOKEN` print `[missing] github: missing GITHUB_TOKEN or GH_TOKEN for Octokit plugins`, never `[ok] github`; a blank `GITHUB_TOKEN` beside a real `GH_TOKEN` prints `[ok] github` without the value.
+- `init` in an empty dir prints `[warn] llm: No model provider is configured: CORVIDINHO_LLM_MODEL is not set.`; with a model and its key it prints `[ok] llm`.
+- `llmDoctorCheck` with an `ollama:` model prints `[ok] llm: no key needed; model ollama:<m> @ 127.0.0.1:11434`; with an `anthropic:` model and its key, `ANTHROPIC_API_KEY present (value not shown); …`; with a tier missing its key, `[warn]` naming that tier and key.
 
 ## Constraints
 
@@ -100,15 +106,16 @@ Acceptance Criteria
 The CLI SHALL expose `task run` with optional `--max-retries` and `--json` TaskResult output so operators and bridges can exercise the prove-before-done gate. There is no way to skip the gate (AGENT-14, REQ-cli-085): a run that changed nothing ends `done` with `verifySkipped` and the "no changes, nothing to verify" note (REQ-agent-003).
 
 Acceptance Criteria
-- `corvidinho task run --json` in a project where the demo run changes nothing exits 0 with `state` `done`, `verifySkipped` true, `filesChanged` `[]` and one `Verify gate: no changes, nothing to verify.` event, and never starts `fledge`.
+- `corvidinho task run --json` against a (fake) provider whose reply changes nothing exits 0 with `state` `done`, `verifySkipped` true, `filesChanged` `[]` and one `Verify gate: no changes, nothing to verify.` event, and never starts `fledge`.
 - Help documents `task run` and does not list `--no-verify`.
 
 ### REQ-cli-007
 
 `corvidinho task run` SHALL drive the prove-before-done loop with an injectable
-execute path: demo stub when no LLM key is configured (it changes nothing and
-reports no files, REQ-agent-085); thin env-gated OpenAI-compatible chat when
-`CORVIDINHO_LLM_API_KEY` (or documented fallback) is set. The verify gate is
+execute path: the model the operator configures (`CORVIDINHO_LLM_MODEL`,
+AGENT-13, REQ-agent-179) over the OpenAI-compatible chat API. There is no
+demo stub: with no usable provider for the run's tier the run calls nothing
+and fails with the no-provider notice (REQ-cli-079). The verify gate is
 always on for every caller: Discord, WATCH, schedules, `/work`, delegate
 workers and a local operator (AGENT-14, REQ-cli-085). `--json` / `--output
 ndjson` emit structured result+events for callers to parse. Package version
@@ -116,7 +123,8 @@ after this change is **0.0.13**.
 
 Acceptance Criteria
 - Help documents `task run` / `--json` / `--output` and not `--no-verify`.
-- Without an LLM key the demo execute reports no files; in a talk worktree whose last run left an unverified edit, the demo run still runs the verify lane (REQ-agent-015).
+- A run whose model changes nothing reports no files; in a talk worktree whose last run left an unverified edit, such a run still runs the verify lane (REQ-agent-015).
+- With no usable provider the run fails with the no-provider notice (REQ-cli-079).
 - Help / fledge.toml do not mention a way to skip verification.
 - Package `0.0.13`.
 
@@ -345,7 +353,9 @@ the number of provider calls counted, and how many are still counted at their
 estimate, and SHALL be marked `warn` at or past the 80% warning, at the cap,
 when the cap value is not a plain USD amount, when the configured model has
 no known price, or when the ledger cannot be read (the last three stop and
-ask before every provider call). The line SHALL be informational and SHALL
+ask before every provider call). A tier with no configured model (AGENT-10)
+calls nothing, so it SHALL NOT count as an unpriced model: neither this line
+nor the `/status` spend lines warn or say paused for it. The line SHALL be informational and SHALL
 NOT change the doctor exit code. `task run` SHALL copy the run's 80% spend
 warning onto `TaskResult.spendWarning` in `--json` output and the NDJSON
 `result` frame, and a run stopped at the cap SHALL exit 0 with state
@@ -366,6 +376,7 @@ Acceptance Criteria
 - `task run --json` against a localhost mock LLM carries `result.spendWarning` on the crossing run only, and at the cap returns `blocked` with a `spend-cap` ask, the generic summary and exit 0 without calling the mock; `--output text` at the cap prints the summary and the ask question.
 - The daemon logs `spend.warning` (amounts and percent) and `run.needs_human` (`reason` `spend-cap`) as `warn` lines for a schedule run that reports them.
 - A stuck schedule run the daemon claims logs `run.needs_human` (`reason` `stuck`), is recorded with its ask pending, and a Discord bridge started later on the same data dir posts it to the owner once.
+- Under a cap with no model configured, `readSpendSnapshot` is `priced` and the public `/status` spend line is absent (not "paused for budget").
 
 ### REQ-cli-085
 
@@ -616,9 +627,13 @@ process started with. The preload SHALL also unset the run and operator
 settings that change test outcomes on the bot box, so the suite runs as it
 does on CI: `CORVIDINHO_NON_INTERACTIVE` and `FLEDGE_NON_INTERACTIVE` (every
 Discord, WATCH and daemon task run sets the first, and its verify lane runs
-the suite), `CORVIDINHO_DAILY_SPEND_CAP_USD`, and the LLM API keys
-`CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY` (so `bun test` never sends a real
-model call), and `CORVIDINHO_DISCORD_SESSION_ID` (a scheduled run's
+the suite), `CORVIDINHO_DAILY_SPEND_CAP_USD`, the LLM API keys
+`CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` (so `bun
+test` never sends a real model call), the operator's model config
+`CORVIDINHO_LLM_MODEL`, `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`,
+`CORVIDINHO_LLM_BASE_URL`, `CORVIDINHO_LLM_TIER` and `OLLAMA_HOST` (a keyless
+`ollama:` model would call a local server, and the no-provider tests expect
+no model; tests configure a fake provider themselves, AGENT-13), and `CORVIDINHO_DISCORD_SESSION_ID` (a scheduled run's
 `schedule_*` id narrows the GitHub gate, DISCORD-SCHEDULE-3.a, and its verify
 lane inherits it). No new env var, config key or command.
 
@@ -628,6 +643,7 @@ Acceptance Criteria
 - A CLI or shell a test spawns without an explicit `env` (`Bun.spawn(argv)`, `Bun.spawn({ cmd })`, `Bun.spawnSync(argv)`) resolves the preload's data dir and sees no audit key, WATCH spawn log or worktree base override.
 - Full `bun test` with those operator vars set passes and leaves the operator data dir empty.
 - With `CORVIDINHO_NON_INTERACTIVE`, `FLEDGE_NON_INTERACTIVE`, `CORVIDINHO_DAILY_SPEND_CAP_USD`, `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY` and a `schedule_*` `CORVIDINHO_DISCORD_SESSION_ID` set, a child `bun test` sees none of them: it is not non-interactive and has no LLM API key; full `bun test` with them set passes.
+- With `ANTHROPIC_API_KEY`, `OLLAMA_HOST`, `CORVIDINHO_LLM_MODEL`, `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`, `CORVIDINHO_LLM_BASE_URL` and `CORVIDINHO_LLM_TIER` set too, a child `bun test` sees none of them and has no usable model provider.
 
 ### REQ-cli-419
 
@@ -734,7 +750,8 @@ name a task no `[tasks]` table defines SHALL be `[missing]` naming that task,
 since fledge refuses to run it. A file that cannot be read or parsed, or
 that is not a regular file (never opened), SHALL be named without printing
 its contents or the parser's message (SAFE-6). `init` SHALL be report only: it prints the `llm`
-line (`warn` without a key, never failing), the `fledge` and `specsync` PATH
+line (`warn` with the no-provider notice when no model provider is usable,
+AGENT-10 / REQ-cli-003; never failing), the `fledge` and `specsync` PATH
 lines and the project-file lines, creates and changes nothing, exits 0 when
 nothing is missing, and points to `corvidinho doctor` for Discord / GitHub
 keys and allowlists. No new flag, env var, config key or slash command.
@@ -742,7 +759,7 @@ keys and allowlists. No new flag, env var, config key or slash command.
 Acceptance Criteria
 - In a directory with no project files, doctor (all other checks passing) prints `[missing]` for `fledge.toml`, `verify-lane`, `.specsync` and `specs` with the plain-language reason and creator command, and no other `[missing]` line; exits 1; creates nothing.
 - In a complete project (and in this checkout) doctor prints `[ok] fledge.toml`, `[ok] verify-lane: [lanes.verify] runs spec-check`, `[ok] .specsync`, `[ok] specs` and still passes (exit 0).
-- `corvidinho init` in an empty directory prints `corvidinho init (report only — creates nothing)`, `[warn] llm`, `[ok] fledge` / `[ok] specsync`, the four `[missing]` project lines, no Discord line, exits 1 and leaves the directory empty; in a complete project with an LLM key it exits 0 and says nothing is missing; without `fledge` / `specsync` on PATH it prints `[missing] fledge` / `[missing] specsync`.
+- `corvidinho init` in an empty directory prints `corvidinho init (report only — creates nothing)`, `[warn] llm: No model provider is configured: CORVIDINHO_LLM_MODEL is not set.`, `[ok] fledge` / `[ok] specsync`, the four `[missing]` project lines, no Discord line, exits 1 and leaves the directory empty; in a complete project with a model and its key it prints `[ok] llm`, exits 0 and says nothing is missing; without `fledge` / `specsync` on PATH it prints `[missing] fledge` / `[missing] specsync`.
 - The verify lane counts for a `"spec-check"` step, `{ task = "spec-check" }`, `{ run = "specsync check …" }`, a `parallel` item, a task whose `deps` run `specsync check`, and a lane imported from `.fledge/lanes/`; it is `[missing]` with its own reason when there is no `[lanes.verify]`, when no step runs spec-check (`echo specsync checked` does not count), when the lane names an undefined `spec-check` task, and when a step or a step task's `deps` names any other undefined task (named in the line) even if spec-check is present; `{ run }` counts `specsync check` by path (`/usr/local/bin/specsync check`) or quoted (`sh -c 'specsync check'`).
 - A `fledge.toml` that is not TOML fails `fledge.toml` and `verify-lane` naming the file, never printing its text; a broken `.fledge/lanes/*.toml` import fails `verify-lane` naming that file; a `.specsync` that is a file is `[missing]` as not a directory; a `fledge.toml` that is a FIFO is `[missing]` without being opened (doctor does not block).
 - Run from a subdirectory of a git project whose root has `fledge.toml`, `.specsync/` and `specs/`, each `[missing]` line names that root (`<root> (the project root) has it — run corvidinho there`) instead of `fledge run --init` / `specsync init`; an item the root lacks keeps its creator command.
@@ -795,8 +812,8 @@ every command SHALL read that project's specs and files.
 
 Acceptance Criteria
 - `parseGlobalFlags` returns `project` for `--project <path>` and `--project=<path>` before or after the command, `""` for `--project` with no path, and leaves `--project` after `--` or as `--task` text alone.
-- Started in a directory A, `--project P task run --task "touch widget" --json` (and `task run … --project=../P`) exits 0 with `state` `done` (the demo run changes nothing in P), and the Planning briefing holds P's `widget` spec.
-- Started in A (whose `.env` sets a spend cap and an LLM key), `--project P doctor` prints exactly what `doctor` prints when started in P: P's `.env.local` wins over P's `.env` with `$VAR` expanded, and A's LLM key is gone (`[warn] llm`); the key value is never printed.
+- Started in a directory A, `--project P task run --task "touch widget" --json` (and `task run … --project=../P`) exits 0 with `state` `done` (its fake provider's reply changes nothing in P), and the Planning briefing holds P's `widget` spec.
+- Started in A (whose `.env` sets a spend cap, an LLM key and a model), `--project P doctor` prints exactly what `doctor` prints when started in P: P's `.env.local` wins over P's `.env` with `$VAR` expanded, and A's LLM key is gone (`[warn] llm`); the key value is never printed.
 - Started in A, `--project P specsync check` gives the `specsync` child P's `.env` values and none of A's, exactly as `specsync check` started in P does.
 - `bun --no-env-file` CLI `--project P doctor` from A prints exactly what `bun --no-env-file` CLI `doctor` prints when started in P (no cap from P's `.env`); `envFileFlags` keeps only Bun's `.env` flags, in order.
 - A spend cap set in the environment still wins over P's `.env`.
@@ -1012,4 +1029,49 @@ Acceptance Criteria
 - With `--rerun-each=2` both runs pass (the root is still there for the rerun) and the fresh `TMPDIR` is empty afterwards.
 - Another run's `corvidinho-test-run-*` root in the same `TMPDIR`, and the target of a symlink the run left in its root, are untouched.
 - A full `bun test` run with a fresh `TMPDIR` passes and leaves that dir empty.
+
+### REQ-cli-097
+
+For the run's duration, `task run` SHALL route the must-ask gate's notes into
+its event stream as `Text` events (`setMustAskNotifier`: the "waiting for the
+owner's OK on an Approve card" line and the approval line, each tagged with
+AUTONOMY-9 or AUTONOMY-10) and restore the previous notifier after, so text
+mode prints them on stderr and `--output ndjson` streams them as `Text`
+frames (protocol unchanged). `plugins run` and any caller without a notifier
+SHALL print them on stderr. A lapsed, denied or unraisable card SHALL end the
+call with a refusal saying why: with no bridge the card lapses, which means
+no, and the CLI prints why (AUTONOMY-9/10 with SAFE-18/20). No flag or env
+var.
+
+Acceptance Criteria
+- The notifier receives the wait line (naming the one-time code for prod) and the approval line; with no notifier the wait line goes to stderr.
+- A lapse's refusal says the running bridge DMs the card and that with no bridge it lapses.
+
+### REQ-cli-079
+
+With no provider set, it says so at startup (AGENT-10, captured from Leif's
+2026-09-28 interview), and there is no built-in default model (AGENT-13).
+`corvidinho task run` SHALL print the no-provider notice for its tier
+(REQ-agent-179) as its first stderr line in text output when the tier has no
+usable provider, and in every output mode the run SHALL end `failed` with that
+notice as its summary, call no provider and exit 1 (`--json` / the NDJSON
+`result` frame carry it; machine modes keep stderr quiet). `corvidinho
+daemon` SHALL add an `llm` field to `daemon.started` — the default tier's
+provider as `<model> @ <host>` (non-openai kinds as `kind:model`), or `none` —
+and, when any tier has no usable provider, SHALL log one `warn`
+`llm.no_provider` line with the `notice`; its scheduled runs fail and call
+no model (their channel post and run row keep the usual `failed (exit 1)`
+line, and this start-up line says why). `--help` SHALL list `CORVIDINHO_LLM_MODEL` as required with the
+`openai:` / `ollama:` / `anthropic:` forms and no built-in default, plus
+`CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY`, `CORVIDINHO_LLM_BASE_URL`,
+`OLLAMA_HOST` and `ANTHROPIC_API_KEY`; `.env.example`, `docs/DAEMON.md`
+(including the Logs table) and `docs/DISCORD-GO-LIVE.md` (E.9, with the
+upgrade note: a key-only setup must now set `CORVIDINHO_LLM_MODEL`) SHALL say
+the same. No key value is printed.
+
+Acceptance Criteria
+- `task run --task hi` with only `OPENAI_API_KEY` set exits 1; its first stderr line is the "CORVIDINHO_LLM_MODEL is not set" notice; stdout has `state=failed` and the notice; no demo text and never the key value.
+- `task run --json` in the same setup prints a `failed` result whose summary is the notice and `filesChanged` `[]`.
+- The daemon with no model logs `daemon.started` with `llm: "none"` and a `warn` `llm.no_provider` line whose `notice` is the notice; with `CORVIDINHO_LLM_MODEL=ollama:qwen3` it logs `llm: "ollama:qwen3 @ 127.0.0.1:11434"` and no `llm.no_provider`.
+- `docs/DAEMON.md`'s Logs table has a row for `llm.no_provider` (the docs test checks every logged event).
 

@@ -3,7 +3,8 @@
  * actually see (CLI-4, ALLOW-3/4, REQ-cli-003):
  * - channel / repo allowlists through the same loader (allowlist file + env,
  *   deny wins), naming the source, never the values;
- * - `[warn] llm` when no key is set (task run uses the demo stub);
+ * - `[warn] llm` with the no-provider notice when no usable model is set
+ *   (AGENT-10; there is no built-in default model or stub);
  * - `data-dir` exists / can be created and is writable;
  * - the project files in the current dir (`fledge.toml`, a verify lane with
  *   spec-check, `.specsync/`, `specs/`), shared with the report-only `init`.
@@ -79,6 +80,7 @@ function readyEnv(extra: Record<string, string>): Record<string, string> {
     GITHUB_TOKEN,
     CORVIDINHO_WATCH_USERNAME: "corvid-agent",
     CORVIDINHO_LLM_API_KEY: LLM_KEY,
+    CORVIDINHO_LLM_MODEL: "test-model",
     ...extra,
   });
 }
@@ -294,19 +296,33 @@ describe("doctor allowlists use the bridge / WATCH loader (defect 7)", () => {
 describe("doctor checks the LLM key and the data dir (defect 8)", () => {
   const allowEnv = { DISCORD_CHANNEL_IDS: CHANNEL, CORVIDINHO_GITHUB_ALLOW_REPOS: REPO };
 
-  test("no LLM key: [warn] llm names the demo stub and does not change the exit code", async () => {
+  test("no usable model provider: [warn] llm says so (AGENT-10) and does not change the exit code", async () => {
+    // A model whose key is missing is not a provider.
     const env = readyEnv(allowEnv);
     delete env.CORVIDINHO_LLM_API_KEY;
     const r = await runDoctor(env);
     expect(r.out).toContain(
-      "[warn] llm: no CORVIDINHO_LLM_API_KEY or OPENAI_API_KEY — task run uses the demo stub",
+      "[warn] llm: No model provider is configured: test-model needs CORVIDINHO_LLM_API_KEY or OPENAI_API_KEY, which is not set.\n",
     );
     expect(r.code).toBe(0);
+    // A key with no model is none either: there is no built-in default (AGENT-13).
+    const keyOnly = readyEnv(allowEnv);
+    delete keyOnly.CORVIDINHO_LLM_MODEL;
+    const k = await runDoctor(keyOnly);
+    expect(k.out).toContain(
+      "[warn] llm: No model provider is configured: CORVIDINHO_LLM_MODEL is not set. Set CORVIDINHO_LLM_MODEL",
+    );
+    expect(k.out).not.toContain("gpt-4o-mini");
+    expect(k.out).not.toContain("demo stub");
+    expect(k.code).toBe(0);
+    expectNoValues(r.out + k.out);
   }, 30_000);
 
   test("an LLM key (either name) shows [ok] llm without the value", async () => {
     const withCorvid = await runDoctor(readyEnv(allowEnv));
-    expect(withCorvid.out).toContain("[ok] llm: CORVIDINHO_LLM_API_KEY/OPENAI_API_KEY present (value not shown)");
+    expect(withCorvid.out).toContain(
+      "[ok] llm: CORVIDINHO_LLM_API_KEY/OPENAI_API_KEY present (value not shown); model test-model @ api.openai.com\n",
+    );
     const env = readyEnv({ ...allowEnv, OPENAI_API_KEY: LLM_KEY });
     delete env.CORVIDINHO_LLM_API_KEY;
     const withOpenai = await runDoctor(env);
@@ -317,7 +333,7 @@ describe("doctor checks the LLM key and the data dir (defect 8)", () => {
   test("per-tier model keys (AGENT-5): [ok] llm names each tier's model, never the key", async () => {
     const plain = await runDoctor(readyEnv({ ...allowEnv, CORVIDINHO_LLM_MODEL: "big" }));
     expect(plain.out).toContain(
-      "[ok] llm: CORVIDINHO_LLM_API_KEY/OPENAI_API_KEY present (value not shown); model big\n",
+      "[ok] llm: CORVIDINHO_LLM_API_KEY/OPENAI_API_KEY present (value not shown); model big @ api.openai.com\n",
     );
     const r = await runDoctor(
       readyEnv({
@@ -328,7 +344,7 @@ describe("doctor checks the LLM key and the data dir (defect 8)", () => {
       }),
     );
     expect(r.out).toContain(
-      "[ok] llm: CORVIDINHO_LLM_API_KEY/OPENAI_API_KEY present (value not shown); model big; per tier: read cheap, tool big, code big2",
+      "[ok] llm: CORVIDINHO_LLM_API_KEY/OPENAI_API_KEY present (value not shown); model big @ api.openai.com; per tier: read cheap, tool big, code big2",
     );
     expect(r.code).toBe(0);
     // CLI-4 / SAFE-8: under a cap, an unpriced read model warns now, not mid-run.
@@ -518,12 +534,12 @@ describe("project files: doctor and a report-only init name what is missing (CLI
     expect(r.code).toBe(0);
   }, 30_000);
 
-  test("init is report only: in an empty dir it names the LLM key, Fledge, SpecSync and each missing project file, creates nothing, exits 1", async () => {
+  test("init is report only: in an empty dir it names the missing model provider, Fledge, SpecSync and each missing project file, creates nothing, exits 1", async () => {
     const dir = project();
     const r = await runCmd("init", cleanEnv({}), dir);
     expect(r.out).toContain("corvidinho init (report only — creates nothing)");
     expect(r.out).toContain(
-      "[warn] llm: no CORVIDINHO_LLM_API_KEY or OPENAI_API_KEY — task run uses the demo stub",
+      "[warn] llm: No model provider is configured: CORVIDINHO_LLM_MODEL is not set.",
     );
     expect(r.out).toContain(`[ok] fledge: found at ${join(stubBin, "fledge")}`);
     expect(r.out).toContain(`[ok] specsync: found at ${join(stubBin, "specsync")}`);
@@ -538,10 +554,10 @@ describe("project files: doctor and a report-only init name what is missing (CLI
     expect(readdirSync(dir)).toEqual([]);
   }, 30_000);
 
-  test("init in a complete project with an LLM key exits 0 and says nothing is missing", async () => {
+  test("init in a complete project with a model and its key exits 0 and says nothing is missing", async () => {
     const dir = readyProject();
     const before = readdirSync(dir).sort();
-    const r = await runCmd("init", cleanEnv({ CORVIDINHO_LLM_API_KEY: LLM_KEY }), dir);
+    const r = await runCmd("init", cleanEnv({ CORVIDINHO_LLM_API_KEY: LLM_KEY, CORVIDINHO_LLM_MODEL: "test-model" }), dir);
     expect(r.out).toContain("[ok] llm: CORVIDINHO_LLM_API_KEY/OPENAI_API_KEY present (value not shown)");
     for (const line of okLines(dir)) expect(r.out).toContain(line);
     expect(r.out).not.toContain("[missing]");

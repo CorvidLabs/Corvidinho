@@ -69,7 +69,6 @@ export {
 export type { CreateTaskExecuteOpts, FetchLike, LlmEnv } from "./execute.ts";
 
 export {
-  DEFAULT_LLM_MODEL,
   loadTierFromEnv,
   modelForTier,
   parseCapabilityTier,
@@ -78,6 +77,21 @@ export {
   TIER_RANK,
 } from "./tier.ts";
 export type { CapabilityTier } from "./tier.ts";
+
+export {
+  entryLabel,
+  modelChainForTier,
+  NO_PROVIDER_NOTICE,
+  parseModelChain,
+  parseModelEntry,
+  PROVIDER_KINDS,
+  providerForTier,
+  providerId,
+  providerNotice,
+  providerStatus,
+  resolveEntry,
+} from "./providers.ts";
+export type { ModelEntry, ProviderKind, ProviderStatus, ResolvedProvider } from "./providers.ts";
 
 export {
   argvFromToolArguments,

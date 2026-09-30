@@ -1,7 +1,10 @@
 /**
  * Provider-agnostic execute for `task run`.
- * Env-gated OpenAI-compatible chat; when key + tier≠read, runs a thin tool loop
- * over allowlisted plugins (AGENT-3/5). Else demo stub for prove-before-done.
+ * Calls the configured model (AGENT-13, src/agent/providers.ts: openai,
+ * ollama or anthropic entries, all over the OpenAI-compatible chat API); at
+ * tier≠read it runs a thin tool loop over allowlisted plugins (AGENT-3/5).
+ * With no usable provider the attempt fails with the no-provider notice
+ * (AGENT-10); there is no built-in default model and no stub.
  * Secrets stay in env — never commit.
  */
 
@@ -95,10 +98,10 @@ import {
 } from "./persona.ts";
 import {
   loadTierFromEnv,
-  modelForTier,
   modelKeyForTier,
   type CapabilityTier,
 } from "./tier.ts";
+import { providerForTier, providerNotice, type ProviderKind } from "./providers.ts";
 import {
   allowlistOffers,
   argvFromToolArguments,
@@ -109,30 +112,41 @@ import {
 } from "./tools.ts";
 
 export type LlmEnv = {
+  /** The provider kind of the tier's first entry; null when none is set (AGENT-13). */
+  kind: ProviderKind | null;
+  /** The kind's key; undefined for ollama or when unset. Never printed. */
   apiKey: string | undefined;
+  /** OpenAI-compatible API root ("" when no model is set). */
   baseUrl: string;
+  /** Model id sent as `body.model` ("" when no model is set; no default). */
   model: string;
   tier: CapabilityTier;
+  /**
+   * AGENT-10: the no-provider notice when this tier has no usable provider
+   * (no entry, or its kind's key is missing); null when it has one.
+   */
+  notice: string | null;
 };
 
 /**
  * Provider settings for one run. `tier` (e.g. `--tier`) overrides
- * `CORVIDINHO_LLM_TIER`, and the model is the one configured for the
- * resulting tier (AGENT-5, {@link modelForTier}).
+ * `CORVIDINHO_LLM_TIER`, and the provider is the first entry configured for
+ * the resulting tier (AGENT-5 / AGENT-13, {@link providerForTier}).
  */
 export function loadLlmEnv(
   env: NodeJS.ProcessEnv = process.env,
   tier?: CapabilityTier,
 ): LlmEnv {
-  const apiKey =
-    env.CORVIDINHO_LLM_API_KEY?.trim() ||
-    env.OPENAI_API_KEY?.trim() ||
-    undefined;
-  const baseUrl = (
-    env.CORVIDINHO_LLM_BASE_URL?.trim() || "https://api.openai.com/v1"
-  ).replace(/\/$/, "");
   const runTier = tier ?? loadTierFromEnv(env, "tool");
-  return { apiKey, baseUrl, model: modelForTier(env, runTier), tier: runTier };
+  const p = providerForTier(env, runTier);
+  return {
+    kind: p?.entry.kind ?? null,
+    apiKey: p?.apiKey,
+    baseUrl: p?.baseUrl ?? "",
+    model: p?.entry.model ?? "",
+    tier: runTier,
+    notice: providerNotice(env, [runTier]),
+  };
 }
 
 /** Memory instructions embedded in the tool-loop system prompt (AGENT-7 / MEMORY-2/4, MEMORY-5..9, MEMORY-ACL-6). */
@@ -359,15 +373,6 @@ type ToolCallPayload = {
   function: { name: string; arguments: string };
 };
 
-function demoExecute(attempt: number): ExecuteResult {
-  // Changes nothing, so it claims nothing: the real diff decides what changed
-  // (AGENT-15, REQ-agent-085), and a claim git does not show would run the lane.
-  return {
-    summary: `demo task attempt ${attempt}`,
-    filesChanged: [],
-  };
-}
-
 /** ToolCall / ToolResult event name for a tool not in this run's catalog. */
 export const UNKNOWN_TOOL_LABEL = "(unknown tool)";
 
@@ -537,8 +542,9 @@ function allowsFledge(allowlist: ReadonlySet<string>): boolean {
 
 /**
  * Build the execute fn used by `corvidinho task run`.
- * No key → demo. Key + read tier → single chat (no tools).
- * Key + tool/code → interruptible plugin tool loop.
+ * No usable provider → a failed attempt whose summary is the no-provider
+ * notice (AGENT-10), with no provider call. Read tier → single chat (no
+ * tools). Tool/code → interruptible plugin tool loop.
  */
 export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   const env = opts.env ?? process.env;
@@ -608,8 +614,10 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
     const llm = loadLlmEnv(env, opts.tier);
     const tier: CapabilityTier = llm.tier;
 
-    if (!llm.apiKey) {
-      return demoExecute(attempt);
+    // AGENT-10 / AGENT-13: no configured model (or its key is missing) —
+    // say so and call nothing; there is no built-in default to fall back to.
+    if (llm.notice) {
+      return { summary: llm.notice, filesChanged: [], error: true };
     }
 
     if (tier === "read" || maxToolRounds <= 0) {
@@ -1293,12 +1301,13 @@ async function chatCompletions(opts: {
     const url = `${opts.llm.baseUrl}/chat/completions`;
     let resp: Response;
     try {
+      // AGENT-13: every kind speaks the OpenAI-compatible API; a keyless
+      // kind (ollama) sends no authorization header.
+      const headers: Record<string, string> = { "content-type": "application/json" };
+      if (opts.llm.apiKey) headers.authorization = `Bearer ${opts.llm.apiKey}`;
       resp = await opts.fetchImpl(url, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${opts.llm.apiKey}`,
-        },
+        headers,
         body: JSON.stringify(body),
         signal,
       });

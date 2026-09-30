@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   createTaskExecute,
-  DEFAULT_LLM_MODEL,
   loadLlmEnv,
+  NO_PROVIDER_NOTICE,
   modelForTier,
   parseCapabilityTier,
   TIER_MODEL_ENV,
@@ -55,6 +55,7 @@ describe("capability tier (AGENT-5)", () => {
   test("loadLlmEnv includes tier from CORVIDINHO_LLM_TIER", () => {
     const e = loadLlmEnv({
       CORVIDINHO_LLM_API_KEY: "k",
+      CORVIDINHO_LLM_MODEL: "m",
       CORVIDINHO_LLM_TIER: "code",
     });
     expect(e.tier).toBe("code");
@@ -116,17 +117,24 @@ describe("createTaskExecute tool loop (mock HTTP)", () => {
     loadBuiltins();
   });
 
-  test("demo path when no API key", async () => {
-    const exec = createTaskExecute({ taskText: "x", env: {}, loadPlugins: false });
-    // re-load for this isolated call after loadPlugins false — registry may be empty
-    loadBuiltins();
-    const exec2 = createTaskExecute({ taskText: "x", env: {} });
+  test("no provider: a tool-tier attempt fails with the no-provider notice, no stub (AGENT-10)", async () => {
+    let calls = 0;
+    const exec2 = createTaskExecute({
+      taskText: "x",
+      env: {},
+      fetchImpl: async () => {
+        calls += 1;
+        return new Response("{}");
+      },
+    });
     const r = await exec2({
       attempt: 1,
       signal: new AbortController().signal,
     });
-    expect(r.summary).toBe("demo task attempt 1");
+    expect(r.error).toBe(true);
+    expect(r.summary).toStartWith(NO_PROVIDER_NOTICE);
     expect(r.filesChanged).toEqual([]);
+    expect(calls).toBe(0);
   });
 
   test("tool loop: LLM requests plugins-list then finishes", async () => {
@@ -230,6 +238,7 @@ describe("createTaskExecute tool loop (mock HTTP)", () => {
       taskText: "summarize",
       env: {
         CORVIDINHO_LLM_API_KEY: "secret",
+        CORVIDINHO_LLM_MODEL: "test-model",
         CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
       },
       fetchImpl,
@@ -285,7 +294,7 @@ describe("createTaskExecute tool loop (mock HTTP)", () => {
     const events: AgentEvent[] = [];
     const exec = createTaskExecute({
       taskText: "ping danger",
-      env: { CORVIDINHO_LLM_API_KEY: "secret", CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1" },
+      env: { CORVIDINHO_LLM_API_KEY: "secret", CORVIDINHO_LLM_MODEL: "test-model", CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1" },
       fetchImpl,
       tier: "tool",
       includeDangerous: true,
@@ -340,7 +349,7 @@ describe("createTaskExecute tool loop (mock HTTP)", () => {
 
     const exec = createTaskExecute({
       taskText: "abort me",
-      env: { CORVIDINHO_LLM_API_KEY: "secret", CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1" },
+      env: { CORVIDINHO_LLM_API_KEY: "secret", CORVIDINHO_LLM_MODEL: "test-model", CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1" },
       fetchImpl,
       tier: "tool",
     });
@@ -399,7 +408,7 @@ describe("createTaskExecute tool loop (mock HTTP)", () => {
 
     const exec = createTaskExecute({
       taskText: "touch",
-      env: { CORVIDINHO_LLM_API_KEY: "secret", CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1" },
+      env: { CORVIDINHO_LLM_API_KEY: "secret", CORVIDINHO_LLM_MODEL: "test-model", CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1" },
       fetchImpl,
       tier: "tool",
       loadPlugins: false,
@@ -1156,17 +1165,20 @@ describe("per-tier model (AGENT-5, REQ-agent-079)", () => {
     loadBuiltins();
   });
 
-  test("loadLlmEnv: the tier's key wins, else CORVIDINHO_LLM_MODEL, else the default", () => {
+  test("loadLlmEnv: the tier's key wins, else CORVIDINHO_LLM_MODEL, else no model (AGENT-13)", () => {
     const env = { ...base, CORVIDINHO_LLM_TIER: "read", CORVIDINHO_LLM_MODEL_READ: " cheap " };
     expect(loadLlmEnv(env)).toMatchObject({ tier: "read", model: "cheap" });
     // An explicit tier (e.g. --tier) overrides CORVIDINHO_LLM_TIER and picks its model.
     expect(loadLlmEnv(env, "code")).toMatchObject({ tier: "code", model: "big" });
     expect(loadLlmEnv({ ...env, CORVIDINHO_LLM_MODEL_CODE: "big2" }, "code").model).toBe("big2");
     expect(loadLlmEnv({ ...env, CORVIDINHO_LLM_MODEL_TOOL: "mid" }, "tool").model).toBe("mid");
-    // Blank per-tier key falls back; no model at all keeps today's default.
+    // Blank per-tier key falls back; no model at all is no model — there is
+    // no built-in default (AGENT-13), and the run gets the notice (AGENT-10).
     expect(loadLlmEnv({ ...base, CORVIDINHO_LLM_MODEL_READ: "  " }, "read").model).toBe("big");
-    expect(loadLlmEnv({ CORVIDINHO_LLM_MODEL_TOOL: "mid" }, "read").model).toBe(DEFAULT_LLM_MODEL);
-    expect(DEFAULT_LLM_MODEL).toBe("gpt-4o-mini");
+    const none = loadLlmEnv({ CORVIDINHO_LLM_MODEL_TOOL: "mid" }, "read");
+    expect(none.model).toBe("");
+    expect(none.notice).toStartWith(NO_PROVIDER_NOTICE);
+    expect(JSON.stringify(none)).not.toContain("gpt-4o-mini");
     expect(TIER_MODEL_ENV).toEqual({
       read: "CORVIDINHO_LLM_MODEL_READ",
       tool: "CORVIDINHO_LLM_MODEL_TOOL",

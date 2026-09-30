@@ -83,6 +83,7 @@ function commitPersona(dir: string, text: string): void {
 
 const llmEnv = {
   CORVIDINHO_LLM_API_KEY: "test-key",
+  CORVIDINHO_LLM_MODEL: "test-model",
   CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
 };
 
@@ -420,6 +421,7 @@ describe("every surface's spawned run carries the persona (PERSONA-2, e2e)", () 
     return {
       ...env,
       CORVIDINHO_LLM_API_KEY: "test-key",
+      CORVIDINHO_LLM_MODEL: "test-model",
       CORVIDINHO_LLM_BASE_URL: `http://127.0.0.1:${server.port}/v1`,
       CORVIDINHO_DATA_DIR: data,
     };

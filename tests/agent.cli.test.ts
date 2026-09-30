@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import {
   chmodSync,
   existsSync,
@@ -11,6 +11,12 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { makeCarriedTalk } from "./fixtures/talk-worktree.ts";
+import { startFakeLlm } from "./fixtures/fake-llm.ts";
+
+// AGENT-13: there is no built-in default model or stub, so spawned runs
+// call this localhost fake provider (a keyless ollama: model).
+const fakeLlm = startFakeLlm();
+afterAll(() => fakeLlm.stop());
 
 const root = import.meta.dir + "/..";
 
@@ -47,6 +53,7 @@ function recordingLane() {
     PATH: `${bin}:${process.env.PATH ?? ""}`,
     CORVIDINHO_LLM_API_KEY: "",
     OPENAI_API_KEY: "",
+    ...fakeLlm.env,
     CORVIDINHO_DELEGATE_DEPTH: "",
   };
   return { dir, work, calls, env };
@@ -145,7 +152,7 @@ describe("corvidinho task run CLI", () => {
       expect(parsed.result.verified).toBe(false);
       expect(parsed.result.state).toBe("done");
       expect(parsed.result.cancelled).toBe(false);
-      // The demo stub changes nothing, so it claims nothing.
+      // The fake model changes nothing, so it claims nothing.
       expect(parsed.result.filesChanged).toEqual([]);
       expect(
         parsed.events.filter((e) => e.type === "Text" && e.text === "Verify gate: no changes, nothing to verify."),
@@ -180,8 +187,8 @@ describe("task run interrupted by a signal (AGENT-3, REQ-cli-244)", () => {
   // A fake `fledge` on PATH stands in for the verify lane: like the real one
   // it runs the lane's task as a child, records both pids, then blocks, so the
   // signal always lands while verify is running. The run's cwd is a talk
-  // worktree whose last run left an unverified edit, so the demo run (which
-  // changes nothing itself) still verifies (AGENT-15.a).
+  // worktree whose last run left an unverified edit, so the run (the fake
+  // model changes nothing itself) still verifies (AGENT-15.a).
   for (const sig of ["SIGINT", "SIGTERM"] as const) {
     test(`${sig} during verify: cancelled result frame, exit 130, verify lane stopped`, async () => {
       const dir = mkdtempSync(join(tmpdir(), "corvidinho-task-signal-"));
@@ -217,6 +224,7 @@ describe("task run interrupted by a signal (AGENT-3, REQ-cli-244)", () => {
             PATH: `${bin}:${process.env.PATH ?? ""}`,
             CORVIDINHO_LLM_API_KEY: "",
             OPENAI_API_KEY: "",
+            ...fakeLlm.env,
             // A top-level run (it takes the talk's marker), even inside a worker's lane.
             CORVIDINHO_DELEGATE_DEPTH: "",
           },
@@ -294,6 +302,7 @@ describe("task run interrupted by a signal (AGENT-3, REQ-cli-244)", () => {
           PATH: `${lane.bin}:${process.env.PATH ?? ""}`,
           CORVIDINHO_LLM_API_KEY: "",
           OPENAI_API_KEY: "",
+          ...fakeLlm.env,
           // A top-level run (it takes the talk's marker), even inside a worker's lane.
           CORVIDINHO_DELEGATE_DEPTH: "",
         },
