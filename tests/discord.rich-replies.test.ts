@@ -108,6 +108,7 @@ async function bridgeWith(
     mentionUserIds?: string[];
     messageId: string;
   }> = [];
+  const dms: Array<{ userId: string; content: string }> = [];
   const result = await startBridge({
     env: {
       DISCORD_BOT_TOKEN: "fake",
@@ -130,11 +131,15 @@ async function bridgeWith(
         replies.push({ ...(p as unknown as (typeof replies)[number]), messageId });
         return { messageId };
       };
+      handlers.sendDm = async ({ userId, content }) => {
+        dms.push({ userId, content });
+        return { channelId: `dm_${userId}`, messageId: `dm_${dms.length}` };
+      };
       return createNullGateway();
     },
   });
   if (result.ok !== true || !box.handlers) throw new Error("bridge failed");
-  return { result, handlers: box.handlers, outbound, replies };
+  return { result, handlers: box.handlers, outbound, replies, dms };
 }
 
 function mention(authorId: string) {
@@ -230,7 +235,7 @@ describe("chat answers are split at 2000 without breaking code fences (DISCORD-1
     await result.stop();
   });
 
-  test("a split fallback reply still pings the owner on the part that holds the SAFE-8 warning line", async () => {
+  test("a split fallback reply to someone else carries no SAFE-8 warning line and pings nobody; the owner gets the warning by DM (SAFE-14.a)", async () => {
     const base = memoryThinkingOutbound();
     const noEdit: ThinkingOutbound = { sendEmbed: base.sendEmbed, editEmbed: base.editEmbed };
     const answer = longAnswer();
@@ -240,25 +245,23 @@ describe("chat answers are split at 2000 without breaking code fences (DISCORD-1
         return { ok: true, sessionId, summary: answer, exitCode: 0, spendWarning: warning };
       },
     };
-    const { result, handlers, replies } = await bridgeWith(agent, { outbound: noEdit, owner: OWNER_ID });
+    const { result, handlers, replies, dms } = await bridgeWith(agent, { outbound: noEdit, owner: OWNER_ID });
     await handlers.onMessage(mention(OTHER_ID));
-    // The warning line (with the owner's mention) is appended at the end of the
-    // answer, so it lands in a later part.
-    const warningLine = replies.at(-1)!.content.split("\n").at(-1)!;
-    expect(warningLine).toContain(`<@${OWNER_ID}>`);
-    expect(warningLine).toContain("82%");
+    // DISCORD-16: the answer alone, split as before.
     expectSplit(
       replies.map((r) => r.content),
-      `${answer}\n\n${warningLine}`,
+      answer,
     );
-    // The part that holds the mention allows it, and no other later part does:
-    // the owner is pinged once, where the line is.
-    const holder = replies.find((r) => r.content.includes(`<@${OWNER_ID}>`))!;
-    expect(holder).not.toBe(replies[0]);
-    expect(holder.mentionUserIds).toEqual([OWNER_ID]);
-    for (const r of replies.slice(1)) {
-      if (r !== holder) expect(r.mentionUserIds).toEqual([]);
+    for (const r of replies) {
+      expect(r.content).not.toContain("82%");
+      expect(r.content).not.toContain(`<@${OWNER_ID}>`);
+      expect(r.mentionUserIds ?? []).not.toContain(OWNER_ID);
     }
+    // DISCORD-15.a: someone else's footer still shows model and time only.
+    expect(replies.at(-1)!.embed!.footer!.text).toMatch(new RegExp(`^${esc(model())} \\| \\d+s$`));
+    expect(dms).toHaveLength(1);
+    expect(dms[0]!.userId).toBe(OWNER_ID);
+    expect(dms[0]!.content).toContain("$4.10 of the $5.00 daily cap used in the last 24h (82%)");
     await result.stop();
   });
 

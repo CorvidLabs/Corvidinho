@@ -29,6 +29,7 @@ import type { AgentClient } from "../src/discord/agent-client.ts";
 import { ASK_REPLY_HINT, askPingKey, SPEND_CAP_HEADLINE } from "../src/discord/ask-ping.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway } from "../src/discord/gateway.ts";
+import { createSpendDm } from "../src/discord/spend-dm.ts";
 import {
   autoPauseAsk,
   FAILURE_AUTO_PAUSE,
@@ -124,6 +125,8 @@ function pair(
     bridgeAllowlist?: ReturnType<typeof allow>;
     post?: (p: Post) => Promise<void | boolean>;
     spendAlerts?: SpendAlertOutbox;
+    /** SAFE-14.a: the bridge's owner DM pass (records what it is handed). */
+    spendDm?: { deliver(o?: { stop?: { ask: HumanAsk; channelId?: string }; warning?: unknown }): Promise<unknown> };
     /** Run in worktrees under this root (REQ-discord-353 pre-run failures). */
     projectRoot?: string;
     project?: string;
@@ -166,6 +169,7 @@ function pair(
     ...workspace,
     owner: OWNER,
     ...(opts.spendAlerts ? { spendAlerts: opts.spendAlerts } : {}),
+    ...(opts.spendDm ? { spendDm: opts.spendDm as never } : {}),
     now: () => clock.now,
     outbound: { post: opts.post ?? (async (p) => void posts.push(p)) },
   });
@@ -282,31 +286,91 @@ describe("daemon-claimed schedule asks reach Discord through the bridge tick (RE
     expect(h.posts[0]!.content).not.toContain(`<@${OWNER_ID}>`);
   });
 
-  test("spend cap: the owner is pinged once per cap episode, the pending 80% warning rides the post, no reply hint (SAFE-8)", async () => {
+  test("spend cap: the owner is pinged once per cap episode, the post says only that work is paused for budget (no question, no warning), no reply hint; the stored details go to the owner's DM pass (SAFE-8, SAFE-14.a)", async () => {
     const db = openCorvidinhoDb({ memory: true });
     // Another run (any surface) crossed 80%: the warning is pending in the DB.
     const ledger = new SpendLedger(db);
     ledger.reserve({ provider: "p", model: "gpt-4o-mini", estimateMicroUsd: 850_000, capMicroUsd: 1e12, now: Date.now() - 1000 });
     expect(ledger.noteWarning({ capMicroUsd: 1_000_000, now: Date.now() })).not.toBeNull();
     const outbox = createSpendAlertOutbox({ db, env: { [SPEND_CAP_ENV]: "5" } });
-    const h = pair({ db, spendAlerts: outbox });
+    const handed: Array<{ stop?: { ask: HumanAsk; channelId?: string }; warning?: unknown }> = [];
+    const spendDm = {
+      async deliver(o: { stop?: { ask: HumanAsk; channelId?: string }; warning?: unknown } = {}) {
+        handed.push(o);
+        return { stop: "none", warning: "none" };
+      },
+    };
+    const h = pair({ db, spendAlerts: outbox, spendDm });
 
     await h.daemonRun(CAP_ASK);
     expect(h.lastRun()).toMatchObject({ status: "completed", ask_reason: "spend-cap" });
     await h.bridgeTick();
     expect(h.posts).toHaveLength(1);
     const first = h.posts[0]!;
-    expect(first.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
-    expect(first.content).toContain(`⚠️ <@${OWNER_ID}> Spend warning (SAFE-8): $0.85 of the $1.00 daily cap`);
+    // The schedule line, then only that work is paused for budget.
+    expect(first.content).toStartWith("Schedule **Nightly**");
+    expect(first.content.split("\n").slice(1)).toEqual([`💸 Work is paused for budget. <@${OWNER_ID}>`]);
+    expect(first.content).not.toContain("Daily spend cap reached");
+    expect(first.content).not.toContain("Spend warning");
+    expect(first.content).not.toMatch(/\$\d|CORVIDINHO_|daily cap/);
     expect(first.content).not.toContain(ASK_REPLY_HINT);
     expect(first.mentionUserIds).toEqual([OWNER_ID]);
+    // The stored question (amounts, cap, setting) is handed to the owner's DM.
+    const stops = handed.filter((o) => o.stop);
+    expect(stops).toHaveLength(1);
+    expect(stops[0]!.stop!.ask.question).toContain("Daily spend cap reached (SAFE-8)");
+    expect(stops[0]!.stop!.channelId).toBe(CHANNEL);
+    // Every bridge tick runs the owner's DM pass (the pending warning).
+    expect(handed.some((o) => !o.stop)).toBe(true);
 
-    // Same episode, next daemon run at the cap: posted again, no second ping.
+    // Same episode, next daemon run at the cap: posted again, no second ping or DM.
     await h.daemonRun(CAP_ASK);
     await h.bridgeTick();
     expect(h.posts).toHaveLength(2);
     expect(h.posts[1]!.content).toContain(SPEND_CAP_HEADLINE);
     expect(silent(h.posts[1]!)).toBe(true);
+    expect(handed.filter((o) => o.stop)).toHaveLength(1);
+  });
+
+  test("spend cap: a daemon ask whose channel post keeps failing is retried every tick, but the owner gets its details by DM once, not every tick (SAFE-14.a)", async () => {
+    const db = openCorvidinhoDb({ memory: true });
+    const outbox = createSpendAlertOutbox({ db, env: { [SPEND_CAP_ENV]: "5" } });
+    const dms: Array<{ userId: string; content: string }> = [];
+    const spendDm = createSpendDm({
+      outbox,
+      owner: () => OWNER,
+      sendDm: () => async ({ userId, content }) => {
+        dms.push({ userId, content });
+        return { channelId: "dm", messageId: `dm_${dms.length}` };
+      },
+      log: () => {},
+    });
+    let failing = true;
+    const posts: Post[] = [];
+    const h = pair({
+      db,
+      spendAlerts: outbox,
+      spendDm,
+      post: async (p) => {
+        if (failing) return false;
+        posts.push(p);
+      },
+    });
+    await h.daemonRun(CAP_ASK);
+    // The channel post fails on three ticks: each hands the ask and the cap
+    // ping back for the next tick, but the details reach the owner once.
+    for (let i = 0; i < 3; i++) await h.bridgeTick();
+    expect(posts).toHaveLength(0);
+    expect(h.lastRun().ask_posted_at).toBeNull();
+    const stopDms = () => dms.filter((d) => d.content.includes("Daily spend cap reached"));
+    expect(stopDms()).toHaveLength(1);
+    expect(stopDms()[0]!.userId).toBe(OWNER_ID);
+    // The channel works again: the ask posts with the ping; no second DM.
+    failing = false;
+    await h.bridgeTick();
+    expect(posts).toHaveLength(1);
+    expect(pinged(posts[0]!, OWNER_ID)).toBe(true);
+    expect(stopDms()).toHaveLength(1);
   });
 
   test("spend cap: an episode another surface already pinged posts without a ping", async () => {

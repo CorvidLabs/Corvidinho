@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "only-the-owner-sees-spend-amounts-and-cap-settings-on-discord-everyone-else-sees-only-work-is-paused-for-budget-safe-14",
+  "implementation_commit": "02faedc2c1341656ffe775b9697e0ab726accfeb",
+  "implementation_tree": "b59f0cb987ea006dffbb9d0c6ed50753d8b121d0",
+  "contract_digest": "1707dfa4892f9e50e27630c37ae2d904678e74a3bb744720b57bf0d368b86d33",
+  "workspace_digest": "2ff4967c0fc59e0cff798b0b85278660c897c924468589c000bf288c01a01114",
+  "closing_digest": "9c197f65987f98a066198f546488c831979f7b1fd9acf54dd9ade9be0d3b31b8",
+  "review_digest": "6c934099d7e06fc70cdb82532b92bb5b749f4192f0b9dde27020b8982be4134a",
+  "finalization_digest": "88f0a2c3de1b77c9a5bf2ca76efd326375d6d68f622dac1f687e48b1e7f65fda",
+  "timestamp": 1790771831
+}

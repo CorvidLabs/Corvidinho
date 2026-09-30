@@ -3,19 +3,20 @@
  *
  * Runs record the 80% warning in `spend_alerts` wherever they happen (bridge
  * child, WATCH, daemon schedule, delegate worker, CLI). The bridge is the one
- * surface that knows the owner, so every bridge post (chat reply, /work,
- * /session start, schedule post) takes the pending warning from here and
- * pings the owner with it. A warning recorded by a run whose surface could
- * not show it (WATCH, daemon, a delegate worker, a schedule whose channel
- * left the allowlist) therefore reaches the owner on the bridge's next post
- * instead of being lost.
+ * surface that knows the owner, so its owner DM pass (after each run and on
+ * every scheduler tick, src/discord/spend-dm.ts) takes the pending warning
+ * from here and sends it to the owner only (SAFE-14.a: never in a channel
+ * post). A warning recorded by a run whose surface could not show it (WATCH,
+ * daemon, a delegate worker, a schedule whose channel left the allowlist)
+ * therefore reaches the owner on the bridge's next pass instead of being
+ * lost.
  *
  * The outbox also decides whether a `spend-cap` ask pings the owner: once per
  * cap episode across chat, slash commands and schedules (spend-alerts.ts
  * `cap` rows), so a busy channel at the cap does not ping on every message.
  *
- * A claim is handed back when the post that carried it did not go out
- * (`release`), so one failed post never swallows a warning or the episode's
+ * A claim is handed back when the DM or post that carried it did not go out
+ * (`release`), so one failed send never swallows a warning or the episode's
  * owner ping. Never throws: a DB problem falls back to the run's own
  * `spendWarning` and to pinging (a notice too many beats a silent one).
  */
@@ -34,9 +35,9 @@ import { spendPercent } from "./spend-notice.ts";
 import type { SpendWarning } from "./types.ts";
 
 export type TakenSpendWarning = {
-  /** Amounts to post (current 24 h spend against the recorded cap). */
+  /** Amounts to send (current 24 h spend against the recorded cap). */
   warning: SpendWarning;
-  /** Hand the warning back when the post that carried it failed. */
+  /** Hand the warning back when the DM that carried it failed. */
   release(): void;
 };
 
@@ -48,11 +49,11 @@ export type SpendCapPingClaim = {
 
 export type SpendAlertOutbox = {
   /**
-   * The SAFE-8 80% warning to append to the post being sent now, or null.
+   * The SAFE-8 80% warning to send the owner now (by DM, SAFE-14.a), or null.
    * With a DB: claims every undelivered warning of the last 24 h (so no other
-   * post repeats it) and returns it with current spend; null when nothing is
+   * pass repeats it) and returns it with current spend; null when nothing is
    * pending, or while spend is back under 80% of that cap (the warning then
-   * stays pending for the first post that sees 80% again). Without a DB (or
+   * stays pending for the first pass that sees 80% again). Without a DB (or
    * when the table is missing): `fallback`, the run's own warning.
    */
   takeWarning(fallback?: SpendWarning): TakenSpendWarning | null;

@@ -1,0 +1,650 @@
+{
+  "schema_version": 1,
+  "attempts": [
+    {
+      "timestamp": 1790749129,
+      "commit": "1efd2b0cf320e629d7b4aecb041afc96cd7fd1f2",
+      "contract_digest": "1707dfa4892f9e50e27630c37ae2d904678e74a3bb744720b57bf0d368b86d33",
+      "execution_digest": "eaa07b6540a4116848906410190d8eea613e5b346828beb9da54808a82ca5c04",
+      "workspace_digest": "2d4accecdc11cff6b2daf28de9e7c240316878505677fc66c50462222b974d11",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-discord-071",
+        "REQ-discord-098",
+        "REQ-discord-215",
+        "REQ-discord-347",
+        "REQ-discord-734"
+      ]
+    },
+    {
+      "timestamp": 1790749134,
+      "commit": "69ba424550da9ba12e7572437116699af8097f04",
+      "contract_digest": "1707dfa4892f9e50e27630c37ae2d904678e74a3bb744720b57bf0d368b86d33",
+      "execution_digest": "eaa07b6540a4116848906410190d8eea613e5b346828beb9da54808a82ca5c04",
+      "workspace_digest": "2d4accecdc11cff6b2daf28de9e7c240316878505677fc66c50462222b974d11",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-discord-071",
+        "REQ-discord-098",
+        "REQ-discord-215",
+        "REQ-discord-347",
+        "REQ-discord-734"
+      ]
+    },
+    {
+      "timestamp": 1790749674,
+      "commit": "e9a051f5a0361d73c4e97a1a48d6af5d34aa07ab",
+      "contract_digest": "1707dfa4892f9e50e27630c37ae2d904678e74a3bb744720b57bf0d368b86d33",
+      "execution_digest": "eaa07b6540a4116848906410190d8eea613e5b346828beb9da54808a82ca5c04",
+      "workspace_digest": "680e3114c106bb8981d6a54332b7d720a4e2c39ca6fdf6ee7b76711aa8afdd0f",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-discord-071",
+        "REQ-discord-098",
+        "REQ-discord-215",
+        "REQ-discord-347",
+        "REQ-discord-734"
+      ]
+    },
+    {
+      "timestamp": 1790749678,
+      "commit": "a0889ffa7f33a173577b048324b9ade0740661b5",
+      "contract_digest": "1707dfa4892f9e50e27630c37ae2d904678e74a3bb744720b57bf0d368b86d33",
+      "execution_digest": "eaa07b6540a4116848906410190d8eea613e5b346828beb9da54808a82ca5c04",
+      "workspace_digest": "680e3114c106bb8981d6a54332b7d720a4e2c39ca6fdf6ee7b76711aa8afdd0f",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-discord-071",
+        "REQ-discord-098",
+        "REQ-discord-215",
+        "REQ-discord-347",
+        "REQ-discord-734"
+      ]
+    },
+    {
+      "timestamp": 1790750156,
+      "commit": "1ff3e48388f27f2d5636b6bbef535cd80922bbf7",
+      "contract_digest": "1707dfa4892f9e50e27630c37ae2d904678e74a3bb744720b57bf0d368b86d33",
+      "execution_digest": "eaa07b6540a4116848906410190d8eea613e5b346828beb9da54808a82ca5c04",
+      "workspace_digest": "d276922bf6f3e017b87965677d1e9ba9cda49d593644e91e59bd4d9ec620c9d2",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-discord-071",
+        "REQ-discord-098",
+        "REQ-discord-215",
+        "REQ-discord-347",
+        "REQ-discord-734"
+      ]
+    },
+    {
+      "timestamp": 1790750160,
+      "commit": "99f69f9ed23ecb3c2b9f7ced4a30d767a4b3caa2",
+      "contract_digest": "1707dfa4892f9e50e27630c37ae2d904678e74a3bb744720b57bf0d368b86d33",
+      "execution_digest": "eaa07b6540a4116848906410190d8eea613e5b346828beb9da54808a82ca5c04",
+      "workspace_digest": "d276922bf6f3e017b87965677d1e9ba9cda49d593644e91e59bd4d9ec620c9d2",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-discord-071",
+        "REQ-discord-098",
+        "REQ-discord-215",
+        "REQ-discord-347",
+        "REQ-discord-734"
+      ]
+    },
+    {
+      "timestamp": 1790751399,
+      "commit": "cd767df7a387e465648a312d00ad7031974dc1ec",
+      "contract_digest": "1707dfa4892f9e50e27630c37ae2d904678e74a3bb744720b57bf0d368b86d33",
+      "execution_digest": "455d328cfdcb4ceb4947cec4d8602927144a4d4b78f35838dfbfb4fd7c1aa6df",
+      "workspace_digest": "130cfc3e073e43247d3ced6a08dd1989511c0d62f0234f44adde248806b8144f",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-discord-071",
+        "REQ-discord-098",
+        "REQ-discord-215",
+        "REQ-discord-347",
+        "REQ-discord-734"
+      ]
+    },
+    {
+      "timestamp": 1790751404,
+      "commit": "a2078772387e4a93a73a191e6cff1541a6f8d1c6",
+      "contract_digest": "1707dfa4892f9e50e27630c37ae2d904678e74a3bb744720b57bf0d368b86d33",
+      "execution_digest": "455d328cfdcb4ceb4947cec4d8602927144a4d4b78f35838dfbfb4fd7c1aa6df",
+      "workspace_digest": "130cfc3e073e43247d3ced6a08dd1989511c0d62f0234f44adde248806b8144f",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-discord-071",
+        "REQ-discord-098",
+        "REQ-discord-215",
+        "REQ-discord-347",
+        "REQ-discord-734"
+      ]
+    },
+    {
+      "timestamp": 1790771613,
+      "commit": "5f514ff0f7f489e131dc93e0da5db5edc1640424",
+      "contract_digest": "1707dfa4892f9e50e27630c37ae2d904678e74a3bb744720b57bf0d368b86d33",
+      "execution_digest": "455d328cfdcb4ceb4947cec4d8602927144a4d4b78f35838dfbfb4fd7c1aa6df",
+      "workspace_digest": "2ff4967c0fc59e0cff798b0b85278660c897c924468589c000bf288c01a01114",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-discord-071",
+        "REQ-discord-098",
+        "REQ-discord-215",
+        "REQ-discord-347",
+        "REQ-discord-734"
+      ]
+    },
+    {
+      "timestamp": 1790771618,
+      "commit": "f09be7946f2f507bafbf0c6ada7a8b8739453f5b",
+      "contract_digest": "1707dfa4892f9e50e27630c37ae2d904678e74a3bb744720b57bf0d368b86d33",
+      "execution_digest": "455d328cfdcb4ceb4947cec4d8602927144a4d4b78f35838dfbfb4fd7c1aa6df",
+      "workspace_digest": "2ff4967c0fc59e0cff798b0b85278660c897c924468589c000bf288c01a01114",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-discord-071",
+        "REQ-discord-098",
+        "REQ-discord-215",
+        "REQ-discord-347",
+        "REQ-discord-734"
+      ]
+    },
+    {
+      "timestamp": 1790771623,
+      "commit": "0f6c3896c41e6ba9e60d58137eb8afc0bf18a479",
+      "contract_digest": "1707dfa4892f9e50e27630c37ae2d904678e74a3bb744720b57bf0d368b86d33",
+      "execution_digest": "455d328cfdcb4ceb4947cec4d8602927144a4d4b78f35838dfbfb4fd7c1aa6df",
+      "workspace_digest": "2ff4967c0fc59e0cff798b0b85278660c897c924468589c000bf288c01a01114",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-discord-071",
+        "REQ-discord-098",
+        "REQ-discord-215",
+        "REQ-discord-347",
+        "REQ-discord-734"
+      ]
+    },
+    {
+      "timestamp": 1790771627,
+      "commit": "6f3b8fc5fddbdb04d196993e1cdd4a60a3c35d0b",
+      "contract_digest": "1707dfa4892f9e50e27630c37ae2d904678e74a3bb744720b57bf0d368b86d33",
+      "execution_digest": "455d328cfdcb4ceb4947cec4d8602927144a4d4b78f35838dfbfb4fd7c1aa6df",
+      "workspace_digest": "2ff4967c0fc59e0cff798b0b85278660c897c924468589c000bf288c01a01114",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-discord-071",
+        "REQ-discord-098",
+        "REQ-discord-215",
+        "REQ-discord-347",
+        "REQ-discord-734"
+      ]
+    },
+    {
+      "timestamp": 1790771627,
+      "commit": "02faedc2c1341656ffe775b9697e0ab726accfeb",
+      "contract_digest": "1707dfa4892f9e50e27630c37ae2d904678e74a3bb744720b57bf0d368b86d33",
+      "execution_digest": "455d328cfdcb4ceb4947cec4d8602927144a4d4b78f35838dfbfb4fd7c1aa6df",
+      "workspace_digest": "2ff4967c0fc59e0cff798b0b85278660c897c924468589c000bf288c01a01114",
+      "acceptance_input_digest": "4507633dec5722a49e352ce1c59b3c61c72968558a5a0102f434c842a12ca13a",
+      "acceptance_manifest": {
+        "schema_version": 1,
+        "entries": [
+          {
+            "path": "docs/BOX-UPDATE.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "6120796dbb8878cfd90868f5831ba57407df3c43acb8d4997a196d904772c572",
+            "entry_digest": "f3e50f6c75a9a04cac53676372c0573d6b3e03e2cd166d87183221e82130e222",
+            "owners": [
+              "@exact:delivery"
+            ]
+          },
+          {
+            "path": "docs/DAEMON.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "c3f9c31f07210b8135eb69f5ee0c45cd55548ae74309c7318696a559d71e794a",
+            "entry_digest": "ee375eb969c16bf8094607ccfe7b80742c4047f8e1b5dee44d786e027a467328",
+            "owners": [
+              "@exact:delivery"
+            ]
+          },
+          {
+            "path": "docs/DISCORD-GO-LIVE.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "4967285cc78d04ed2deb603cd288081df6be650841b2b08a816970600818abb4",
+            "entry_digest": "e5c91bd48caf4c215dcbff03c4f48da36dac69b5a0809c3460de8a117b14ed26",
+            "owners": [
+              "@exact:delivery"
+            ]
+          },
+          {
+            "path": "docs/discord.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "8c8b2249a9ab7f9c632281c5b85ab815a20366c4f010a4cf983c621788319d2b",
+            "entry_digest": "514c291cb832d09a9a1a61024e6b543bd79bf04b932f80492fc8a3eb361ea13e",
+            "owners": [
+              "@exact:delivery"
+            ]
+          },
+          {
+            "path": "specs/agent/agent.spec.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "617d400f24bb73356e39f7b2fd5fdc42d987ec88fd50b348a247d61d836b880f",
+            "entry_digest": "b675f5249c460ff1e0082a82eb1c542e5bfbae3e477a1e0bd8cbf9a4ee4f6b87",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "specs/agent/context.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "d76cd90c631ea926a7a66ed9c1d9e19cdc745e767687deaff21241041adfb8b9",
+            "entry_digest": "f93515f598a7f68afe90f924ba2680118dbcad9dc5735e84bc325f0aa1fc4208",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "specs/agent/requirements.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "e4b55d36e01c61700315c550ad127b1a2f983457ce138ac1c99a824183114490",
+            "entry_digest": "f0677483cd460583f802fa428e86d513337cd5be9bb7a42b55a2e49e54283de4",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "specs/agent/tasks.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "15955dc0ea8bc11ad9e36cea1ca266e352d029a49b0803ae5dae3d239a9fb472",
+            "entry_digest": "320502eca3792ee5e517405b9d1da93a33b8016a009625d2b311ddfce229b670",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "specs/agent/testing.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "98eb9bb3df46b092b73a3d774bd7c27804784d28be0d2030e2622950c7a17031",
+            "entry_digest": "69d355db2b44931fe45198b927eead0d8ea874cf1bd33a92033556f20141b9d8",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "specs/discord/context.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "5959c58aadca03abe655cb690afcfb4232b04aa13ca3ca6fd3554d0ac2a8fd86",
+            "entry_digest": "d1eabe30183c4e345a24f6caf77b870adb27336be5c4bc83ee8cb7b2eeda3cef",
+            "owners": [
+              "discord"
+            ]
+          },
+          {
+            "path": "specs/discord/discord.spec.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "985422952d38efff1f7c862e05f7cc224734adf567d8db6cbb71b002ee162863",
+            "entry_digest": "b12305ba52ac034814ed1529995e84363fe2ebcaf2a318b025bfcacebe4aea12",
+            "owners": [
+              "discord"
+            ]
+          },
+          {
+            "path": "specs/discord/requirements.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "1e7190bc86bf506a7bf3b7d925b33d822460f97ad2ef168cd84586607995c985",
+            "entry_digest": "017f840ed98123873d66ab60026279e6a8d09a365189b7c4b822e3b238115cb5",
+            "owners": [
+              "discord"
+            ]
+          },
+          {
+            "path": "specs/discord/tasks.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "0aa872cdc0f53390df90aede6279472e6356621550d2182db507584ee6d688bf",
+            "entry_digest": "fa9dbcfff2896ff46f933c60a877f0d68ff98c548e637557238ff93217dc7138",
+            "owners": [
+              "discord"
+            ]
+          },
+          {
+            "path": "specs/discord/testing.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "0d8d4e3ed13bd2bb291d864bbfdaa458894ea5fd741d13081671e92fc6e529d8",
+            "entry_digest": "95cb4ac8764c00ab8127c02beca7d9876bf97f142a0bc1b9212594bd5207ea43",
+            "owners": [
+              "discord"
+            ]
+          },
+          {
+            "path": "src/agent/index.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "2518a386647fb1c9f60903713d47448d317a398da9e2cf8bdf68d8b5e5cd2d73",
+            "entry_digest": "8182111cc9ce0bf5c13bdac2a2061d74296551f02eefdde41b756c68d50c6814",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "src/agent/spend-alerts.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "135b79987f33ea84a4cb4608f081613df67565423f8c8a0dd25a5b500d19e65c",
+            "entry_digest": "c4ce917b40e27c36b8ad0e5d43f99f3c85c597d3e8701bb01bd0bace5ce87f6d",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "src/agent/spend-notice.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "8ed110cd7590599da7e2e41b1b53c96ec1ce2554626c70e7f02990933ce43897",
+            "entry_digest": "28c90bc6d1ab1074a04a0128458ed45739e0a369d16f2aaf02e24bb926121db4",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "src/agent/spend-outbox.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "387e8bfdd030e4a69675801c1634f81e95a5a902fb1c22ce81ab3a1b3342bdaf",
+            "entry_digest": "dc5100dc0173bbeabe9f88ffbfb69ec715cba14a1993790a071576ef0e20bdc5",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "src/discord/ask-ping.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "f8fca997c2fa35425129b5f8f7b0538c07f22b46bcb4b905641742f32e27d04d",
+            "entry_digest": "458029e2fe66f82da060cc95a917c20883035b1701cace25798f640031362805",
+            "owners": [
+              "discord"
+            ]
+          },
+          {
+            "path": "src/discord/bridge.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "0a223f9915d40db83b7b2b858d588e84fbf25d0f95e8b13fe5493232471f3299",
+            "entry_digest": "c441ef62007795f62ea36f94b36dcefb6d25cd6dab38c3f23b83ce98c9f28244",
+            "owners": [
+              "discord"
+            ]
+          },
+          {
+            "path": "src/discord/command-handlers/session.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "bf50ea54ed8a1dc0fa2c571d3f954b9b8e4df7c018e30d7438e8ff623163aeb3",
+            "entry_digest": "8ed327885877b1f5875a360e869e684075b13a0edef4b3c70f6c334c13acbcd2",
+            "owners": [
+              "discord"
+            ]
+          },
+          {
+            "path": "src/discord/command-handlers/status.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "63eb6c95f40a40b8c70095e9ac73284bd49db60090de1e4082fe1ad363fc38de",
+            "entry_digest": "41a3c09c81d73f3e8b2e748b0656ba2c83ef938e97a6daee0882491789abc1bd",
+            "owners": [
+              "discord"
+            ]
+          },
+          {
+            "path": "src/discord/command-handlers/work.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "6841854d2edf6ee1e08e99c2eea23fb187cf15ce2ef46cc76817a59720cb8073",
+            "entry_digest": "fc14053f28b922f04ef7af006cb1a21efe6c3c9f160f9c7379a720d5c9a452a8",
+            "owners": [
+              "discord"
+            ]
+          },
+          {
+            "path": "src/discord/slash-types.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "a97cea503a3f3c4f5b907cbc2919a738fc7981eb2f8eecb3ba3b96daf73dcc12",
+            "entry_digest": "49272a64fdf1a940a9b2f743f5ca5fe4aa7f96f32db531d6982b88c59463c6e3",
+            "owners": [
+              "discord"
+            ]
+          },
+          {
+            "path": "src/discord/spend-dm.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "b33c6f475931cce2dc626eaa78e70288afaf460896cfd2e52172e1ff2c1a594f",
+            "entry_digest": "eb9b164807d6cc41ac7f388ddcf7b664be0cbb5bd467def166db122048954231",
+            "owners": [
+              "discord"
+            ]
+          },
+          {
+            "path": "src/discord/spend-post.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "cb61659e6aff7d0bfd50b7dad4de033beee408a6f699b499ef65dbd85e2bda4f",
+            "entry_digest": "320a9e5e631d3cd8224d1ba3c8671b00356e5f550c559da032c7158b4417dfea",
+            "owners": [
+              "discord"
+            ]
+          },
+          {
+            "path": "src/scheduler/service.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "b1d56ed02efb94995f7a3fa1d4e107084d4eb7aa98cb7b473d6766c34c271c66",
+            "entry_digest": "3d4071f587b5bf2c589a74ec94b159096d74e249169358e892c9f54f7a390d0c",
+            "owners": [
+              "discord"
+            ]
+          },
+          {
+            "path": "tests/discord.collapsed-ping.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "90bc3b48b9031490d6a8aaff7d74edb74e3392386736f107009dee6df03e82af",
+            "entry_digest": "1760ed79312d5910243031438b06fd3ccccb58325d2f0f3a3e5ab45ef420a186",
+            "owners": [
+              "@exact:test"
+            ]
+          },
+          {
+            "path": "tests/discord.rich-replies.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "8dd886ccd60c50527548e4b6fbfb3e13a53843950cff1f41fa8855e29deb8516",
+            "entry_digest": "8ffa31817d08e159ac3124974c3eaede39e21340fe431b637a43a4b2cc87581e",
+            "owners": [
+              "@exact:test"
+            ]
+          },
+          {
+            "path": "tests/discord.slash-pending-ask.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "6dce8e5b911a60f7932578b451841f87bf36c45e3cd7313ac11a7980775ed0c3",
+            "entry_digest": "8224252e84dff697026b4d296a88a799d32ac2eaa7775de5e9bfc8341d30f109",
+            "owners": [
+              "@exact:test"
+            ]
+          },
+          {
+            "path": "tests/discord.spend-dm.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "f516c51bf13ecf8efd90d28c85768349a239e420a6768e3330c04e88faa16705",
+            "entry_digest": "a164095c1c85d7b094e5dde932676e7012e668c95dfe7b83f45c04a8647f4028",
+            "owners": [
+              "@exact:test"
+            ]
+          },
+          {
+            "path": "tests/discord.spend.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "5ce54c5b85a471d83141933b3017f891d1e1c471beb41e89bae0335becbc87a4",
+            "entry_digest": "2dddcc0a65400a97af7402395a341556bc8e101210095a835d2111907a9a7f89",
+            "owners": [
+              "@exact:test"
+            ]
+          },
+          {
+            "path": "tests/docs.operator-facts.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "4d5e5e6736451995b3d0ff38d997f114e9aeb6840bb1ce8864fb8c8f7696bac4",
+            "entry_digest": "fb41765bae0e92d55331b624b4d19a180664729243878ef9a63c918f2e8eb36c",
+            "owners": [
+              "@exact:test"
+            ]
+          },
+          {
+            "path": "tests/scheduler.ask-outbox.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "7790df79205a66d5c08780c7bf056bfe58b6a81469a17fb1c41561c3b6c34b3b",
+            "entry_digest": "38e763c4091ebfbb5ce5b237fc27fb39fb78c33a6708b0be4a0606dba3d2335c",
+            "owners": [
+              "@exact:test"
+            ]
+          }
+        ]
+      },
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-discord-071",
+        "REQ-discord-098",
+        "REQ-discord-215",
+        "REQ-discord-347",
+        "REQ-discord-734"
+      ]
+    }
+  ]
+}

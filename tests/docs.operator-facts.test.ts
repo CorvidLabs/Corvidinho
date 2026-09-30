@@ -108,6 +108,9 @@ describe("docs/discord.md slash surface", () => {
     for (const bit of ["announce channel", "owner configured", "audit chain", "24 h spend"]) {
       expect(row!).toContain(bit);
     }
+    // SAFE-14.a: the spend line is the owner's; anyone else sees only the pause.
+    expect(row!).toContain("24 h spend vs cap for the owner only");
+    expect(row!).toContain("Work is paused for budget.");
   });
 
   test("the criteria line cites the whole captured DISCORD-1..N range", () => {

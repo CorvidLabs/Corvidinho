@@ -25,6 +25,7 @@ import {
   finishSlashWithOwnerNotice,
   slashOwnerNotice,
 } from "../spend-post.ts";
+import { spendStopFor } from "../spend-dm.ts";
 
 function formatSessionLine(
   s: {
@@ -311,46 +312,53 @@ export async function handleSessionStart(
   const body = `${head}${summary}`;
 
   // DISCORD-ASK-7 — collapse thinking into the final body (drop the deferred
-  // reply); the owner ping for the ask and the pending SAFE-8 80% warning go
-  // out as a fresh post (an edit does not notify), claims handed back when
-  // nothing carried them.
+  // reply); the owner ping for the ask goes out as a fresh post (an edit does
+  // not notify), its claim handed back when nothing carried it. SAFE-14.a:
+  // the 80% warning and a cap stop's details go to the owner by DM instead.
   const notice = slashOwnerNotice({
     owner: ctx.owner,
-    outbox: ctx.spendAlerts,
     ask: result.ask,
     askOwner,
-    spendWarning: result.spendWarning,
     // SAFE-13: a tool result that looked like an injection tells the owner.
     injection: result.injection,
     label: `/session \`${session.id}\``,
   });
-  await finishSlashWithOwnerNotice({
-    thinking,
-    body,
-    interaction,
-    sessionId: session.id,
-    trackBotMessage: ctx.trackBotMessage,
-    thinkExtras,
-    ok: result.ok,
-    failStatus: `❌ exit ${result.exitCode}`,
-    ...(ask ? { askStatus: { status: ask.status, failed: ask.failed }, mentionUserIds: ask.mentionUserIds } : {}),
-    ...(choice
-      ? {
-          components: choice.components,
-          onDelivered: (_mode: "collapsed" | "fallback", messageId?: string) =>
-            recordSlashStub(ctx.store, session, choice.pending, messageId),
-        }
-      : answerAsk
-      ? {
-          components: answerAsk.components,
-          keepFooter: true,
-          onDelivered: (_mode: "collapsed" | "fallback", messageId?: string) =>
-            recordSlashStub(ctx.store, session, answerAsk.pending, messageId),
-        }
-      : {}),
-    notice,
-    post: ctx.post,
-  });
+  try {
+    await finishSlashWithOwnerNotice({
+      thinking,
+      body,
+      interaction,
+      sessionId: session.id,
+      trackBotMessage: ctx.trackBotMessage,
+      thinkExtras,
+      ok: result.ok,
+      failStatus: `❌ exit ${result.exitCode}`,
+      ...(ask ? { askStatus: { status: ask.status, failed: ask.failed }, mentionUserIds: ask.mentionUserIds } : {}),
+      ...(choice
+        ? {
+            components: choice.components,
+            onDelivered: (_mode: "collapsed" | "fallback", messageId?: string) =>
+              recordSlashStub(ctx.store, session, choice.pending, messageId),
+          }
+        : answerAsk
+        ? {
+            components: answerAsk.components,
+            keepFooter: true,
+            onDelivered: (_mode: "collapsed" | "fallback", messageId?: string) =>
+              recordSlashStub(ctx.store, session, answerAsk.pending, messageId),
+          }
+        : {}),
+      notice,
+      post: ctx.post,
+    });
+  } finally {
+    // SAFE-14.a: the owner's DM — the stop's details when this run claimed
+    // the episode's ping, and the pending 80% warning. Never throws.
+    await ctx.spendDm?.deliver({
+      stop: spendStopFor(result.ask, askOwner, interaction.channelId),
+      warning: result.spendWarning,
+    });
+  }
 }
 
 export async function handleSessionCommand(

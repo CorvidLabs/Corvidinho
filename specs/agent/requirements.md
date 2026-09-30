@@ -227,8 +227,9 @@ whose question states the 24-hour spend, the call estimate and the cap,
 names the operator action that continues (raise or unset the cap where
 Corvidinho runs and restart, or wait for earlier spend to leave the window,
 then ask again) and says a reply cannot lift the cap, without a yes/no
-question; the attempt's summary SHALL be the generic `SPEND_CAP_SUMMARY`
-with no amounts and no env names (safe for a public reply such as a WATCH
+question; the attempt's summary SHALL be the generic `SPEND_CAP_SUMMARY`,
+which is `SPEND_PAUSED_TEXT` "Work is paused for budget." (SAFE-14.a), with no
+amounts, no cap and no env names (safe for a public reply such as a WATCH
 comment), and `runTask` SHALL return state `blocked` (never `done`, verify
 not run, no retry) through the AUTONOMY-1/2 ask path. A model with no known
 price, a cap value that is not a plain USD amount (never echoed), or an
@@ -256,8 +257,16 @@ second warning is recorded — for the first post that sees 80% or more;
 allows one owner ping per cap episode, re-armed the same way, and returns a
 claim whose `release` hands the ping back when the post that carried it
 failed). The module SHALL also report spend against the cap for doctor and
-Discord `/status` (AUTONOMOUS-8). The Approve card (#96, draft SAFE-18..20)
-and draft SAFE-14..16 are not part of this requirement.
+the owner's Discord `/status` line (AUTONOMOUS-8), and SHALL provide the only
+spend line anyone else sees (SAFE-14.a): `spendPaused(snapshot)` is true while
+runs stop at the spend check (24-hour spend at or past the cap, an unpriced
+model, an invalid cap value, an unreadable ledger), and
+`formatSpendPublicStatusLine(snapshot)` is "Spend: Work is paused for budget."
+then and undefined otherwise, naming no amount, cap, model, path or setting.
+The bridge delivers the claimed warning to the owner by DM only
+(REQ-discord-098). The Approve card (#96, SAFE-18..20) and
+per-provider caps (SAFE-14, and SAFE-15 for each cap) are not part of this
+requirement; of SAFE-14 it covers only SAFE-14.a's public text.
 
 Acceptance Criteria
 - No cap: the capped fetch is the same fetch and no database file is created.
@@ -270,6 +279,7 @@ Acceptance Criteria
 - The call that brings spend to 80% yields exactly one `Text` warning and one `onSpendWarning`; later calls stay quiet while spend stays at or above 70%; after spend is seen under 70% (by a settle or a reservation) the next crossing warns again, including within 24 hours; 24 hours after the last warning, or with a new cap value, it warns again; `task run --json` carries `result.spendWarning` on the crossing run.
 - A warning recorded by one process is taken once by the outbox with current spend, can be released and taken again, and stays pending (not delivered, not dropped) while spend is back under 80%: 80% at T0, then 72%, then 96% delivers exactly one warning at 96% and records no second warning; without a database the outbox returns the run's own warning.
 - `claimCapPing` returns a claim once per cap episode and again after spend is seen under 70% or 24 hours pass; a released claim lets the next claim in the same episode succeed.
+- `SPEND_PAUSED_TEXT` is "Work is paused for budget." and `SPEND_CAP_SUMMARY` equals it; `formatSpendPublicStatusLine` is undefined with no cap and under the cap, and "Spend: Work is paused for budget." at the cap, for an unpriced model, an invalid value and an unreadable ledger; `spendPaused` flips exactly at the cap; the owner's `formatSpendStatusLine` keeps the amounts.
 
 ### REQ-agent-117
 

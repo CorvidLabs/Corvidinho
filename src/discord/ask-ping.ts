@@ -14,12 +14,16 @@
  * An edit does not notify its mentions, so an answer collapsed into the
  * thinking message (DISCORD-ASK-6/7) is followed by the one-line
  * formatCollapsedPing post (REQ-discord-215).
+ *
+ * SAFE-14.a (#98): a spend-cap stop posts only that work is paused for
+ * budget — never the question, which holds the amounts and the cap setting;
+ * those reach the owner by DM (src/discord/spend-dm.ts).
  */
 
 import { createHash } from "node:crypto";
-import { formatSpendWarningLine } from "../agent/spend-notice.ts";
+import { SPEND_PAUSED_TEXT } from "../agent/spend-notice.ts";
 import { clipKeepingRoleNote } from "../agent/task-summary.ts";
-import type { HumanAsk, SpendWarning } from "../agent/types.ts";
+import type { HumanAsk } from "../agent/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import { defangMassMentions } from "./allowed-mentions.ts";
@@ -117,6 +121,8 @@ function quote(text: string): string {
  *
  * AUTONOMY-4: clarify → requester; stuck → owner (requester===owner is fine).
  * SAFE-8: spend-cap → owner (the operator is the one who can lift the cap).
+ * SAFE-14.a: a spend-cap post is the headline alone — the question (amounts,
+ * cap, setting names) is never quoted in a channel; the owner gets it by DM.
  */
 export function formatAskReply(opts: FormatAskReplyOpts): AskReply {
   const stuck = opts.ask.reason === "stuck";
@@ -139,7 +145,7 @@ export function formatAskReply(opts: FormatAskReplyOpts): AskReply {
   const lines: string[] = [];
   if (opts.prefix?.trim()) lines.push(clean(opts.prefix, 300));
   lines.push(`${headline}${ping}`);
-  lines.push(quote(clean(opts.ask.question, ASK_REPLY_QUESTION_MAX)));
+  if (!spendCap) lines.push(quote(clean(opts.ask.question, ASK_REPLY_QUESTION_MAX)));
   if (stuck && opts.context?.trim()) {
     lines.push(clean(opts.context, ASK_REPLY_CONTEXT_MAX));
   }
@@ -167,64 +173,16 @@ export function formatAskReply(opts: FormatAskReplyOpts): AskReply {
 }
 
 /**
- * SAFE-8 spend-cap ask headline: the run paused before a provider call. It
- * names the operator because a requester cannot lift the cap.
+ * SAFE-8 / SAFE-14.a spend-cap ask headline: the run paused before a
+ * provider call. Everyone sees only that work is paused for budget (no
+ * amounts, no cap or setting names); the owner gets the details by DM.
  */
-export const SPEND_CAP_HEADLINE =
-  "💸 I paused before spending more — the daily spend cap needs the operator.";
-export const SPEND_CAP_STATUS = "💸 Paused at the spend cap";
-
-export type SpendWarningReply = {
-  /** One line appended to the run's post. */
-  line: string;
-  /** The owner, when set, so the line can ping them. */
-  mentionUserIds: string[];
-};
+export const SPEND_CAP_HEADLINE = `💸 ${SPEND_PAUSED_TEXT}`;
+export const SPEND_CAP_STATUS = `💸 ${SPEND_PAUSED_TEXT.replace(/\.$/, "")}`;
 
 /**
- * SAFE-8 80% warning line for a Discord post, rebuilt from the warning's
- * amounts (never from child text). Pings the configured owner when set; the
- * runner records each warning once per crossing and the bridge's outbox
- * (src/agent/spend-outbox.ts) hands it to exactly one post.
- */
-export function formatSpendWarningReply(
-  warning: SpendWarning,
-  owner: OwnerRecord | null | undefined,
-): SpendWarningReply {
-  const id = owner?.discordId;
-  const line = formatSpendWarningLine(warning);
-  return {
-    line: id ? line.replace(/^⚠️ /, `⚠️ <@${id}> `) : line,
-    mentionUserIds: id ? [id] : [],
-  };
-}
-
-/**
- * A post with the SAFE-8 80% warning line appended (owner added to the
- * allowed mentions), cut to `max` (default ASK_REPLY_MAX; a chat answer the
- * bridge splits into messages passes its whole-answer cap, DISCORD-16).
- * Returns `post` unchanged when there is no warning.
- */
-export function withSpendWarningPost<
-  T extends { content: string; mentionUserIds?: string[] },
->(
-  post: T,
-  warning: SpendWarning | undefined,
-  owner: OwnerRecord | null | undefined,
-  max: number = ASK_REPLY_MAX,
-): T {
-  if (!warning) return post;
-  const w = formatSpendWarningReply(warning, owner);
-  const ids = [...new Set([...(post.mentionUserIds ?? []), ...w.mentionUserIds])];
-  return {
-    ...post,
-    content: appendPostLine(post.content, w.line, max),
-    ...(ids.length ? { mentionUserIds: ids } : {}),
-  };
-}
-
-/**
- * `content` + a blank line + `line`, cutting `content` so the post stays ≤ max.
+ * `content` + a blank line + `line`, cutting `content` so the post stays ≤ max
+ * (the SAFE-13 owner line, a slash run's owner notice).
  * The cut keeps a closing "(not allowed for your role)" note (ROLES-CHAT-3,
  * REQ-discord-734): the body loses its end, never the note.
  */
@@ -251,7 +209,7 @@ export function clipPostSummary(summary: string, headLength = 0): string {
 
 /** Pointer for the user a collapsed answer asks a question (AUTONOMY-4). */
 export const COLLAPSED_PING_QUESTION = "↑ question for you";
-/** Pointer for a user a collapsed answer needs (owner: AUTONOMY-2, SAFE-8). */
+/** Pointer for a user a collapsed answer needs (owner: AUTONOMY-2, SAFE-8 cap stop, SAFE-13). */
 export const COLLAPSED_PING_NEEDS = "↑ needs you";
 
 export type CollapsedPing = {
@@ -267,7 +225,8 @@ export type CollapsedPing = {
  * message that mentions someone is followed by this short fresh post.
  * `questionUserIds` are the users the answer asks a question (the clarify
  * requester, "↑ question for you"); every other mentioned user is needed
- * ("↑ needs you": the owner on stuck, spend cap or the 80% warning).
+ * ("↑ needs you": the owner on stuck, a spend-cap stop or a SAFE-13 line;
+ * the 80% spend warning goes to the owner by DM, SAFE-14.a).
  * Users in `alreadyPinged` (a fresh post already pinged them this turn, e.g.
  * the slash owner notice) are left out. Null when nobody is left to ping.
  */

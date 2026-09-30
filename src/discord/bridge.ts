@@ -37,11 +37,7 @@ import {
   createEchoAgentClient,
   createSpawnAgentClient,
 } from "./agent-client.ts";
-import {
-  ASK_NO_OWNER_WARNING,
-  formatAskReply,
-  withSpendWarningPost,
-} from "./ask-ping.ts";
+import { ASK_NO_OWNER_WARNING, formatAskReply } from "./ask-ping.ts";
 import {
   ASK_ANSWER_ACK,
   ASK_ANSWER_INPUT_ID,
@@ -175,9 +171,10 @@ import {
 import type { Database } from "bun:sqlite";
 import { VERSION as PACKAGE_VERSION, tryGitTipShortSha } from "../version.ts";
 import { readSpendSnapshot } from "../agent/spend.ts";
-import { formatSpendStatusLine } from "../agent/spend-notice.ts";
+import { formatSpendPublicStatusLine, formatSpendStatusLine } from "../agent/spend-notice.ts";
 import { createSpendAlertOutbox } from "../agent/spend-outbox.ts";
 import { askPingOwner, postCollapsedPing } from "./spend-post.ts";
+import { createSpendDm, spendStopFor } from "./spend-dm.ts";
 import { AnnounceStore } from "./announce-store.ts";
 import {
   formatBridgeLiveAnnouncement,
@@ -494,13 +491,8 @@ export async function startBridge(
     ? () => formatAuditLine(verifyAudit(db, auditKeyFromEnv(env)))
     : undefined;
   if (auditLine) console.log(`[discord] ${auditLine()}`);
-  // AUTONOMOUS-8: /status shows rolling 24 h spend against the daily cap.
-  const spendLine = () =>
-    formatSpendStatusLine(
-      readSpendSnapshot({ env, db, model: loadLlmEnv(env).model }),
-    );
-  // SAFE-8: every bridge post delivers pending 80% warnings (recorded by any
-  // run on this data dir) and pings the owner once per spend-cap episode.
+  // SAFE-8: the owner is pinged once per spend-cap episode; pending 80%
+  // warnings (recorded by any run on this data dir) are claimed here too.
   const spendAlerts = createSpendAlertOutbox({ db, env });
   // SAFE-5: /admin mutations append to the same chain (fail closed on error).
   const recordAudit = db
@@ -512,6 +504,22 @@ export async function startBridge(
   // Approve/Deny card from one engine (src/discord/approval-cards.ts); the
   // MEMORY-ACL-6 forget request is its `forget` kind.
   const sendDmRef: { fn?: GatewayHandlers["sendDm"] } = {};
+  // SAFE-14.a: spend amounts and cap settings reach only the owner, by DM —
+  // the 80% warning and a cap stop's details, after each run and every tick.
+  const spendDm = createSpendDm({
+    outbox: spendAlerts,
+    owner: () => config.owner ?? null,
+    sendDm: () => sendDmRef.fn,
+  });
+  // AUTONOMOUS-8 / SAFE-14.a: /status shows the owner rolling 24 h spend
+  // against the daily cap; anyone else sees only "Work is paused for budget."
+  // while runs stop at the cap, and nothing otherwise.
+  const spendLine = (ownerView: boolean) => {
+    const snap = readSpendSnapshot({ env, db, model: loadLlmEnv(env).model });
+    if (!ownerView) return formatSpendPublicStatusLine(snap);
+    const line = formatSpendStatusLine(snap);
+    return spendDm.waiting() ? `${line} — ⚠️ a spend DM to you has not gone out yet (retried every tick)` : line;
+  };
   const sendDm = async (o: Parameters<NonNullable<GatewayHandlers["sendDm"]>>[0]) =>
     sendDmRef.fn ? sendDmRef.fn(o) : null;
   const editCardMessage = async (o: Parameters<NonNullable<GatewayHandlers["editMessage"]>>[0]) =>
@@ -615,6 +623,7 @@ export async function startBridge(
       auditLine,
       spendLine,
       spendAlerts,
+      spendDm,
       ...(replyRef.fn ? { post: replyRef.fn } : {}),
       // MEMORY-7.a: /session start and /work send private replies by DM.
       ...(sendDmRef.fn ? { sendDm: sendDmRef.fn } : {}),
@@ -1109,22 +1118,15 @@ export async function startBridge(
         // records no answer, REQ-discord-098).
         store.recordTurn(session, "agent", answerTurnText(body, pendingToStore ?? askRaw));
 
-        // SAFE-8: the pending 80% spend warning and its owner mention ride
-        // whichever message goes out (the collapsed edit or the fallback
-        // reply); when neither does, the warning and the cap ping go back.
-        const spend = spendAlerts.takeWarning(result.spendWarning);
+        // SAFE-14.a: no spend amounts ride the post; the 80% warning and a
+        // cap stop's details go to the owner by DM (after the post, below).
         // SAFE-13: a tool result that looked like an injection pings the owner
         // on the same post.
         const out = withInjectionNotice(
-          withSpendWarningPost(
-            {
-              content: body,
-              ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
-            },
-            spend?.warning,
-            config.owner,
-            DISCORD_ANSWER_MAX,
-          ),
+          {
+            content: body,
+            ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
+          },
           result.injection,
           config.owner,
           // DISCORD-16: the answer is split into messages, so the SAFE-13
@@ -1210,11 +1212,14 @@ export async function startBridge(
             store.trackBotMessage(`bot_reply_for_${msg.id}`, session);
           }
         } finally {
-          // Nothing went out: the next post carries the warning and the cap ping.
-          if (!delivered) {
-            spend?.release();
-            askOwner?.release();
-          }
+          // Nothing went out: the next post carries the cap ping.
+          if (!delivered) askOwner?.release();
+          // SAFE-14.a: the owner's DM — the stop's details when this post
+          // claimed the episode's ping, and the pending 80% warning.
+          await spendDm.deliver({
+            stop: spendStopFor(askRaw, askOwner, channelId),
+            warning: result.spendWarning,
+          });
         }
       } finally {
         inflight.end();
@@ -1739,21 +1744,14 @@ export async function startBridge(
         // AGENT-6: the answer to the pick joins the session's thread.
         store.recordTurn(session, "agent", answerTurnText(body, pendingToStore ?? askRaw));
 
-        // SAFE-8: the pending 80% warning and its owner mention ride whichever
-        // message goes out; when neither does, it and the cap ping go back.
-        const spend = spendAlerts.takeWarning(result.spendWarning);
+        // SAFE-14.a: as on a chat reply — no spend amounts ride the post.
         // SAFE-13: a tool result that looked like an injection pings the owner
         // on the same post.
         const out = withInjectionNotice(
-          withSpendWarningPost(
-            {
-              content: body,
-              ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
-            },
-            spend?.warning,
-            config.owner,
-            DISCORD_ANSWER_MAX,
-          ),
+          {
+            content: body,
+            ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
+          },
           result.injection,
           config.owner,
           // DISCORD-16: the answer is split into messages, so the SAFE-13
@@ -1833,11 +1831,13 @@ export async function startBridge(
             inflight?.end();
           }
         } finally {
-          // Nothing went out: the next post carries the warning and the cap ping.
-          if (!delivered) {
-            spend?.release();
-            askOwner?.release();
-          }
+          // Nothing went out: the next post carries the cap ping.
+          if (!delivered) askOwner?.release();
+          // SAFE-14.a: the owner's DM, as on a chat reply.
+          await spendDm.deliver({
+            stop: spendStopFor(askRaw, askOwner, channelId),
+            warning: result.spendWarning,
+          });
         }
 
         // DISCORD-ASK-8 — drop the ephemeral "Got it… Working…" once resume finishes
@@ -1960,6 +1960,9 @@ export async function startBridge(
       // mute set, and its injection refusal lands on the bridge's trail.
       mutedUsers,
       ...(recordAudit ? { recordAudit } : {}),
+      // SAFE-14.a: every tick retries the owner's spend DMs; a schedule run's
+      // warning and cap stop go there, never into the schedule's post.
+      spendDm,
       outbound: {
         post: async ({ channelId, content, mentionUserIds }) => {
           if (!replyRef.fn) return false;

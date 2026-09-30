@@ -226,7 +226,9 @@ describe("/work and /session start keep a run's ask as the pending ask (AUTONOMY
   test("/work stopped at the spend cap: blocked, no pending ask; a later \"ok\" runs the agent with no cap text", async () => {
     const { agent, calls } = askingAgent({ ask: CAP_ASK, summary: SPEND_CAP_SUMMARY });
     const bridge = await bridgeWith(agent);
-    const answerId = await runSlash(bridge, "work", { description: "add storage" }, "Daily spend cap reached");
+    // SAFE-14.a: the answer says only that work is paused for budget.
+    const answerId = await runSlash(bridge, "work", { description: "add storage" }, "Work is paused for budget.");
+    expect(bridge.outbound.contentEdits.some((e) => String(e.content ?? "").includes("Daily spend cap reached"))).toBe(false);
     if (!bridge.result.ok) throw new Error("bridge did not start");
     expect(bridge.result.workStore.list()[0]!.status).toBe("blocked");
     const session = bridge.result.store.getByBotMessage(answerId);
@@ -336,7 +338,9 @@ describe("/work and /session start keep a run's ask as the pending ask (AUTONOMY
   test("/session start stopped at the spend cap keeps no pending ask", async () => {
     const { agent } = askingAgent({ ask: CAP_ASK, summary: SPEND_CAP_SUMMARY });
     const bridge = await bridgeWith(agent, { community: true });
-    const answerId = await runSlash(bridge, "session", { topic: "storage" }, "Daily spend cap reached");
+    // SAFE-14.a: the answer says only that work is paused for budget.
+    const answerId = await runSlash(bridge, "session", { topic: "storage" }, "Work is paused for budget.");
+    expect(bridge.outbound.contentEdits.some((e) => String(e.content ?? "").includes("Daily spend cap reached"))).toBe(false);
     const session = bridge.result.store.getByBotMessage(answerId);
     expect(session).toBeDefined();
     expect(session!.pendingAsk ?? null).toBeNull();

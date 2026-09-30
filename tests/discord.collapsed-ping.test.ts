@@ -2,8 +2,9 @@
  * AUTONOMY-2/4 + SAFE-8 with DISCORD-ASK-6/7 (REQ-discord-215): Discord does
  * not notify a mention added by a message edit, so an answer collapsed into
  * the thinking message that mentions the requester (clarify) or the owner
- * (stuck, spend cap, 80% warning) is followed by one short fresh post that
- * pings exactly those users. No extra post for a fresh (fallback) reply, and
+ * (stuck, spend cap) is followed by one short fresh post that pings exactly
+ * those users. The 80% spend warning never rides an answer; it goes to the
+ * owner by DM (SAFE-14.a). No extra post for a fresh (fallback) reply, and
  * no second ping for a user the slash owner notice (#160) already pinged.
  * Fixtures only: fake gateway reply, fake thinking outbound, in-memory DB.
  */
@@ -73,6 +74,7 @@ async function bridgeWith(
 ) {
   const box: { handlers: GatewayHandlers | null } = { handlers: null };
   const replies: Reply[] = [];
+  const dms: Array<{ userId: string; content: string }> = [];
   const { outbound, finals } = thinkingOutbound(opts.collapse ?? true);
   let calls = 0;
   const result = await startBridge({
@@ -101,11 +103,15 @@ async function bridgeWith(
         replies.push(o);
         return { messageId: `bot_${calls}` };
       };
+      handlers.sendDm = async ({ userId, content }) => {
+        dms.push({ userId, content });
+        return { channelId: `dm_${userId}`, messageId: `dm_${dms.length}` };
+      };
       return createNullGateway();
     },
   });
   if (!result.ok || !box.handlers) throw new Error("bridge did not start");
-  return { result, handlers: box.handlers, replies, finals };
+  return { result, handlers: box.handlers, replies, finals, dms };
 }
 
 function askAgent(ask: HumanAsk | (() => HumanAsk), extra: Record<string, unknown> = {}): AgentClient {
@@ -264,13 +270,17 @@ describe("chat and button-pick answers collapsed into the thinking message", () 
     await result.stop();
   });
 
-  test("clarify plus a pending 80% warning: one post pings the requester and the owner, each with its pointer", async () => {
-    const { result, handlers, replies, finals } = await bridgeWith(askAgent(CLARIFY), { db: pendingWarningDb() });
+  test("clarify plus a pending 80% warning: the answer carries no warning, one post pings only the requester, the owner gets the warning by DM (SAFE-14.a)", async () => {
+    const { result, handlers, replies, finals, dms } = await bridgeWith(askAgent(CLARIFY), { db: pendingWarningDb() });
     await handlers.onMessage(MENTION);
-    expect(finals[0]!.content).toContain(`⚠️ <@${OWNER_ID}> Spend warning (SAFE-8)`);
+    expect(finals[0]!.content).not.toContain("Spend warning");
+    expect(finals[0]!.mentionUserIds).toEqual([REQUESTER_ID]);
     expect(replies).toHaveLength(1);
-    expect(replies[0]!.content).toBe(`${QUESTION} · ${NEEDS}`);
-    expectExactPing(replies[0]!, [REQUESTER_ID, OWNER_ID]);
+    expect(replies[0]!.content).toBe(QUESTION);
+    expectExactPing(replies[0]!, [REQUESTER_ID]);
+    expect(dms).toHaveLength(1);
+    expect(dms[0]!.userId).toBe(OWNER_ID);
+    expect(dms[0]!.content).toContain("Spend warning (SAFE-8)");
     await result.stop();
   });
 
@@ -448,8 +458,8 @@ describe("slash answers collapsed into the thinking message (/work, /session sta
     await result.stop();
   });
 
-  test("/session start with a clarify ask by the owner and a pending 80% warning: the #160 owner notice is the only ping", async () => {
-    const { result, handlers, replies, finals } = await bridgeWith(askAgent(CLARIFY), {
+  test("/session start with a clarify ask by the owner and a pending 80% warning: no owner notice (the warning goes by DM), so the only ping is the question's", async () => {
+    const { result, handlers, replies, finals, dms } = await bridgeWith(askAgent(CLARIFY), {
       db: pendingWarningDb(),
       env: { CORVIDINHO_OWNER_DISCORD_ID: REQUESTER_ID },
     });
@@ -457,8 +467,11 @@ describe("slash answers collapsed into the thinking message (/work, /session sta
     expect(finals).toHaveLength(1);
     expect(finals[0]!.mentionUserIds).toEqual([REQUESTER_ID]);
     expect(replies).toHaveLength(1);
-    expect(replies[0]!.content).toContain(`⚠️ <@${REQUESTER_ID}> Spend warning (SAFE-8)`);
-    expect(replies[0]!.mentionUserIds).toEqual([REQUESTER_ID]);
+    expect(replies[0]!.content).toBe(QUESTION);
+    expectExactPing(replies[0]!, [REQUESTER_ID]);
+    expect(dms).toHaveLength(1);
+    expect(dms[0]!.userId).toBe(REQUESTER_ID);
+    expect(dms[0]!.content).toContain("Spend warning (SAFE-8)");
     await result.stop();
   });
 
@@ -475,7 +488,7 @@ describe("slash answers collapsed into the thinking message (/work, /session sta
         };
       },
     };
-    const { result, handlers, replies, finals } = await bridgeWith(agent, {
+    const { result, handlers, replies, finals, dms } = await bridgeWith(agent, {
       db: pendingWarningDb(),
       env: { [SPEND_CAP_ENV]: "5" },
     });
@@ -483,7 +496,10 @@ describe("slash answers collapsed into the thinking message (/work, /session sta
     expect(finals).toHaveLength(1);
     expect(replies).toHaveLength(1);
     expect(replies[0]!.content).toContain(`💸 <@${OWNER_ID}> /work`);
+    expect(replies[0]!.content).not.toContain("Spend warning");
     expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    // SAFE-14.a: the stop's details and the warning go to the owner by DM.
+    expect(dms.map((d) => d.userId)).toEqual([OWNER_ID, OWNER_ID]);
     await result.stop();
   });
 

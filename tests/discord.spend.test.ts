@@ -1,9 +1,12 @@
 /**
  * SAFE-8 as amended on #98 on Discord (REQ-discord-098): the spend-cap ask
- * goes through the AUTONOMY-1/2 ask path with the owner pinged, the 80%
- * warning rides the reply / schedule post and pings the owner, and /status
- * shows 24 h spend vs the cap (AUTONOMOUS-8). Fixtures only: fake gateway,
- * fake sh bin, in-memory DB — no live Discord, no network, no git worktrees.
+ * goes through the AUTONOMY-1/2 ask path with the owner pinged, and /status
+ * shows the owner 24 h spend vs the cap (AUTONOMOUS-8). SAFE-14.a: only the
+ * owner sees spend amounts and cap settings — every channel post says only
+ * "Work is paused for budget.", the 80% warning and a cap stop's details go
+ * to the owner by DM, and anyone else's /status shows at most that work is
+ * paused. Fixtures only: fake gateway (replies and DMs recorded), fake sh
+ * bin, in-memory DB — no live Discord, no network, no git worktrees.
  */
 import { describe, expect, test } from "bun:test";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -27,10 +30,8 @@ import {
   ASK_REPLY_MAX,
   askPingKey,
   formatAskReply,
-  formatSpendWarningReply,
   SPEND_CAP_HEADLINE,
   SPEND_CAP_STATUS,
-  withSpendWarningPost,
 } from "../src/discord/ask-ping.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { SessionStore } from "../src/discord/session-store.ts";
@@ -69,15 +70,30 @@ const CAP_ASK: HumanAsk = spendCapReachedAsk({
   estimateMicroUsd: 2_600,
   capMicroUsd: 5_000_000,
 });
+/** SAFE-14.a: all a channel learns about spend. */
+const PAUSED = "Work is paused for budget.";
+/** SAFE-14.a: no amount, cap value or setting name in `text`. */
+function expectNoSpendDetails(text: string | null | undefined): void {
+  const t = text ?? "";
+  expect(t).not.toMatch(/\$\d/);
+  expect(t).not.toContain("CORVIDINHO_");
+  expect(t).not.toContain("SAFE-8");
+  expect(t).not.toMatch(/daily (spend )?cap/i);
+  expect(t).not.toMatch(/\d+%/);
+}
+/** The warning DM for the pending 80% warning below ($0.85 of $1.00). */
+const WARNING_DM_85 = "⚠️ Spend warning (SAFE-8): $0.85 of the $1.00 daily cap used in the last 24h (85%)";
 
 describe("spend-cap ask on Discord (ask path + owner ping)", () => {
-  test("headline and status say the run paused at the cap; owner pinged; not a failure", () => {
+  test("headline and status say only that work is paused for budget; the question is not quoted; owner pinged; not a failure (SAFE-14.a)", () => {
     const r = formatAskReply({ ask: CAP_ASK, owner: OWNER, replyHint: true });
     const lines = r.content.split("\n");
-    expect(lines[0]).toBe(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
-    expect(r.content).toContain("> Daily spend cap reached (SAFE-8): $4.9990 spent in the last 24h");
-    expect(r.content).toContain(SPEND_CAP_ENV);
+    expect(lines[0]).toBe(`💸 ${PAUSED} <@${OWNER_ID}>`);
+    expect(lines).toHaveLength(1);
+    expect(r.content).not.toContain("Daily spend cap reached");
+    expectNoSpendDetails(r.content);
     expect(r.status).toBe(SPEND_CAP_STATUS);
+    expect(r.status).toBe("💸 Work is paused for budget");
     expect(r.failed).toBe(false);
     expect(r.mentionUserIds).toEqual([OWNER_ID]);
   });
@@ -91,46 +107,22 @@ describe("spend-cap ask on Discord (ask path + owner ping)", () => {
   });
 });
 
-describe("80% warning line (formatSpendWarningReply / withSpendWarningPost)", () => {
-  test("owner mentioned in the line and allowed; no owner → plain line, no mention", () => {
-    const withOwner = formatSpendWarningReply(WARNING, OWNER);
-    expect(withOwner.line).toStartWith(`⚠️ <@${OWNER_ID}> Spend warning (SAFE-8): $4.10 of the $5.00 daily cap`);
-    expect(withOwner.mentionUserIds).toEqual([OWNER_ID]);
-    const none = formatSpendWarningReply(WARNING, null);
-    expect(none.line).toStartWith("⚠️ Spend warning (SAFE-8)");
-    expect(none.mentionUserIds).toEqual([]);
-  });
-
-  test("no warning → same post object; warning → appended line, mention ids merged", () => {
-    const post: { channelId: string; content: string; mentionUserIds?: string[] } = {
-      channelId: "c",
-      content: "all good",
-    };
-    expect(withSpendWarningPost(post, undefined, OWNER)).toBe(post);
-    const out = withSpendWarningPost({ ...post, mentionUserIds: ["u2", OWNER_ID] }, WARNING, OWNER);
-    expect(out.content).toStartWith("all good\n\n⚠️ <@");
-    expect(out.mentionUserIds).toEqual(["u2", OWNER_ID]);
-    const plain = withSpendWarningPost(post, WARNING, null);
-    expect(plain.mentionUserIds).toBeUndefined();
-  });
-
-  test("a long post is cut so the warning line always fits", () => {
+describe("appendPostLine (a slash owner notice or SAFE-13 line on a post)", () => {
+  test("a long post is cut so the appended line always fits", () => {
     const out = appendPostLine("x".repeat(5000), "LINE");
     expect(out.length).toBeLessThanOrEqual(ASK_REPLY_MAX);
     expect(out).toEndWith("…\n\nLINE");
   });
 
-  test("the cut for the warning line keeps a closing role note (REQ-discord-734, ROLES-CHAT-3)", () => {
+  test("the cut for an appended line keeps a closing role note (REQ-discord-734, ROLES-CHAT-3)", () => {
     const tail = `\n\n${ROLE_REFUSED_SUMMARY_NOTE}`;
     // A non-ADMIN chat answer: 1800 chars, the note last.
     const content = chatBodyFromTaskResult({ summary: `${"y".repeat(2500)}${tail}` });
     expect(content.length).toBe(1800);
-    const post: { channelId: string; content: string; mentionUserIds?: string[] } = { channelId: "c", content };
-    const out = withSpendWarningPost(post, WARNING, OWNER);
-    const line = formatSpendWarningReply(WARNING, OWNER).line;
-    expect(out.content.length).toBe(ASK_REPLY_MAX);
-    expect(out.content).toEndWith(`y…${tail}\n\n${line}`);
-    expect(out.mentionUserIds).toEqual([OWNER_ID]);
+    const line = `💸 <@${OWNER_ID}> /work \`w\`: ${PAUSED} ${"z".repeat(150)}`;
+    const out = appendPostLine(content, line);
+    expect(out.length).toBe(ASK_REPLY_MAX);
+    expect(out).toEndWith(`y…${tail}\n\n${line}`);
     // A body that fits is untouched.
     const short = `answer${tail}`;
     expect(appendPostLine(short, "LINE")).toBe(`${short}\n\nLINE`);
@@ -138,6 +130,7 @@ describe("80% warning line (formatSpendWarningReply / withSpendWarningPost)", ()
 });
 
 type Reply = { channelId: string; content: string; replyToMessageId?: string; mentionUserIds?: string[] };
+type Dm = { userId: string; content: string };
 
 async function bridgeWith(
   agent: AgentClient,
@@ -151,10 +144,13 @@ async function bridgeWith(
    * pass one with `editMessage` to exercise the collapsed single message.
    */
   thinkingOutbound?: ThinkingOutbound,
+  /** True while DMs should fail (the live gateway then returns null). */
+  failDms: () => boolean = () => false,
 ) {
   const box: { handlers: GatewayHandlers | null } = { handlers: null };
   const outbound = memoryThinkingOutbound();
   const replies: Reply[] = [];
+  const dms: Dm[] = [];
   const result = await startBridge({
     env: {
       DISCORD_BOT_TOKEN: "fake",
@@ -183,11 +179,17 @@ async function bridgeWith(
         replies.push(opts);
         return { messageId: `bot_${replies.length}` };
       };
+      // SAFE-14.a: the owner's spend DMs.
+      handlers.sendDm = async ({ userId, content }) => {
+        if (failDms()) return null;
+        dms.push({ userId, content });
+        return { channelId: `dm_${userId}`, messageId: `dm_${dms.length}` };
+      };
       return createNullGateway();
     },
   });
   if (!result.ok || !box.handlers) throw new Error("bridge did not start");
-  return { result, handlers: box.handlers, outbound, replies };
+  return { result, handlers: box.handlers, outbound, replies, dms };
 }
 
 const MENTION = {
@@ -200,39 +202,51 @@ const MENTION = {
 };
 
 describe("bridge replies", () => {
-  test("spend-cap ask → question + owner ping; status paused, not an error (fallback reply path)", async () => {
+  test("spend-cap ask → only 'Work is paused for budget.' + owner ping in the channel; the details go to the owner by DM; status paused, not an error (fallback reply path)", async () => {
     const agent: AgentClient = {
       async runChat({ sessionId }) {
-        return { ok: true, sessionId, summary: `state=blocked\n${formatAskSummary(CAP_ASK)}`, exitCode: 0, ask: CAP_ASK };
+        return { ok: true, sessionId, summary: SPEND_CAP_SUMMARY, exitCode: 0, ask: CAP_ASK };
       },
     };
-    const { result, handlers, outbound, replies } = await bridgeWith(agent, { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID });
+    const { result, handlers, outbound, replies, dms } = await bridgeWith(agent, { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID });
     await handlers.onMessage(MENTION);
     expect(replies).toHaveLength(1);
-    expect(replies[0]!.content).toContain(SPEND_CAP_HEADLINE);
-    expect(replies[0]!.content).toContain("Daily spend cap reached");
+    expect(replies[0]!.content).toBe(`💸 ${PAUSED} <@${OWNER_ID}>`);
+    expectNoSpendDetails(replies[0]!.content);
     expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
     const last = outbound.edits[outbound.edits.length - 1]!.embed as DiscordEmbedPayload;
     expect(last.description).toContain(SPEND_CAP_STATUS);
+    expectNoSpendDetails(last.description);
     expect(last.color).not.toBe(THINKING_COLORS.error);
+    // SAFE-14.a: the amounts and the setting reach only the owner, by DM.
+    expect(dms).toHaveLength(1);
+    expect(dms[0]!.userId).toBe(OWNER_ID);
+    expect(dms[0]!.content).toStartWith(`💸 ${PAUSED} Only you see these details (SAFE-14.a).\nIn <#chan-1>:\n> Daily spend cap reached (SAFE-8): $4.9990 spent in the last 24h`);
+    expect(dms[0]!.content).toContain(SPEND_CAP_ENV);
     await result.stop();
   });
 
-  test("80% warning → reply gets the warning line and pings the owner", async () => {
+  test("80% warning → the reply carries no warning line and pings nobody; the owner gets the warning by DM", async () => {
     const agent: AgentClient = {
       async runChat({ sessionId }) {
         return { ok: true, sessionId, summary: "all good", exitCode: 0, spendWarning: WARNING };
       },
     };
-    const { result, handlers, replies } = await bridgeWith(agent, { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID });
+    const { result, handlers, replies, dms } = await bridgeWith(agent, { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID });
     await handlers.onMessage(MENTION);
-    expect(replies[0]!.content).toStartWith("all good\n\n⚠️ <@");
-    expect(replies[0]!.content).toContain("$4.10 of the $5.00 daily cap used in the last 24h (82%)");
-    expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    expect(replies[0]!.content).toBe("all good");
+    expect(replies[0]!.mentionUserIds ?? []).toEqual([]);
+    expect(dms).toEqual([
+      {
+        userId: OWNER_ID,
+        content:
+          "⚠️ Spend warning (SAFE-8): $4.10 of the $5.00 daily cap used in the last 24h (82%). At the cap I stop and ask before spending more.",
+      },
+    ]);
     await result.stop();
   });
 
-  test("/status shows 24 h spend vs the cap from the shared DB", async () => {
+  test("/status: the owner sees 24 h spend vs the cap from the shared DB; anyone else sees no spend line, and only 'Work is paused for budget.' at the cap (SAFE-14.a)", async () => {
     const db = openCorvidinhoDb({ memory: true });
     new SpendLedger(db).reserve({ provider: "p", model: "gpt-4o-mini", estimateMicroUsd: 4_100_000, capMicroUsd: 1e12, now: Date.now() - 1000 });
     const agent: AgentClient = {
@@ -242,21 +256,60 @@ describe("bridge replies", () => {
     };
     const { result, handlers } = await bridgeWith(
       agent,
-      { [SPEND_CAP_ENV]: "5", CORVIDINHO_LLM_MODEL: "gpt-4o-mini" },
+      { [SPEND_CAP_ENV]: "5", CORVIDINHO_LLM_MODEL: "gpt-4o-mini", CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID },
       db,
     );
-    const replies: SlashReplyPayload[] = [];
-    const ix: SlashInteraction = {
-      id: "ix_1",
-      commandName: "status",
-      channelId: "chan-1",
-      userId: "user-1",
-      options: {},
-      reply: async (p) => void replies.push(p),
+    const status = async (userId: string) => {
+      const replies: SlashReplyPayload[] = [];
+      await handlers.onSlash!({
+        id: `ix_${userId}_${Math.random()}`,
+        commandName: "status",
+        channelId: "chan-1",
+        userId,
+        options: {},
+        reply: async (p) => void replies.push(p),
+      });
+      expect(replies[0]?.ephemeral).toBe(true);
+      return replies[0]?.content ?? "";
     };
-    await handlers.onSlash!(ix);
-    expect(replies[0]?.ephemeral).toBe(true);
-    expect(replies[0]?.content).toContain("Spend (24h): $4.10 of $5.00 daily cap (82%) — ⚠️ past 80%");
+    expect(await status(OWNER_ID)).toContain("Spend (24h): $4.10 of $5.00 daily cap (82%) — ⚠️ past 80%");
+    // Under the cap: nothing about spend for anyone else.
+    const other = await status(SLASH_REQUESTER);
+    expect(other).not.toContain("Spend");
+    expect(other).not.toContain(PAUSED);
+    expectNoSpendDetails(other);
+    // At the cap: only that work is paused for budget.
+    new SpendLedger(db).reserve({ provider: "p", model: "gpt-4o-mini", estimateMicroUsd: 1_000_000, capMicroUsd: 1e12, now: Date.now() - 500 });
+    const paused = await status(SLASH_REQUESTER);
+    expect(paused).toContain(`Spend: ${PAUSED}`);
+    expectNoSpendDetails(paused);
+    expect(await status(OWNER_ID)).toContain("Spend (24h): $5.10 of $5.00 daily cap (102%) — 🛑 cap reached");
+    await result.stop();
+  });
+
+  test("/status with no cap set: the owner sees it is off and which setting turns it on; anyone else sees nothing about spend (SAFE-14.a)", async () => {
+    const agent: AgentClient = {
+      async runChat({ sessionId }) {
+        return { ok: true, sessionId, summary: "x", exitCode: 0 };
+      },
+    };
+    const { result, handlers } = await bridgeWith(agent, { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID });
+    const status = async (userId: string) => {
+      const replies: SlashReplyPayload[] = [];
+      await handlers.onSlash!({
+        id: `ix_${userId}`,
+        commandName: "status",
+        channelId: "chan-1",
+        userId,
+        options: {},
+        reply: async (p) => void replies.push(p),
+      });
+      return replies[0]?.content ?? "";
+    };
+    expect(await status(OWNER_ID)).toContain(`Spend cap: off (set ${SPEND_CAP_ENV} to track spend)`);
+    const other = await status(SLASH_REQUESTER);
+    expect(other).not.toContain("Spend");
+    expectNoSpendDetails(other);
     await result.stop();
   });
 
@@ -305,10 +358,11 @@ describe("spawn client reads spendWarning from the result frame", () => {
   }, 30_000);
 });
 
-describe("scheduler post carries the 80% warning", () => {
-  test("warning line appended to the ✅ post; owner pinged", async () => {
+describe("a scheduler post never carries the 80% warning (SAFE-14.a)", () => {
+  test("the ✅ post has no warning line and pings nobody; the owner gets the warning by DM", async () => {
     const store = new ScheduleStore();
     const posts: Array<{ channelId: string; content: string; mentionUserIds?: string[] }> = [];
+    const dms: SpendWarning[] = [];
     const past = Date.now() - 60_000;
     const s = store.create({
       name: "Nightly",
@@ -334,6 +388,12 @@ describe("scheduler post carries the 80% warning", () => {
       useWorktrees: false,
       owner: OWNER,
       outbound: { post: async (p) => void posts.push(p) },
+      spendDm: {
+        async deliver(o) {
+          if (o?.warning) dms.push(o.warning);
+          return { stop: "none", warning: o?.warning ? "sent" : "none" };
+        },
+      },
     });
     await svc.tick();
     for (let i = 0; i < 50 && svc.runningIds().length > 0; i++) {
@@ -342,8 +402,10 @@ describe("scheduler post carries the 80% warning", () => {
     svc.stop();
     expect(posts).toHaveLength(1);
     expect(posts[0]!.content).toStartWith("✅ Schedule **Nightly**");
-    expect(posts[0]!.content).toContain(`⚠️ <@${OWNER_ID}> Spend warning (SAFE-8)`);
-    expect(posts[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    expect(posts[0]!.content).not.toContain("Spend warning");
+    expectNoSpendDetails(posts[0]!.content);
+    expect(posts[0]!.mentionUserIds ?? []).toEqual([]);
+    expect(dms).toEqual([WARNING]);
   });
 });
 
@@ -377,8 +439,8 @@ const CAP_RESULT = {
   task: { state: "blocked", verified: false, verifySkipped: true, attempts: 1, cancelled: false },
 };
 
-describe("80% warning reaches the owner even when the crossing run could not show it", () => {
-  test("a WATCH-style run crosses 80% (warning ignored there); the next bridge reply pings the owner once", async () => {
+describe("80% warning reaches the owner (by DM) even when the crossing run could not show it", () => {
+  test("a WATCH-style run crosses 80% (warning ignored there); the next bridge run DMs the owner once and the reply stays plain", async () => {
     const dir = mkdtempSync(join(tmpdir(), "corvidinho-spend-deliver-"));
     const path = join(dir, "corvidinho.db");
     try {
@@ -412,24 +474,26 @@ describe("80% warning reaches the owner even when the crossing run could not sho
           return { ok: true, sessionId, summary: "all good", exitCode: 0 };
         },
       };
-      const { result, handlers, replies } = await bridgeWith(
+      const { result, handlers, replies, dms } = await bridgeWith(
         agent,
         { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "1" },
         openCorvidinhoDb({ path }),
       );
       await handlers.onMessage(MENTION);
-      expect(replies[0]!.content).toStartWith("all good\n\n⚠️ <@");
-      expect(replies[0]!.content).toContain("of the $1.00 daily cap used in the last 24h (80%)");
-      expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
+      expect(replies[0]!.content).toBe("all good");
+      expect(dms).toHaveLength(1);
+      expect(dms[0]!.userId).toBe(OWNER_ID);
+      expect(dms[0]!.content).toContain("of the $1.00 daily cap used in the last 24h (80%)");
       await handlers.onMessage({ ...MENTION, id: "m2" });
       expect(replies[1]!.content).toBe("all good");
+      expect(dms).toHaveLength(1);
       await result.stop();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  test("/work delivers a pending warning as a fresh post that pings the owner", async () => {
+  test("/work DMs a pending warning to the owner; no channel post carries it", async () => {
     const db = openCorvidinhoDb({ memory: true });
     const ledger = new SpendLedger(db);
     ledger.reserve({ provider: "p", model: "gpt-4o-mini", estimateMicroUsd: 850_000, capMicroUsd: 1e12, now: Date.now() - 1000 });
@@ -439,26 +503,27 @@ describe("80% warning reaches the owner even when the crossing run could not sho
         return { ok: true, sessionId, summary: "did it", exitCode: 0 };
       },
     };
-    const { result, handlers, replies } = await bridgeWith(agent, { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID }, db);
+    const { result, handlers, replies, dms } = await bridgeWith(agent, { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID }, db);
     const { ix, edits } = slashInteraction("work", { description: "add storage" });
     await handlers.onSlash!(ix);
     expect(edits.at(-1)!.content).toContain("(completed)");
-    expect(replies).toHaveLength(1);
-    expect(replies[0]!.content).toStartWith(`⚠️ <@${OWNER_ID}> Spend warning (SAFE-8): $0.85 of the $1.00 daily cap`);
-    expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    expectNoSpendDetails(edits.at(-1)!.content);
+    expect(replies).toHaveLength(0);
+    expect(dms.map((d) => d.userId)).toEqual([OWNER_ID]);
+    expect(dms[0]!.content).toStartWith(WARNING_DM_85);
     await result.stop();
   });
 });
 
 describe("spend-cap ask: once per cap episode, no reply hint, blocked (not done) on slash runs", () => {
-  test("chat: the first ask at the cap pings the owner; later ones post without a ping or a reply hint", async () => {
+  test("chat: the first ask at the cap pings the owner and DMs them the details; later ones post without a ping, a reply hint or a DM", async () => {
     const db = openCorvidinhoDb({ memory: true });
     const agent: AgentClient = {
       async runChat({ sessionId }) {
         return { ...CAP_RESULT, sessionId };
       },
     };
-    const { result, handlers, replies } = await bridgeWith(
+    const { result, handlers, replies, dms } = await bridgeWith(
       agent,
       { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "5" },
       db,
@@ -467,27 +532,31 @@ describe("spend-cap ask: once per cap episode, no reply hint, blocked (not done)
     await handlers.onMessage({ ...MENTION, id: "m2" });
     expect(replies[0]!.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
     expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
-    expect(replies[1]!.content).toContain(SPEND_CAP_HEADLINE);
-    expect(replies[1]!.content).not.toContain("<@");
+    expect(replies[1]!.content).toBe(SPEND_CAP_HEADLINE);
     expect(replies[1]!.mentionUserIds).toEqual([]);
     for (const r of replies) {
       expect(r.content).not.toContain(ASK_REPLY_HINT);
-      expect(r.content).toContain("Replying can't lift the cap");
+      expect(r.content).not.toContain("Replying can't lift the cap");
+      expectNoSpendDetails(r.content);
     }
+    // One DM per cap episode, like one channel ping.
+    expect(dms).toHaveLength(1);
+    expect(dms[0]!.content).toContain("Replying can't lift the cap");
     // Spend seen back under 70% (the next call's check) re-arms the ping.
     new SpendLedger(db).reserve({ provider: "p", model: "gpt-4o-mini", estimateMicroUsd: 1, capMicroUsd: 5_000_000, now: Date.now() });
     await handlers.onMessage({ ...MENTION, id: "m3" });
     expect(replies[2]!.mentionUserIds).toEqual([OWNER_ID]);
+    expect(dms).toHaveLength(2);
     await result.stop();
   });
 
-  test("/work at the cap: blocked task, paused status, ask in the reply, owner pinged once in a fresh post", async () => {
+  test("/work at the cap: blocked task, paused status, 'Work is paused for budget.' in the reply, owner pinged once in a fresh post and DMed the details", async () => {
     const agent: AgentClient = {
       async runChat({ sessionId }) {
         return { ...CAP_RESULT, sessionId };
       },
     };
-    const { result, handlers, replies, outbound } = await bridgeWith(agent, {
+    const { result, handlers, replies, outbound, dms } = await bridgeWith(agent, {
       CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID,
       [SPEND_CAP_ENV]: "5",
     });
@@ -496,8 +565,9 @@ describe("spend-cap ask: once per cap episode, no reply hint, blocked (not done)
     const body = edits.at(-1)!.content!;
     expect(body).toContain("(blocked)");
     expect(body).toContain(SPEND_CAP_HEADLINE);
-    expect(body).toContain("Daily spend cap reached (SAFE-8)");
-    expect(body).toContain("PR: not opened — the work run paused at the daily spend cap (SAFE-8).");
+    expect(body).not.toContain("Daily spend cap reached");
+    expect(body).toContain(`PR: not opened — ${PAUSED}`);
+    expectNoSpendDetails(body);
     expect(body).not.toContain("✅");
     expect(body).not.toContain("<@");
     if (!result.ok) throw new Error("bridge did not start");
@@ -507,14 +577,17 @@ describe("spend-cap ask: once per cap episode, no reply hint, blocked (not done)
     expect(last.color).not.toBe(THINKING_COLORS.error);
     expect(replies).toHaveLength(1);
     expect(replies[0]!.content).toMatch(
-      new RegExp(`^💸 <@${OWNER_ID}> /work \`work_[0-9a-f]+\` paused at the daily spend cap`),
+      new RegExp(`^💸 <@${OWNER_ID}> /work \`work_[0-9a-f]+\`: Work is paused for budget\\.$`),
     );
     expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
-    // Same cap episode: the next /work posts its reply but does not ping again.
+    expect(dms).toHaveLength(1);
+    expect(dms[0]!.content).toContain("Daily spend cap reached (SAFE-8)");
+    // Same cap episode: the next /work posts its reply but does not ping or DM again.
     const second = slashInteraction("work", { description: "more storage" });
     await handlers.onSlash!(second.ix);
     expect(second.edits.at(-1)!.content).toContain("(blocked)");
     expect(replies).toHaveLength(1);
+    expect(dms).toHaveLength(1);
     await result.stop();
   });
 
@@ -592,19 +665,22 @@ describe("spend-cap ask: once per cap episode, no reply hint, blocked (not done)
     await result.stop();
   });
 
-  test("/session start at the cap shows the ask (not ✅) and pings the owner", async () => {
+  test("/session start at the cap shows only that work is paused (not ✅), pings the owner and DMs them the details", async () => {
     const agent: AgentClient = {
       async runChat({ sessionId }) {
         return { ...CAP_RESULT, sessionId };
       },
     };
-    const { result, handlers, replies } = await bridgeWith(agent, { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID });
+    const { result, handlers, replies, dms } = await bridgeWith(agent, { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID });
     const { ix, edits } = slashInteraction("session", { topic: "storage" });
     await handlers.onSlash!(ix);
     expect(edits.at(-1)!.content).toContain(SPEND_CAP_HEADLINE);
+    expectNoSpendDetails(edits.at(-1)!.content);
     expect(replies[0]!.content).toMatch(
-      new RegExp(`^💸 <@${OWNER_ID}> /session \`[^\`]+\` paused at the daily spend cap`),
+      new RegExp(`^💸 <@${OWNER_ID}> /session \`[^\`]+\`: Work is paused for budget\\.$`),
     );
+    expect(dms).toHaveLength(1);
+    expect(dms[0]!.content).toContain("Daily spend cap reached (SAFE-8)");
     await result.stop();
   });
 
@@ -686,7 +762,7 @@ describe("spend-cap ask: once per cap episode, no reply hint, blocked (not done)
   });
 });
 
-describe("a post that did not go out hands back its warning and cap ping (review #160)", () => {
+describe("a post that did not go out hands back its cap ping; the warning goes by DM regardless (review #160, SAFE-14.a)", () => {
   function pendingWarningDb() {
     const db = openCorvidinhoDb({ memory: true });
     const ledger = new SpendLedger(db);
@@ -696,13 +772,13 @@ describe("a post that did not go out hands back its warning and cap ping (review
   }
   const expired = () => new Error("Unknown interaction (token expired)");
 
-  test("/work whose final reply fails (expired token) still posts the owner notice with the warning; the error is re-thrown", async () => {
+  test("/work whose final reply fails (expired token) still posts the owner notice, the owner still gets the DMs, and the error is re-thrown", async () => {
     const agent: AgentClient = {
       async runChat({ sessionId }) {
         return { ...CAP_RESULT, sessionId };
       },
     };
-    const { result, handlers, replies } = await bridgeWith(
+    const { result, handlers, replies, dms } = await bridgeWith(
       agent,
       { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "5" },
       pendingWarningDb(),
@@ -713,20 +789,23 @@ describe("a post that did not go out hands back its warning and cap ping (review
     };
     await expect(handlers.onSlash!(ix)).rejects.toThrow("token expired");
     expect(replies).toHaveLength(1);
-    expect(replies[0]!.content).toMatch(new RegExp(`^💸 <@${OWNER_ID}> /work \`work_[0-9a-f]+\` paused at the daily spend cap`));
-    expect(replies[0]!.content).toContain(`⚠️ <@${OWNER_ID}> Spend warning (SAFE-8): $0.85 of the $1.00 daily cap`);
+    expect(replies[0]!.content).toMatch(new RegExp(`^💸 <@${OWNER_ID}> /work \`work_[0-9a-f]+\`: Work is paused for budget\\.$`));
     expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    expect(dms.map((d) => d.content.split("\n")[0])).toEqual([
+      `💸 ${PAUSED} Only you see these details (SAFE-14.a).`,
+      expect.stringContaining(WARNING_DM_85),
+    ]);
     await result.stop();
   });
 
-  test("/session start whose reply and notice both fail hands back the warning and the cap ping: the next chat reply carries both", async () => {
+  test("/session start whose reply and notice both fail hands back the cap ping (the next chat reply pings the owner); the details and the warning were DMed at once, never riding a post", async () => {
     const agent: AgentClient = {
       async runChat({ sessionId }) {
         return { ...CAP_RESULT, sessionId };
       },
     };
     let failing = true;
-    const { result, handlers, replies } = await bridgeWith(
+    const { result, handlers, replies, dms } = await bridgeWith(
       agent,
       { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "5" },
       pendingWarningDb(),
@@ -738,16 +817,17 @@ describe("a post that did not go out hands back its warning and cap ping (review
     };
     await expect(handlers.onSlash!(ix)).rejects.toThrow("token expired");
     expect(replies).toHaveLength(0);
+    expect(dms).toHaveLength(2);
+    expect(dms[1]!.content).toStartWith(WARNING_DM_85);
     failing = false;
     await handlers.onMessage(MENTION);
     expect(replies).toHaveLength(1);
-    expect(replies[0]!.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
-    expect(replies[0]!.content).toContain("Spend warning (SAFE-8): $0.85 of the $1.00 daily cap");
+    expect(replies[0]!.content).toBe(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
     expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
     await result.stop();
   });
 
-  test("a run resumed by a button pick that stops at the cap: free-text ask with the owner pinged once, the warning delivered, no pending ask", async () => {
+  test("a run resumed by a button pick that stops at the cap: 'Work is paused for budget.' with the owner pinged once, the details and the warning DMed, no pending ask", async () => {
     let n = 0;
     const agent: AgentClient = {
       async runChat({ sessionId }) {
@@ -773,7 +853,7 @@ describe("a post that did not go out hands back its warning and cap ping (review
       },
     };
     const db = openCorvidinhoDb({ memory: true });
-    const { result, handlers, replies } = await bridgeWith(
+    const { result, handlers, replies, dms } = await bridgeWith(
       agent,
       { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "5" },
       db,
@@ -795,11 +875,14 @@ describe("a post that did not go out hands back its warning and cap ping (review
     });
     await handlers.onComponent!(pick("ix-pick"));
     const last = replies.at(-1)! as Reply & { components?: unknown[] };
-    expect(last.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
-    expect(last.content).toContain("Spend warning (SAFE-8): $0.85 of the $1.00 daily cap");
+    expect(last.content).toBe(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
     expect(last.mentionUserIds).toEqual([OWNER_ID]);
     expect(last.components).toBeUndefined();
     expect(result.store.list()[0]!.pendingAsk ?? null).toBeNull();
+    expect(dms.map((d) => d.content.split("\n")[0])).toEqual([
+      `💸 ${PAUSED} Only you see these details (SAFE-14.a).`,
+      expect.stringContaining(WARNING_DM_85),
+    ]);
     await result.stop();
   });
 
@@ -898,7 +981,7 @@ function collapseOutbound(failEdits: () => boolean = () => false) {
   return { outbound, finals };
 }
 
-describe("collapsed answer (DISCORD-ASK-6/7) carries SAFE-8 like a reply", () => {
+describe("collapsed answer (DISCORD-ASK-6/7) carries SAFE-8 like a reply; the warning never rides it (SAFE-14.a)", () => {
   function pendingWarningDb() {
     const db = openCorvidinhoDb({ memory: true });
     const ledger = new SpendLedger(db);
@@ -907,14 +990,14 @@ describe("collapsed answer (DISCORD-ASK-6/7) carries SAFE-8 like a reply", () =>
     return db;
   }
 
-  test("the 80% warning and the owner mention ride the edit of the thinking message; the only fresh post is the owner ping (an edit does not notify)", async () => {
+  test("with an 80% warning pending, the edit of the thinking message is the plain answer, pings nobody and adds no fresh post; the owner gets the warning by DM, once", async () => {
     const agent: AgentClient = {
       async runChat({ sessionId }) {
         return { ok: true, sessionId, summary: "all good", exitCode: 0 };
       },
     };
     const { outbound, finals } = collapseOutbound();
-    const { result, handlers, replies } = await bridgeWith(
+    const { result, handlers, replies, dms } = await bridgeWith(
       agent,
       { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID },
       pendingWarningDb(),
@@ -923,26 +1006,26 @@ describe("collapsed answer (DISCORD-ASK-6/7) carries SAFE-8 like a reply", () =>
     );
     await handlers.onMessage(MENTION);
     expect(finals).toHaveLength(1);
-    expect(finals[0]!.content).toStartWith(`all good\n\n⚠️ <@${OWNER_ID}> Spend warning (SAFE-8): $0.85 of the $1.00 daily cap`);
-    expect(finals[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    expect(finals[0]!.content).toBe("all good");
+    expect(finals[0]!.mentionUserIds ?? []).toEqual([]);
     // DISCORD-3.a — the answer keeps a footer-only embed (model).
     expect(finals[0]!.embed).toStrictEqual({
       color: THINKING_COLORS.success,
       footer: { text: answerFooterText(loadLlmEnv(process.env).model) },
     });
-    // REQ-discord-215: one short fresh post pings the owner (no answer copy).
-    expect(replies).toHaveLength(1);
-    expect(replies[0]!.content).toBe(`<@${OWNER_ID}> ↑ needs you`);
-    expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
-    expect(replies[0]!.replyToMessageId).toBe(finals[0]!.messageId);
-    // Delivered once: the next answer carries no warning and pings nobody.
+    // REQ-discord-215: nobody is mentioned, so no fresh ping post.
+    expect(replies).toHaveLength(0);
+    expect(dms).toHaveLength(1);
+    expect(dms[0]!.content).toStartWith(WARNING_DM_85);
+    // Delivered once: the next answer DMs nothing more.
     await handlers.onMessage({ ...MENTION, id: "m2" });
     expect(finals[1]!.content).toBe("all good");
-    expect(replies).toHaveLength(1);
+    expect(replies).toHaveLength(0);
+    expect(dms).toHaveLength(1);
     await result.stop();
   });
 
-  test("REQ-discord-311: a collapsed answer carrying the 80% warning clears its in-flight row; so does a turn where nothing went out (claims handed back)", async () => {
+  test("REQ-discord-311: a collapsed answer clears its in-flight row; so does a turn where nothing went out; a warning pending meanwhile still reaches the owner by DM", async () => {
     const agent: AgentClient = {
       async runChat({ sessionId }) {
         return { ok: true, sessionId, summary: "all good", exitCode: 0 };
@@ -952,7 +1035,7 @@ describe("collapsed answer (DISCORD-ASK-6/7) carries SAFE-8 like a reply", () =>
     const db = pendingWarningDb();
     const inflight = new InflightReplyStore(db);
     const { outbound, finals } = collapseOutbound(() => failing);
-    const { result, handlers, replies } = await bridgeWith(
+    const { result, handlers, replies, dms } = await bridgeWith(
       agent,
       { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID },
       db,
@@ -960,7 +1043,8 @@ describe("collapsed answer (DISCORD-ASK-6/7) carries SAFE-8 like a reply", () =>
       outbound,
     );
     await handlers.onMessage(MENTION);
-    expect(finals[0]!.content).toContain(`⚠️ <@${OWNER_ID}> Spend warning (SAFE-8)`);
+    expect(finals[0]!.content).toBe("all good");
+    expect(dms).toHaveLength(1);
     expect(inflight.list()).toEqual([]);
     // A second warning is pending; edit and fallback reply both fail.
     const ledger = new SpendLedger(db);
@@ -968,17 +1052,20 @@ describe("collapsed answer (DISCORD-ASK-6/7) carries SAFE-8 like a reply", () =>
     expect(ledger.noteWarning({ capMicroUsd: 1_000_001, now: Date.now() })).not.toBeNull();
     failing = true;
     await handlers.onMessage({ ...MENTION, id: "m2" });
-    // Only the first answer's owner ping (REQ-discord-215) went out.
-    expect(replies).toHaveLength(1);
+    expect(replies).toHaveLength(0);
     expect(inflight.list()).toEqual([]);
+    // The DM does not depend on the post.
+    expect(dms).toHaveLength(2);
+    expect(dms[1]!.content).toContain("Spend warning (SAFE-8)");
     failing = false;
     await handlers.onMessage({ ...MENTION, id: "m3" });
-    expect(finals.at(-1)!.content).toContain(`⚠️ <@${OWNER_ID}> Spend warning (SAFE-8)`);
+    expect(finals.at(-1)!.content).toBe("all good");
+    expect(dms).toHaveLength(2);
     expect(inflight.list()).toEqual([]);
     await result.stop();
   });
 
-  test("a spend-cap stop collapses to plain text (no buttons) that pings the owner once per episode and leaves no pending ask", async () => {
+  test("a spend-cap stop collapses to 'Work is paused for budget.' (no buttons) that pings the owner once per episode and leaves no pending ask", async () => {
     const agent: AgentClient = {
       async runChat({ sessionId }) {
         return { ...CAP_RESULT, sessionId };
@@ -999,18 +1086,17 @@ describe("collapsed answer (DISCORD-ASK-6/7) carries SAFE-8 like a reply", () =>
     expect(replies).toHaveLength(1);
     expect(replies[0]!.content).toBe(`<@${OWNER_ID}> ↑ needs you`);
     expect(finals).toHaveLength(2);
-    expect(finals[0]!.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
+    expect(finals[0]!.content).toBe(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
     expect(finals[0]!.content).not.toContain(ASK_REPLY_HINT);
     expect(finals[0]!.components).toBeNull();
     expect(finals[0]!.mentionUserIds).toEqual([OWNER_ID]);
-    expect(finals[1]!.content).toContain(SPEND_CAP_HEADLINE);
-    expect(finals[1]!.content).not.toContain("<@");
+    expect(finals[1]!.content).toBe(SPEND_CAP_HEADLINE);
     expect(finals[1]!.mentionUserIds).toEqual([]);
     for (const s of result.store.list()) expect(s.pendingAsk ?? null).toBeNull();
     await result.stop();
   });
 
-  test("collapsed edit fails → the fallback reply carries the warning; edit and reply both fail → warning and cap ping go to the next answer", async () => {
+  test("collapsed edit fails → the fallback reply carries the owner ping (no warning); edit and reply both fail → the cap ping goes to the next answer; the details and the warning are DMed either way", async () => {
     const agent: AgentClient = {
       async runChat({ sessionId }) {
         return { ...CAP_RESULT, sessionId };
@@ -1019,23 +1105,24 @@ describe("collapsed answer (DISCORD-ASK-6/7) carries SAFE-8 like a reply", () =>
     let failEdits = true;
     let failReplies = false;
     const { outbound, finals } = collapseOutbound(() => failEdits);
-    const { result, handlers, replies } = await bridgeWith(
+    const { result, handlers, replies, dms } = await bridgeWith(
       agent,
       { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "5" },
       pendingWarningDb(),
       () => failReplies,
       outbound,
     );
-    // Edit fails, the fallback reply goes out: it carries the ping and the warning.
+    // Edit fails, the fallback reply goes out: it carries the ping, never the warning.
     await handlers.onMessage(MENTION);
     expect(finals).toHaveLength(0);
     expect(replies).toHaveLength(1);
-    expect(replies[0]!.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
-    expect(replies[0]!.content).toContain("Spend warning (SAFE-8): $0.85 of the $1.00 daily cap");
+    expect(replies[0]!.content).toBe(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
     expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    expect(dms).toHaveLength(2);
+    expect(dms[1]!.content).toStartWith(WARNING_DM_85);
     await result.stop();
 
-    // Both fail: nothing went out, so both claims are handed back.
+    // Both fail: nothing went out, so the cap ping is handed back; the DMs still went.
     const again = collapseOutbound(() => failEdits);
     const second = await bridgeWith(
       agent,
@@ -1048,13 +1135,16 @@ describe("collapsed answer (DISCORD-ASK-6/7) carries SAFE-8 like a reply", () =>
     await second.handlers.onMessage(MENTION);
     expect(again.finals).toHaveLength(0);
     expect(second.replies).toHaveLength(0);
+    expect(second.dms).toHaveLength(2);
     failEdits = false;
     failReplies = false;
     await second.handlers.onMessage({ ...MENTION, id: "m2" });
     expect(again.finals).toHaveLength(1);
-    expect(again.finals[0]!.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
-    expect(again.finals[0]!.content).toContain("Spend warning (SAFE-8): $0.85 of the $1.00 daily cap");
+    expect(again.finals[0]!.content).toBe(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
     expect(again.finals[0]!.mentionUserIds).toEqual([OWNER_ID]);
+    // The re-claimed ping re-sends the stop's details (one per ping); no warning left.
+    expect(second.dms).toHaveLength(3);
+    expect(second.dms[2]!.content).toContain("Daily spend cap reached (SAFE-8)");
     await second.result.stop();
   });
 
@@ -1127,9 +1217,9 @@ describe("collapsed slash answer (DISCORD-ASK-7) keeps the SAFE-8 owner notice a
     },
   };
 
-  test("/work at the cap: the thinking message becomes the paused ask (not ✅ Done), the deferred reply is dropped, the owner is pinged once in a fresh post with the warning", async () => {
+  test("/work at the cap: the thinking message becomes the paused ask (not ✅ Done), the deferred reply is dropped, the owner is pinged once in a fresh post without the warning, which goes by DM", async () => {
     const { outbound, finals } = collapseOutbound();
-    const { result, handlers, replies } = await bridgeWith(
+    const { result, handlers, replies, dms } = await bridgeWith(
       capAgent,
       { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "5" },
       pendingWarningDb(),
@@ -1148,15 +1238,20 @@ describe("collapsed slash answer (DISCORD-ASK-7) keeps the SAFE-8 owner notice a
     expect(finals[0]!.content).not.toContain("<@");
     expect(finals[0]!.mentionUserIds).toEqual([]);
     expect(result.workStore.list()[0]!.status).toBe("blocked");
+    expectNoSpendDetails(finals[0]!.content);
     expect(replies).toHaveLength(1);
-    expect(replies[0]!.content).toMatch(new RegExp(`^💸 <@${OWNER_ID}> /work \`work_[0-9a-f]+\` paused at the daily spend cap`));
-    expect(replies[0]!.content).toContain(`⚠️ <@${OWNER_ID}> Spend warning (SAFE-8): $0.85 of the $1.00 daily cap`);
+    expect(replies[0]!.content).toMatch(new RegExp(`^💸 <@${OWNER_ID}> /work \`work_[0-9a-f]+\`: Work is paused for budget\\.$`));
     expect(replies[0]!.mentionUserIds).toEqual([OWNER_ID]);
-    // Same episode, warning delivered: no second owner post.
+    expect(dms.map((d) => d.content.split("\n")[0])).toEqual([
+      `💸 ${PAUSED} Only you see these details (SAFE-14.a).`,
+      expect.stringContaining(WARNING_DM_85),
+    ]);
+    // Same episode, warning delivered: no second owner post or DM.
     const second = slashInteraction("work", { description: "more storage" });
     await handlers.onSlash!(second.ix);
     expect(finals).toHaveLength(2);
     expect(replies).toHaveLength(1);
+    expect(dms).toHaveLength(2);
     await result.stop();
   });
 
@@ -1207,7 +1302,7 @@ describe("collapsed slash answer (DISCORD-ASK-7) keeps the SAFE-8 owner notice a
     expect(finals).toHaveLength(2);
     expect(finals[1]!.messageId).toBe(finals[0]!.messageId);
     expect(finals[1]!.content).toStartWith(finals[0]!.content!);
-    expect(finals[1]!.content).toMatch(new RegExp(`💸 <@${OWNER_ID}> /work \`work_[0-9a-f]+\` paused at the daily spend cap`));
+    expect(finals[1]!.content).toMatch(new RegExp(`💸 <@${OWNER_ID}> /work \`work_[0-9a-f]+\`: Work is paused for budget\\.$`));
     expect(finals[1]!.mentionUserIds).toEqual([OWNER_ID]);
     // DISCORD-3.a (REQ-discord-457): the re-edit keeps the answer's
     // footer-only embed (model + plumbing, done color like the fallback's
@@ -1226,10 +1321,10 @@ describe("collapsed slash answer (DISCORD-ASK-7) keeps the SAFE-8 owner notice a
     await result.stop();
   });
 
-  test("nothing carried the notice (collapse, owner post and re-edit all fail; the reply throws): the warning and the cap ping go to the next chat answer", async () => {
+  test("nothing carried the notice (collapse, owner post and re-edit all fail; the reply throws): the cap ping goes to the next chat answer; the warning was DMed at once", async () => {
     let failing = true;
     const { outbound, finals } = collapseOutbound(() => failing);
-    const { result, handlers, replies } = await bridgeWith(
+    const { result, handlers, replies, dms } = await bridgeWith(
       capAgent,
       { CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID, [SPEND_CAP_ENV]: "5" },
       pendingWarningDb(),
@@ -1243,11 +1338,12 @@ describe("collapsed slash answer (DISCORD-ASK-7) keeps the SAFE-8 owner notice a
     await expect(handlers.onSlash!(ix)).rejects.toThrow("token expired");
     expect(finals).toHaveLength(0);
     expect(replies).toHaveLength(0);
+    expect(dms).toHaveLength(2);
+    expect(dms[1]!.content).toStartWith(WARNING_DM_85);
     failing = false;
     await handlers.onMessage(MENTION);
     expect(finals).toHaveLength(1);
-    expect(finals[0]!.content).toContain(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
-    expect(finals[0]!.content).toContain("Spend warning (SAFE-8): $0.85 of the $1.00 daily cap");
+    expect(finals[0]!.content).toBe(`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`);
     expect(finals[0]!.mentionUserIds).toEqual([OWNER_ID]);
     await result.stop();
   });

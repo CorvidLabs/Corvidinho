@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "only-the-owner-sees-spend-amounts-and-cap-settings-on-discord-everyone-else-sees-only-work-is-paused-for-budget-safe-14",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "02faedc2c1341656ffe775b9697e0ab726accfeb",
+      "contract_digest": "1707dfa4892f9e50e27630c37ae2d904678e74a3bb744720b57bf0d368b86d33",
+      "execution_digest": "455d328cfdcb4ceb4947cec4d8602927144a4d4b78f35838dfbfb4fd7c1aa6df",
+      "workspace_digest": "2ff4967c0fc59e0cff798b0b85278660c897c924468589c000bf288c01a01114",
+      "timestamp": 1790771815
+    }
+  ]
+}

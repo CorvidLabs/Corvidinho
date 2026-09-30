@@ -7,8 +7,8 @@
  * call (a bridge-spawned run, WATCH, the daemon, a delegate worker, the CLI)
  * records a `warn` row when a settled call takes rolling 24 h spend to 80% of
  * the cap. The row stays undelivered until the Discord bridge — the only
- * surface that knows the owner — claims it on its next post and pings the
- * owner (src/agent/spend-outbox.ts). A warning is never used up by a run whose
+ * surface that knows the owner — claims it and DMs the owner (SAFE-14.a;
+ * src/agent/spend-outbox.ts, src/discord/spend-dm.ts). A warning is never used up by a run whose
  * surface could not show it, nor by a post made while spend is back under 80%
  * (it stays pending, still disarming its crossing, until a post sees 80%
  * again or it is 24 h old).
