@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "scheduled-runs-read-and-act-only-on-repos-the-owner-allowlists-even-public-ones-discord-schedule-3-a-in-a-schedule-run",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "7401bccdfae1dbca1743d7d310e418092d99f46b",
+      "contract_digest": "478672dac5e779aa068f17cb3538d8a1c91cdda3d3c26b4a9d5f16851df1176c",
+      "execution_digest": "6456f450d0927449b55a14df95285413b93c406352079c9a61eb7cc9247cb10b",
+      "workspace_digest": "603bab09d366bf8668e1cd3fe87b93d39538af9b91eda2e5a186fc15eb10cc94",
+      "timestamp": 1790743156
+    }
+  ]
+}

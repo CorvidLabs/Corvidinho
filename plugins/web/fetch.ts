@@ -9,10 +9,13 @@
  * → redirects are read manually and every hop repeats the whole check. Body,
  * returned text and wall time are capped; only text content types come back.
  * Nothing the server controls (status text, header values) is echoed raw into
- * an error.
+ * an error. In a scheduled run every hop to a GitHub host must also name a
+ * GITHUB-6-allowlisted repo (DISCORD-SCHEDULE-3.a).
  */
 
 import { lookup } from "node:dns/promises";
+import { checkGithubRepo, tryLoadAllowlist, type AllowlistConfig } from "../../src/allowlist/index.ts";
+import { isScheduleRunEnv } from "../../src/plugins/roles.ts";
 import { scrubSecrets } from "../../src/store/scrub.ts";
 import { checkAddress, ipFamily, type IpFamily } from "./address.ts";
 import { extractTitle, htmlToText, stripControls } from "./text.ts";
@@ -40,7 +43,18 @@ export type WebFetchDeps = {
   maxChars?: number;
   timeoutMs?: number;
   maxRedirects?: number;
+  /**
+   * Env of the calling run (default `process.env`). In a scheduled run
+   * (`isScheduleRunEnv`) every hop to a GitHub host must name an allowlisted
+   * repo (DISCORD-SCHEDULE-3.a).
+   */
+  env?: NodeJS.ProcessEnv;
+  /** Allowlist for that check; default read once per call for `env` (ALLOW-4 file + env). */
+  allowlist?: AllowlistConfig;
 };
+
+/** The caps and seams every hop uses. */
+type HopDeps = Required<Omit<WebFetchDeps, "env" | "allowlist">>;
 
 export type WebFetchErrorCode =
   | "invalid-url"
@@ -169,13 +183,87 @@ export function checkUrlShape(url: URL): URL {
 }
 
 function parseUrl(raw: string): URL {
-  let url: URL;
   try {
-    url = new URL(raw.trim());
+    return new URL(raw.trim());
   } catch {
     throw new WebFetchError("invalid-url", "invalid URL");
   }
-  return checkUrlShape(url);
+}
+
+/** GitHub's own hosts (DISCORD-SCHEDULE-3.a): github.com, githubusercontent.com and their subdomains. */
+function isGithubHost(host: string): boolean {
+  return (
+    host === "github.com" ||
+    host.endsWith(".github.com") ||
+    host === "githubusercontent.com" ||
+    host.endsWith(".githubusercontent.com")
+  );
+}
+
+/** One OWNER or REPO path segment as GitHub names them. */
+const REPO_SEGMENT = /^[A-Za-z0-9._-]+$/;
+
+/** The repo path's leading segments on each GitHub host that names one. */
+const REPO_PATH_PREFIX: Readonly<Record<string, readonly string[]>> = {
+  "github.com": [],
+  "www.github.com": [],
+  "codeload.github.com": [],
+  "raw.githubusercontent.com": [],
+  "api.github.com": ["repos"],
+};
+
+/**
+ * Whether `url` is on a GitHub host and, if so, the OWNER/REPO it names:
+ * `/<owner>/<repo>/…` on github.com (and www.), codeload.github.com and
+ * raw.githubusercontent.com, `/repos/<owner>/<repo>/…` on api.github.com.
+ * Any other path or GitHub host (gists, other API routes, user content,
+ * release objects) names no repo (`repo: null`).
+ */
+export function githubRepoOfUrl(url: URL): { github: false } | { github: true; repo: string | null } {
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
+  if (!isGithubHost(host)) return { github: false };
+  const prefix = REPO_PATH_PREFIX[host];
+  if (!prefix) return { github: true, repo: null };
+  const segs = url.pathname.split("/").slice(1);
+  let parts: string[];
+  try {
+    parts = segs.slice(0, prefix.length + 2).map((p) => decodeURIComponent(p));
+  } catch {
+    return { github: true, repo: null };
+  }
+  if (parts.length < prefix.length + 2 || prefix.some((p, i) => parts[i] !== p)) {
+    return { github: true, repo: null };
+  }
+  const owner = parts[prefix.length]!;
+  const name = parts[prefix.length + 1]!.replace(/\.git$/i, "");
+  const ok = (p: string) => REPO_SEGMENT.test(p) && p !== "." && p !== "..";
+  return ok(owner) && ok(name) ? { github: true, repo: `${owner}/${name}` } : { github: true, repo: null };
+}
+
+/**
+ * DISCORD-SCHEDULE-3.a — the per-hop GitHub rule of a scheduled run, or null
+ * outside one. A hop to a GitHub host passes only when it names a repo that
+ * passes the GITHUB-6 allowlist (deny wins); an unreadable allowlist refuses
+ * every GitHub hop. Other hosts are untouched.
+ */
+async function scheduleRepoGate(deps: WebFetchDeps): Promise<((url: URL) => void) | null> {
+  const env = deps.env ?? process.env;
+  if (!isScheduleRunEnv(env)) return null;
+  let cfg = deps.allowlist ?? null;
+  if (!cfg) {
+    const loaded = await tryLoadAllowlist({ env });
+    cfg = loaded.ok ? loaded.config : null;
+  }
+  return (url) => {
+    const gh = githubRepoOfUrl(url);
+    if (!gh.github) return;
+    if (gh.repo && cfg && checkGithubRepo(gh.repo, cfg).ok) return;
+    const host = url.hostname.toLowerCase().replace(/\.$/, "");
+    throw new WebFetchError(
+      "blocked",
+      `refused: ${host} is GitHub and this URL is not in an allowlisted repo; scheduled runs read only allowlisted repos, even public ones (DISCORD-SCHEDULE-3.a)`,
+    );
+  };
 }
 
 /** Names refused before DNS: localhost (RFC 6761) and non-canonical numeric hosts. */
@@ -314,7 +402,7 @@ function capChars(text: string, max: number): string {
 async function dialPinned(
   url: URL,
   pins: readonly ResolvedAddress[],
-  deps: Required<WebFetchDeps>,
+  deps: HopDeps,
   signal: AbortSignal,
 ): Promise<{ resp: TransportResponse; pin: ResolvedAddress }> {
   let lastMsg = "no addresses";
@@ -341,10 +429,20 @@ async function dialPinned(
 
 async function run(
   rawUrl: string,
-  deps: Required<WebFetchDeps>,
+  deps: HopDeps,
   signal: AbortSignal,
+  gateDeps: WebFetchDeps,
 ): Promise<WebFetchResult> {
-  const first = parseUrl(rawUrl);
+  const repoGate = await scheduleRepoGate(gateDeps);
+  // The shared per-hop URL rule: shape (SAFE-7 / SAFE-6), then a scheduled
+  // run's GitHub repo gate (DISCORD-SCHEDULE-3.a), before any DNS or dial.
+  const checkHop = (u: URL): URL => {
+    const out = checkUrlShape(u);
+    repoGate?.(out);
+    return out;
+  };
+  if (signal.aborted) throw new WebFetchError("timeout", "aborted");
+  const first = checkHop(parseUrl(rawUrl));
   let url = first;
   const redirects: string[] = [];
 
@@ -372,7 +470,7 @@ async function run(
         } catch {
           throw new WebFetchError("redirect", "redirect to an invalid URL");
         }
-        url = checkUrlShape(next);
+        url = checkHop(next);
         redirects.push(url.href);
         continue;
       }
@@ -442,7 +540,7 @@ async function run(
  * deadline.
  */
 export async function webFetch(rawUrl: string, deps: WebFetchDeps = {}): Promise<WebFetchResult> {
-  const full: Required<WebFetchDeps> = {
+  const full: HopDeps = {
     resolver: deps.resolver ?? systemResolver,
     transport: deps.transport ?? createSocketTransport(),
     maxBytes: deps.maxBytes ?? WEB_FETCH_MAX_BYTES,
@@ -459,7 +557,7 @@ export async function webFetch(rawUrl: string, deps: WebFetchDeps = {}): Promise
     }, full.timeoutMs);
   });
   try {
-    return await Promise.race([run(rawUrl, full, controller.signal), deadline]);
+    return await Promise.race([run(rawUrl, full, controller.signal, deps), deadline]);
   } finally {
     clearTimeout(timer);
     controller.abort();

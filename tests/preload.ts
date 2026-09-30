@@ -39,6 +39,10 @@ delete process.env.FLEDGE_NON_INTERACTIVE;
 delete process.env.CORVIDINHO_DAILY_SPEND_CAP_USD;
 delete process.env.CORVIDINHO_LLM_API_KEY;
 delete process.env.OPENAI_API_KEY;
+// A scheduled run's session id (`schedule_*`) narrows its GitHub tools and
+// web-fetch to allowlisted repos (DISCORD-SCHEDULE-3.a); its verify lane
+// inherits the key, and the suite must not run as a scheduled run.
+delete process.env.CORVIDINHO_DISCORD_SESSION_ID;
 
 // Bun.spawn / Bun.spawnSync with no `env` pass the environment this process
 // started with, not process.env as edited above, so a CLI a test spawns would

@@ -19,9 +19,15 @@ function git(cwd: string, args: string[]): string {
   return new TextDecoder().decode(p.stdout).trim();
 }
 
+/**
+ * A checkout nested in the bridge root: a schedule may use it only when its
+ * origin is on the GitHub allowlist (DISCORD-SCHEDULE-3.a), so it gets an
+ * allowlisted one.
+ */
 function initGitRepo(dir: string): void {
   mkdirSync(dir, { recursive: true });
   git(dir, ["init"]);
+  git(dir, ["remote", "add", "origin", "https://github.com/CorvidLabs/proj.git"]);
   git(dir, ["config", "user.email", "test@example.com"]);
   git(dir, ["config", "user.name", "Test"]);
   writeFileSync(join(dir, "README.md"), "# test\n");
@@ -39,6 +45,7 @@ function commitSubjects(project: string): string[] {
 function svcFor(store: ScheduleStore, agent: unknown, root: string, maxConcurrent = 2) {
   const cfg = emptyConfig();
   cfg.discord.channels = ["chan-allowed"];
+  cfg.github.orgs = ["corvidlabs"];
   return new SchedulerService({
     store,
     agent: agent as never,
