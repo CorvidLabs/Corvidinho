@@ -44,6 +44,7 @@ import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { MUST_ASK_POST_KIND, setMustAskNotifier } from "../src/plugins/must-ask.ts";
 import { clearRegistry } from "../src/plugins/registry.ts";
 import { SCHEDULE_SESSION_PREFIX } from "../src/plugins/roles.ts";
+import { runPlugin } from "../src/plugins/run.ts";
 import type { PluginHandlerResult } from "../src/plugins/types.ts";
 import { SchedulerService } from "../src/scheduler/service.ts";
 import { ScheduleStore, type Schedule } from "../src/scheduler/store.ts";
@@ -380,6 +381,8 @@ const RUN_KEYS = [
   "CORVIDINHO_ACTING_WORK_TASK",
   "CORVIDINHO_ACTING_SURFACE",
   "CORVIDINHO_DISCORD_SESSION_ID",
+  "CORVIDINHO_DISCORD_REPLY_CHANNEL_ID",
+  "CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID",
   "CORVIDINHO_DISCORD_ALLOW_CHANNELS",
   "CORVIDINHO_DISCORD_DRY_RUN",
   "CORVIDINHO_DELEGATE_DEPTH",
@@ -444,6 +447,9 @@ describe("DISCORD-SCHEDULE-1.a: must-ask calls in the owner's schedule run ask o
       CORVIDINHO_ACTING_ROLE: o.actingIsAdmin ? "owner" : o.actingRole === "team" ? "team" : "community",
       CORVIDINHO_ACTING_WORK_TASK: "0",
       CORVIDINHO_ACTING_SURFACE: o.surface ?? "",
+      // A schedule passes no reply channel (REQ-discord-476).
+      CORVIDINHO_DISCORD_REPLY_CHANNEL_ID: "",
+      CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID: "",
     });
   }
 
@@ -581,6 +587,37 @@ describe("DISCORD-SCHEDULE-1.a: must-ask calls in the owner's schedule run ask o
     expect(run.results[0]!.success).toBe(false);
     expect(run.results[0]!.detail ?? "").toContain("not allowed for your role");
     expect(run.result.ask).toBeUndefined();
+  });
+
+  test("the owner's schedule is the owner, but it still has no private place: private notes, a --person view, a profile and discord-send-file are refused; project memory is the owner's (MEMORY-6/7.a, DISCORD-17)", async () => {
+    stampRun(OWNER_SCHEDULE);
+    const cwd = tempDir("corvidinho-sched-owner-private-");
+    writeFileSync(join(cwd, "digest.txt"), "nightly digest\n");
+    const allowlist = ["discord-send-file"];
+    const run = (name: string, args: string[]) =>
+      runPlugin({ name, args, nonInteractive: true, allowlist, cwd, json: true });
+    // Project memory: the owner's own schedule reads and writes it (MEMORY-6).
+    const stored = await run("memory-store", ["--project", "--category", "entity", "--key", "digest", "posted nightly"]);
+    expect(stored.ok).toBe(true);
+    const recalled = await run("memory-recall", ["--project"]);
+    expect(recalled.ok).toBe(true);
+    expect(JSON.stringify(recalled.data ?? recalled.message ?? "")).toContain("posted nightly");
+    // MEMORY-7 / 7.a: no conversation, so nothing private is read.
+    for (const [name, args] of [
+      ["memory-recall", ["--category", "private"]],
+      ["memory-recall", ["--person", TOFU]],
+      ["memory-profile", []],
+    ] as const) {
+      const r = await run(name, [...args]);
+      expect({ name, args, ok: r.ok }).toEqual({ name, args, ok: false });
+      expect(r.privateText).toBeUndefined();
+      expect(r.error ?? "").toContain("never in a schedule");
+    }
+    // DISCORD-17: past the role gate, but a schedule has no conversation to attach in.
+    const sent = await run("discord-send-file", ["digest.txt"]);
+    expect(sent.ok).toBe(false);
+    expect(sent.error ?? "").not.toContain("not allowed for your role");
+    expect(sent.error ?? "").toContain("no Discord conversation for this run");
   });
 
   test("the scheduler records that ask: the schedule waits, and the next due tick runs nothing and raises no new card", async () => {

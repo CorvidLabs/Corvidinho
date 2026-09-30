@@ -11,7 +11,7 @@ the child, an injected fake provider, the real approvals store answered by
 `tests/fixtures/must-ask.ts`, `startDaemon` and `startBridge` with a null
 gateway; no network, no tokens).
 
-- `tests/scheduler.owner-role.test.ts` (17 tests, new).
+- `tests/scheduler.owner-role.test.ts` (18 tests, new).
 - `tests/roles.team.test.ts` (3 tests added: "DISCORD-SCHEDULE-1.a:
   schedule-run stamps in the tool layer").
 - `tests/agent.allowlisted-dangerous.test.ts` (1 test added: the owner's own
@@ -21,11 +21,11 @@ Fail-on-base proof: in this branch's worktree, the base's (af4597e)
 `src/scheduler/service.ts`, `src/plugins/roles.ts`, `src/agent/execute.ts`,
 `src/discord/bridge.ts`, `src/daemon/daemon.ts` and
 `src/discord/agent-client.ts` swapped in (the branch's additive
-`src/agent/ask.ts` kept, so the new file loads): 15 failures — 11 of 17 in
-`scheduler.owner-role` (all but the read-only, owner-chat, other-person and
-three `mustAskRefusedAsk` unit guards), all 3 new `roles.team` tests and the
+`src/agent/ask.ts` kept, so the new file loads): 15 failures — 11 of 18 in
+`scheduler.owner-role` (all but the read-only, owner-chat, other-person,
+no-private-place and three `mustAskRefusedAsk` unit guards), all 3 new `roles.team` tests and the
 new `agent.allowlisted-dangerous` test; with the base's `src/agent/ask.ts`
-too the new file cannot load. With the branch's sources restored all 66 tests
+too the new file cannot load. With the branch's sources restored all 67 tests
 in the three files pass. On the branch: `bunx tsc --noEmit` clean, full
 `bun test` green, `fledge lanes run verify --non-interactive` green.
 
@@ -46,6 +46,7 @@ in the three files pass. On the branch: `bunx tsc --noEmit` clean, full
 | `REQ-agent-741` | `tests/scheduler.owner-role.test.ts` › "no answer in time (lapsed): a no too — the run ends blocked with a stuck ask saying nobody answered" | `blocked`, stuck, "nobody answered Approve card … in time (SAFE-20: no answer means no)". |
 | `REQ-agent-741` | `tests/scheduler.owner-role.test.ts` › "outside a schedule (the owner's own chat) a denied card leaves the run going: the model sees the refusal, no ask" | Post refused, no ask, `done`, two model requests. |
 | `REQ-discord-741` | `tests/scheduler.owner-role.test.ts` › "another person's schedule never reaches the card: the post is not offered and refused for the role" | Not offered, no card, the role refusal, no ask. |
+| `REQ-discord-741`, `REQ-plugins-101`, `REQ-discord-476` | `tests/scheduler.owner-role.test.ts` › "the owner's schedule is the owner, but it still has no private place: …" | With the owner's schedule stamps and no reply channel: `memory-store` / `memory-recall --project` work; `memory-recall --category private`, `--person` and `memory-profile` are refused ("never in a schedule") with no `privateText`; `discord-send-file` passes the role check and is refused "no Discord conversation for this run". A guard (passes on both); a mutation that treats a schedule as a conversation fails it. |
 | `REQ-discord-741` | `tests/scheduler.owner-role.test.ts` › "the scheduler records that ask: the schedule waits, and the next due tick runs nothing and raises no new card" | First tick: one run, one card, open stuck ask naming the tool, one post pinging the owner with controls; next two due ticks skipped, no run, still one card, one wait note. |
 | `REQ-agent-741` | `tests/scheduler.owner-role.test.ts` › "denied, lapsed and a resent deny give a stuck ask naming the tool, the why, the rule and the card", "anything else is not: …", "a long why is cut; secrets in it are scrubbed" | Exact question for `denied`; the lapse and resent wording; null for a call that ran, `worker` / `no-owner` / `unavailable` / `aborted` and plain failures; a long why cut, a token scrubbed. |
 | `REQ-cli-741` | `tests/scheduler.owner-role.test.ts` › "daemon: the owner's schedule runs as the owner; after the file names another owner, the next run is community" | `[true]`, then `[true, false]` after rewriting `[owner]`, no restart. |

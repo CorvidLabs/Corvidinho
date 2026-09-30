@@ -1302,12 +1302,16 @@ shell gate says "scheduled runs never get them", and a team member's resolves
 the exact text; denied, the run ends `blocked` with the stuck ask naming the
 tool and card and the scheduler records it: the ask posts to the channel
 pinging the owner with its controls, and the next two due ticks run nothing,
-raise no new card and post one wait note. The daemon (`startDaemon`) and the
+raise no new card and post one wait note. The owner's schedule stamps still
+give no private place: project memory works, but private notes, a `--person`
+view and `memory-profile` are refused with no `privateText`, and
+`discord-send-file` passes the role check and is refused for want of a
+conversation channel. The daemon (`startDaemon`) and the
 bridge (`startBridge`, null gateway) spawn the owner's schedule as the owner,
 and after the allowlist file names another owner the next run is community.
 - Fail on base: with the base's (af4597e) `src/scheduler/service.ts`,
   `src/plugins/roles.ts`, `src/agent/execute.ts`, `src/discord/bridge.ts`,
   `src/daemon/daemon.ts` and `src/discord/agent-client.ts` swapped in (the
-  additive `mustAskRefusedAsk` kept so the file loads), 11 of the 17 tests
-  fail; the read-only, owner-chat, other-person and `mustAskRefusedAsk` unit
-  guards pass on both. All pass on the branch.
+  additive `mustAskRefusedAsk` kept so the file loads), 11 of the 18 tests
+  fail; the read-only, owner-chat, other-person, no-private-place and
+  `mustAskRefusedAsk` unit guards pass on both. All pass on the branch.
