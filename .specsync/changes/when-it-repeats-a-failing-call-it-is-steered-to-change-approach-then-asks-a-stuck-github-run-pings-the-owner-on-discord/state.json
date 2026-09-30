@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "9abc768f5b1a2122ae55025efea32b4a9113e249",
   "created_at": 1790743808,
-  "updated_at": 1790746002,
+  "updated_at": 1790746007,
   "affected_specs": [
     "agent",
     "watch",
