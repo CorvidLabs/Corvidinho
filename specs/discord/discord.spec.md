@@ -235,7 +235,9 @@ notified }`, `press(interaction, parsed, mayDecide)`, `start(pollMs)`,
 `stop()`, `settle(ms)`, `has(kind)`), the kind contract (`ApprovalKind`,
 `ApprovalKindStore`, `ApprovalRecord`, `ApprovalCardView`,
 `ApprovalTelling`, `AnyApprovalKind`), `storedApprovalKind(opts)` (a kind
-over `approval_requests`), `APPROVAL_POLL_MS` (5 s), `APPROVAL_DM_RETRY_MS`
+over `approval_requests`), `mustAskApprovalKinds(opts)` (the must-ask gate's
+`mustask` destructive and `mustask-post` plain kinds, REQ-discord-097),
+`APPROVAL_POLL_MS` (5 s), `APPROVAL_DM_RETRY_MS`
 (60 s), `APPROVAL_NOT_OWNER` and `APPROVAL_UNKNOWN_KIND`.
 `src/discord/approve-card.ts` exports the custom ids
 (`approveCardCustomId` / `parseApproveCardCustomId`, decisions `approve |
@@ -793,7 +795,14 @@ mention, led by `GitHub <repo>#<n> — answer on the thread: <link>`),
 
 Empty channel allowlist fail-start; empty user/role = deny-all when checked;
 empty admin lists = nobody ADMIN; missing token clean exit; no ProcessManager;
-secrets out of repo; discord-post-message dangerous; thinking status edits one
+secrets out of repo; discord-post-message dangerous, and every post it makes
+waits for the owner's OK on the plain `mustask-post` card showing the exact
+defanged text (dictated text and replies to the owner included; a dry run and
+a post its channel / requester-flag / token / strict checks refuse raise no
+card; the DISCORD-8 requester lookup runs after the Approve), while the bridge
+registers the must-ask kinds (`mustAskApprovalKinds`: `mustask` destructive
+for prod, `mustask-post` plain) on its one card engine (AUTONOMY-10/10.a,
+AUTONOMY-9.a, REQ-discord-097); thinking status edits one
 progress message in-place; slash handlers re-check channel allowlist and
 minPermission before acting; rate/mute refuse only the offending user;
 outbound post with requesting_user_id verifies requester channel perms, and in a bridge-started run always for the acting Discord user (`CORVIDINHO_ACTING_DISCORD_USER_ID`): a requesting id naming anyone else refuses and a check that cannot run refuses, nothing posted (REQ-discord-012);

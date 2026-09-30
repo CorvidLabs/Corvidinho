@@ -287,7 +287,11 @@ Ask the human (REQ-agent-044, issue #44, AUTONOMY-1/2/7 / DISCORD-ASK):
 `src/agent/ask.ts` exports `ASK_TOOL_NAME` (`ask-human`), `withAskTool`,
 `askFromToolArguments`, `askFromUnknown`, `formatAskSummary`, `stuckAfterVerifyAsk`,
 `ASK_AGENT_SYSTEM_INSTRUCTIONS` (AUTONOMY-7 + prefer `options` / numbered choices
-for ephemeral Discord buttons). `src/agent/ask-options.ts` exports
+for ephemeral Discord buttons + the one AUTONOMY-11 sentence: anything inside
+its guardrails it just does and then says what it did; only prod or deploy
+contact and channel posts need the owner's OK, which the tool itself waits
+for on the Approve card, so it never calls ask-human for permission first and
+never repeats a call the owner denied — REQ-agent-097). `src/agent/ask-options.ts` exports
 `resolveAskOptions` / `parseChoicesFromQuestion` / `normalizeAskOptions`
 (option ids come out unique within an ask: a repeated id takes the first
 unused position number, and already-unique ids are kept byte-identical,

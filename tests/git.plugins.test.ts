@@ -22,6 +22,7 @@ import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { clearRegistry, list } from "../src/plugins/registry.ts";
 import { runPlugin } from "../src/plugins/run.ts";
 import { gitEnv, scrubGitOutput } from "../plugins/git/exec.ts";
+import { answerMustAsk } from "./fixtures/must-ask.ts";
 import {
   parseNameStatusZ,
   parsePushPorcelain,
@@ -452,7 +453,16 @@ describe("hooks disabled and linked worktrees", () => {
     const c = await run("git-commit", ["-m", "feat: a", "a.ts"], repo);
     expect(c.error).toBeUndefined();
     expect(c.ok).toBe(true);
-    const p = await run("git-push", [], repo);
+    // A push of main is a push to a usual default branch: it waits for the
+    // owner's Approve card (AUTONOMY-9), approved here.
+    const card = answerMustAsk("approved");
+    let p;
+    try {
+      p = await run("git-push", [], repo);
+    } finally {
+      card.restore();
+    }
+    expect(card.requests.map((r) => r.kind)).toEqual(["mustask"]);
     expect(p.error).toBeUndefined();
     expect(p.ok).toBe(true);
     expect(remoteRef(bare, "main")).toBe(g(repo, "rev-parse", "HEAD").trim());

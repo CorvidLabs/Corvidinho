@@ -146,13 +146,20 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   can DM the owner only when they share a server with it and accept DMs from its members (the
   server's Privacy Settings); until the card goes out the ask stays pending and then lapses as a
   no. No intent or portal toggle is needed. See [`discord.md`](discord.md) Memory.
-- Approve / Deny cards and one-time codes (SAFE-18..20): every card (today: forget requests) comes
-  from the running bridge by **direct message**, checked about every 5 seconds even with the
+- Approve / Deny cards and one-time codes (SAFE-18..20): every card (forget requests, and the
+  must-ask cards below) comes from the running bridge by **direct message**, checked about every 5 seconds even with the
   scheduler off; a diff or text comes first, then the card with the exact action, target and
   amount. Destructive and money cards also need a **one-time code**: after **Approve** the bot DMs
   an 8-character code (valid once, for that card only, for 2 minutes) that you type with **Enter
   code**. Same DM rule as above; nothing to configure. With no bridge running no card goes out, and
   an unanswered card is a no. See [`discord.md`](discord.md) "Approve / Deny cards".
+- Must-ask (AUTONOMY-9/10): prod and deploy contact (the VPS, secrets, env, DNS, deploy tools, a
+  push to a remote's default branch — read-only looks included) and every `discord-post-message`
+  post wait for your OK on one of those cards before they run (prod cards need the one-time code);
+  a deny or no answer in 5 minutes runs nothing. Updating to a tagged release with
+  `CORVIDINHO_REF=v<X.Y.Z> scripts/corvidinho-update.sh` in the installed checkout is not a deploy.
+  Needs the bridge running and an owner configured; nothing else to set. See [`discord.md`](discord.md)
+  "The must-ask list".
 - Private reads by DM (MEMORY-7.a): private notes, profile reads (`memory-profile`) and the owner's
   view of someone's memory are sent to whoever asked by **direct message**; the channel gets only a
   short "sent privately" note. Same DM rule as above: the person must share a server with the bot
@@ -230,7 +237,7 @@ project's Fledge plugins; re-check any time with `corvidinho plugins list`). An 
 | `memory-override` | true | 1 | true | the owner's chat should correct memories on request, or an operator runs `corvidinho plugins run memory-override` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
 | `files-delete` | true | 2 | true | an operator runs `corvidinho plugins run files-delete` non-interactively (SAFE-2 protected paths always refused) |
 | `github-issue-create` / `github-issue-comment` / `github-pr-review` | true | 1 | true | the owner's runs should open issues, comment or review PRs (GITHUB-1/3), or an operator runs `corvidinho plugins run <name>` non-interactively; team members' Discord runs get `github-issue-comment` and `github-pr-review` too, on GITHUB-6-allowlisted repos only (IDENTITY-10, E.6) |
-| `discord-post-message` | true | 1 | true | an operator runs `corvidinho plugins run discord-post-message` non-interactively to post to an allowlisted channel (DISCORD-5/8); in the owner's runs the model can post too, and only where the owner could post themselves (the DISCORD-8 check is for the acting user; needs Server Members Intent) |
+| `discord-post-message` | true | 1 | true | an operator runs `corvidinho plugins run discord-post-message` non-interactively to post to an allowlisted channel (DISCORD-5/8); in the owner's runs the model can post too, and only where the owner could post themselves (the DISCORD-8 check is for the acting user; needs Server Members Intent). Every post, the operator's included, first waits for the owner's OK on a DM Approve card (AUTONOMY-10.a; needs the bridge running and an owner configured) |
 | `discord-send-file` | true | 1 | true | the owner's runs should attach files and images (screenshots, logs, diffs, charts) to their replies (DISCORD-17); always in the conversation's own channel, which the bridge sets (no `--channel`), only where the owner could attach files themselves (DISCORD-8 with Attach Files; needs Server Members Intent), 8 MB and a png/jpeg/gif/webp + txt/log/md/diff/patch/json/csv allowlist, text secret-scrubbed, SAFE-2 protected and secret paths refused, see [`discord.md`](discord.md) Files and images in replies |
 | `danger-ping` | true | 1 | true | only to test the deny path (no-op) |
 

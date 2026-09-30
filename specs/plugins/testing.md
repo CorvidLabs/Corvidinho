@@ -294,3 +294,39 @@ thread refuses `memory-profile` (no content in any refusal); the local CLI
 shows the profile inline. `tests/memory.profiles.test.ts` and
 `tests/memory.recall-github.test.ts` read `privateText` where the model used
 to get the rows.
+
+## Must-ask gate (REQ-plugins-097, AUTONOMY-9/9.a, AUTONOMY-10/10.a, AUTONOMY-11)
+
+`tests/must-ask.gate.test.ts` — through `runPlugin` with registered test
+commands and a temp data dir: an approved card runs the call once after it
+and the request ends `used` (kind `mustask`, class destructive, requester
+`local`, the wait note names the one-time code); a channel post is the plain
+`mustask-post` card with the exact text and names where it was asked from;
+a deny runs nothing, the same call again is refused with no new card, a
+changed call asks again; no answer lapses (`expired`, the refusal says the
+bridge DMs the card) and does not block asking again; a delegate worker and
+a run with no owner are refused with no card; an aborted wait is exit 130;
+a throwing classifier asks as prod; a refusal is a SAFE-5 `denied` row;
+`discord-post-message` text claiming no OK is needed still raises the card
+with the defanged text; the policy table; and the real card engine
+(`mustAskApprovalKinds`) answering both kinds — prod needs Approve plus the
+code, a post one press, Deny runs nothing.
+`tests/must-ask.classify.test.ts` — the shell, runner, Fledge and git-push
+classifiers over temp projects and repos (table commands, wrappers, npx,
+package scripts, make / just recipes with variables, inline code, scripts,
+unreadable forms, everyday commands that don't ask, SAFE-21 / clamp refusals
+left to the handler, the tagged self-update and every near-miss form, the
+recorded and unrecorded default branch).
+`tests/must-ask.boundary.test.ts` — only the must-ask builtins carry a class
+and every other builtin passes the gate with no card; real non-must-ask calls
+raise none; each must-ask builtin's everyday call raises none; the tool loop
+holds a post for the card, feeds the owner's no back to the model and runs a
+files-write in the same round with no card.
+`tests/must-ask.regression.test.ts` (imports only modules main has, so it
+fails on main on what it checks) — with no owner configured a real
+`discord-post-message` post is refused (`refused (AUTONOMY-10)`, exit 2) and
+no request is sent, and a `git-push` of `main` to its remote is refused
+(`refused (AUTONOMY-9)`) and the remote stays empty.
+`tests/git.plugins.test.ts`, `tests/discord.requester-perms.test.ts` and
+`tests/discord.allowed-mentions.test.ts` approve the card
+(`tests/fixtures/must-ask.ts`) where they push `main` or post for real.

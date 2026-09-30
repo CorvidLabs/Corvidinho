@@ -12,6 +12,7 @@ files:
   - src/plugins/mutating.ts
   - src/plugins/roles.ts
   - src/plugins/builtins.ts
+  - src/plugins/must-ask.ts
   - src/plugins/githubDeny.ts
   - src/plugins/githubPublic.ts
   - tests/github.public.community.test.ts
@@ -78,6 +79,7 @@ files:
   - tests/runners.plugins.test.ts
   - tests/shell.clamp-scripts.test.ts
   - plugins/shell/footguns.ts
+  - plugins/shell/must-ask.ts
   - tests/shell.footguns.test.ts
   - plugins/web/index.ts
   - plugins/web/commands.ts
@@ -102,6 +104,7 @@ files:
   - plugins/fledge/commands.ts
   - plugins/fledge/spawn.ts
   - plugins/fledge/core.ts
+  - plugins/fledge/must-ask.ts
   - src/plugins/toolCost.ts
   - tests/fledge.plugins.test.ts
   - tests/fledge.cli.test.ts
@@ -111,6 +114,11 @@ files:
   - tests/proc-group.test.ts
   - tests/roles.chat.gates.test.ts
   - tests/roles.team.test.ts
+  - tests/must-ask.gate.test.ts
+  - tests/must-ask.classify.test.ts
+  - tests/must-ask.boundary.test.ts
+  - tests/must-ask.regression.test.ts
+  - tests/fixtures/must-ask.ts
 
 db_tables: []
 depends_on: []
@@ -143,6 +151,10 @@ Autonomous extras are plugins left off until the project opts in (PLUGIN-5):
 (AUTONOMOUS-6 / REQ-plugins-118). Both pass a worker's own SAFE-13 hit
 (`result.injection`, validated) back as `data.injection`, which the lead's
 tool loop takes as its own hit (REQ-plugins-071).
+Every call goes through the must-ask gate in `runPlugin`: a call its command
+classes as prod or deploy contact or as a channel post waits for the owner's
+Approve card, and anything else runs with no ask (AUTONOMY-9/10/11,
+REQ-plugins-097).
 
 ## Public API
 
@@ -195,6 +207,26 @@ the Fledge core builtins via `loadFledgeCorePlugins(opts?)` (called by
 `runTimeoutMs`, `maxOutputBytes`), `FLEDGE_CORE_COMMAND_NAMES`,
 `FLEDGE_NAME_RE`, `resolveFledgeBin(env)`, `fledgeCoreChildEnv(base, root)`,
 `laneSourcesRefusal(cwd)`, `parseLanesList` and `parseLanesValidate`.
+Must-ask (REQ-plugins-097): `PluginCommand.mustAsk?` is a `MustAskClass`
+(`prod` | `public`) or a `MustAskClassifier` (`{ args, cwd, env }` →
+`MustAskVerdict`: null, `{ ask: MustAskAsk }` with `class`, `why`, `target`
+and optional exact `text`, or `{ refuse: PluginHandlerResult }`);
+`src/plugins/must-ask.ts` exports `mustAskGate(input)` (null ⇒ run; a result
+⇒ return it and run nothing), `mustAskVerdict(cmd, args, cwd, env?)`,
+`MUST_ASK_POLICY` (spend / prod / public → AUTONOMY-8 / -9 / -10 and the card
+kind and class), `MUST_ASK_PROD_KIND` (`mustask`), `MUST_ASK_POST_KIND`
+(`mustask-post`), `MUST_ASK_CARD_KINDS`, `MUST_ASK_CARD_TTL_MS` (5 min),
+`MUST_ASK_POLL_MS`, `MUST_ASK_NOTHING_DONE`, `MUST_ASK_WHY_MAX` (300: the
+card's action and target lines are kept to one short line; the exact text or
+command goes out whole before the card), `PROD_COMMANDS`,
+`prodCommandWhy(name, args)`, `prodTextWhy(text)`,
+`setMustAskNotifier(fn | null)` and the test seam `setMustAskTestHooks`
+(`MustAskTestHooks`: `ttlMs`, `pollMs`, `onRequest`).
+`plugins/shell/must-ask.ts` exports `shellProdWhy(command, root, opts?)`,
+`taskCommandProdWhy`, `runnerProdWhy(tool, args, root, opts?)`,
+`isSelfUpdateToTag(command, root, opts?)`, `INSTALL_ROOT` and
+`SELF_UPDATE_SCRIPT`; `plugins/fledge/must-ask.ts` exports
+`fledgeRunMustAsk`, `fledgeLanesRunMustAsk` and `fledgePluginMustAsk(command)`.
 `plugins/specsync/api.ts` exports `listRegisteredModules` (in a project that
 has a `.specsync/` dir, each `specs/<name>/<name>.spec.md` that
 `readModuleSpec` reads, plus the `[specs]` names of `.specsync/registry.toml`
@@ -327,7 +359,58 @@ deletion of SAFE-2 protected infra, and reports
 ref of a configured remote (never a URL), never forces, gates every push
 URL's OWNER/REPO through `checkRepoGate` with the allowlist file + env
 (GITHUB-6, deny wins), and redacts URL credentials / secret tokens. Draft
-SAFE-22 default-branch policy is not enforced (awaiting HI).
+SAFE-22 default-branch policy is not enforced (awaiting HI); a push of the
+remote's default branch waits for the owner's card as a deploy (AUTONOMY-9,
+REQ-plugins-097).
+
+Must-ask (AUTONOMY-9/9.a, AUTONOMY-10/10.a channel posts, AUTONOMY-11,
+REQ-plugins-097): `runPlugin` calls `mustAskGate` after the role gate and the
+SAFE-1 deny and before the SAFE-5 `started` row, for every caller (the tool
+loop on every surface, `/work`, schedules, WATCH, `plugins run`). The class
+comes from the command's own `mustAsk` only; a classifier that throws asks as
+prod (fail closed). A `refuse` verdict is returned as the command's own
+refusal with no card. For an `ask`: a delegate or council worker
+(`CORVIDINHO_DELEGATE_DEPTH` > 0) is refused with no card; with no owner
+configured the call is refused at once; the same call the owner denied
+(same kind and action hash — tool, args and target — and the same requester)
+is refused with no new card; otherwise one `approval_requests` row is
+recorded (kind `mustask`, class destructive, for prod — Approve plus the
+SAFE-19 one-time code, AUTONOMY-9.a; kind `mustask-post`, class plain, for a
+channel post), with the exact text or command as its text, the acting user as
+requester, this process as waiter and a 5-minute expiry; the run notes the
+wait once (`setMustAskNotifier`, stderr by default) and polls the decision
+with the run's abort signal. Only an approval it consumes once runs the call;
+a deny, no answer by the expiry or a stopped run (exit 130) runs nothing and
+returns a refusal naming the rule, the request id and why (SAFE-20); every
+refusal appends a `denied` SAFE-5 row. Classified builtins:
+`discord-post-message` (public: every post, the exact defanged text shown; a
+dry run asks nothing; a post its own checks refuse is refused before any
+card), `shell-exec`, the runners, `fledge-run`, `fledge-lanes-run`,
+discovered `fledge-<command>` and `git-push` (prod); every other builtin has
+no class. `shell-exec` (`shellProdWhy`) reads each simple command over the
+clamp's walker and each command an exec wrapper runs: a `PROD_COMMANDS` name
+(ssh family, root, the box's services, packages, containers, firewall and
+cron, secrets tools, cloud, hosting, cluster and infrastructure CLIs, DNS
+tools), remote `rsync`, `gh` on secrets / variables / workflows / releases
+(and `gh api` on those paths), `git push`, `npx` / `bunx` / `pnpm dlx` /
+`yarn dlx` / `npm exec` of one, a package script (with its pre/post) from the
+project's package.json, a `make` / `just` recipe with its prerequisites and
+variables, inline interpreter code and an in-root or `#!` script an
+interpreter or a path runs; an unreadable script or recipe, a make / just
+file or dir option and a command named by an expansion ask; the box updater
+by any other path or form asks. A command SAFE-21 or the clamp refuses is not
+classified. `isSelfUpdateToTag`: exactly `CORVIDINHO_REF=v<X.Y.Z>` and the
+installed checkout's `scripts/corvidinho-update.sh` (or `bash` it), nothing
+else typed, and a tag that checkout has, is not a deploy (AUTONOMY-9). The
+runners (`runnerProdWhy`) ask on table words in argv and in an in-root script
+they are handed; `fledge-run` / `fledge-lanes-run` read the task and lane
+commands from `fledge.toml` and `.fledge/lanes/*.toml` (tasks with `deps`,
+steps as task names, `{ run }`, `{ task }` and `{ parallel }`) like shell commands, and
+ask for anything they can't read (no fledge.toml: fledge refuses, no ask);
+a discovered `fledge-<command>` asks on table words in its name or argv.
+`git-push` asks when the current branch is the remote's recorded default
+(`refs/remotes/<remote>/HEAD`), or, with none recorded, a usual default name
+(`main`, `master`, `trunk`, `production` …); feature branches never ask.
 
 `delegate` (REQ-plugins-117) is `dangerous: false`, `mutating: true`, minTier
 2, `autonomous: true`: hidden from the tool catalog unless the session is

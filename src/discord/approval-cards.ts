@@ -65,6 +65,7 @@ import {
   type ApprovalRequest,
 } from "../approvals/store.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
+import { MUST_ASK_CARD_KINDS, MUST_ASK_NOTHING_DONE } from "../plugins/must-ask.ts";
 import { isScheduleRunnerAlive } from "../scheduler/store.ts";
 import {
   APPROVAL_CODE_INPUT_ID,
@@ -806,4 +807,25 @@ export function storedApprovalKind(opts: {
     approvedOutcome: (req) => opts.approvedOutcome?.(req) ?? "Approved by you.",
     orphaned: (req) => Boolean(req.waiter) && !isScheduleRunnerAlive(req.waiter!),
   };
+}
+
+/**
+ * AUTONOMY-9/10 (#97): the must-ask gate's cards (src/plugins/must-ask.ts),
+ * both stored in `approval_requests` — `mustask` (prod or deploys; class
+ * destructive, so Approve also needs the one-time code, AUTONOMY-9.a) and
+ * `mustask-post` (a channel post; class plain). Approve only records the
+ * decision: the waiting run reads it and uses it once.
+ */
+export function mustAskApprovalKinds(opts: { db: Database; now?: () => number }): ApprovalKind<ApprovalRequest, void>[] {
+  return MUST_ASK_CARD_KINDS.map((k) =>
+    storedApprovalKind({
+      db: opts.db,
+      kind: k.kind,
+      class: k.class,
+      audit: k.kind,
+      nothingDone: MUST_ASK_NOTHING_DONE,
+      approvedOutcome: () => "Approved by you — the waiting run goes ahead with exactly this.",
+      ...(opts.now ? { now: opts.now } : {}),
+    }),
+  );
 }

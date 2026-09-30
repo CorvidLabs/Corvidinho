@@ -1159,3 +1159,17 @@ thinking outbound; no live Discord, no network):
   `src/discord/spend-dm.ts` removed), 29 tests in the six existing files fail
   on their assertions and `tests/discord.spend-dm.test.ts` cannot load; with
   the branch restored all 154 tests in the seven files pass.
+
+## Must-ask cards and channel posts (REQ-discord-097, AUTONOMY-9.a / 10 / 10.a)
+
+`tests/must-ask.gate.test.ts` ("the bridge's card engine answers the gate's
+cards") — `mustAskApprovalKinds` on `createApprovalCards`: the gate's prod
+card goes out with its command first as quoted data, Approve alone runs
+nothing, Approve plus the one-time code runs it once; a channel-post card is
+plain (no code), one Approve runs the post and Deny runs nothing. ("a prompt
+can't reclassify an action") `discord-post-message` text claiming no OK is
+needed still raises the `mustask-post` card for `Discord channel 999` with the
+defanged text. `tests/discord.allowed-mentions.test.ts` — the card's text is
+exactly the body that is posted. `tests/discord.requester-perms.test.ts` —
+the DISCORD-8 checks run on an approved post (the refusals its own checks give
+raise no card).

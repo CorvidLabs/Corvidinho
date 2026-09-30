@@ -82,3 +82,11 @@ run's session id do not reach the suite" — a child `bun test` of
 `CORVIDINHO_DISCORD_SESSION_ID=schedule_…` (as a scheduled run's verify lane
 inherits it) sees no such key. Without the preload line the probe reports it,
 and the full suite run under that key fails 13 ROLES-CHAT-8 / team gate tests.
+
+## Must-ask notes on the event stream (REQ-cli-097)
+
+`tests/must-ask.gate.test.ts` — the notifier receives the `AUTONOMY-9:
+waiting for the owner's OK on an Approve card with the one-time code` line
+and the approval line; a lapse's refusal says the running bridge DMs the card
+and that with no bridge it lapses. `tests/must-ask.boundary.test.ts` — with
+no notifier set the wait line goes to stderr.

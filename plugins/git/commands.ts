@@ -12,6 +12,7 @@ import { isAbsolute, normalize, relative, resolve, sep } from "node:path";
 import { tryLoadAllowlist } from "../../src/allowlist/load.ts";
 import { checkRepoGate } from "../../src/plugins/githubDeny.ts";
 import type {
+  MustAskVerdict,
   PluginCommand,
   PluginHandlerArgs,
   PluginHandlerResult,
@@ -261,6 +262,60 @@ const BRANCH_REFUSE: Record<string, string> = {
   "-d": "refused: git-branch-create does not delete branches",
   "--delete": "refused: git-branch-create does not delete branches",
 };
+
+/**
+ * Branch names a remote usually deploys or releases from; a push of one asks
+ * when the remote's default branch is not recorded locally.
+ */
+const USUAL_DEFAULT_BRANCHES = new Set([
+  "main", "master", "trunk", "default", "production", "prod", "live", "release", "stable", "deploy", "gh-pages",
+]);
+
+/**
+ * AUTONOMY-9 (#97): a push to the remote's default branch is a deploy and
+ * asks; a feature-branch push does not. The default is the remote's recorded
+ * HEAD (`refs/remotes/<remote>/HEAD`); when none is recorded, a push of a
+ * usual default name asks. A call the handler would refuse (no repo,
+ * detached HEAD, a bad remote) is left to it.
+ */
+async function gitPushMustAsk(ctx: { args: string[]; cwd: string }): Promise<MustAskVerdict> {
+  const r = await gitRoot(ctx.cwd);
+  if (!r.ok) return null;
+  const root = r.root;
+  let a: ParsedArgs;
+  try {
+    a = parseArgs(ctx.args, {
+      value: ["--remote", "--repo"],
+      bool: ["--set-upstream"],
+      alias: { "-u": "--set-upstream", "-R": "--repo" },
+      refuse: PUSH_REFUSE,
+    });
+  } catch {
+    return null;
+  }
+  const branch = await currentBranch(root);
+  if (!branch) return null;
+  const remote = a.values.get("--remote") ?? a.positional[0] ?? "origin";
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(remote)) return null;
+  const head = await runGit(root, ["symbolic-ref", "--quiet", "--short", `refs/remotes/${remote}/HEAD`]);
+  const recorded = head.code === 0 ? head.stdout.trim() : "";
+  const def = recorded.startsWith(`${remote}/`) ? recorded.slice(remote.length + 1) : null;
+  const target = `branch ${branch} → remote ${remote}`;
+  if (def !== null) {
+    return branch === def
+      ? { ask: { class: "prod", why: `pushes ${branch}, ${remote}'s default branch (a deploy)`, target } }
+      : null;
+  }
+  return USUAL_DEFAULT_BRANCHES.has(branch)
+    ? {
+        ask: {
+          class: "prod",
+          why: `pushes ${branch}, a usual default branch name, and ${remote}'s default branch is not recorded here (it may be a deploy)`,
+          target,
+        },
+      }
+    : null;
+}
 
 export const gitCommands: PluginCommand[] = [
   {
@@ -641,6 +696,8 @@ export const gitCommands: PluginCommand[] = [
       'Push the current branch to the same-named branch on a configured remote (default origin) and set upstream. Never force; no refspecs. The remote OWNER/REPO must pass the GitHub repo gate (GITHUB-6); credentials only from env / credential helper. dangerous + minTier=code. Args: [--remote <name>]. e.g. [] or ["--remote","origin"]',
     dangerous: true,
     minTier: 2,
+    // AUTONOMY-9: a push to the remote's default branch waits for the owner's card + code.
+    mustAsk: gitPushMustAsk,
     handler: (ctx) =>
       inRepo(ctx, async (root) => {
         const a = parseArgs(ctx.args, {

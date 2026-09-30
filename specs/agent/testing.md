@@ -310,3 +310,12 @@ flips exactly at the cap; the owner's `formatSpendStatusLine` keeps the
 amounts. `tests/agent.spend-ask.test.ts` and `tests/agent.spend.test.ts` keep
 asserting that a stopped run's summary is `SPEND_CAP_SUMMARY` (no `$`, no
 `CORVIDINHO_`) and that the question carries the details.
+
+## AUTONOMY-11 sentence (REQ-agent-097)
+
+`tests/must-ask.boundary.test.ts` — `ASK_AGENT_SYSTEM_INSTRUCTIONS` carries
+the "Must-ask (AUTONOMY-9..11)" sentence and the tool loop's system message
+holds it; in one round a files-write runs with no card while a
+`discord-post-message` waits for the owner's card, and the owner's no reaches
+the model as the tool's refusal (`refused (AUTONOMY-10) … the owner denied
+it`), which it reports in its answer.

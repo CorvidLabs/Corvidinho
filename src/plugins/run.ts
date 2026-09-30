@@ -6,6 +6,7 @@ import {
   type AuditOutcome,
 } from "../audit/log.ts";
 import { openCorvidinhoDb } from "../store/db.ts";
+import { mustAskGate } from "./must-ask.ts";
 import { isMutatingPlugin } from "./mutating.ts";
 import { get } from "./registry.ts";
 import {
@@ -56,7 +57,10 @@ function toAllowSet(allowlist?: ReadonlySet<string> | string[]): Set<string> {
 /**
  * Run a registered plugin by name.
  * Enforces ROLES-CHAT role gate, then dangerous + nonInteractive deny unless
- * allowlisted (SAFE-1 / PLUGIN-2).
+ * allowlisted (SAFE-1 / PLUGIN-2), then the must-ask gate: a call its
+ * command classes as prod or a channel post waits for the owner's Approve
+ * card, and a deny or no answer runs nothing (AUTONOMY-9/10, SAFE-20;
+ * src/plugins/must-ask.ts). Every caller goes through it.
  */
 export async function runPlugin(opts: RunOptions): Promise<PluginHandlerResult> {
   const cmd = get(opts.name);
@@ -101,6 +105,26 @@ export async function runPlugin(opts: RunOptions): Promise<PluginHandlerResult> 
       error: err.message,
       exitCode: err.exitCode,
     };
+  }
+
+  // AUTONOMY-9/10 (+ .a): prod and deploy contact and channel posts wait for
+  // the owner's Approve card; the class comes from the command's own
+  // classifier, never from model text. Anything else runs with no ask
+  // (AUTONOMY-11).
+  const held = await mustAskGate({
+    cmd,
+    args,
+    cwd: opts.cwd ?? process.cwd(),
+    env: process.env,
+    ...(opts.signal ? { signal: opts.signal } : {}),
+  });
+  if (held) {
+    try {
+      recordAudit(cmd.name, args, "denied", held.exitCode ?? 2);
+    } catch {
+      /* the refusal stands; audit failure must not flip it */
+    }
+    return held;
   }
 
   if (dangerous) {

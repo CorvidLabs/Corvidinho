@@ -1,0 +1,27 @@
+---
+id: it-asks-me-on-an-approve-card-before-touching-prod-or-deploys-or-making-a-channel-post-anything-else-it-just-does-and
+state: approved
+type: feature
+base_commit: 151e9baf38ef7e8d67ffa4271ee8c4af614c9ae6
+---
+
+# It asks me on an Approve card before touching prod or deploys or making a channel post; anything else it just does and tells me (AUTONOMY-9/9.a, AUTONOMY-10/10.a channel posts, AUTONOMY-11, #97)
+
+## Intent
+
+It asks me on an Approve card before touching prod or deploys or making a channel post; anything else it just does and tells me (AUTONOMY-9/9.a, AUTONOMY-10/10.a channel posts, AUTONOMY-11, #97)
+
+## Affected Canonical Specs
+
+- `plugins`
+- `discord`
+- `agent`
+- `cli`
+
+## Acceptance Criteria
+
+- AUTONOMY-9, AUTONOMY-10, AUTONOMY-11 (captured on main from Leif's 2026-09-28 interview) and AUTONOMY-9.a, AUTONOMY-10.a (captured with hi in this PR from Leif's 2026-09-30 round 13 decisions) hold for this PR's scope: every plugin call goes through one must-ask gate in runPlugin (after the role gate and SAFE-1, before SAFE-5), and its class comes only from the command's own mustAsk class or classifier, never from model text. Prod (AUTONOMY-9/9.a): shell-exec commands that reach another host, run as root or look at or change the box's services, packages, containers, firewall or cron, use a secrets, cloud, hosting, cluster, infrastructure or DNS tool, gh on secrets/variables/workflows/releases or git push from the shell (through exec wrappers, npx, package scripts, make/just recipes and inline interpreter code; unreadable scripts and recipes ask), runner argv/code/scripts, fledge-run/fledge-lanes-run task and lane commands from fledge.toml (unreadable asks), discovered fledge commands by name/argv, and git-push of the remote's default branch — read-only looks included — wait for the owner's mustask card (class destructive: Approve plus the SAFE-19 one-time code); updating itself with exactly CORVIDINHO_REF=v<X.Y.Z> <installed checkout>/scripts/corvidinho-update.sh for an existing tag runs with no ask. Public (AUTONOMY-10/10.a, channel-post half): every discord-post-message post waits for the plain mustask-post card showing the exact defanged text, dictated text and replies to the owner included; a dry run and a post the tool refuses anyway raise no card. SAFE-20: a deny, no answer within 5 minutes or a stopped run runs nothing and the model gets a refusal saying why; the same denied (tool, args, requester) is refused again with no new card; delegate and council workers get a no-card refusal; with no owner configured the call is refused at once; with no bridge the card lapses and the refusal says so; the run prints the wait as one Text event (task run) or stderr line. AUTONOMY-11: every other builtin runs through runPlugin with no card (a builtin boundary test), and the model's system instructions carry one sentence telling it to just act and say what it did. The first-20 public-thread replies half of AUTONOMY-10/10.a is left to the later must-ask-public change. tests/must-ask.gate.test.ts, tests/must-ask.classify.test.ts and tests/must-ask.boundary.test.ts fail on main and pass here (REQ-plugins-097, REQ-discord-097, REQ-agent-097, REQ-cli-097).
+
+## No-spec Rationale
+
+Not applicable
