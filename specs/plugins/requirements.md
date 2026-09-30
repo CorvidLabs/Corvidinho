@@ -1038,6 +1038,7 @@ Acceptance Criteria
 - Concurrent appenders in several processes lose no rows.
 - Several processes that each open the shared DB file, append one row and close it (as dangerous plugin runs do), all at once, get every append in and the chain verifies.
 - While another process holds the write lock for about a second, frees it for 50 ms and then holds it past busy_timeout, `appendAudit` takes the lock while it is free; its row links to the other process's row, the chain verifies and the connection keeps its busy_timeout.
+- Several processes that each open the shared DB file and append one row, all at once, get every append in and the chain verifies also when the file is new or has a re-scrub due (their opens take turns, REQ-discord-287).
 
 ### REQ-plugins-312
 

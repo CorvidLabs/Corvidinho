@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 91
+version: 92
 status: draft
 files:
   - src/discord/types.ts
@@ -1345,3 +1345,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-30 | it-asks-me-on-an-approve-card-before-touching-prod-or-deploys-or-making-a-channel-post-anything-else-it-just-does-and: It asks me on an Approve card before touching prod or deploys or making a channel post; anything else it just does and tells me (AUTONOMY-9/9.a, AUTONOMY-10/10.a channel posts, AUTONOMY-11, #97) |
 | 2026-09-30 | i-configure-the-models-openai-compatible-ollama-anthropic-with-no-built-in-default-and-it-says-so-when-none-is-set: I configure the models (OpenAI-compatible, Ollama, Anthropic) with no built-in default, and it says so when none is set (AGENT-13, AGENT-10) |
 | 2026-09-30 | shared-db-open-and-safe-5-audit-append-retry-a-busy-sqlite-lock-every-millisecond-so-other-processes-committing-back-to: Shared DB open and SAFE-5 audit append retry a busy SQLite lock every millisecond, so other processes committing back to back cannot pass them over for the whole busy_timeout and lose audit rows |
+| 2026-09-30 | shared-db-open-takes-the-write-lock-up-front-so-processes-that-open-a-new-file-or-one-with-a-re-scrub-due-at-once-take: Shared DB open takes the write lock up front, so processes that open a new file or one with a re-scrub due at once take turns instead of failing part way |

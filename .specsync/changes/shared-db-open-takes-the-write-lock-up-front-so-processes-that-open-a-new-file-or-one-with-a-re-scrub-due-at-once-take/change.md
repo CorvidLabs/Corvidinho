@@ -1,6 +1,6 @@
 ---
 id: shared-db-open-takes-the-write-lock-up-front-so-processes-that-open-a-new-file-or-one-with-a-re-scrub-due-at-once-take
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 24f70ecdca39ffa74e1645185baf7cc9882982ca
 ---
