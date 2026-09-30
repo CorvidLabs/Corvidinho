@@ -153,9 +153,29 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   A slash command there gets only the zero-width ack (the tip for the owner),
   `/schedule create` naming it is refused, and a schedule whose channel is the
   thread neither runs nor posts at tick (both already gated the thread id;
-  kept as regression locks). Restart recovery edits and replies nothing for a
-  row in the denied thread or under a denied parent and deletes the row, and
-  still recovers a row in another thread under the parent.
+  kept as regression locks), and `discord-post-message` to it is refused
+  (`is denied`). Restart recovery edits and replies nothing for a row in the
+  denied thread or under a denied parent and deletes the row, and still
+  recovers a row in another thread under the parent.
+- `tests/discord.thread-deny.test.ts` — where a deny on the parent alone
+  reaches a thread allowlisted by its own id (`channels = [thread]` or
+  `[parent, thread]`, `deny_channels = [parent]`), pinning current behaviour
+  (REQ-discord-212): a message in the thread is refused silently and runs
+  nothing through `startBridge`, both a new @mention and a thread message,
+  reply or mention in a talk started there before the deny; an ask press for
+  a session a message started there is not allowlisted, and through
+  `startBridge` gets only the zero-width ack with no resume. Slash,
+  `/schedule` and `discord-post-message` gate the id they are given:
+  `/status` in the thread is served, `/schedule create` naming it is accepted
+  and a tick on it runs and posts there, and
+  `discord-post-message --channel <thread>` posts (dry run). A
+  `/session start` session in the thread (no thread id recorded) is judged on
+  the thread alone: its ask press resumes it with `replyChannelId` = the
+  thread and no `replyParentChannelId`, its pick's restart row records no
+  parent, and a restart row with no parent is recovered in the thread; a
+  reply in the thread to its answer is a message run that carries the parent
+  as `replyParentChannelId` and on its restart row (REQ-discord-311 /
+  REQ-discord-476).
 - `tests/discord.send-file.test.ts` — a deny-listed thread under its
   allowlisted parent is refused `is denied` before any requester check or
   upload; another thread under that parent still attaches.

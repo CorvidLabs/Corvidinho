@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "req-discord-212-says-where-a-parent-deny-reaches-its-threads-a-deny-listed-thread-is-refused-on-every-path-while-a-deny",
+  "implementation_commit": "107598c05820046370d74c6a34306c7676c5c039",
+  "implementation_tree": "dda1be0f82784b6648c9c62755250ce6426d2fd0",
+  "contract_digest": "28380f93c35ac3ce22bc634fd54f3dd2f90378225b544aa5dc229ab9e163d6f5",
+  "workspace_digest": "bf25aa7ecc126b6c0ff314a5c74b408f61fe19efa14d30788bd9332f651e421f",
+  "closing_digest": "c201fec8d9500519d0b7e1d20f5582ed7c9fd61085e94d7b7d2fddc004701248",
+  "review_digest": "b0b181ff65de81c869503b665a07019ac0685b9745e54c4ba0c27057b16830e2",
+  "finalization_digest": "f902704b40dc0d5693ea8afc8038625f6c8f3e28e2df312c44015902c8ecba51",
+  "timestamp": 1790749311
+}
