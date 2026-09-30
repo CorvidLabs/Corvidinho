@@ -55,11 +55,19 @@ import {
   callSignature,
   changedState,
   createRepeatFailureGuard,
+  createStallNudgeGuard,
   errorExcerpt,
+  isStateChangingTool,
+  nothingChanged,
   REPEAT_FAILURE_BLOCK_DETAIL,
   repeatedFailureAsk,
   repeatFailureSteer,
+  stallKind,
+  stallNudge,
+  stallNudgedNote,
+  stallStandsNote,
   type RepeatFailureGuard,
+  type StallNudgeGuard,
 } from "./loop-guards.ts";
 import {
   claimsIgnorance,
@@ -669,12 +677,21 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   let injection: InjectionNotice | null = null;
   // AGENT-16: failing-call counts for the whole run (verify retries included).
   const repeatGuard = createRepeatFailureGuard();
+  // AGENT-17: one nudge per run for a plan-only or empty "Done." reply.
+  const stallGuard = createStallNudgeGuard();
   // SAFE-3.a: the allowlisted shell, runners and Fledge core runs, and whether
   // this run already said once why the gate held them back.
   const safe3aNamed = [...SAFE3A_TOOLS].filter((name) => allowlist.has(name));
   let safe3aNoted = false;
 
-  const run: ExecuteFn = async ({ attempt, verifyFeedback, signal, specBriefing, repoWays }) => {
+  const run: ExecuteFn = async ({
+    attempt,
+    verifyFeedback,
+    signal,
+    specBriefing,
+    repoWays,
+    workspaceChanged,
+  }) => {
     if (personaNote) {
       emit(onEvent, { type: "Text", text: personaNote });
       personaNote = null;
@@ -791,6 +808,8 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       },
       onPrivateReply: (text) => opts.onPrivateReply?.(text),
       repeatGuard,
+      stallGuard,
+      workspaceChanged,
       // AGENT-4 (REQ-agent-502): a delegate worker gets this run's allowlist
       // and, outside a role session, may run an allowlisted Fledge command
       // whose edits no result reports (a role-session worker is non-ADMIN).
@@ -867,6 +886,10 @@ type LoopArgs = {
   workerEditsUnreported?: boolean;
   /** AGENT-16: the run's repeat-failure guard (src/agent/loop-guards.ts). */
   repeatGuard?: RepeatFailureGuard;
+  /** AGENT-17: the run's one-nudge guard (src/agent/loop-guards.ts). */
+  stallGuard?: StallNudgeGuard;
+  /** AGENT-17: the verify gate's real git diff since the baseline; absent with no git tree. */
+  workspaceChanged?: () => Promise<string[] | null>;
 };
 
 async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
@@ -897,6 +920,8 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     onPrivateReply,
     workerEditsUnreported = false,
     repeatGuard = createRepeatFailureGuard(),
+    stallGuard = createStallNudgeGuard(),
+    workspaceChanged,
   } = args;
   // AGENT-16: a new conversation — no steer has reached the model in it yet.
   repeatGuard.newConversation();
@@ -1083,6 +1108,33 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
           roundLimit += 1;
           continue;
         }
+      }
+      // AGENT-17: a reply that is only a plan, or a short "Done."-style or
+      // empty claim, when this round offered a state-changing tool, SAFE-13
+      // has not tripped and nothing changed (the real git diff, or
+      // tool-reported changes with no git tree): the run's first such reply
+      // gets one nudge to the same model (it never uses up a tool round);
+      // after that the reply stands, with an operator note.
+      const stalled = stallKind(content);
+      if (
+        stalled &&
+        llm.tier !== "read" &&
+        !injectionTripped() &&
+        roundTools.some((t) => isStateChangingTool(t.function.name)) &&
+        (await nothingChanged({
+          sawChange: repeatGuard.sawChange(),
+          unreportedEdits: unreportedEditTools.size > 0,
+          workspaceChanged,
+        })) &&
+        !signal.aborted
+      ) {
+        if (stallGuard.next() === "nudge") {
+          emit(onEvent, { type: "Text", text: stallNudgedNote(stalled) });
+          messages.push({ role: "user", content: stallNudge(stalled, offered.has(ASK_TOOL_NAME)) });
+          roundLimit += 1;
+          continue;
+        }
+        emit(onEvent, { type: "Text", text: stallStandsNote(stalled) });
       }
       return {
         summary:

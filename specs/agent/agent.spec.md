@@ -56,6 +56,7 @@ files:
   - tests/agent.verify-gate.test.ts
   - tests/fixtures/talk-worktree.ts
   - tests/agent.loop-guards.test.ts
+  - tests/agent.stall-nudge.test.ts
   - tests/agent.test-evidence.test.ts
   - tests/fixtures/lane-output.ts
   - src/agent/providers.ts
@@ -129,6 +130,13 @@ refusal counts) until something really changes; the 2nd identical failure is
 followed by a harness steer to change approach or ask, and an identical call
 made after the model has seen that steer does not run: the attempt ends with
 the existing "stuck" ask, so every surface pings the owner (AUTONOMY-2/4).
+Plan-only or empty "Done." replies (AGENT-17, nudge half, REQ-agent-087;
+`src/agent/loop-guards.ts`): a final reply that is only a plan, or a short
+"Done."-style or empty claim, when the round offered a state-changing tool,
+SAFE-13 has not tripped and nothing changed (the verify gate's real git diff,
+or tool-reported changes with no git tree), gets one harness nudge to the
+same model, once per run; a second stall stands with an operator note.
+Moving to a stronger model is not built yet.
 
 ## Public API
 
@@ -145,7 +153,22 @@ or mutating builtin is in exactly one), `STEER_AFTER_FAILURES` (2),
 `repeatedFailureAsk(label)` (a `stuck` HumanAsk) and
 `createRepeatFailureGuard()` → `RepeatFailureGuard` (`newConversation`,
 `before(sig, round)` → `"run" | "ask"`, `after(sig, round, result, changed)`
-→ `{ failures, steer }`, `lastError(sig)`). No env var, config key, flag,
+→ `{ failures, steer }`, `lastError(sig)`, `sawChange()` — true once any
+result of the run was a change). No env var, config key, flag,
+HumanAsk reason or NDJSON field is added.
+
+Stall nudge (REQ-agent-087, AGENT-17 nudge half): `src/agent/loop-guards.ts`
+also exports `isStateChangingTool(name)` (a `STATE_CHANGING_TOOLS` builtin or
+a Fledge plugin command; `changedState` uses it), `stallKind(text)` →
+`"plan" | "done-claim" | null`, `STALL_DONE_MAX_CHARS` (60),
+`STALL_PLAN_MAX_CHARS` (600), `STALL_NUDGE_MARK`
+(`[Corvidinho harness — AGENT-17]`), `nothingChanged({ sawChange,
+unreportedEdits, workspaceChanged? })` (async), `stallNudge(kind,
+askOffered)`, `stallNudgedNote(kind)`, `stallStandsNote(kind)` and
+`createStallNudgeGuard()` → `StallNudgeGuard` (`next()` → `"nudge"` once,
+then `"stand"`). `ExecuteContext` gains the optional `workspaceChanged()` →
+`Promise<string[] | null>`: `runTask` passes its `WorkspaceDiffTracker`'s
+`changed` when the run has a git snapshot. No env var, config key, flag,
 HumanAsk reason or NDJSON field is added.
 
 Export `MEMORY_AGENT_SYSTEM_INSTRUCTIONS` from `src/agent/execute.ts` (and
@@ -559,6 +582,21 @@ with `repeatedFailureAsk`, whose question names only an offered tool (else
 `(unknown tool)`), never error text. The ask is never given before the model
 has seen the steer in its own conversation.
 
+A plan-only or empty "Done." reply that changed nothing is nudged once
+(AGENT-17, REQ-agent-087): only in `runToolLoop`'s final-reply branch, after
+the MEMORY-9 follow-up, and only when `stallKind` matches, the tier is not
+read, SAFE-13 has not tripped, the round's catalog offers an
+`isStateChangingTool` tool and `nothingChanged` holds (no `changedState`
+result in the run, no tool whose edits no result reports, and an empty real
+diff where there is a git tree; an unreadable diff counts as a change; the
+diff is read only for a reply that stalls). The nudge is one user message to
+the same conversation and model chain, never uses up a tool round, and comes
+at most once per `createTaskExecute`; a later stall stands with one
+`[operator] AGENT-17` line (no ask, no error). `stallKind` is null for any
+"?", code fence, "let me know" or offer, decline, toy / demo / joke or
+deferral, and for answers and social replies. The model chain (AGENT-11)
+and the spend guard (SAFE-8/14/15) are unchanged.
+
 The persona sets tone only and the rules win (REQ-agent-069, PERSONA-3): the
 persona block is always first in the system prompt and every rule
 (`PERSONA_RULES_SYSTEM_INSTRUCTIONS`, SAFE / role / memory / ask
@@ -959,6 +997,12 @@ A change the run did not open is never touched.
 - **When** it makes the same call a second time, then a third after seeing the steer
 - **Then** the 2nd tool result ends with the AGENT-16 harness steer quoting the error, the 3rd call never runs, and the run ends `blocked` with the stuck question `The same files-read call keeps failing with nothing changed in between. How should I proceed?` (REQ-agent-086)
 
+### Scenario: the model only says "Done." and changed nothing
+
+- **Given** a code-tier run (the catalog offers `files-write`) in a project whose tree has not changed
+- **When** the model's final reply is "Done." (or only a plan, or empty)
+- **Then** the same model gets one `[Corvidinho harness — AGENT-17]` nudge and its next reply is the answer; if that reply stalls again it stands with an `[operator] AGENT-17 … the reply stands` line; a Q&A answer, a social reply, a question, "let me know", a decline or a toy demo is never nudged (REQ-agent-087)
+
 ### Scenario: the owner's schedule posts to a channel and the owner says no
 
 - **Given** `CORVIDINHO_ALLOWLIST=discord-post-message` and a run the scheduler spawned for the owner's own schedule (owner stamp, `CORVIDINHO_ACTING_SURFACE=schedule`, session `schedule_<id>`)
@@ -1004,6 +1048,9 @@ A change the run did not open is never touched.
 | The same tool call (same argv) fails a 2nd time with nothing changed | the call's tool message ends with the AGENT-16 steer (scrubbed error excerpt); the loop continues (REQ-agent-086) |
 | That call is made again after the model saw the steer | not run; `ToolResult` success=false with `REPEAT_FAILURE_BLOCK_DETAIL`, one `[operator] AGENT-16` Text line; state blocked with a `stuck` ask naming only the tool (REQ-agent-086) |
 | Identical failing calls in one batch, or in a fresh verify-retry conversation | they run and get the steer again; never the ask before the model saw the steer (REQ-agent-086) |
+| Final reply is only a plan or a short "Done."-style / empty claim, a state-changing tool was offered, no SAFE-13 trip, nothing changed | one `[Corvidinho harness — AGENT-17]` user message to the same model (no tool round used), one `[operator] AGENT-17 … nudged once` line; its next reply is the answer (REQ-agent-087) |
+| It stalls again after the run's nudge | the reply stands; one `[operator] AGENT-17 … the reply stands` line; no ask, no error (REQ-agent-087) |
+| The git diff cannot be read (null or throws) when a reply stalls | counted as a change: no nudge (REQ-agent-087) |
 | AbortSignal fired | cancelled=true (outer loop) or execute returns early mid tool loop |
 | AbortSignal fired while verify runs | lane's process tree killed; cancelled=true, no VerifyResult, no retry, no `ask` |
 | Aborted lane left an escaped process holding its output pipe | runner stops waiting after a 250 ms grace; cancelled=true |

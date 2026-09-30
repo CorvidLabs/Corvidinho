@@ -125,6 +125,13 @@ export type ExecuteContext = {
    * prompt block for them. Absent when none was found.
    */
   repoWays?: RepoWays;
+  /**
+   * AGENT-17 (REQ-agent-087): the verify gate's real git diff since the
+   * run's baseline (`WorkspaceDiffTracker.changed`), for the tool loop's
+   * "nothing changed" check; null when git cannot be read. Absent with no
+   * git tree (tool-reported changes decide).
+   */
+  workspaceChanged?: () => Promise<string[] | null>;
 };
 
 export type ExecuteFn = (ctx: ExecuteContext) => Promise<ExecuteResult>;

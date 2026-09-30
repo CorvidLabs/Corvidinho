@@ -478,7 +478,7 @@ describe("DISCORD-SCHEDULE-1.a: must-ask calls in the owner's schedule run ask o
                 function: { name: c.name, arguments: JSON.stringify({ argv: c.argv }) },
               })),
             }
-          : { role: "assistant", content: "done" };
+          : { role: "assistant", content: "The post was not approved, so nothing went out." };
       return Response.json({ choices: [{ message }] });
     };
     return { fetchImpl, seen };
