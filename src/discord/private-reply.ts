@@ -16,7 +16,7 @@
 
 import { scrubSecrets } from "../store/scrub.ts";
 import { defangMassMentions } from "./allowed-mentions.ts";
-import { DISCORD_ANSWER_MAX, splitDiscordMessage } from "./rich-reply.ts";
+import { DISCORD_ANSWER_MAX, DISCORD_DM_MAX, splitDiscordMessage } from "./rich-reply.ts";
 
 /** A direct message to one user (gateway `sendDm`); null when it did not go out. */
 export type SendPrivateDm = (opts: {
@@ -31,7 +31,7 @@ export const PRIVATE_REPLY_TEXT_MAX = DISCORD_ANSWER_MAX;
 /** Ends a private reply cut at {@link PRIVATE_REPLY_TEXT_MAX}. */
 export const PRIVATE_REPLY_CUT_MARKER = "\n… (cut here — ask for a narrower part to see the rest)";
 /** A DM part stays within the gateway's direct-message cap (1900). */
-export const PRIVATE_DM_PART_MAX = 1900;
+export const PRIVATE_DM_PART_MAX = DISCORD_DM_MAX;
 
 /** First line of each private DM. */
 export const PRIVATE_DM_HEADER = "🔒 Private — only you can see this (MEMORY-7.a):";

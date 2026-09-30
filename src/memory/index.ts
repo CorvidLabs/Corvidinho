@@ -81,6 +81,8 @@ export {
   forgetTargets,
   githubOriginOf,
   parseForgetRequester,
+  previewForgetTargets,
+  type ForgetCounts,
   type ForgetGithubThread,
   type ForgetRequest,
   type ForgetRequester,

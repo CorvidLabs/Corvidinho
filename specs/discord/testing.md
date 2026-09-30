@@ -798,23 +798,29 @@ person for a declared person, a community member and an undeclared user,
 audited `memory-forget-request` started / ok, deleting nothing; refused with
 no actor, outside a conversation, with arguments and with no owner. Through
 `startBridge` with a fake gateway: `deliverForgetCards` DMs the owner one card
-(who, count, request id, lapse; no content) with Approve / Deny; a non-owner
+(`Action:` / `Target:` / `Amount: 6 memories (5 stored, 1 earlier versions),
+1 session turns and 0 kept conversations` one line each, request id, the
+one-time code note, lapse; no content) with Approve / Deny; a non-owner
 press (even the asker) is refused ephemerally with a `denied` row; the owner's
-Approve deletes every memory row of that person (profile, private, superseded,
-legacy and alt Discord-id scopes) and their session turns, stored and in
-the running bridge's session thread, keeps other people's and project memory
-and the people list, writes `started` / `ok`, answers the press first
-(card without buttons, before any DM), then DMs the asker and marks the card
+Approve (SAFE-19, REQ-discord-096) answers the press first with Enter code /
+Deny and DMs the code apart (never in the card's message), deleting nothing;
+Enter code opens the `cvok:forget:submit:<id>` form, and the code typed there
+(lower case accepted) deletes every memory row of that person (profile,
+private, superseded, legacy and alt Discord-id scopes) and their session
+turns, stored and in the running bridge's session thread, keeps other
+people's and project memory and the people list, writes `started` / `ok`,
+answers the submit first (privately), then DMs the asker and marks the card
 told; a second press finds it closed. Deny deletes nothing and, when the DM fails, tells the asker in their
 allowlisted conversation. The chat path delivers the card after the message.
-A keyed audit chain with no key refuses Approve and leaves the ask pending
-(SAFE-5 fail closed). With a fake clock an unanswered ask expires on the pass
-(card closed, asker told) and a late Approve deletes nothing. Schema v12: a
-v11 DB migrates keeping memories, `forget_requests` has no free-text column,
-one pending ask per subject, re-running is a no-op.
-`tests/watch.session-store.durable.test.ts` and
-`tests/scheduler.ask-outbox.test.ts` expect `SCHEMA_VERSION` 13 (v13, kept
-conversations, follows v12; REQ-discord-472).
+A keyed audit chain with no key refuses the code's approval and leaves the
+ask pending (SAFE-5 fail closed). With a fake clock an unanswered ask expires
+on the pass (card closed, asker told) and a late Approve deletes nothing.
+Schema v12: a v11 DB migrates keeping memories, `forget_requests` has no
+free-text column, one pending ask per subject, re-running is a no-op.
+`tests/watch.session-store.durable.test.ts`,
+`tests/store.conversation.test.ts` and `tests/scheduler.ask-outbox.test.ts`
+expect `SCHEMA_VERSION` 14 (v13 kept conversations, REQ-discord-472; v14
+approval cards, REQ-discord-096).
 
 ## Forget from GitHub and /admin people forget (REQ-discord-1016, MEMORY-ACL-6.a)
 
@@ -823,7 +829,8 @@ conversations, follows v12; REQ-discord-472).
   `/admin people forget person:Tofu` writes `admin-people-forget` started /
   ok, one pending ask (`admin:<owner>` → `person:tofu`), replies with the
   request id and DMs the owner the card ("started by you with /admin people
-  forget", no content) at once; a second run reuses the ask; Approve deletes
+  forget", no content) at once; a second run reuses the ask; Approve and the
+  one-time code (`tests/fixtures/approval-code.ts`) delete
   Tofu's memory and session turn but never the owner's own note or turn, DMs
   nobody else, adds no "told" line and marks the ask told; an undeclared id
   and a Discord id are refused (`denied`), no person gives the usage, a
@@ -839,6 +846,69 @@ conversations, follows v12; REQ-discord-472).
   threads by login and by `github-id:<n>`.
 - `tests/discord.admin-slash.test.ts`: the `people` group ends with `role`,
   `forget`.
+
+## Approve / Deny card engine and one-time codes (REQ-discord-096, SAFE-18..20)
+
+- `tests/discord.approval-cards.test.ts` — engine over in-memory SQLite with a
+  fixed clock and recording DMs (`storedApprovalKind` kinds), and the bridge
+  with a fake gateway (the `forget` kind):
+  - SAFE-18: an 84-line diff with a ```` ``` ````, `@everyone` and a fake token
+    goes out before the card as `Diff for request <id> (i/n) — quoted as
+    data` parts in a ```` ```diff ```` block, each ≤ 1900, together exactly the
+    scrubbed diff (token redacted, mention defanged, fence broken); the card
+    is last and alone has Approve / Deny, `Action:` (line break shown ⏎) /
+    `Target:` / `Amount:` one line each, the parts count, request id and hash;
+    a 501-character action, and a text needing over 10 parts, are never sent
+    (logged) and lapse as a no.
+  - SAFE-19: a kind with no class is destructive — Approve updates the card to
+    Enter code / Deny and DMs the code apart (no components; the code in no
+    card message, `approval_codes` row or audit row); Enter code opens the
+    `submit` form; the code acts once (`approval-card`, `approval-code-issue`,
+    `approval-approve` started / ok), a second submit is "Already closed";
+    the waiter consumes it once. Money needs the code; plain acts on one press.
+    Late code (2 min), another card's code, a wrong code: refused, the open
+    code voided, card back to Approve / Deny; a new Approve's code works.
+    A failed action (`started`, `error`) leaves the request pending and the
+    same code no longer works. A code that could not be DMed is voided.
+  - SAFE-20: an unanswered card expires on the pass (card marked, codes void);
+    a code submitted after the card's expiry does nothing (the code expiry is
+    capped at the card's); a request whose waiter process is gone is closed
+    before delivery, or on Approve after it; `waitForDecision` closes an
+    unanswered or aborted request as expired and reads another connection's
+    decision.
+  - The card binds what it showed: a stored request whose row changed after
+    its card went out (as a re-scrub would) is closed as changed on Approve
+    (nothing done, no code), and the fresh card shows the new amount, records
+    its hash, and its Approve with the code acts.
+  - Bridge: muting the owner between Approve and the code submit refuses the
+    submit (and another user's), `memory-forget-approve` `denied` rows, and
+    after unmute the same code works; a press carrying typed text or a submit
+    without it is ignored; with `disableScheduler` and no chat the engine's own
+    poll DMs a card recorded before the bridge started, and a second bridge
+    process completes Approve and the code on that card; a forget card whose
+    count changed after it went out is closed as changed (nothing deleted, no
+    code) and a fresh card with the new count follows; so is a forget card a
+    v13 bridge sent (posted, no `action_hash`): Approve on it deletes nothing
+    and sends no code, and the fresh card's Approve with the code forgets; an
+    ask that lapsed while no bridge ran is closed and its asker told on the
+    poll.
+  - Schema v14: a v13 DB (no approval tables, no `forget_requests.action_hash`)
+    migrates keeping its forget ask, no plain `code` column, re-running is a
+    no-op; `approval_requests` fields are stored scrubbed and are in
+    `SCRUB_TARGETS`.
+- `tests/approvals.code.test.ts` — `issueCode` (alphabet, length, salted hash
+  only, expiry capped by the card, a new code voids the old), `verifyAndConsume`
+  (once; any case, spaces or dashes; another card, kind or action hash refused
+  and voided; late refused and voided; junk is wrong), `voidCodes`,
+  `purgeOldCodes`.
+- `tests/discord.gateway-no-cut.test.ts` — through the live gateway with a fake
+  discord.js: a 1900-character DM and a 2000-character edit go out whole,
+  1901 / 2001 (the defang counted) are refused (null / false, logged) with
+  nothing sent; a card update and a code-form reply of 2000 go out whole, 2001
+  throws `DiscordContentTooLongError` with nothing sent; answer parts are
+  defanged before the split; the private Choose message stays ≤ 1900.
+- `tests/discord.forget-card.test.ts`, `tests/discord.admin-forget.test.ts` and
+  `tests/watch.forget-me.test.ts` drive Approve through the one-time code.
 
 ## Untrusted text on Discord (REQ-discord-071, SAFE-11/12/13)
 

@@ -8,6 +8,12 @@
  * []`, and `@everyone` / `@here` are defanged in the text, so model-written
  * summaries cannot ping a role, `@everyone`, `@here` or a user (DISCORD-8
  * confused deputy, REQ-discord-205).
+ *
+ * No silent cuts (SAFE-18, REQ-discord-096): a direct message over
+ * DISCORD_DM_MAX, or a component reply/update, form-submit reply or message
+ * edit over Discord's 2000 characters, is refused loudly (logged; `sendDm`
+ * resolves null, `editMessage` false, a reply throws) instead of being cut;
+ * callers split first.
  */
 
 import type * as DiscordJs from "discord.js";
@@ -30,11 +36,37 @@ import type {
   SlashReplyPayload,
 } from "./slash-types.ts";
 import type { DiscordEmbedPayload } from "./thinking-status.ts";
-import { DISCORD_MESSAGE_MAX } from "./rich-reply.ts";
+import { DISCORD_DM_MAX, DISCORD_MESSAGE_MAX } from "./rich-reply.ts";
 import type { DiscordModal } from "./ask-buttons.ts";
 import { buildVersionPresenceData } from "./presence.ts";
 import type { BridgeConfig, InboundMessage } from "./types.ts";
 import { VERSION as PACKAGE_VERSION } from "../version.ts";
+
+/** Outbound text over its limit: refused, never cut (SAFE-18, REQ-discord-096). */
+export class DiscordContentTooLongError extends Error {
+  constructor(
+    readonly where: string,
+    readonly length: number,
+    readonly max: number,
+  ) {
+    super(`[discord] ${where}: ${length} characters is over the ${max}-character limit; not sent (never cut)`);
+    this.name = "DiscordContentTooLongError";
+  }
+}
+
+/**
+ * `content` with mass mentions defanged, or a thrown
+ * {@link DiscordContentTooLongError} when it is over `max` (no silent cut).
+ */
+export function boundedContent(where: string, content: string, max: number): string {
+  const text = defangMassMentions(content);
+  if (text.length > max) {
+    const err = new DiscordContentTooLongError(where, text.length, max);
+    console.error(err.message);
+    throw err;
+  }
+  return text;
+}
 
 /**
  * Thin MessageComponent interaction (DISCORD-ASK buttons), or the submit of
@@ -714,7 +746,7 @@ export async function createLiveGateway(
       };
       if (content === null) payload.content = null;
       else if (content !== undefined) {
-        payload.content = defangMassMentions(content).slice(0, DISCORD_MESSAGE_MAX);
+        payload.content = boundedContent("editMessage", content, DISCORD_MESSAGE_MAX);
       }
       if (embed === null) payload.embeds = [];
       else if (embed) {
@@ -741,7 +773,7 @@ export async function createLiveGateway(
       const user = await client.users.fetch(userId);
       // REQ-discord-205: a DM parses no mentions either.
       const sent = await user.send({
-        content: defangMassMentions(content).slice(0, 1900),
+        content: boundedContent("sendDm", content, DISCORD_DM_MAX),
         ...(components?.length ? { components: components as never } : {}),
         allowedMentions: outboundAllowedMentions(),
       });
@@ -808,7 +840,7 @@ export function adaptComponent(interaction: {
         allowedMentions: outboundAllowedMentions(),
       };
       if (opts.content !== undefined) {
-        payload.content = defangMassMentions(opts.content).slice(0, 1900);
+        payload.content = boundedContent("component reply", opts.content, DISCORD_MESSAGE_MAX);
       }
       // Explicit empty array clears buttons (DISCORD-ASK-8); do not use truthiness.
       if (opts.components !== undefined) {
@@ -903,7 +935,7 @@ export function adaptModalSubmit(interaction: {
         allowedMentions: outboundAllowedMentions(),
       };
       if (opts.content !== undefined) {
-        payload.content = defangMassMentions(opts.content).slice(0, 1900);
+        payload.content = boundedContent("form submit reply", opts.content, DISCORD_MESSAGE_MAX);
       }
       if (opts.components !== undefined) {
         payload.components = opts.components as never;

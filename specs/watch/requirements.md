@@ -507,7 +507,8 @@ scope). A declared person SHALL get one `forget_requests` ask
 actor `github:<login>`, surface `watch:forget-me` — no row ⇒ nothing
 recorded — then `ok`, or `error` on a store failure; one open ask per
 person) and nothing SHALL be deleted; the Discord bridge DMs the owner the
-card (REQ-discord-1016). Every such event SHALL get one reply on its thread
+card (REQ-discord-1016), which the owner approves with Approve and the
+one-time code (SAFE-19, REQ-discord-096). Every such event SHALL get one reply on its thread
 (`watchForgetMeReplyBody`, attribution footer): the request went to the
 owner (or is already waiting) and nothing is forgotten unless they approve
 within 24 h; for a sender not on the list, that nothing is kept for them and
@@ -535,6 +536,8 @@ Acceptance Criteria
 - A WATCH run's kept conversation lists `github:<login>` and `github-id:<n>`.
 - With two decided asks, a rate limit (429) on the first outcome post stops the pass (neither is posted); a locked thread (a bare 403) on the first does not: the second is posted and marked told, and the first once its thread takes the post.
 - `tests/watch.forget-me.test.ts` covers each and fails on main.
+- The owner's approval of a GitHub ask on the bridge's card takes Approve and the one-time code typed into the form (SAFE-19, REQ-discord-096); the thread reply and the outcome post are unchanged (`tests/watch.forget-me.test.ts`).
+
 ### REQ-watch-367
 
 WATCH recognises GitHub users by numeric user id only (IDENTITY-7.a, #36,

@@ -80,11 +80,14 @@ export type DiscordActionRow = {
   components: DiscordButton[];
 };
 
-/** Paragraph text input (component type 4, style 2) of the Answer form. */
+/**
+ * Text input (component type 4) of a form: paragraph (style 2) for the ask
+ * Answer form, short (style 1) for an Approve card's one-time code.
+ */
 export type DiscordTextInput = {
   type: 4;
   custom_id: string;
-  style: 2;
+  style: 1 | 2;
   min_length: number;
   max_length: number;
   required: true;
@@ -372,8 +375,19 @@ export function formatAskEphemeralContent(ask: HumanAsk): string {
     .split("\n")
     .map((l) => `> ${l}`)
     .join("\n");
-  return `❓ Pick one:\n${quoted}`;
+  const text = `❓ Pick one:\n${quoted}`;
+  // The gateway refuses a component reply over Discord's limit instead of
+  // cutting it (REQ-discord-096): a question of many short lines is cut
+  // here, visibly (…).
+  if (text.length <= ASK_EPHEMERAL_MAX) return text;
+  let end = ASK_EPHEMERAL_MAX - 1;
+  const last = text.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end -= 1;
+  return `${text.slice(0, end)}…`;
 }
+
+/** Longest private Choose message (under Discord's 2000). */
+export const ASK_EPHEMERAL_MAX = 1900;
 
 export function findOptionLabel(
   options: readonly AskOption[] | undefined,

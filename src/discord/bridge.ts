@@ -94,7 +94,13 @@ import {
 import { loadDeclaredPeople } from "../identity/people.ts";
 import { enrichPromptWithMemories, memoryInjectOptsFor } from "./memory-inject.ts";
 import { parseApproveCardCustomId } from "./approve-card.ts";
-import { createForgetCards, FORGET_CARD_KIND, type ForgetDeliveryResult } from "./forget-card.ts";
+import {
+  APPROVAL_POLL_MS,
+  APPROVAL_UNKNOWN_KIND,
+  createApprovalCards,
+  type ApprovalDeliveryResult,
+} from "./approval-cards.ts";
+import { forgetApprovalKind } from "./forget-card.ts";
 import { createWatchAskDelivery } from "./watch-ask.ts";
 import { clearBridgeRunning, markBridgeRunning } from "../watch/owner-ask.ts";
 import { deliverPrivateReplies, withPrivateNote } from "./private-reply.ts";
@@ -188,11 +194,14 @@ export type StartBridgeResult =
       memoryStore?: MemoryStore;
       announceStore?: AnnounceStore;
       /**
-       * MEMORY-ACL-6: one forget-card delivery pass (owner cards, expiries,
-       * outcome notices); also run by every scheduler tick and after each
-       * chat message. Undefined without a DB.
+       * SAFE-18..20 / MEMORY-ACL-6: one Approve/Deny card delivery pass
+       * (owner cards, expiries, outcome notices) of every card kind — the
+       * engine's own poll runs it, and so does each chat message and
+       * scheduler tick. Undefined without a DB.
        */
-      deliverForgetCards?: () => Promise<ForgetDeliveryResult>;
+      deliverApprovalCards?: () => Promise<ApprovalDeliveryResult>;
+      /** The same pass (MEMORY-ACL-6's name for it). */
+      deliverForgetCards?: () => Promise<ApprovalDeliveryResult>;
       mutedUsers: Set<string>;
       rateLimitState: RateLimitState;
       muteUser: (userId: string) => void;
@@ -246,6 +255,11 @@ export type StartBridgeOptions = {
   schedulerPollIntervalMs?: number;
   /** Scheduler (and nightly backup) clock override (tests). */
   schedulerNow?: () => number;
+  /**
+   * SAFE-18..20: the Approve/Deny card engine's poll interval (default
+   * APPROVAL_POLL_MS; ≤ 0 ⇒ no poll; tests).
+   */
+  approvalPollMs?: number;
 };
 
 function memoryThinkingOutbound(): ThinkingOutbound & {
@@ -494,26 +508,41 @@ export async function startBridge(
         appendAudit(db, entry, { key: auditKeyFromEnv(env) })
     : undefined;
   const mutedUsers = new Set<string>(config.mutedUserIds);
-  // MEMORY-ACL-6: forget requests reach the owner as a DM Approve/Deny card.
+  // SAFE-18..20: everything that needs the owner's OK reaches them as a DM
+  // Approve/Deny card from one engine (src/discord/approval-cards.ts); the
+  // MEMORY-ACL-6 forget request is its `forget` kind.
   const sendDmRef: { fn?: GatewayHandlers["sendDm"] } = {};
-  const forgetCards = db
-    ? createForgetCards({
+  const sendDm = async (o: Parameters<NonNullable<GatewayHandlers["sendDm"]>>[0]) =>
+    sendDmRef.fn ? sendDmRef.fn(o) : null;
+  const editCardMessage = async (o: Parameters<NonNullable<GatewayHandlers["editMessage"]>>[0]) =>
+    embedRef.editMessage ? embedRef.editMessage(o) : false;
+  const approvals = db
+    ? createApprovalCards({
         db,
         env,
         owner: () => config.owner ?? null,
-        people: () => declaredPeople(),
-        sendDm: async (o) => (sendDmRef.fn ? sendDmRef.fn(o) : null),
-        editMessage: async (o) => (embedRef.editMessage ? embedRef.editMessage(o) : false),
-        post: async ({ channelId, content, mentionUserIds }) =>
-          !!replyRef.fn && (await replyRef.fn({ channelId, content, mentionUserIds })) !== null,
-        // DISCORD-5: the fallback notice only in a conversation still allowlisted.
-        mayPost: (channelId, parentChannelId) =>
-          isMonitoredConversation(channelId, parentChannelId, config.allowlist),
-        // An approved forget also drops the session threads this process
-        // still holds for them, so no later run replays those turns.
-        onForgotten: ({ discordIds }) => {
-          store.forgetTurnsOfUsers(discordIds);
-        },
+        sendDm,
+        editMessage: editCardMessage,
+        kinds: [
+          forgetApprovalKind({
+            db,
+            env,
+            owner: () => config.owner ?? null,
+            people: () => declaredPeople(),
+            sendDm,
+            editMessage: editCardMessage,
+            post: async ({ channelId, content, mentionUserIds }) =>
+              !!replyRef.fn && (await replyRef.fn({ channelId, content, mentionUserIds })) !== null,
+            // DISCORD-5: the fallback notice only in a conversation still allowlisted.
+            mayPost: (channelId, parentChannelId) =>
+              isMonitoredConversation(channelId, parentChannelId, config.allowlist),
+            // An approved forget also drops the session threads this process
+            // still holds for them, so no later run replays those turns.
+            onForgotten: ({ discordIds }) => {
+              store.forgetTurnsOfUsers(discordIds);
+            },
+          }),
+        ],
       })
     : undefined;
   // AGENT-16.a: a stuck WATCH run (the watch process shares this data dir)
@@ -593,7 +622,7 @@ export async function startBridge(
       // MEMORY-ACL-6.a: `/admin people forget` records the ask in the shared
       // DB and sends the owner's card at once.
       ...(db ? { requestForget: (i) => new ForgetRequestStore({ db }).request(i) } : {}),
-      ...(forgetCards ? { deliverForgetCards: () => forgetCards.deliver() } : {}),
+      ...(approvals ? { deliverForgetCards: () => approvals.deliver() } : {}),
       // Same object/arrays as the router + scheduler: /admin splices in place.
       allowlist: config.allowlist,
       agent,
@@ -1189,16 +1218,22 @@ export async function startBridge(
         }
       } finally {
         inflight.end();
-        // MEMORY-ACL-6: a forget request made in this run reaches the owner now.
-        void forgetCards?.deliver();
+        // SAFE-18 / MEMORY-ACL-6: a card this run raised (a forget request)
+        // reaches the owner now.
+        void approvals?.deliver();
       }
     },
     onComponent: async (interaction) => {
-      // MEMORY-ACL-6: an Approve/Deny card press (the owner's DM, so no
-      // channel allowlist); the presser must be the owner, re-checked now.
+      // SAFE-18..20 / MEMORY-ACL-6: an Approve/Deny card press or its code
+      // form's submit (the owner's DM, so no channel allowlist); the presser
+      // must be the owner, re-checked now on every press and submit.
       const card = parseApproveCardCustomId(interaction.customId);
       if (card) {
-        if (card.kind === FORGET_CARD_KIND && forgetCards) {
+        // SAFE-19 — typed text only ever comes from the code form's submit,
+        // and that form's custom_id only ever comes with typed text; a mix-up
+        // (a forged press or submit) is ignored.
+        if ((card.decision === "submit") !== (interaction.modalValues !== undefined)) return;
+        if (approvals?.has(card.kind)) {
           const mayDecide =
             resolvePermissionLevel({
               userId: interaction.userId,
@@ -1209,9 +1244,9 @@ export async function startBridge(
               owner: config.owner ?? null,
               mutedUsers,
             }) >= PermissionLevel.ADMIN;
-          await forgetCards.press(interaction, card, mayDecide);
+          await approvals.press(interaction, card, mayDecide);
         } else {
-          await interaction.reply({ content: "This card is no longer handled.", ephemeral: true });
+          await interaction.reply({ content: APPROVAL_UNKNOWN_KIND, ephemeral: true });
         }
         return;
       }
@@ -1909,12 +1944,13 @@ export async function startBridge(
       defaultProjectRoot: config.projectRoot,
       owner: config.owner ?? null,
       spendAlerts,
-      // MEMORY-ACL-6: every tick delivers forget cards, expiries and notices;
+      // SAFE-18..20: a tick also runs a card pass (the engine's own poll is
+      // the main trigger, so cards still go out with the scheduler off);
       // AGENT-16.a: and DMs the owner each stuck WATCH ask.
-      ...(forgetCards || watchAsks
+      ...(approvals || watchAsks
         ? {
             onTick: () => {
-              void forgetCards?.deliver();
+              void approvals?.deliver();
               void watchAsks?.deliver();
             },
           }
@@ -1990,6 +2026,9 @@ export async function startBridge(
   // on this data dir (its ticker delivers stuck WATCH asks).
   const bridgeRunner =
     db && scheduler && watchAsks && sendDmRef.fn ? markBridgeRunning(db) : undefined;
+  // SAFE-18..20: the card engine's own poll (DMs undelivered cards, closes
+  // expired requests as a no, tells askers), with or without the scheduler.
+  approvals?.start(opts.approvalPollMs ?? APPROVAL_POLL_MS);
   // AGENT-6.a: retained conversations go 30 days after their last update,
   // also while the bridge sits idle (reads and writes purge too).
   const conversationPurge = setInterval(
@@ -2009,13 +2048,19 @@ export async function startBridge(
     scheduleStore,
     memoryStore,
     announceStore,
-    ...(forgetCards ? { deliverForgetCards: () => forgetCards.deliver() } : {}),
+    ...(approvals
+      ? {
+          deliverApprovalCards: () => approvals.deliver(),
+          deliverForgetCards: () => approvals.deliver(),
+        }
+      : {}),
     mutedUsers,
     rateLimitState,
     muteUser: (userId: string) => muteUserImpl(mutedUsers, userId),
     unmuteUser: (userId: string) => unmuteUserImpl(mutedUsers, userId),
     stop: async () => {
       clearInterval(conversationPurge);
+      approvals?.stop();
       scheduler?.stop();
       // AGENT-16.a: no further stuck WATCH ask is taken, and the watch
       // process no longer counts on this bridge to DM the owner.
@@ -2052,6 +2097,8 @@ export async function startBridge(
       // AGENT-16.a: a stuck WATCH ask's DM in flight gets the same grace,
       // then is handed back for the next start.
       await watchAsks?.settle(ABANDONED_SETTLE_MS);
+      // A card pass in flight gets the same short grace while the gateway is up.
+      await approvals?.settle(ABANDONED_SETTLE_MS);
       await gateway.stop();
     },
   };
