@@ -9,11 +9,11 @@
  * every attempt.
  *
  * Fake provider (injected fetch), temp git project and talk worktree made by
- * `ensureTalkWorkspace`, temp allowlist file, the real card store; no network,
- * no tokens.
+ * `ensureTalkWorkspace`, temp allowlist file, the real card store, a stand-in
+ * `kubectl` first on PATH for the prod command; no network, no tokens.
  */
 import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTaskExecute, type AgentEvent } from "../src/agent/index.ts";
@@ -49,6 +49,7 @@ const KEYS = [
 ] as const;
 
 let saved: Record<string, string | undefined> = {};
+let savedPath: string | undefined;
 let restoreHooks: (() => void) | null = null;
 const temps: string[] = [];
 
@@ -59,6 +60,7 @@ function tempDir(prefix: string): string {
 }
 
 beforeEach(() => {
+  savedPath = process.env.PATH;
   saved = {};
   for (const k of KEYS) {
     saved[k] = process.env[k];
@@ -76,6 +78,8 @@ afterEach(() => {
     if (saved[k] === undefined) delete process.env[k];
     else process.env[k] = saved[k];
   }
+  if (savedPath === undefined) delete process.env.PATH;
+  else process.env.PATH = savedPath;
   clearRegistry();
   loadBuiltins();
 });
@@ -85,6 +89,28 @@ afterAll(() => {
 });
 
 type Talk = { base: string; project: string; work: string };
+
+/**
+ * A stand-in `kubectl` first on PATH (shell-exec's child env is process.env,
+ * restored after each test): it records each call in the directory it ran in
+ * and returns at once. The prod command never runs the host's real kubectl,
+ * whose run time the test can't bound (ubuntu-latest CI runners ship one: it
+ * took 2.4-3.1 s there and once passed bun's 5 s test timeout) and which,
+ * with an operator's KUBECONFIG, would contact a real cluster.
+ */
+function fakeKubectl(): { calls: (dir: string) => string[] } {
+  const bin = tempDir("corvidinho-safe3a-bin-");
+  const tool = join(bin, "kubectl");
+  writeFileSync(tool, `#!/bin/sh\nprintf '%s\\n' "$*" >> kubectl.calls\n`);
+  chmodSync(tool, 0o755);
+  process.env.PATH = `${bin}:${process.env.PATH ?? ""}`;
+  return {
+    calls: (dir) => {
+      const log = join(dir, "kubectl.calls");
+      return existsSync(log) ? readFileSync(log, "utf8").split("\n").filter(Boolean) : [];
+    },
+  };
+}
 
 async function ownerTalk(): Promise<Talk> {
   const base = tempDir("corvidinho-safe3a-e2e-");
@@ -202,6 +228,7 @@ describe("SAFE-3.a: the owner's own chat gets the allowlisted shell in its own w
 
   test("the owner's shell-exec of a prod command still raises the must-ask Approve card; a deny runs nothing", async () => {
     const talk = await ownerTalk();
+    const kubectl = fakeKubectl();
     const h = answerMustAsk("denied");
     restoreHooks = h.restore;
     const notes: string[] = [];
@@ -217,17 +244,21 @@ describe("SAFE-3.a: the owner's own chat gets the allowlisted shell in its own w
     const r = results(run.events).find((e) => e.name === "shell-exec");
     expect(r?.success).toBe(false);
     expect(existsSync(join(talk.work, "ran.marker"))).toBe(false);
+    expect(kubectl.calls(talk.work)).toEqual([]);
     expect(notes.some((n) => n.includes("AUTONOMY-9: waiting for the owner's OK on an Approve card"))).toBe(true);
   });
 
   test("approved on the card, the same prod command runs once in the talk worktree", async () => {
     const talk = await ownerTalk();
+    const kubectl = fakeKubectl();
     const h = answerMustAsk("approved");
     restoreHooks = h.restore;
     setMustAskNotifier(() => {});
     const run = execute(talk.work, [{ name: "shell-exec", argv: ["kubectl get pods; touch ran.marker"] }]);
     await run.attempt(1);
     expect(h.requests).toHaveLength(1);
+    expect(kubectl.calls(talk.work)).toEqual(["get pods"]);
+    expect(kubectl.calls(talk.project)).toEqual([]);
     expect(existsSync(join(talk.work, "ran.marker"))).toBe(true);
   });
 });
