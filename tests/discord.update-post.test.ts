@@ -8,8 +8,8 @@
  * `src/discord/announce.ts` (no model call). The real CHANGELOG.md has a long
  * section for the version used here, so a bullet dump would show.
  */
-import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentClient } from "../src/discord/agent-client.ts";
@@ -28,6 +28,17 @@ const CHAT_CHANNEL = "chan-1";
 const SHIPPED = "0.0.34";
 
 type Reply = { channelId: string; content: string; mentionUserIds?: string[] };
+
+/** Temp dirs a test made (allowlist file dir, project root), removed after each test. */
+const tempDirs: string[] = [];
+function tempDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  tempDirs.push(dir);
+  return dir;
+}
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
 
 const idleAgent: AgentClient = {
   async runChat({ sessionId }) {
@@ -64,13 +75,13 @@ async function bridgeWithAnnounce(opts: { version: string; announceChannel: stri
       DISCORD_BOT_TOKEN: "fake",
       DISCORD_CHANNEL_IDS: CHAT_CHANNEL,
       CORVIDINHO_DISCORD_DRY_RUN: "1",
-      CORVIDINHO_ALLOWLIST_FILE: join(mkdtempSync(join(tmpdir(), "corvidinho-upost-")), "none.toml"),
+      CORVIDINHO_ALLOWLIST_FILE: join(tempDir("corvidinho-upost-"), "none.toml"),
       CORVIDINHO_OWNER_DISCORD_ID: "111122223333444455",
     },
     db,
     announceStore,
     version: opts.version,
-    projectRoot: mkdtempSync(join(tmpdir(), "corvidinho-upost-proj-")),
+    projectRoot: tempDir("corvidinho-upost-proj-"),
     skipProtocolCheck: true,
     disableScheduler: true,
     agent: idleAgent,
