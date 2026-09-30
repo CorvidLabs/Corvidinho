@@ -1,14 +1,33 @@
 /**
- * Shell plugins (PLUGIN-1 / SAFE-3 / REQ-plugins-086..088).
+ * Shell plugins (PLUGIN-1 / SAFE-3 / SAFE-21 / REQ-plugins-086..088, 494..495).
  * Steal: Merlin fledge-plugin-shell project-root clamp (#570).
+ *
+ * Before spawning, `shell-exec` refuses SAFE-21 foot-guns (footguns.ts), then
+ * SAFE-3 escapes (clamp.ts); each refusal is exit 2 and spawns nothing. The
+ * child runs with the runners' env (verify-lane scrub, no GitHub / git
+ * credentials: SAFE-21.a), bounded like them (timeout, output cap, process
+ * group killed on timeout or the calling run's abort), and its output is
+ * secret-scrubbed.
  */
 
 import { resolve } from "node:path";
+import { scrubSecrets } from "../../src/store/scrub.ts";
 import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
+import { spawnCapped } from "../fledge/spawn.ts";
+import {
+  RUNNER_MAX_OUTPUT_BYTES,
+  RUNNER_TIMEOUT_MS,
+  runnerChildEnv,
+} from "../runners/commands.ts";
 import {
   clampRefuseMessage,
   firstDisallowedCd,
 } from "./clamp.ts";
+import { firstFootgun, footgunRefuseMessage } from "./footguns.ts";
+
+/** Same bounds as the language runners: a cold build fits, the run's abort stops it sooner. */
+export const SHELL_TIMEOUT_MS = RUNNER_TIMEOUT_MS;
+export const SHELL_MAX_OUTPUT_BYTES = RUNNER_MAX_OUTPUT_BYTES;
 
 type ParsedCommand = { command?: string; json: boolean; error?: string };
 
@@ -67,7 +86,7 @@ export const shellCommands: PluginCommand[] = [
   {
     name: "shell-exec",
     description:
-      "Execute a shell command (sh -c) pinned to the project cwd. dangerous + minTier=code. SAFE-3 refuses cd/pushd outside the root. Args: <command|--command ...>. Options (--json, --command) go before the command; every later token is part of the command.",
+      "Execute a shell command (sh -c) pinned to the project cwd, without GitHub/git credentials. dangerous + minTier=code. Refuses (and says why) cd/env -C outside the root (SAFE-3), sed -i or > edits, downloads piped into a shell, deletes outside the worktree and secret reads (SAFE-21). Args: <command|--command ...>. Options (--json, --command) go before the command; every later token is part of the command.",
     dangerous: true,
     minTier: 2,
     async handler(ctx): Promise<PluginHandlerResult> {
@@ -83,6 +102,25 @@ export const shellCommands: PluginCommand[] = [
       }
 
       const root = resolve(ctx.cwd);
+      // SAFE-21 first, so a foot-gun names its own reason (`curl … | sh` is a
+      // download run as code, not a cd).
+      const footgun = firstFootgun(cmdStr, root);
+      if (footgun != null) {
+        const msg = footgunRefuseMessage(footgun);
+        return {
+          ok: false,
+          error: msg,
+          message: msg,
+          exitCode: 2,
+          data: {
+            refused: true,
+            rule: "SAFE-21",
+            family: footgun.rule,
+            script: footgun.script,
+            root,
+          },
+        };
+      }
       const offending = firstDisallowedCd(cmdStr, root);
       if (offending != null) {
         const msg = clampRefuseMessage(root, offending);
@@ -91,19 +129,15 @@ export const shellCommands: PluginCommand[] = [
           error: msg,
           message: msg,
           exitCode: 2,
-          data: { refused: true, target: offending, root },
+          data: { refused: true, rule: "SAFE-3", target: offending, root },
         };
       }
 
-      // SAFE-3: an inherited CDPATH would send a relative `cd sub` outside the
-      // root, and an inherited OLDPWD is where `cd -` lands. Drop both.
-      const env: Record<string, string | undefined> = {
-        ...process.env,
-        // Defence-in-depth hint for nested tools (optional consumers).
-        CORVIDINHO_PROJECT_ROOT: root,
-      };
-      delete env.CDPATH;
-      delete env.OLDPWD;
+      // The runners' env: the verify-lane scrub (no LLM / Discord / GitHub
+      // keys), no GitHub or git credentials (SAFE-21.a), and — SAFE-3 — no
+      // inherited CDPATH (a relative `cd sub` could leave the root) or OLDPWD
+      // (where `cd -` lands).
+      const env = runnerChildEnv(process.env, root);
 
       // Merlin pattern: eval "$1" 2>&1 so trailing comments/quotes don't break
       // redirect. `CDPATH=; readonly CDPATH` runs first so a dynamically built
@@ -111,7 +145,7 @@ export const shellCommands: PluginCommand[] = [
       // outside the root; both no-ops leave the command's exit code / output
       // untouched. This is the runtime half of SAFE-3 — the lexer no longer
       // second-guesses CDPATH.
-      const proc = Bun.spawn(
+      const res = await spawnCapped(
         [
           "sh",
           "-c",
@@ -121,23 +155,43 @@ export const shellCommands: PluginCommand[] = [
         ],
         {
           cwd: root,
-          stdout: "pipe",
-          stderr: "pipe",
           env,
+          timeoutMs: SHELL_TIMEOUT_MS,
+          maxBytes: SHELL_MAX_OUTPUT_BYTES,
+          signal: ctx.signal,
         },
       );
+      if (res.spawnError) {
+        return {
+          ok: false,
+          error: `shell-exec: sh could not start: ${scrubSecrets(res.spawnError)}`,
+          exitCode: 127,
+          data: { command: cmdStr, cwd: root, exitCode: 127, started: false },
+        };
+      }
 
-      const stdout = await new Response(proc.stdout).text();
-      const stderr = await new Response(proc.stderr).text();
-      const code = await proc.exited;
-      const output = stdout + (stderr ? stderr : "");
+      // Shell output is untrusted data headed for chat/logs: scrub secrets (SAFE-6).
+      let output = scrubSecrets(res.stdout + res.stderr);
+      if (res.truncated) {
+        output += `\n[output truncated at ${SHELL_MAX_OUTPUT_BYTES} bytes per stream]\n`;
+      }
+      const code = res.timedOut ? 124 : res.aborted ? 130 : res.code;
       const ok = code === 0;
       const data = {
         command: cmdStr,
         cwd: root,
         exitCode: code,
+        timedOut: res.timedOut,
+        aborted: res.aborted,
+        truncated: res.truncated,
         output,
       };
+      if (res.timedOut || res.aborted) {
+        const why = res.timedOut
+          ? `shell-exec timed out after ${SHELL_TIMEOUT_MS}ms and was killed`
+          : "shell-exec stopped: the calling run was interrupted";
+        return { ok: false, data, message: output, error: why, exitCode: code };
+      }
       if (ctx.json || parsed.json) {
         return {
           ok,

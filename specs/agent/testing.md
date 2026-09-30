@@ -39,7 +39,9 @@ streamed NDJSON result still parses; with the hash budget spent an untouched
 dirty file stays quiet and an edit to it is caught; the gate off takes no
 snapshot.
 `tests/agent.tool-loop.test.ts` "runTask: a real code-tier shell-exec edit
-reaches the verify gate": end to end through the real `shell-exec` plugin.
+reaches the verify gate": end to end through the real `shell-exec` plugin,
+writing with `printf broken | tee app.ts` (SAFE-21 refuses a `>` edit,
+REQ-plugins-494).
 ## Allowlisted dangerous tools in task run (REQ-agent-501, REQ-agent-502)
 
 `tests/agent.allowlisted-dangerous.test.ts` (fake provider, fake `fledge` on

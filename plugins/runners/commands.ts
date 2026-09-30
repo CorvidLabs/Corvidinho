@@ -15,13 +15,16 @@
  *
  * The child gets the verify lane's scrubbed env (no Discord config, GitHub
  * tokens, audit key, acting identity or LLM keys; src/agent/verify.ts),
- * without CDPATH / OLDPWD, like `shell-exec`. The spawn is bounded
+ * without CDPATH / OLDPWD, like `shell-exec`, and without the owner's GitHub
+ * or git credentials (SAFE-21.a, {@link withoutGitCredentials}). The spawn is bounded
  * (plugins/fledge/spawn.ts): stdin closed, timeout, per-stream output cap,
  * own process group killed on timeout or the calling run's abort. A binary
  * that cannot start returns exit 127 instead of throwing.
  */
 
-import { resolve } from "node:path";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { buildVerifyEnv } from "../../src/agent/verify.ts";
 import { scrubSecrets } from "../../src/store/scrub.ts";
 import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
@@ -55,12 +58,92 @@ export function runnerDescription(spec: RunnerSpec): string {
   return `Run ${spec.tool} with argv verbatim (no shell) in the project root. dangerous + minTier=code. Args: ${spec.tool}'s own argv, e.g. ${spec.example}.`;
 }
 
-/** Child env: the verify lane's scrub, no CDPATH / OLDPWD, project root hint. */
+/**
+ * Env keys that carry, or point git / gh / ssh at, the owner's GitHub and git
+ * credentials (SAFE-21.a): tokens, askpass helpers, the ssh agent, and the
+ * git config and gh config locations that name credential helpers.
+ */
+const CREDENTIAL_ENV_KEYS = new Set([
+  "GH_TOKEN",
+  "GITHUB_TOKEN",
+  "GH_ENTERPRISE_TOKEN",
+  "GITHUB_ENTERPRISE_TOKEN",
+  "GH_CONFIG_DIR",
+  "GIT_ASKPASS",
+  "SSH_ASKPASS",
+  "SSH_ASKPASS_REQUIRE",
+  "SSH_AUTH_SOCK",
+  "GIT_SSH",
+  "GIT_SSH_COMMAND",
+  "GIT_CONFIG",
+  "GIT_CONFIG_GLOBAL",
+  "GIT_CONFIG_SYSTEM",
+  "GIT_CONFIG_NOSYSTEM",
+  "GIT_CONFIG_PARAMETERS",
+  "GIT_CONFIG_COUNT",
+  "GIT_TERMINAL_PROMPT",
+]);
+const CREDENTIAL_ENV_PATTERNS: readonly RegExp[] = [
+  /^GIT_CONFIG_(KEY|VALUE)_\d+$/,
+  /^(GH|GITHUB)_\w*(TOKEN|PAT|PASSWORD|SECRET)\w*$/,
+];
+
+/** True when env key `key` carries or steers GitHub / git credentials (SAFE-21.a). */
+export function isCredentialEnvKey(key: string): boolean {
+  return CREDENTIAL_ENV_KEYS.has(key) || CREDENTIAL_ENV_PATTERNS.some((p) => p.test(key));
+}
+
+/** ssh for git that offers no key: no config, no key files, no agent, no prompt. */
+export const NO_KEY_GIT_SSH =
+  "ssh -F /dev/null -o IdentityFile=/dev/null -o IdentitiesOnly=yes " +
+  "-o IdentityAgent=none -o BatchMode=yes";
+
+let emptyGhDir: string | null = null;
+
+/** An empty gh config dir for this process (no hosts.yml: gh is logged out). */
+function emptyGhConfigDir(): string {
+  if (emptyGhDir == null) {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-no-gh-"));
+    emptyGhDir = dir;
+    process.once("exit", () => rmSync(dir, { recursive: true, force: true }));
+  }
+  return emptyGhDir;
+}
+
+/**
+ * SAFE-21.a: `env` minus the owner's GitHub / git credentials, in place. The
+ * keys {@link isCredentialEnvKey} names are dropped, then git reads no global
+ * or system config (where credential helpers and URL rewrites live) and a
+ * repo-local `credential.helper` is reset by a last, command-line-level empty
+ * one; git never prompts; git's ssh offers no key; gh reads an empty config
+ * dir (no hosts.yml); cargo fetches git dependencies with that git. Pushes,
+ * PRs and merges then go only through the checked GitHub tools.
+ */
+export function withoutGitCredentials(env: Record<string, string>): Record<string, string> {
+  for (const key of Object.keys(env)) {
+    if (isCredentialEnvKey(key)) delete env[key];
+  }
+  env.GIT_CONFIG_GLOBAL = "/dev/null";
+  env.GIT_CONFIG_NOSYSTEM = "1";
+  env.GIT_CONFIG_COUNT = "1";
+  env.GIT_CONFIG_KEY_0 = "credential.helper";
+  env.GIT_CONFIG_VALUE_0 = "";
+  env.GIT_TERMINAL_PROMPT = "0";
+  env.GIT_SSH_COMMAND = NO_KEY_GIT_SSH;
+  env.GH_CONFIG_DIR = emptyGhConfigDir();
+  env.CARGO_NET_GIT_FETCH_WITH_CLI = "true";
+  return env;
+}
+
+/**
+ * Child env for the runners and `shell-exec`: the verify lane's scrub, no
+ * CDPATH / OLDPWD, no GitHub / git credentials (SAFE-21.a), project root hint.
+ */
 export function runnerChildEnv(
   base: NodeJS.ProcessEnv,
   projectRoot: string,
 ): Record<string, string> {
-  const env = buildVerifyEnv(base);
+  const env = withoutGitCredentials(buildVerifyEnv(base));
   delete env.CDPATH;
   delete env.OLDPWD;
   env.CORVIDINHO_PROJECT_ROOT = projectRoot;

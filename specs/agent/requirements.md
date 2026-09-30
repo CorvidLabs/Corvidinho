@@ -668,7 +668,7 @@ Acceptance Criteria
 - A tracker whose diff lists 30000 paths adds 1000 of them to `filesChanged` after the tool-reported ones, the note counts all 30000, and the NDJSON `result` line read in 64 KiB chunks still parses with the "Verification failed" summary.
 - With the content budget spent, an already-dirty file left alone is not reported and an edit to it is (stat compare).
 - With the gate off no snapshot is taken.
-- End to end: the tool loop runs the real code-tier `shell-exec` with `printf broken > app.ts` in a temp git repo; its payload has no `filesChanged`, yet `runTask` runs verify once and ends `failed` with `filesChanged: ["app.ts"]`.
+- End to end: the tool loop runs the real code-tier `shell-exec` with `printf broken | tee app.ts >/dev/null` in a temp git repo (a `>` edit is refused by SAFE-21, REQ-plugins-494, so the shell's own write goes through `tee`); its payload has no `filesChanged`, yet `runTask` runs verify once and ends `failed` with `filesChanged: ["app.ts"]`.
 
 ### REQ-agent-428
 
