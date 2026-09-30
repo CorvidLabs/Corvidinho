@@ -200,6 +200,16 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   amounts), and the owner's `/status` spend line notes that a spend DM is waiting. `/status`
   shows the spend line to the owner only; anyone else sees just "Spend: Work is paused for
   budget." while runs are stopped at the cap.
+- At a cap, with an owner configured, a run first asks the owner on a **spend card** (SAFE-8,
+  SAFE-8.a): the bridge DMs a card showing the one model call it held (model and provider), the
+  cap it would pass (`total` or `provider:<id>`) and that call's estimate, after the run's task
+  as quoted data. **Approve** plus the one-time code it then DMs (SAFE-19) lets exactly that call
+  through; the next call past the cap asks again with a new card and code. Deny, no answer in
+  4 minutes, a late code or a stopped run sends and spends nothing, and the run ends paused as
+  above. The card needs the bridge running on the same data dir (WATCH, schedules, the daemon and
+  delegate workers raise it too); with no bridge the run waits out the 4 minutes and the lapse is
+  a no. With no owner configured, or for an unpriced model or a bad cap setting, the run stops and
+  asks the operator as before. See [`discord.md`](discord.md) "The spend card".
 
 ### E.2 Protocol 2: restart the bridge, WATCH and daemon together (DISCORD-10)
 
@@ -570,8 +580,9 @@ included), a network error, a timeout (the 10-minute request cap) or a malformed
 on at once with the next entry, with no retry or backoff, and keeps that model for the rest of
 the run (later rounds, verify retries). A next entry whose key is not set is skipped the same
 way. Nothing is remembered between runs: each `task run` process tries the first entry once
-again. A stop at the spend cap is not a model failure: the run stops and asks (SAFE-8) and never
-routes around the cap to another model; a Deny or a lapsed card on a tool is the tool's answer,
+again. A stop at the spend cap is not a model failure: the run stops and asks (SAFE-8, on the
+owner's spend card when one is configured) and never routes around the cap to another model —
+not even when the request's 10-minute timeout ends a card wait; a Deny or a lapsed card on a tool is the tool's answer,
 and your own stop is a stop. It tells you on every surface:
 
 - the run's answer ends with a note that clips and message splits keep, e.g.

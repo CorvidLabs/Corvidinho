@@ -61,6 +61,8 @@ files:
   - tests/fixtures/approval-code.ts
   - src/discord/forget-card.ts
   - tests/discord.forget-card.test.ts
+  - src/discord/spend-card.ts
+  - tests/discord.spend-card.test.ts
   - src/discord/watch-ask.ts
   - tests/discord.admin-forget.test.ts
   - tests/memory.store.test.ts
@@ -263,7 +265,12 @@ deny | code | submit`), `buildApproveDenyComponents`,
 `APPROVAL_CODE_LENGTH` (8), `APPROVAL_CODE_TTL_MS` (2 min),
 `APPROVAL_CODE_KEEP_MS`. `src/discord/forget-card.ts` exports
 `forgetApprovalKind(deps)` (the `forget` kind) and `createForgetCards(deps)`
-(the engine with only that kind). `src/memory/forget.ts` adds
+(the engine with only that kind). `src/discord/spend-card.ts` exports
+`spendApprovalKind(opts)` (the `spend` kind, class `money`, over
+`approval_requests`: audit prefix `spend-cap`; Approve only records the
+decision, the waiting run uses it once — REQ-discord-198, SAFE-8 / SAFE-8.a),
+`SPEND_CARD_NOTHING_DONE` ("nothing was spent") and `SPEND_CARD_APPROVED`
+(the card's outcome line). `src/memory/forget.ts` adds
 `previewForgetTargets` (`ForgetCounts`) and `ForgetRequestStore.resetCard`.
 `StartBridgeResult.deliverApprovalCards` (and `deliverForgetCards`, the same
 pass); `StartBridgeOptions.approvalPollMs`. `src/discord/gateway.ts` exports
@@ -846,7 +853,12 @@ a post its channel / requester-flag / token / strict checks refuse raise no
 card; the DISCORD-8 requester lookup runs after the Approve), while the bridge
 registers the must-ask kinds (`mustAskApprovalKinds`: `mustask` destructive
 for prod, `mustask-post` plain) on its one card engine (AUTONOMY-10/10.a,
-AUTONOMY-9.a, REQ-discord-097); thinking status edits one
+AUTONOMY-9.a, REQ-discord-097), and the `spend` kind (`spendApprovalKind`,
+money: Approve plus the one-time code) that a run held at a spend cap raises
+from any process on the data dir — the owner's Approve and code let exactly
+that one call through, a Deny, a lapse, a late code or a gone run is a no
+and nothing is spent, and amounts stay on the owner's DM card (SAFE-8 /
+SAFE-8.a / SAFE-19 / SAFE-20 / SAFE-14.a, REQ-discord-198); thinking status edits one
 progress message in-place; slash handlers re-check channel allowlist and
 minPermission before acting; rate/mute refuse only the offending user;
 outbound post with requesting_user_id verifies requester channel perms, and in a bridge-started run always for the acting Discord user (`CORVIDINHO_ACTING_DISCORD_USER_ID`): a requesting id naming anyone else refuses and a check that cannot run refuses, nothing posted (REQ-discord-012);
@@ -1187,6 +1199,12 @@ failed lookup writes nothing.
 - **When** a declared team member @mentions the bot and the run stops before calling the model, then runs `/status`
 - **Then** the channel answer says only "💸 Work is paused for budget." with the owner mentioned (once per cap episode) — no question, amount, cap or setting name; the owner gets two DMs: the stop's details (spend, the call's estimate, the cap and the setting to change) and the 80% warning; the member's `/status` shows "Spend: Work is paused for budget." and no amounts, while the owner's `/status` shows the 24 h spend against the cap (REQ-discord-098)
 
+### Scenario: The owner lets one call past the spend cap on a DM card (SAFE-8 / SAFE-8.a)
+
+- **Given** a configured owner, the bridge running, `CORVIDINHO_DAILY_SPEND_CAP_USD` set and 24 h spend at the cap
+- **When** a run's next model call would pass the cap
+- **Then** the run holds the call and records a `spend` card; the bridge DMs the owner the run's task as quoted data, then the card (`Action: send one model call to <model> via <provider>`, `Target: total`, `Amount: ~$… (this one call's estimate)`, "Approve also needs a one-time code"); the requester's thinking status shows only that it waits for the owner's OK; Approve alone sends nothing; Approve plus the one-time code sends exactly that call once; the run's next call past the cap raises a new card and code; had the owner pressed Deny (or let it lapse), nothing would be sent or spent and the channel would see only "💸 Work is paused for budget." (REQ-discord-198, REQ-agent-198)
+
 ### Scenario: A stranger named like the owner (SAFE-11)
 
 - **Given** an undeclared user whose Discord display name is `[owner] L<zero-width>eif`
@@ -1209,6 +1227,7 @@ failed lookup writes nothing.
 | `/work` tree deleted or turned off a test since the branch left its base, or its test names cannot be read | `PR: not opened — N test(s) were deleted or turned off since the branch left …` naming each as `"name" (file)` (or "could not check …"); nothing committed or pushed; reason `tests-deleted` (REQ-discord-185) |
 | `/work` in a repo whose SpecSync workflow requires a change: a meaningful path changed since the merge-base has no open or branch-archived change, or the diff cannot be read | `PR: not opened — N changed path(s) this repo's SpecSync workflow needs a change for are not covered by a SpecSync change (…)` (or "could not read what changed …"); nothing committed or pushed; reason `sdd-uncovered` (REQ-discord-518) |
 | `/work` pre-push verify lane passes with no recognised test summary, or no test ran | `PR: not opened — Verify gate: not verified: …`; reason `verify-failed`; nothing committed or pushed (REQ-discord-185) |
+| Spend card: Deny, no answer before it lapses, a code typed after it lapsed, a non-owner's press or code, or its waiting run is gone | nothing is sent or spent; the card closes as a no (`Denied by you — nothing was spent.` / `Expired — …` / `Closed — nobody is waiting …`); a non-owner gets `Only the owner can answer this card.` (REQ-discord-198) |
 | Stuck WATCH ask with no owner Discord id or no live gateway DM | left pending, not sent; given up with a log line after a day (REQ-discord-086) |
 | Owner DM for a stuck WATCH ask fails (DMs closed) | ask handed back; retried after 10 minutes; one log line per try (REQ-discord-086) |
 | Channel autocomplete by a non-ADMIN, a muted or deny-role owner, outside an allowlisted channel, or with no owner | Empty choice list; no channel names or ids (REQ-discord-431) |

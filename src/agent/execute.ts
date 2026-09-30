@@ -30,6 +30,8 @@ import {
 import { runPlugin } from "../plugins/run.ts";
 import type { PluginHandlerResult, PluginImage } from "../plugins/types.ts";
 import { scrubSecrets } from "../store/scrub.ts";
+import { projectLabel } from "../discord/list-scope.ts";
+import { projectKeyFor } from "../memory/scope.ts";
 import { createSpendGuard, SpendCapRefusal } from "./spend.ts";
 import { formatSpendWarningLine } from "./spend-notice.ts";
 import { ROLE_REFUSED_SUMMARY_NOTE } from "./task-summary.ts";
@@ -592,7 +594,9 @@ function allowsFledge(allowlist: ReadonlySet<string>): boolean {
 export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   const env = opts.env ?? process.env;
   // SAFE-8: warn at 80% of the daily spend cap; a call that would pass it is
-  // not sent and the attempt ends with a spend-cap ask (no cap = untouched fetch).
+  // not sent as is (no cap = untouched fetch): with an owner configured it
+  // waits for the owner's spend Approve card, which lets that one call
+  // through (SAFE-8.a), else the attempt ends with a spend-cap ask.
   const spend = createSpendGuard(opts.fetchImpl ?? fetch, {
     env,
     readUsage: extractUsage,
@@ -601,6 +605,13 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
     onWarning: (w) => {
       emit(opts.onEvent, { type: "Text", text: formatSpendWarningLine(w) });
       opts.onSpendWarning?.(w);
+    },
+    // The card shows the task (as data) and the project's label, never a
+    // host path (REQ-discord-418); the wait and its outcome are Text events.
+    approval: {
+      ...(opts.taskText?.trim() ? { taskText: opts.taskText.trim() } : {}),
+      project: () => projectLabel(projectKeyFor(opts.cwd ?? process.cwd())),
+      onNote: (text) => emit(opts.onEvent, { type: "Text", text }),
     },
   });
   const fetchImpl = spend.fetch;
@@ -1495,7 +1506,9 @@ async function chatCompletions(opts: {
         signal,
       });
     } catch (err) {
-      if (timedOut()) return timeoutError;
+      // SAFE-8: a call held for a spend card whose wait the per-request
+      // timeout cut short is still a cap stop, never a model timeout.
+      if (timedOut() && !(err instanceof SpendCapRefusal)) return timeoutError;
       const msg = err instanceof Error ? err.message : String(err);
       // SAFE-8: a call stopped at the spend cap was never sent — not a model
       // failure, so it never fails over (a cap stop asks, AUTONOMY-8).

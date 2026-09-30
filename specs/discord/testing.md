@@ -1344,3 +1344,24 @@ The SAFE-14.a surface tests (`tests/discord.spend.test.ts`,
 `tests/discord.collapsed-ping.test.ts`) pass unchanged.
 - Fail on base: the file cannot load on main's (7090656) sources.
 
+
+## The spend card on the bridge's engine (REQ-discord-198 added; SAFE-8, SAFE-8.a, SAFE-18, SAFE-19, SAFE-20)
+
+`tests/discord.spend-card.test.ts` (6 tests; in-memory or temp-dir SQLite,
+the fake LLM as an injected fetch, the real card engine with recording DMs,
+the bridge with a fake gateway): the owner is DMed the task as quoted data,
+then the card (title, action, target `total`, amount, the code note); Approve
+alone sends nothing, Approve plus the code DMed apart sends the paused call
+once and answers `SPEND_CARD_APPROVED`, the request ends `used` and the
+`spend-cap-card` / `spend-cap-approve` rows are on the audit chain; Deny sends
+nothing and the card says "Denied by you — nothing was spent."; another
+user's Approve and code are refused ("Only the owner can answer this card.");
+a code typed after the card lapsed is a no; a card whose waiting process is
+gone is closed on the next pass; the bridge DMs a spend card another process
+recorded with its `cvok:spend:approve:<id>` button and answers Approve with the
+code step. The SAFE-14.a surface tests (`tests/discord.spend.test.ts`,
+`tests/discord.spend-dm.test.ts`, `tests/discord.approval-cards.test.ts`,
+`tests/scheduler.ask-outbox.test.ts`) pass unchanged.
+- Fail on base: the file cannot load on main's (0aeb345) sources
+  (`src/discord/spend-card.ts` does not exist), and main's bridge has no
+  `spend` kind, so such a card is never DMed.

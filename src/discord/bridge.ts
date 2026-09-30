@@ -99,6 +99,7 @@ import {
   type ApprovalDeliveryResult,
 } from "./approval-cards.ts";
 import { forgetApprovalKind } from "./forget-card.ts";
+import { spendApprovalKind } from "./spend-card.ts";
 import { createWatchAskDelivery } from "./watch-ask.ts";
 import { clearBridgeRunning, markBridgeRunning } from "../watch/owner-ask.ts";
 import { deliverPrivateReplies, withPrivateNote } from "./private-reply.ts";
@@ -562,6 +563,8 @@ export async function startBridge(
           // AUTONOMY-9/10: prod / deploy asks (code) and channel-post asks
           // the must-ask gate (src/plugins/must-ask.ts) records.
           ...mustAskApprovalKinds({ db }),
+          // SAFE-8 / SAFE-8.a: one model call past a spend cap (money: code).
+          spendApprovalKind({ db }),
         ],
       })
     : undefined;

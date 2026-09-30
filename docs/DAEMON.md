@@ -61,7 +61,12 @@ on the same data dir:
   with the same pings as a run the bridge claimed: the owner for stuck and
   spend-cap, the schedule's creator for clarify. A spend-cap ask posts only
   "💸 Work is paused for budget."; its details (amounts, the cap and the
-  setting) go to the owner by DM (SAFE-14.a). A schedule with no channel
+  setting) go to the owner by DM (SAFE-14.a). Before a run stops at a
+  spend cap it first waits up to 4 minutes on the owner's spend card
+  (SAFE-8 / SAFE-8.a, when an owner is configured): the daemon cannot DM
+  it, a bridge on the same data dir does; Approve plus the one-time code
+  lets that one call through. With only the daemon running the card lapses,
+  which is a no, and nothing is spent. A schedule with no channel
   gets its question by DM to the owner instead. Only the newest ask of a
   schedule is posted, and not at all once it was cancelled or a later run of
   that schedule has finished. With only the daemon running, the question
