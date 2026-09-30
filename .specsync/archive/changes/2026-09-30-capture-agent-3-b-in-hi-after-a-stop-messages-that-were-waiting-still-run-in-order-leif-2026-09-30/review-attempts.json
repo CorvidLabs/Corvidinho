@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "capture-agent-3-b-in-hi-after-a-stop-messages-that-were-waiting-still-run-in-order-leif-2026-09-30",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "b4dae7633c63babbcf6f8cbef7fb079a51f6a06c",
+      "contract_digest": "be30514699d5215c02990f00073a50b56af89c898c788e5ffdacde337179e71c",
+      "execution_digest": "b0f8180c1abba641cf8d8f8f09cc0054ca7227255f9520d9f4659850bf63d29b",
+      "workspace_digest": "4c4a3040646f1aa1562aa6440c6c9d97e553a1ff8a867559e4dc0b4421497d5a",
+      "timestamp": 1790799080
+    }
+  ]
+}

@@ -117,6 +117,8 @@ import {
   componentChannelAllowlisted,
   promptBodyForAskGate,
   routeMessage,
+  waitedMessageStillAllowed,
+  waitedPressStillAllowed,
 } from "./message-router.ts";
 import {
   defaultRateLimitConfig,
@@ -134,6 +136,12 @@ import {
 import { CORVIDINHO_PROTOCOL_VERSION } from "./protocol-version.ts";
 import { enforceProtocolVersionOrExit } from "./protocol-version.ts";
 import { SessionStore } from "./session-store.ts";
+import {
+  RUN_STOP_ACK,
+  RUN_STOPPED_TEXT,
+  SessionRunControl,
+  isStopRunText,
+} from "./run-control.ts";
 import { answerTurnText } from "./session-thread.ts";
 import { handleSlashInteraction } from "./slash-dispatch.ts";
 import type { SlashContext } from "./slash-types.ts";
@@ -483,6 +491,13 @@ export async function startBridge(
         open = false;
         inflightBestEffort("clear", (s) => s.end(id));
       },
+      /**
+       * AGENT-3: the bridge stopped mid-reply — leave the row for the next
+       * start, which marks the reply interrupted; a later `end()` is a no-op.
+       */
+      keep(): void {
+        open = false;
+      },
     };
   };
   const scheduleStore =
@@ -558,6 +573,9 @@ export async function startBridge(
             // still holds for them, so no later run replays those turns.
             onForgotten: ({ discordIds }) => {
               store.forgetTurnsOfUsers(discordIds);
+              // A message of theirs still waiting its turn does not run
+              // (AGENT-3.a, REQ-discord-301).
+              runControl.noteForgotten(discordIds);
             },
           }),
           // AUTONOMY-9/10: prod / deploy asks (code) and channel-post asks
@@ -628,6 +646,41 @@ export async function startBridge(
 
   const gitTipSha = tryGitTipShortSha(config.projectRoot);
 
+  // AGENT-3 / AGENT-3.a / AGENT-3.b (REQ-discord-301/302): one run at a time
+  // per session, and 'stop' / 'cancel'. After a stopped run a card pass runs
+  // at once, so an Approve card its killed run waited on closes as a no
+  // (nobody waits for it any more, SAFE-20).
+  const runControl = new SessionRunControl({
+    onStopped: () => {
+      void approvals?.deliver();
+    },
+  });
+
+  /**
+   * AGENT-3.a (REQ-discord-302): stop the run `runId` (idempotent; its
+   * process tree is killed) and answer the stop message with one short ack,
+   * tracked on the run's session. Waiting messages still run (AGENT-3.b).
+   */
+  async function stopRunFor(msg: InboundMessage, runId: string, sessionId: string): Promise<void> {
+    const outcome = runControl.stop(runId, msg.authorId);
+    // Routing and this call happen in one tick, so the run is still there.
+    if (outcome === "none") return;
+    if (outcome === "stopped") {
+      console.log(`[discord] run ${runId} of session ${sessionId} stopped by ${msg.authorId}`);
+    }
+    const session = store.get(sessionId);
+    if (!replyRef.fn) {
+      if (session) store.trackBotMessage(`bot_reply_for_${msg.id}`, session);
+      return;
+    }
+    const sent = await replyRef.fn({
+      channelId: msg.threadId ?? msg.channelId,
+      content: RUN_STOP_ACK,
+      replyToMessageId: msg.id,
+    });
+    if (sent?.messageId && session) store.trackBotMessage(sent.messageId, session);
+  }
+
   function buildSlashCtx(): SlashContext {
     return {
       store,
@@ -676,6 +729,8 @@ export async function startBridge(
       mutedUsers,
       rateLimitState,
       rateLimitConfig,
+      // AGENT-3.a: /session start and /work runs take their session's turn.
+      runControl,
       adminUserIds: config.adminUserIds,
       adminRoleIds: config.adminRoleIds,
       owner: config.owner ?? null,
@@ -694,6 +749,8 @@ export async function startBridge(
         owner: config.owner ?? null,
         mutedUsers,
         rateLimit: { state: rateLimitState, config: rateLimitConfig },
+        // AGENT-3.a (REQ-discord-302): a reply 'stop' to a run's progress message.
+        runs: runControl,
       });
 
       if (action.kind === "ignore") return;
@@ -709,38 +766,140 @@ export async function startBridge(
         return;
       }
 
+      // AGENT-3.a (REQ-discord-302): the requester's or the owner's 'stop' /
+      // 'cancel' in reply to a running run's progress message.
+      if (action.kind === "stop_run") {
+        await stopRunFor(msg, action.runId, action.sessionId);
+        return;
+      }
+
       const { session, prompt } = action;
       const channelId = msg.threadId ?? msg.channelId;
 
-      // DISCORD-ASK-5 / REQ-discord-044: a button ask past its timeout is
-      // cleared here, before the thin-ack gate, so its dead Choose button is
-      // never restated. The newest open ask that has not timed out takes its
-      // place (earlier timed-out ones are dropped), or none is left and the
-      // message runs the agent. A cancel keeps its ack below.
+      // AGENT-3.a (REQ-discord-302): 'stop' or 'cancel' (the whole message)
+      // from the requester in their session stops its run in flight — it
+      // never waits behind it. With nothing running the text goes on as
+      // before ('cancel' still clears open asks, AUTONOMY-6).
       if (
         action.kind === "continue_session" &&
-        session.pendingAsk?.options?.length &&
-        isAskExpired(session.pendingAsk) &&
-        !isCancelAsk(promptBodyForAskGate(prompt))
+        isStopRunText(promptBodyForAskGate(prompt))
       ) {
-        store.clearPendingAsk(session, session.pendingAsk.askId);
+        const running = runControl.current(session.id);
+        if (running) {
+          await stopRunFor(msg, running.runId, session.id);
+          return;
+        }
       }
 
-      // AUTONOMY-5/6: while waiting on an ask, thin acks restate the newest
-      // one; cancel clears every open ask of the session (SESSION-MULTI-3).
-      if (
-        action.kind === "continue_session" &&
-        session.pendingAsk &&
-        (isThinAck(promptBodyForAskGate(prompt)) ||
-          isCancelAsk(promptBodyForAskGate(prompt)))
-      ) {
-        if (isCancelAsk(promptBodyForAskGate(prompt))) {
-          store.setPendingAsk(session, null);
+      // AGENT-3.a / AGENT-3.b (REQ-discord-301): one run at a time per
+      // session — a message sent while a run of this session is going waits
+      // for it (first in, first out; a stop does not drop it) and then goes
+      // on as if it had just arrived. Other sessions run in parallel.
+      const turn = runControl.enqueue({
+        sessionId: session.id,
+        requesterId: msg.authorId,
+        channelId,
+      });
+      // REQ-discord-311: a message that waits is in flight from now on, so a
+      // restart while it waits still gets the interrupted notice.
+      let inflight = turn.waited
+        ? trackInflight({
+            sessionId: session.id,
+            channelId,
+            parentChannelId: msg.threadId ? msg.channelId : null,
+            requestMessageId: msg.id,
+          })
+        : undefined;
+      try {
+        if (!(await turn.ready)) {
+          // The bridge is stopping: nothing starts; the row stays so the
+          // next start marks this reply interrupted.
+          inflight?.keep();
+          return;
+        }
+        // After waiting, the session may have ended, idled out or had its
+        // user forgotten (MEMORY-ACL-6), or the channel or its author may no
+        // longer pass the channel, actor or mute gate (`/admin` changes and
+        // mutes are live): then nothing runs or is posted.
+        if (
+          turn.waited &&
+          (store.get(session.id) !== session ||
+            turn.requesterForgotten ||
+            !waitedMessageStillAllowed(msg, {
+              allowlist: config.allowlist,
+              owner: config.owner ?? null,
+              mutedUsers,
+            }))
+        ) {
+          return;
+        }
+
+        // DISCORD-ASK-5 / REQ-discord-044: a button ask past its timeout is
+        // cleared here, before the thin-ack gate, so its dead Choose button is
+        // never restated. The newest open ask that has not timed out takes its
+        // place (earlier timed-out ones are dropped), or none is left and the
+        // message runs the agent. A cancel keeps its ack below.
+        if (
+          action.kind === "continue_session" &&
+          session.pendingAsk?.options?.length &&
+          isAskExpired(session.pendingAsk) &&
+          !isCancelAsk(promptBodyForAskGate(prompt))
+        ) {
+          store.clearPendingAsk(session, session.pendingAsk.askId);
+        }
+
+        // AUTONOMY-5/6: while waiting on an ask, thin acks restate the newest
+        // one; cancel clears every open ask of the session (SESSION-MULTI-3).
+        if (
+          action.kind === "continue_session" &&
+          session.pendingAsk &&
+          (isThinAck(promptBodyForAskGate(prompt)) ||
+            isCancelAsk(promptBodyForAskGate(prompt)))
+        ) {
+          if (isCancelAsk(promptBodyForAskGate(prompt))) {
+            store.setPendingAsk(session, null);
+            if (replyRef.fn) {
+              const sent = await replyRef.fn({
+                channelId,
+                content: ASK_CANCELLED_ACK,
+                replyToMessageId: msg.id,
+              });
+              if (sent?.messageId) store.trackBotMessage(sent.messageId, session);
+            } else {
+              store.trackBotMessage(`bot_reply_for_${msg.id}`, session);
+            }
+            return;
+          }
+          // Thin ack: restate once; do not spawn agent.
+          const hasButtons = Boolean(session.pendingAsk.options?.length);
+          // DISCORD-ASK-4.a: a free-text ask restates with its Answer button
+          // while that button has not timed out (DISCORD-ASK-5); after that the
+          // restatement is the reply-only text it was before.
+          const answerButton = !hasButtons && !isAskExpired(session.pendingAsk);
+          const restated = hasButtons
+            ? formatAskStub({
+                ask: session.pendingAsk,
+                ownerDiscordId: config.owner?.discordId,
+                requesterDiscordId: msg.authorId,
+              })
+            : formatAskReply({
+                ask: session.pendingAsk,
+                owner: config.owner,
+                requesterDiscordId: msg.authorId,
+                replyHint: true,
+                answerButton,
+              });
           if (replyRef.fn) {
             const sent = await replyRef.fn({
               channelId,
-              content: ASK_CANCELLED_ACK,
+              content: restated.content,
               replyToMessageId: msg.id,
+              mentionUserIds: restated.mentionUserIds,
+              ...(hasButtons
+                ? { components: buildOpenStubComponents(session.pendingAsk.askId) }
+                : answerButton
+                ? { components: buildAnswerStubComponents(session.pendingAsk.askId) }
+                : {}),
             });
             if (sent?.messageId) store.trackBotMessage(sent.messageId, session);
           } else {
@@ -748,152 +907,117 @@ export async function startBridge(
           }
           return;
         }
-        // Thin ack: restate once; do not spawn agent.
-        const hasButtons = Boolean(session.pendingAsk.options?.length);
-        // DISCORD-ASK-4.a: a free-text ask restates with its Answer button
-        // while that button has not timed out (DISCORD-ASK-5); after that the
-        // restatement is the reply-only text it was before.
-        const answerButton = !hasButtons && !isAskExpired(session.pendingAsk);
-        const restated = hasButtons
-          ? formatAskStub({
-              ask: session.pendingAsk,
-              ownerDiscordId: config.owner?.discordId,
-              requesterDiscordId: msg.authorId,
-            })
-          : formatAskReply({
-              ask: session.pendingAsk,
-              owner: config.owner,
-              requesterDiscordId: msg.authorId,
-              replyHint: true,
-              answerButton,
-            });
-        if (replyRef.fn) {
-          const sent = await replyRef.fn({
-            channelId,
-            content: restated.content,
-            replyToMessageId: msg.id,
-            mentionUserIds: restated.mentionUserIds,
-            ...(hasButtons
-              ? { components: buildOpenStubComponents(session.pendingAsk.askId) }
-              : answerButton
-              ? { components: buildAnswerStubComponents(session.pendingAsk.askId) }
-              : {}),
-          });
-          if (sent?.messageId) store.trackBotMessage(sent.messageId, session);
-        } else {
-          store.trackBotMessage(`bot_reply_for_${msg.id}`, session);
-        }
-        return;
-      }
 
-      // IDENTITY-8..12: owner (ADMIN, unchanged), else the declared person's
-      // team role, else community; the tool layer re-checks it on every call.
-      // Resolved before the run: SAFE-12/13 need to know whose words these are.
-      const actingRole = resolveDiscordActingRole({
-        userId: msg.authorId,
-        roleIds: msg.authorRoleIds,
-        allowlist: config.allowlist,
-        adminUserIds: config.adminUserIds,
-        adminRoleIds: config.adminRoleIds,
-        owner: config.owner ?? null,
-        mutedUsers,
-        people: declaredPeople(),
-      });
-      const actingIsAdmin = actingRole === "owner";
-
-      // SAFE-13: a non-owner's message that looks like an injection attempt
-      // never reaches a run. One short reply says so and pings the owner
-      // (allowed mentions: the owner only); an audit row records the actor,
-      // the surface and the reason ids, never the text. A session this
-      // message would have started is dropped; the turn is not recorded.
-      const suspected = inboundInjection(prompt, actingRole);
-      if (suspected) {
-        auditInboundInjection(recordAudit, {
-          actor: msg.authorId,
-          surface: `discord:${session.id}`,
-          source: "chat-message",
-          reasons: suspected.reasons,
+        // IDENTITY-8..12: owner (ADMIN, unchanged), else the declared person's
+        // team role, else community; the tool layer re-checks it on every call.
+        // Resolved before the run: SAFE-12/13 need to know whose words these are.
+        const actingRole = resolveDiscordActingRole({
+          userId: msg.authorId,
+          roleIds: msg.authorRoleIds,
+          allowlist: config.allowlist,
+          adminUserIds: config.adminUserIds,
+          adminRoleIds: config.adminRoleIds,
+          owner: config.owner ?? null,
+          mutedUsers,
+          people: declaredPeople(),
         });
-        const refusal = formatInjectionRefusal(suspected.reasons, config.owner);
-        if (refusal.mentionUserIds.length === 0) console.warn(INJECTION_NO_OWNER_WARNING);
-        const sent = replyRef.fn
-          ? await replyRef.fn({
-              channelId,
-              content: refusal.content,
-              replyToMessageId: msg.id,
-              mentionUserIds: refusal.mentionUserIds,
-            })
-          : null;
-        if (action.kind === "start_session") {
-          await store.endSession(session);
-        } else {
-          store.trackBotMessage(sent?.messageId ?? `bot_reply_for_${msg.id}`, session);
+        const actingIsAdmin = actingRole === "owner";
+
+        // SAFE-13: a non-owner's message that looks like an injection attempt
+        // never reaches a run. One short reply says so and pings the owner
+        // (allowed mentions: the owner only); an audit row records the actor,
+        // the surface and the reason ids, never the text. A session this
+        // message would have started is dropped; the turn is not recorded.
+        const suspected = inboundInjection(prompt, actingRole);
+        if (suspected) {
+          auditInboundInjection(recordAudit, {
+            actor: msg.authorId,
+            surface: `discord:${session.id}`,
+            source: "chat-message",
+            reasons: suspected.reasons,
+          });
+          const refusal = formatInjectionRefusal(suspected.reasons, config.owner);
+          if (refusal.mentionUserIds.length === 0) console.warn(INJECTION_NO_OWNER_WARNING);
+          const sent = replyRef.fn
+            ? await replyRef.fn({
+                channelId,
+                content: refusal.content,
+                replyToMessageId: msg.id,
+                mentionUserIds: refusal.mentionUserIds,
+              })
+            : null;
+          if (action.kind === "start_session") {
+            await store.endSession(session);
+          } else {
+            store.trackBotMessage(sent?.messageId ?? `bot_reply_for_${msg.id}`, session);
+          }
+          return;
         }
-        return;
-      }
 
-      // SAFE-12: a non-owner's words go to the model fenced as untrusted data
-      // (their request, never instructions; only their role decides what runs).
-      const spoken = fenceSpeakerText(prompt, actingRole, "chat-message");
+        // SAFE-12: a non-owner's words go to the model fenced as untrusted data
+        // (their request, never instructions; only their role decides what runs).
+        const spoken = fenceSpeakerText(prompt, actingRole, "chat-message");
 
-      // AUTONOMY-6 / SESSION-MULTI-3 / DISCORD-ASK:
-      // - free-text pending (no options): substantive continue answers and clears.
-      // - button pending (has options): chat continues; buttons stay until pick/timeout.
-      let agentPrompt = spoken;
-      if (action.kind === "continue_session" && session.pendingAsk) {
-        const pending = session.pendingAsk;
-        if (pending.options?.length) {
-          agentPrompt = spoken;
-        } else {
-          const prior = pending.question;
-          agentPrompt =
-            `[Prior clarifying question you asked (the human is answering it now):\n${prior}]\n\n` +
-            `Human answer:\n${spoken}`;
-          // Only the answered ask: earlier open button asks stay (SESSION-MULTI-3).
-          store.clearPendingAsk(session, pending.askId);
+        // AUTONOMY-6 / SESSION-MULTI-3 / DISCORD-ASK:
+        // - free-text pending (no options): substantive continue answers and clears.
+        // - button pending (has options): chat continues; buttons stay until pick/timeout.
+        let agentPrompt = spoken;
+        if (action.kind === "continue_session" && session.pendingAsk) {
+          const pending = session.pendingAsk;
+          if (pending.options?.length) {
+            agentPrompt = spoken;
+          } else {
+            const prior = pending.question;
+            agentPrompt =
+              `[Prior clarifying question you asked (the human is answering it now):\n${prior}]\n\n` +
+              `Human answer:\n${spoken}`;
+            // Only the answered ask: earlier open button asks stay (SESSION-MULTI-3).
+            store.clearPendingAsk(session, pending.askId);
+          }
         }
-      }
-      // AGENT-6 (REQ-discord-072): the session's earlier turns, oldest first,
-      // go ahead of the new message and any pending-ask block, so a continued
-      // run keeps the thread. A new session has none (one resumed after the
-      // TTL begins from its retained conversation, SESSION-3.a). At about 80%
-      // of the model's window the oldest turns are condensed into the
-      // session's summary, the task and latest instruction kept word for word
-      // (SESSION-5/6). The human's own words (before enrichment) join the
-      // thread now, so a run that throws or a bridge that dies mid-run still
-      // keeps the request.
-      agentPrompt = store.threadPrompt(session, agentPrompt);
-      store.recordTurn(session, "human", prompt);
+        // AGENT-6 (REQ-discord-072): the session's earlier turns, oldest first,
+        // go ahead of the new message and any pending-ask block, so a continued
+        // run keeps the thread. A new session has none (one resumed after the
+        // TTL begins from its retained conversation, SESSION-3.a). At about 80%
+        // of the model's window the oldest turns are condensed into the
+        // session's summary, the task and latest instruction kept word for word
+        // (SESSION-5/6). The human's own words (before enrichment) join the
+        // thread now, so a run that throws or a bridge that dies mid-run still
+        // keeps the request.
+        agentPrompt = store.threadPrompt(session, agentPrompt);
+        store.recordTurn(session, "human", prompt);
 
-      const outbound = resolveOutbound();
-      const llmModel = loadLlmEnv(process.env).model;
-      // DISCORD-15.a: tokens and cost show on the owner's own runs only.
-      const ownerRun = isOwnerDiscord(config.owner, msg.authorId);
+        const outbound = resolveOutbound();
+        const llmModel = loadLlmEnv(process.env).model;
+        // DISCORD-15.a: tokens and cost show on the owner's own runs only.
+        const ownerRun = isOwnerDiscord(config.owner, msg.authorId);
 
-      const thinking = new ThinkingStatus({
-        outbound,
-        channelId,
-        replyToMessageId: msg.id,
-        sessionId: session.id,
-        model: llmModel,
-        showUsage: ownerRun,
-        debounceMs: opts.thinkingDebounceMs,
-        tickMs: opts.thinkingTickMs,
-      });
+        const thinking = new ThinkingStatus({
+          outbound,
+          channelId,
+          replyToMessageId: msg.id,
+          sessionId: session.id,
+          model: llmModel,
+          showUsage: ownerRun,
+          debounceMs: opts.thinkingDebounceMs,
+          tickMs: opts.thinkingTickMs,
+        });
 
-      // REQ-discord-311: record the reply while it is in flight so the next
-      // bridge start can mark it interrupted if this process dies mid-reply.
-      // Cleared on every exit path (collapsed, fallback reply, dry, failed,
-      // refused, thrown).
-      const inflight = trackInflight({
-        sessionId: session.id,
-        channelId,
-        parentChannelId: msg.threadId ? msg.channelId : null,
-        requestMessageId: msg.id,
-      });
-      try {
+        // REQ-discord-311: record the reply while it is in flight so the next
+        // bridge start can mark it interrupted if this process dies mid-reply
+        // (a message that waited is recorded from when it began waiting).
+        // Cleared on every exit path (collapsed, fallback reply, dry, failed,
+        // refused, thrown); kept only when the bridge stops mid-reply.
+        inflight ??= trackInflight({
+          sessionId: session.id,
+          channelId,
+          parentChannelId: msg.threadId ? msg.channelId : null,
+          requestMessageId: msg.id,
+        });
         await thinking.start({ description: "Working on your request..." });
         inflight.progress(thinking.progressMessageId);
+        // AGENT-3.a: a reply 'stop' / 'cancel' to this progress message stops the run.
+        turn.setProgressMessage(thinking.progressMessageId);
 
         // SESSION-WORKTREE: bind isolated cwd on start; on continue reuse the
         // live worktree (no silent switch), or re-create it when its directory
@@ -988,6 +1112,8 @@ export async function startBridge(
               // and the talk's own worktree in the run).
               surface: "chat",
               cwd: sessionCwd,
+              // AGENT-3.a: a stop (or the bridge stopping) kills its process tree.
+              signal: turn.signal,
               // DISCORD-17: files attach in this conversation's channel only.
               replyChannelId: channelId,
               ...(msg.threadId ? { replyParentChannelId: msg.channelId } : {}),
@@ -1006,6 +1132,18 @@ export async function startBridge(
           await thinking.fail(failed);
           throw err;
         }
+
+        // AGENT-3: the bridge is stopping and the run was killed. Nothing is
+        // posted; the row stays, so the next start marks this reply
+        // interrupted (REQ-discord-311).
+        if (turn.stopReason === "closed") {
+          inflight.keep();
+          thinking.dispose();
+          return;
+        }
+        // AGENT-3.a (REQ-discord-302): a stopped run's answer is only
+        // "⏹ Stopped" with the DISCORD-15/15.a footer — no question, no body.
+        const stopped = turn.stopReason === "stopped";
 
         const plumbing = result.task
           ? formatTaskPlumbing({
@@ -1027,7 +1165,7 @@ export async function startBridge(
         // AUTONOMY-1/2/4 / DISCORD-ASK: needs a human → buttons when options, else free-text.
         // SAFE-8: a spend-cap stop is always free text (no choice can lift the
         // cap), pings the owner once per cap episode and is never the pending ask.
-        const askRaw = result.ask;
+        const askRaw = stopped ? undefined : result.ask;
         const spendCap = askRaw?.reason === "spend-cap";
         const askOwner = askRaw ? askPingOwner(askRaw, config.owner, spendAlerts) : null;
         const resolvedOptions =
@@ -1126,7 +1264,9 @@ export async function startBridge(
         });
         // DISCORD-3.a — final chat reply is human text only (no plumbing lines).
         const body = withPrivateNote(
-          askBody
+          stopped
+            ? RUN_STOPPED_TEXT
+            : askBody
             ? askBody.content
             : result.ok
               ? // DISCORD-16: the whole answer; it is split into messages when long.
@@ -1164,7 +1304,7 @@ export async function startBridge(
             keepFooter: askBody?.keepFooter,
             mentionUserIds: out.mentionUserIds,
             extras: thinkExtras,
-            failed: askBody ? askBody.failed : !result.ok,
+            failed: stopped || (askBody ? askBody.failed : !result.ok),
           });
           if (collapsed) {
             delivered = true;
@@ -1189,7 +1329,9 @@ export async function startBridge(
             if (ping) store.trackBotMessage(ping.messageId, session);
           } else if (replyRef.fn) {
             // Fallback when editMessage unavailable: status embed + separate reply.
-            if (askBody) {
+            if (stopped) {
+              await thinking.fail(RUN_STOPPED_TEXT, thinkExtras);
+            } else if (askBody) {
               await (askBody.failed
                 ? thinking.fail(askBody.status, thinkExtras)
                 : thinking.done(askBody.status, thinkExtras));
@@ -1210,7 +1352,7 @@ export async function startBridge(
                   ? null
                   : thinking.answerFooter({
                       extras: thinkExtras,
-                      failed: askBody ? askBody.failed : !result.ok,
+                      failed: stopped || (askBody ? askBody.failed : !result.ok),
                     }),
               replyToMessageId: msg.id,
               ...(out.mentionUserIds ? { mentionUserIds: out.mentionUserIds } : {}),
@@ -1242,7 +1384,9 @@ export async function startBridge(
           });
         }
       } finally {
-        inflight.end();
+        inflight?.end();
+        // AGENT-3.a / AGENT-3.b: the next message of this session may start.
+        turn.done();
         // SAFE-18 / MEMORY-ACL-6: a card this run raised (a forget request)
         // reaches the owner now.
         void approvals?.deliver();
@@ -1563,36 +1707,20 @@ export async function startBridge(
       }
 
       const channelId = session.threadId ?? session.channelId;
-      // AGENT-6 (REQ-discord-072): the earlier turns (the original request
-      // included) go ahead of the answered question, as on a chat reply; the
-      // answer (a pick or an Answer form submit) joins the thread as the run
-      // starts. SESSION-5/6: condensed at about 80% of the window, as in chat.
-      const agentPrompt = store.threadPrompt(
-        session,
-        `${priorBlock}\n\nHuman answer:\n${spoken}`,
-      );
-      store.recordTurn(session, "human", answer);
-
-      const outbound = resolveOutbound();
-      const llmModel = loadLlmEnv(process.env).model;
-      // DISCORD-15.a: tokens and cost show on the owner's own runs only.
-      const ownerRun = isOwnerDiscord(config.owner, interaction.userId);
       const stubId = pending.stubMessageId ?? interaction.messageId;
-      const thinking = new ThinkingStatus({
-        outbound,
-        channelId,
-        replyToMessageId: stubId,
-        existingMessageId: stubId,
+      // AGENT-3.a / AGENT-3.b (REQ-discord-301): the resumed run takes its
+      // session's turn — behind a run of that session still going, it waits
+      // (first in, first out) and then goes on as it would have.
+      const turn = runControl.enqueue({
         sessionId: session.id,
-        model: llmModel,
-        showUsage: ownerRun,
-        debounceMs: opts.thinkingDebounceMs,
-        tickMs: opts.thinkingTickMs,
+        requesterId: interaction.userId,
+        channelId,
       });
       // REQ-discord-311: a button pick runs the agent like a message reply, so
-      // it is recorded while in flight too and cleared on every exit path. The
-      // Choose stub is reused as the progress surface (DISCORD-ASK-7), so the
-      // row's progress message is usually the stub itself.
+      // it is recorded while in flight (and while it waits its turn) too and
+      // cleared on every exit path; kept only when the bridge stops mid-reply.
+      // The Choose stub is reused as the progress surface (DISCORD-ASK-7), so
+      // the row's progress message is usually the stub itself.
       const inflight = stubId
         ? trackInflight({
             sessionId: session.id,
@@ -1602,8 +1730,63 @@ export async function startBridge(
           })
         : undefined;
       try {
+        if (!(await turn.ready)) {
+          // The bridge is stopping: nothing starts; the row stays so the
+          // next start marks this reply interrupted.
+          inflight?.keep();
+          return;
+        }
+        // After waiting, the session may have ended, idled out or had its
+        // user forgotten (MEMORY-ACL-6), or the press may no longer pass the
+        // channel, actor or mute gate (`/admin` changes and mutes are live):
+        // then nothing runs or is posted.
+        if (
+          turn.waited &&
+          (store.get(session.id) !== session ||
+            turn.requesterForgotten ||
+            !waitedPressStillAllowed(interaction, session, {
+              allowlist: config.allowlist,
+              owner: config.owner ?? null,
+              mutedUsers,
+            }))
+        ) {
+          try {
+            await interaction.deleteReply?.();
+          } catch {
+            /* already gone */
+          }
+          return;
+        }
+
+        // AGENT-6 (REQ-discord-072): the earlier turns (the original request
+        // included) go ahead of the answered question, as on a chat reply; the
+        // answer (a pick or an Answer form submit) joins the thread as the run
+        // starts. SESSION-5/6: condensed at about 80% of the window, as in chat.
+        const agentPrompt = store.threadPrompt(
+          session,
+          `${priorBlock}\n\nHuman answer:\n${spoken}`,
+        );
+        store.recordTurn(session, "human", answer);
+
+        const outbound = resolveOutbound();
+        const llmModel = loadLlmEnv(process.env).model;
+        // DISCORD-15.a: tokens and cost show on the owner's own runs only.
+        const ownerRun = isOwnerDiscord(config.owner, interaction.userId);
+        const thinking = new ThinkingStatus({
+          outbound,
+          channelId,
+          replyToMessageId: stubId,
+          existingMessageId: stubId,
+          sessionId: session.id,
+          model: llmModel,
+          showUsage: ownerRun,
+          debounceMs: opts.thinkingDebounceMs,
+          tickMs: opts.thinkingTickMs,
+        });
         await thinking.start({ description: "Working on your request..." });
         inflight?.progress(thinking.progressMessageId);
+        // AGENT-3.a: a reply 'stop' / 'cancel' to this progress message stops the run.
+        turn.setProgressMessage(thinking.progressMessageId);
 
         // SESSION-WORKTREE-3 / REQ-discord-357: bind on every turn, as the chat
         // path does, so a parked or missing worktree is re-created, never the
@@ -1664,6 +1847,8 @@ export async function startBridge(
               // worktree; the shell gate re-checks the owner and the worktree.
               surface: "ask",
               cwd: sessionCwd,
+              // AGENT-3.a: a stop (or the bridge stopping) kills its process tree.
+              signal: turn.signal,
               // DISCORD-17: files attach in this conversation's channel only.
               replyChannelId: channelId,
               ...(session.threadId ? { replyParentChannelId: session.channelId } : {}),
@@ -1688,6 +1873,18 @@ export async function startBridge(
           throw err;
         }
 
+        // AGENT-3: the bridge is stopping and the run was killed. Nothing is
+        // posted; the row stays, so the next start marks this reply
+        // interrupted (REQ-discord-311).
+        if (turn.stopReason === "closed") {
+          inflight?.keep();
+          thinking.dispose();
+          return;
+        }
+        // AGENT-3.a (REQ-discord-302): a stopped run's answer is only
+        // "⏹ Stopped" with the DISCORD-15/15.a footer — no question, no body.
+        const stopped = turn.stopReason === "stopped";
+
         const plumbing = result.task
           ? formatTaskPlumbing({
               state: result.task.state,
@@ -1708,7 +1905,7 @@ export async function startBridge(
 
         // SAFE-8: as on a chat reply — a spend-cap stop is free text, pings the
         // owner once per cap episode and is never the pending ask.
-        const askRaw = result.ask;
+        const askRaw = stopped ? undefined : result.ask;
         const spendCap = askRaw?.reason === "spend-cap";
         const askOwner = askRaw ? askPingOwner(askRaw, config.owner, spendAlerts) : null;
         const resolvedOptions =
@@ -1787,7 +1984,9 @@ export async function startBridge(
           sendDm: sendDmRef.fn,
         });
         const body = withPrivateNote(
-          askBody
+          stopped
+            ? RUN_STOPPED_TEXT
+            : askBody
             ? askBody.content
             : result.ok
               ? // DISCORD-16: the whole answer; it is split into messages when long.
@@ -1822,7 +2021,7 @@ export async function startBridge(
             keepFooter: askBody?.keepFooter,
             mentionUserIds: out.mentionUserIds,
             extras: thinkExtras,
-            failed: askBody ? askBody.failed : !result.ok,
+            failed: stopped || (askBody ? askBody.failed : !result.ok),
           });
           if (collapsed) {
             delivered = true;
@@ -1845,7 +2044,9 @@ export async function startBridge(
             });
             if (ping) store.trackBotMessage(ping.messageId, session);
           } else if (replyRef.fn) {
-            if (askBody) {
+            if (stopped) {
+              await thinking.fail(RUN_STOPPED_TEXT, thinkExtras);
+            } else if (askBody) {
               await (askBody.failed
                 ? thinking.fail(askBody.status, thinkExtras)
                 : thinking.done(askBody.status, thinkExtras));
@@ -1865,7 +2066,7 @@ export async function startBridge(
                   ? null
                   : thinking.answerFooter({
                       extras: thinkExtras,
-                      failed: askBody ? askBody.failed : !result.ok,
+                      failed: stopped || (askBody ? askBody.failed : !result.ok),
                     }),
               replyToMessageId: pending.stubMessageId ?? interaction.messageId,
               ...(out.mentionUserIds ? { mentionUserIds: out.mentionUserIds } : {}),
@@ -1903,6 +2104,8 @@ export async function startBridge(
         }
       } finally {
         inflight?.end();
+        // AGENT-3.a / AGENT-3.b: the next run of this session may start.
+        turn.done();
       }
     },
     onSlash: async (interaction) => {
@@ -2133,6 +2336,10 @@ export async function startBridge(
     unmuteUser: (userId: string) => unmuteUserImpl(mutedUsers, userId),
     stop: async () => {
       clearInterval(conversationPurge);
+      // AGENT-3: every Discord run still going is stopped (its process tree
+      // killed) and no waiting message starts; their in-flight rows stay, so
+      // the next start marks those replies interrupted (REQ-discord-311).
+      runControl.close();
       approvals?.stop();
       scheduler?.stop();
       // AGENT-16.a: no further stuck WATCH ask is taken, and the watch
@@ -2172,6 +2379,8 @@ export async function startBridge(
       await watchAsks?.settle(ABANDONED_SETTLE_MS);
       // A card pass in flight gets the same short grace while the gateway is up.
       await approvals?.settle(ABANDONED_SETTLE_MS);
+      // The stopped runs get the same grace to wind down.
+      await runControl.settle(ABANDONED_SETTLE_MS);
       await gateway.stop();
     },
   };

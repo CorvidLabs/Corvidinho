@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "release-0-0-37-owner-worktree-shell-model-fallback-provider-spend-caps-specsync-changes-owner-schedules-stop-and-queue",
+  "slug": "release-0-0-37-owner-worktree-shell-model-fallback-provider-spend-caps-specsync-changes-owner-schedules-stop-and-queue",
+  "title": "Release 0.0.37: owner worktree shell, model fallback, provider spend caps, SpecSync changes, owner schedules, stop and queue",
+  "description": "Release 0.0.37: owner worktree shell, model fallback, provider spend caps, SpecSync changes, owner schedules, stop and queue",
+  "kind": "operations",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "81ceb4a1423189b50ce25df34363b26b50426d1d",
+  "created_at": 1790804257,
+  "updated_at": 1790804287,
+  "affected_specs": [
+    "cli"
+  ],
+  "affected_paths": [
+    "package.json",
+    "CHANGELOG.md",
+    "STATUS.md",
+    "tests/version.test.ts",
+    "tests/update-helpers.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "package.json 0.0.37; version prints 0.0.37; CHANGELOG 0.0.37 extractable; STATUS rows"
+  ],
+  "selected_artifacts": [
+    "context",
+    "plan",
+    "testing",
+    "design",
+    "tasks",
+    "requirements",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}

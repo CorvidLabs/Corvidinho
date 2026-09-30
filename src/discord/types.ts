@@ -101,6 +101,15 @@ export type RouteAction =
       kind: "continue_session";
       session: SessionStub;
       prompt: string;
+    }
+  | {
+      /**
+       * AGENT-3.a (REQ-discord-302): 'stop' / 'cancel' in reply to a running
+       * run's progress message, from its requester or the owner.
+       */
+      kind: "stop_run";
+      runId: string;
+      sessionId: string;
     };
 
 export type BridgeConfig = {

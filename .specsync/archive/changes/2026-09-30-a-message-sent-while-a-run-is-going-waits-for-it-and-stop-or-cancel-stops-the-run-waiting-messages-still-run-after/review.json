@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "a-message-sent-while-a-run-is-going-waits-for-it-and-stop-or-cancel-stops-the-run-waiting-messages-still-run-after",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "b4dae7633c63babbcf6f8cbef7fb079a51f6a06c",
+  "contract_digest": "cd27b41267973b8c7ee8156d7b7270c3b22b3ff050bc57fb34f8e8e1a3d6b993",
+  "execution_digest": "8febb323c62c7114ddef51bc8782a2bbd08307f33dce69e901ded6da6078e5d9",
+  "workspace_digest": "4c4a3040646f1aa1562aa6440c6c9d97e553a1ff8a867559e4dc0b4421497d5a",
+  "timestamp": 1790798655
+}

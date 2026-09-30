@@ -1142,3 +1142,12 @@ Acceptance Criteria
 - `tests/scheduler.owner-role.test.ts` ("daemon: …"): with an allowlist file naming the owner, the owner's due schedule is spawned `actingIsAdmin: true`; after the file names another owner the next due run of it is spawned `actingIsAdmin: false`, with no restart.
 - The test fails with the base sources (always `false`).
 
+### REQ-cli-428
+
+The project SHALL ship package version `0.0.37` (owner worktree shell, model fallback, provider spend caps, SpecSync changes, owner schedules, stop and queue). CLI `version` and Discord presence (DISCORD-12) report `0.0.37` after a restart. CHANGELOG SHALL include verbose 0.0.37 notes.
+
+Acceptance Criteria
+- `package.json` version is `0.0.37`.
+- CLI `version` prints `0.0.37`.
+- CHANGELOG has a 0.0.37 section that the updater's changelog helper extracts exactly.
+

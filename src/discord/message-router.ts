@@ -10,22 +10,28 @@
  * SESSION-3.a (REQ-discord-472): after a session expired, its user's reply to
  * one of its answers, or their message in its thread, starts a new session
  * from its retained conversation (same gates first) instead of no answer.
+ * AGENT-3.a (REQ-discord-302): 'stop' / 'cancel' in reply to a running run's
+ * progress message, from its requester or the owner, is `stop_run`; checked
+ * right after the channel gate, before the thread and bot-message lookups
+ * (the REQ-discord-002 exception).
  */
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import { type ConversationRecord, discordThreadKey } from "../store/conversation.ts";
-import type { OwnerRecord } from "../identity/owner.ts";
+import { isOwnerDiscord, type OwnerRecord } from "../identity/owner.ts";
 import {
   claimRefusalNotice,
   gateActor,
   gateInbound,
   gateRateOrMute,
   isMonitoredChannel,
+  isMuted,
   isMonitoredConversation,
   resolvePermissionLevel,
   type RateLimitConfig,
   type RateLimitState,
 } from "./permissions.ts";
+import { isStopRunText, type SessionRunControl } from "./run-control.ts";
 import type { SessionStore } from "./session-store.ts";
 import {
   type InboundMessage,
@@ -84,6 +90,11 @@ export type RouterDeps = {
   rateLimit?: { state: RateLimitState; config: RateLimitConfig; permLevel?: number };
   /** Injectable clock for tests. */
   nowMs?: number;
+  /**
+   * AGENT-3.a — the runs in flight, by progress message (REQ-discord-302).
+   * Unset ⇒ no `stop_run` route.
+   */
+  runs?: Pick<SessionRunControl, "byProgressMessage">;
 };
 
 function refuseRateOrMute(
@@ -138,7 +149,7 @@ function silentChannelDeny(): RouteAction {
  * either is deny-listed (deny wins, REQ-plugins-005). The session's recorded
  * channel never stands in for it.
  */
-function ownChannelAllowlisted(msg: InboundMessage, deps: RouterDeps): boolean {
+function ownChannelAllowlisted(msg: InboundMessage, deps: Pick<RouterDeps, "allowlist">): boolean {
   if (msg.threadId === undefined) return isMonitoredChannel(msg.channelId, deps.allowlist);
   return isMonitoredConversation(msg.threadId, msg.channelId, deps.allowlist);
 }
@@ -175,7 +186,10 @@ export function componentChannelAllowlisted(
  * REQ-discord-201 / DISCORD-DENY-1 — deny-listed or unlisted actor: silent
  * refuse (no public reply). Null when the actor may proceed.
  */
-function refuseActor(msg: InboundMessage, deps: RouterDeps): RouteAction | null {
+function refuseActor(
+  msg: InboundMessage,
+  deps: Pick<RouterDeps, "allowlist" | "owner">,
+): RouteAction | null {
   const gate = gateActor({
     userId: msg.authorId,
     roleIds: msg.authorRoleIds,
@@ -184,6 +198,46 @@ function refuseActor(msg: InboundMessage, deps: RouterDeps): RouteAction | null 
   });
   if (gate.ok) return null;
   return { kind: "refuse", reason: "user_not_allowlisted" };
+}
+
+/**
+ * AGENT-3.a (REQ-discord-301) — a chat message that waited for its session's
+ * run goes on only while it still passes the gates it passed when it came in:
+ * its own channel is still allowlisted and not deny-listed (DISCORD-5,
+ * REQ-discord-212), its author still passes the actor gate (REQ-discord-201,
+ * DISCORD-DENY-1) and is not muted (DISCORD-6). `/admin` list changes and
+ * mutes are live, so they can land while it waits. The rate limit is not
+ * counted again. False: it runs nothing and posts nothing (DISCORD-DENY-3).
+ */
+export function waitedMessageStillAllowed(
+  msg: InboundMessage,
+  deps: Pick<RouterDeps, "allowlist" | "owner" | "mutedUsers">,
+): boolean {
+  if (!ownChannelAllowlisted(msg, deps)) return false;
+  if (refuseActor(msg, deps)) return false;
+  return !(deps.mutedUsers && isMuted(deps.mutedUsers, msg.authorId));
+}
+
+/**
+ * AGENT-3.a (REQ-discord-301) — the same re-check for an ask pick or Answer
+ * form submit that waited for its session's run: the press channel and the
+ * session's own channel (`componentChannelAllowlisted`), the actor gate and
+ * mute, as at press time. False: the resumed run does not start.
+ */
+export function waitedPressStillAllowed(
+  press: { channelId: string; userId: string; roleIds?: string[] },
+  session: Pick<SessionStub, "channelId" | "threadId">,
+  deps: Pick<RouterDeps, "allowlist" | "owner" | "mutedUsers">,
+): boolean {
+  if (!componentChannelAllowlisted(press.channelId, session, deps.allowlist)) return false;
+  const actor = gateActor({
+    userId: press.userId,
+    roleIds: press.roleIds,
+    allowlist: deps.allowlist,
+    owner: deps.owner,
+  });
+  if (!actor.ok) return false;
+  return !(deps.mutedUsers && isMuted(deps.mutedUsers, press.userId));
 }
 
 /**
@@ -223,7 +277,30 @@ function resumeRetained(
 }
 
 /**
- * Pure router: given an inbound message, decide start/continue/refuse/ignore.
+ * AGENT-3.a (REQ-discord-302) — a reply whose whole text is 'stop' or
+ * 'cancel' to the progress message of a run in flight, in that message's own
+ * channel, from the run's requester or the owner: `stop_run`, after the actor
+ * and mute/rate gates. Null when it is not one (anyone else's reply, other
+ * text, a finished run): the message then routes as before.
+ */
+function stopRunRoute(msg: InboundMessage, deps: RouterDeps): RouteAction | null {
+  if (!msg.referencedMessageId || !deps.runs) return null;
+  const run = deps.runs.byProgressMessage(msg.referencedMessageId);
+  if (!run || run.channelId !== (msg.threadId ?? msg.channelId)) return null;
+  if (!isStopRunText(promptBodyForAskGate(stripMentions(msg.content)))) return null;
+  if (run.requesterId !== msg.authorId && !isOwnerDiscord(deps.owner, msg.authorId)) {
+    return null;
+  }
+  const actorDenied = refuseActor(msg, deps);
+  if (actorDenied) return actorDenied;
+  const blocked = refuseRateOrMute(msg, deps);
+  if (blocked) return blocked;
+  return { kind: "stop_run", runId: run.runId, sessionId: run.sessionId };
+}
+
+/**
+ * Pure router: given an inbound message, decide start/continue/refuse/ignore
+ * (or `stop_run`, AGENT-3.a).
  */
 export function routeMessage(
   msg: InboundMessage,
@@ -244,6 +321,13 @@ export function routeMessage(
       ? silentChannelDeny()
       : { kind: "ignore", reason: "channel_not_allowlisted" };
   }
+
+  // AGENT-3.a (REQ-discord-302): 'stop' / 'cancel' in reply to a running
+  // run's progress message stops that run — before the thread and
+  // bot-message lookups, so the owner's reply stops it too and a reply to a
+  // tracked stub that is the progress message never continues the session.
+  const stop = stopRunRoute(msg, deps);
+  if (stop) return stop;
 
   // Thread path (DISCORD-2.a + SESSION-MULTI-1/2): each user has their own
   // session in a thread, and a plain message continues only the author's own.
