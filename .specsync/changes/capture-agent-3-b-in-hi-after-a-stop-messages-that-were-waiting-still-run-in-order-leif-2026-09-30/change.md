@@ -1,6 +1,6 @@
 ---
 id: capture-agent-3-b-in-hi-after-a-stop-messages-that-were-waiting-still-run-in-order-leif-2026-09-30
-state: approved
+state: implementing
 type: documentation
 base_commit: 1820fb4aa936182a4b7ca504e68ce8ada24851b1
 ---

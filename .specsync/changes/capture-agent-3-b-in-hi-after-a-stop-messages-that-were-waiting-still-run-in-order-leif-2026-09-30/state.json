@@ -7,10 +7,11 @@
   "title": "Capture AGENT-3.b in hi: after a stop, messages that were waiting still run, in order (Leif 2026-09-30)",
   "description": "Capture AGENT-3.b in hi: after a stop, messages that were waiting still run, in order (Leif 2026-09-30)",
   "kind": "documentation",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "1820fb4aa936182a4b7ca504e68ce8ada24851b1",
   "created_at": 1790795860,
-  "updated_at": 1790795883,
+  "updated_at": 1790795895,
   "affected_specs": [],
   "affected_paths": [
     "hi/agent.md",
