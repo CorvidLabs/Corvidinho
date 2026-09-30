@@ -680,6 +680,17 @@ counted up to the break, so it is 0): a tampered unkeyed row needs no key to
 be seen. Only a verify that stops at a keyed row without the key reads
 `cannot verify keyed rows (CORVIDINHO_AUDIT_HMAC_KEY not set)`.
 
+SAFE-5 appends under contention (REQ-plugins-287): `appendAudit` takes the
+write lock with BEGIN IMMEDIATE tried every millisecond until the
+connection's busy_timeout has passed (`retryWhileBusy`, `src/store/db.ts`),
+not at SQLite's busy-handler back-off (one try per 100 ms after 228 ms).
+Other processes committing back to back free the lock for well under a
+millisecond, so under that back-off an append (and the plugin run's open
+before it, REQ-discord-287) could be passed over for the whole busy_timeout
+and its row was lost with "database is locked". Only the BEGIN is retried;
+the COMMIT keeps busy_timeout. Inside a caller's transaction the append is a
+savepoint, as before.
+
 SpecSync tools stay inside the project (SPECSYNC-1 / SPECSYNC-5 / SPECSYNC-6,
 PLUGIN-1, REQ-plugins-008).
 `specsync-read` / `specsync-brief` take only a plain module name

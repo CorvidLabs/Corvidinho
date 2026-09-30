@@ -540,6 +540,47 @@ export function migrateCorvidinhoDb(db: Database): void {
   }
 }
 
+/** How often a connection waiting for a busy DB lock tries again. */
+const BUSY_RETRY_MS = 1;
+
+function isBusy(err: unknown): boolean {
+  return String((err as { code?: unknown } | null)?.code ?? "").startsWith("SQLITE_BUSY");
+}
+
+/**
+ * Run `fn`; while it fails with SQLITE_BUSY, run it again every BUSY_RETRY_MS
+ * until the connection's busy_timeout has passed, then throw that error.
+ *
+ * SQLite's own busy handler (busy_timeout) backs off to one try every 100 ms.
+ * A commit keeps the file locked for its whole sync, and other processes
+ * writing back to back take the lock again well under a millisecond after
+ * each commit, so a connection waiting under that handler could be passed
+ * over for the whole busy_timeout and fail with "database is locked" although
+ * the lock was free many times; a SAFE-5 row was lost that way
+ * (REQ-plugins-287). `fn` must leave nothing behind when it fails with
+ * SQLITE_BUSY: one statement, a BEGIN, or a whole transaction. With
+ * busy_timeout 0 it runs once, as before.
+ */
+export function retryWhileBusy<T>(db: Database, fn: () => T): T {
+  const { timeout } = db.query("PRAGMA busy_timeout").get() as { timeout: number };
+  if (!(timeout > 0)) return fn();
+  const deadline = performance.now() + timeout;
+  // These tries replace SQLite's busy handler while `fn` runs.
+  db.exec("PRAGMA busy_timeout = 0");
+  try {
+    for (;;) {
+      try {
+        return fn();
+      } catch (err) {
+        if (!isBusy(err) || performance.now() >= deadline) throw err;
+      }
+      Bun.sleepSync(BUSY_RETRY_MS);
+    }
+  } finally {
+    db.exec(`PRAGMA busy_timeout = ${timeout}`);
+  }
+}
+
 /**
  * Open (and migrate) the shared Corvidinho SQLite DB.
  */
@@ -556,8 +597,17 @@ export function openCorvidinhoDb(opts: OpenDbOptions = {}): Database {
   // Bridge, spawned agents and plugins share one file: wait briefly for a
   // writer instead of failing with "database is locked".
   db.exec("PRAGMA busy_timeout = 5000;");
-  migrateCorvidinhoDb(db);
-  // SAFE-6: re-scrub stored rows once whenever the scrub rules tighten.
-  ensureScrubbed(db);
+  // foreign_keys is a no-op inside a transaction, so it is set first.
+  db.exec("PRAGMA foreign_keys = ON;");
+  // One transaction, so an open waits for the lock once, not once per
+  // statement (each would need its own free moment), with retryWhileBusy's
+  // tries instead of SQLite's back-off.
+  retryWhileBusy(db, () =>
+    db.transaction(() => {
+      migrateCorvidinhoDb(db);
+      // SAFE-6: re-scrub stored rows once whenever the scrub rules tighten.
+      ensureScrubbed(db);
+    })(),
+  );
   return db;
 }

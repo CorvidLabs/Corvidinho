@@ -907,6 +907,15 @@ from `src/agent/spend.ts`, REQ-discord-098; `discord_session_turns` from
 TABLE IF NOT EXISTS without a schema version bump, and their free-text columns are
 scrubbed on write and listed in `SCRUB_TARGETS` (SAFE-6); `spend_alerts` has
 no free-text column (a constant kind and integers).
+`openCorvidinhoDb` sets busy_timeout 5000 and foreign_keys on, then runs the
+migration and `ensureScrubbed` in one transaction under `retryWhileBusy`
+(REQ-discord-287): while the file is locked the whole transaction is tried
+again every millisecond until busy_timeout has passed, so an open needs one
+free moment (not one per statement) and other processes committing back to
+back cannot pass it over for the whole busy_timeout, as SQLite's back-off
+(one try per 100 ms) did. `retryWhileBusy(db, fn)` sets busy_timeout 0 while
+`fn` runs and restores it after; `fn` must leave nothing behind when it
+fails with SQLITE_BUSY; with busy_timeout 0 it runs `fn` once.
 Retained conversations live in `conversation_threads` (schema v13,
 `SCHEMA_VERSION` 13, a forward-only migration after v12's `forget_requests`;
 REQ-discord-472): `summary`
