@@ -124,7 +124,8 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   chat (IDENTITY-6). Read live, no restart. See [`discord.md`](discord.md) "Declared people".
 - Roles (IDENTITY-8..12): give each declared person `role = "team"` or `role = "community"`
   (no `role` = community), or use `/admin people role` (owner-only, SAFE-5 audited). The owner
-  is always owner; anyone undeclared is community. See E.6.
+  is always owner; anyone undeclared is community. Only the owner and team can start `/work`
+  (IDENTITY-11.a), so with no owner and nobody declared as team nobody can. See E.6.
 - No owner, or a Discord id that is not a snowflake ⇒ **nobody is ADMIN** (IDENTITY-3).
   `doctor` shows `owner: configured: no`.
 - An owner who is muted (`/mute`, `DISCORD_MUTED_USER_IDS`) or on `[discord].deny_users` is not ADMIN.
@@ -133,7 +134,8 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
 - Owner-only today: `/mute`, `/unmute`, `/admin …`, `/announce channel`, `/schedule create|pause|resume|delete`,
   memory forget/override (from the owner's chat once `CORVIDINHO_ALLOWLIST` names them, E.3, or
   `corvidinho plugins run` with the acting env set; see [`discord.md`](discord.md) Memory),
-  reading someone else's memory (`memory-recall` / `memory-profile --person`, MEMORY-7),
+  reading someone else's memory (`memory-recall` / `memory-profile --person`, MEMORY-7; the owner
+  gets it by direct message, never in the channel, MEMORY-7.a),
   mutating tools in a chat session (E.6),
   and the `/work` draft-PR step (E.3).
 - Forget requests (MEMORY-ACL-6): anyone may ask the bot to forget them — on Discord, or on GitHub
@@ -144,6 +146,11 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   can DM the owner only when they share a server with it and accept DMs from its members (the
   server's Privacy Settings); until the card goes out the ask stays pending and then lapses as a
   no. No intent or portal toggle is needed. See [`discord.md`](discord.md) Memory.
+- Private reads by DM (MEMORY-7.a): private notes, profile reads (`memory-profile`) and the owner's
+  view of someone's memory are sent to whoever asked by **direct message**; the channel gets only a
+  short "sent privately" note. Same DM rule as above: the person must share a server with the bot
+  and accept DMs from its members, or the note says it could not be sent (it is never posted in
+  the channel instead).
 - When a run asks for a human, a clarify question (AUTONOMY-1/4) pings the requester (the message
   author, or the schedule creator for a scheduled run); a stuck run (AUTONOMY-2) and a spend-cap
   stop (SAFE-8) ping the owner. With no owner a stuck or spend-cap question still posts and the
@@ -197,8 +204,8 @@ project's Fledge plugins; re-check any time with `corvidinho plugins list`). An 
 | `git-push` | true | 2 | true | `/work` should open draft PRs; the remote's OWNER/REPO must also pass the GitHub allowlist (GITHUB-6) |
 | `github-pr-create` | true | 1 | true | `/work` should open draft PRs; needs `GITHUB_TOKEN`/`GH_TOKEN` |
 | `git-branch-create` | true | 2 | true | an operator runs `corvidinho plugins run git-branch-create` non-interactively (`/work` does not need it: the worktree makes the branch) |
-| `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, SAFE-3); never offered to the model from the allowlist until the SAFE-3 decision |
-| `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere), and `plugins list` names any that are not loaded; never offered to the model from the allowlist until the SAFE-3 decision |
+| `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, `env -C` and symlinks included, SAFE-3; refuses `sed -i` / `>` edits, downloads piped into a shell, deletes outside the worktree and secret reads, saying why, SAFE-21; starts without GitHub or git credentials, so pushes, PRs and merges go only through the typed GitHub tools, SAFE-21.a; 10 minute timeout, 64 KiB output cap, output scrubbed); never offered to the model from the allowlist until the SAFE-3 decision |
+| `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere) without GitHub or git credentials (SAFE-21.a), and `plugins list` names any that are not loaded; never offered to the model from the allowlist until the SAFE-3 decision |
 | `memory-forget` | true | 1 | true | the owner's chat should forget memories on request, or an operator runs `corvidinho plugins run memory-forget` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
 | `memory-override` | true | 1 | true | the owner's chat should correct memories on request, or an operator runs `corvidinho plugins run memory-override` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
 | `files-delete` | true | 2 | true | an operator runs `corvidinho plugins run files-delete` non-interactively (SAFE-2 protected paths always refused) |
@@ -221,7 +228,8 @@ What an entry unlocks **today**:
   `github-pr-create`. Without them the reply says
   `not opened — opening a PR from /work needs an explicit allow (GITHUB-5): allowlist … (CORVIDINHO_ALLOWLIST)`
   and the changes stay on the work branch. The PR step also needs verify to pass, the requester
-  to be the owner, and the repo to pass GITHUB-6.
+  to be the owner or a declared team member (only they can start `/work`, IDENTITY-10/11.a),
+  and the repo to pass GITHUB-6.
 - The model's tool catalog in `task run` (CLI-3 / SAFE-1). A dangerous tool is offered to the
   model only when the run's `CORVIDINHO_ALLOWLIST` names it and its `minTier` fits the run's
   tier; an unlisted one stays out, and a call to a tool that is not offered is refused. Role
@@ -311,7 +319,7 @@ Who is who in an allowlisted channel:
   (#102) do not exist yet.
 - Everyone else ⇒ **community**: declared `community`, declared without a role, undeclared,
   muted or deny-listed (IDENTITY-11/12). Muted users are refused (the mute and rate gate runs on
-  chat and on every slash command).
+  chat and on every slash command). Community can't start `/work` (IDENTITY-11.a).
 - WATCH runs, scheduled runs and `delegate` / `council` workers are community whoever triggered
   them.
 - The role is re-read from the people list on every tool call (IDENTITY-12): a
@@ -357,8 +365,9 @@ Community sessions (every non-owner who is not team, plus all WATCH and schedule
   CHANGELOG — `github-docs-read`, or the project files) and the public issues and milestones
   of allowed public repos (`github-issue-list`, `github-milestone-list`). No site URL is a
   source (`web-fetch` is never offered to community).
-- `/session start` and `/work` run for community too, as read-only sessions. `/work` never
-  opens a PR for community.
+- `/session start` runs for community too, as a read-only session. `/work` does not
+  (IDENTITY-11.a): a community member, or anyone undeclared, gets the ephemeral
+  `not authorized` and nothing starts — no worktree, branch, work task, run or PR.
 - The owner keeps the GitHub allowlist (GITHUB-6) and still passes every SAFE gate.
 - A local `corvidinho task run` in a shell has no role session, so these gates do not apply
   there. The bridges always set `CORVIDINHO_ACTING_IS_ADMIN` to `0` or `1` for their runs, and
@@ -420,7 +429,9 @@ schedules, WATCH, `task run`, delegate and council workers), so the next turn af
 uses the new text; no restart and no setting. It goes into the system prompt first, and
 Corvidinho's rules follow it and win (one message per turn, no spam, no unchecked claims).
 Fixed-text bot posts (the bridge-live note, `/status`, error and spend lines) do not go through
-the model and keep their text.
+the model and keep their text. The bridge-live note in the `/announce` channel is written in the
+persona's voice: one short line with the version and a link to its GitHub Release notes, never a
+changelog bullet list (PERSONA-1.a); editing `persona.md` does not change it.
 
 - Only the copy committed at `HEAD` is loaded. `scripts/corvidinho-update.sh` checks out the
   merged ref, so change the voice with a PR like any other file; a hand edit on the VM is not

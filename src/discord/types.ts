@@ -152,6 +152,13 @@ export type AgentSpawnResult = {
    */
   injection?: InjectionNotice;
   /**
+   * MEMORY-7.a (REQ-discord-710): text shown only privately to the person
+   * who asked (private notes, a profile, the owner's view of someone's
+   * memory), which the model never saw. The bridge sends it by direct
+   * message (`deliverPrivateReplies`) and never posts it in the channel.
+   */
+  privateReplies?: string[];
+  /**
    * Verify facts from the child's `result` frame (AGENT-4); absent when no
    * frame parsed. /work ships a PR only from a verified tree (REQ-discord-088).
    */

@@ -66,6 +66,30 @@ and a deny-listed channel are refused with exit 3.
 
 `tests/discord.user-lookup.test.ts` — see also discord testing companion.
 
+## Shell foot-guns, env -C and symlinked cd (REQ-plugins-087, REQ-plugins-494..495)
+
+`tests/shell.footguns.test.ts` — temp project, temp outside dir and a temp
+`HOME` holding `~/.config/corvidinho/env` and `~/.netrc`; every refused
+command starts with `touch spawned` (and every script writes it first), so a
+refusal that spawned anything is caught. Each SAFE-21 family refuses end to
+end with exit 2, `rule: "SAFE-21"`, its family and a `<why>; <instead>`
+message (edit, download, delete, secret), also from in-root scripts run with
+`sh`; outside victims survive; in-root deletes, reads and redirects to
+`/dev/null` / fd dups still run; downloads used as data are not refused. The
+child env has no LLM / Discord / GitHub keys, askpass or ssh agent, git reads
+no global config and never prompts, gh's config dir is empty, and a
+credential helper in `~/.gitconfig` and in the repo config never runs against
+a local HTTP server answering 401; an aborted run kills `sleep 60` (exit
+130); output is capped and a `ghp_…` token scrubbed.
+`tests/shell.clamp-bypass.test.ts` — `env -C` / `--chdir` / `-iC` / `--ch`
+/ `sudo -D` / `env -S`, `cd` / `pushd` through in-root symlinks that point
+out, and `ln` targets that lead out refuse (unit and end to end, SAFE-3);
+in-root `env -C sub` and a link to an in-root dir still run.
+`tests/shell.clamp-scripts.test.ts` — the written-script case writes through
+`tee`, since a `>` edit is refused first by SAFE-21.
+`tests/runners.plugins.test.ts` — the runners' child env is credential-free
+(SAFE-21.a, REQ-plugins-495).
+
 ## Language runners (REQ-plugins-313..314)
 
 `tests/runners.plugins.test.ts` — stub `node` / `python3` / `cargo` /bin/sh
@@ -219,3 +243,15 @@ source gives none); `runCouncil` keeps a voice's notice on its outcome.
   memory-forget-me points at the comment path" — with the GitHub commenter
   env, the tool fails naming `says just "forget me"` and MEMORY-ACL-6.a, and no
   forget request is recorded.
+## Private reads shown only privately (REQ-plugins-710, MEMORY-7.a)
+
+`tests/memory.private-view.test.ts` — in a Discord-conversation env the
+person's own private notes and profile and the owner's `--person` recall,
+profile and private notes return their text only in `privateText`, with
+`data` `{ sentPrivately: true, what }` and the placeholder `message`; the
+person's own everyday recall still returns rows; a schedule refuses the
+owner's `--person` view and profile and a person's own profile, a GitHub
+thread refuses `memory-profile` (no content in any refusal); the local CLI
+shows the profile inline. `tests/memory.profiles.test.ts` and
+`tests/memory.recall-github.test.ts` read `privateText` where the model used
+to get the rows.

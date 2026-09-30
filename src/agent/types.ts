@@ -125,6 +125,13 @@ export type TaskResult = {
    * the surface tells the owner.
    */
   injection?: InjectionNotice;
+  /**
+   * MEMORY-7.a (REQ-agent-710 / REQ-cli-710): text shown only privately to
+   * the person who asked — private notes, a profile, the owner's view of
+   * someone's memory — that the model never saw. The Discord bridge sends it
+   * by direct message and never posts it in the channel. Absent when none.
+   */
+  privateReplies?: string[];
 };
 
 /**
@@ -139,8 +146,11 @@ export type SpendWarning = {
   percent: number;
 };
 
+/**
+ * `[corvidinho]` settings from the project's fledge.toml. There is no key
+ * that turns the verify gate off (AGENT-14, REQ-agent-003).
+ */
 export type AgentConfig = {
-  verifyBeforeComplete: boolean;
   maxRetries: number;
 };
 
@@ -154,6 +164,19 @@ export type WorkspaceDiffTracker = {
    * when git could not be read, so the gate verifies anyway (fail closed).
    */
   changed(): Promise<string[] | null>;
+  /**
+   * AGENT-15.a (REQ-agent-015): the last run in this talk worktree did not
+   * end verified, so the baseline is the talk branch's merge-base and every
+   * edit since the talk started counts, including ones an earlier attempt
+   * left.
+   */
+  carried?: boolean;
+  /**
+   * Talk worktrees only: record how the run ended. `done` (verified, or
+   * nothing to verify) lets the next run there start from its own snapshot;
+   * anything else makes it carry the baseline.
+   */
+  settle?(done: boolean): void;
 };
 
 /**
@@ -167,14 +190,13 @@ export type RunTaskOptions = {
   /** Task description for Planning SpecSync briefing (Merlin spec_loader). */
   task?: string;
   execute: ExecuteFn;
-  /** Override config; when false, skip verify gate. */
-  verifyBeforeComplete?: boolean;
   maxRetries?: number;
   verifyRunner?: VerifyRunner;
   /**
    * Test seam (like `verifyRunner`, not a product surface): starts the real
-   * git working-tree diff the verify gate adds to `filesChanged`
-   * (REQ-agent-085). Default `startWorkspaceDiff`.
+   * git working-tree diff that fills `filesChanged` (REQ-agent-085). Default
+   * `startWorkspaceDiff`; `task run` in a delegate or council worker passes
+   * it with `{ nested: true }` (REQ-agent-015).
    */
   workspaceDiff?: WorkspaceDiffStart;
   onEvent?: (event: AgentEvent) => void;

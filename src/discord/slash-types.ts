@@ -17,6 +17,7 @@ import type { AnnounceStore } from "./announce-store.ts";
 import type { WorkPrRunner } from "../work/pr.ts";
 import type { SpendAlertOutbox } from "../agent/spend-outbox.ts";
 import type { ChannelPost } from "./spend-post.ts";
+import type { SendPrivateDm } from "./private-reply.ts";
 import type { GithubUserLookup } from "../identity/github-user.ts";
 
 export type SlashOptionValue = string | number | boolean | null;
@@ -80,6 +81,12 @@ export type SlashContext = {
    * run: a deferred-reply edit may not notify a mention (spend-post.ts).
    */
   post?: ChannelPost;
+  /**
+   * MEMORY-7.a (REQ-discord-710) — direct message to the invoker (the gateway
+   * `sendDm`): `/session start` and `/work` send a run's private replies
+   * here, never to the channel. Unset ⇒ they are not shown anywhere.
+   */
+  sendDm?: SendPrivateDm;
   /**
    * SAFE-5 — append one audit row (bridge wires the shared DB). Throws when
    * the trail is unavailable; /admin mutations then fail closed, as they do

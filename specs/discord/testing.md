@@ -681,11 +681,12 @@ both.
   1500-char run-row summary ending with the note and posts at most 1900 chars
   ending with it; a run returning 1800 plain chars stores and posts exactly its
   first 1500.
-- `tests/discord.slash-ask7.test.ts` › "/work answer for a non-owner keeps the
-  closing role note within the 1900 cap": a `member-1` `/work` with a
-  207-char description (non-owner PR line) gets a collapsed answer of at most
-  1900 chars whose summary part is under 1500 (fitted after the head) and ends
-  with the note.
+- `tests/discord.slash-ask7.test.ts` › "/work answer for a non-owner (team)
+  keeps the closing role note in the rich answer": a declared team member's
+  `/work` (community can't start one, IDENTITY-11.a) with a 207-char
+  description (stub PR line) gets a collapsed answer of at most 1900 chars
+  whose summary part is under 1500 (fitted after the head) and ends with the
+  note.
 - Same file › "/session start answer for a non-owner keeps the closing role
   note within the 1900 cap": the answer is at most 1900 chars, its summary part
   at most 1500, and it ends with the note.
@@ -734,7 +735,8 @@ community; muted or deny-listed team ⇒ community); the spawn client stamps
 (schedules pass no role ⇒ community); through `startBridge` chat stamps each
 speaker's role and a file edit applies to the next message; `/work` runs a
 team member with `actingRole: "team"` + `workTask: true` and reaches the PR
-step, the owner is unchanged, community / undeclared never reach it, and a
+step, the owner is unchanged, community / undeclared get the ephemeral
+`not authorized` and never run (IDENTITY-11.a), and a
 team member demoted mid-run gets no PR; `/session start` stamps the role
 without the work flag; `/admin people role` promotes / demotes with
 `admin-people-role` `started`/`ok` rows, no-change on the same role, refuses
@@ -744,6 +746,26 @@ and a missing audit trail; `people list` shows each role, `config show` counts
 them; JSON files keep unread keys. `tests/discord.admin-slash.test.ts`: the
 `people` group ends with `role` (`person`, `role` with team / community
 choices).
+
+Community can't start /work (IDENTITY-11.a, REQ-discord-065 / REQ-discord-088):
+`tests/roles.community-no-work.test.ts` — a temp git repo as the project and a
+temp worktree base; through `handleSlashInteraction`, a `/work` by declared
+community, a declared person with no role and an undeclared user (also with a
+`project` option, with no owner and nobody declared, and with no owner but a
+people file) gets exactly one ephemeral `not authorized` reply, no deferred
+reply, no session, work task, agent run or PR step, and the repo keeps one
+worktree and no `talk/*` branch; with no owner a declared team member still
+runs as team; a muted or deny-listed team member is refused the same way at
+the handler, and through the dispatcher gets the mute reply / zero-width ack
+first with nothing started;
+the owner and a team member still run with a worktree under the base,
+`workTask: true` and the PR step; a demotion / promotion written to the
+people file applies to the next `/work`; through `startBridge` a community
+`/work` spawns nothing while the owner's runs. `tests/work.pr.test.ts`,
+`tests/discord.actor-gate.test.ts` and `tests/roles.team.test.ts` expect the
+refusal for community; `tests/safe.injection.test.ts` keeps the SAFE-13
+refusal for a stranger's injected `/work`. Tests that drive `/work` as a
+non-owner declare the invoker team with `tests/fixtures/team-people.ts`.
 
 Forget on request (MEMORY-ACL-6, #101 / REQ-discord-101):
 `tests/discord.forget-card.test.ts` — the Approve/Deny card helper
@@ -853,6 +875,53 @@ differs is nobody; the undeclared-under-`[people]` owner, by `[owner]
 github_id`, on their Discord id) and
 `projectScopeForRepo`.
 
+## Private replies by DM only (REQ-discord-710, MEMORY-7.a)
+
+`tests/memory.private-view.test.ts` — `privateRepliesFromUnknown` (strings
+only, via `boundPrivateReplies`: at most 5, the last saying how many more were
+not sent, each scrubbed then cut to 6000 with a marker — a straddling token
+redacted, no lone surrogate — and a bounded list unchanged), `deliverPrivateReplies`
+(DM parts ≤1900 even after the gateway's defang of a text full of `@everyone`,
+scrubbed, header first; "failed" with no DM path, a null or a throwing send)
+and `withPrivateNote`; through the bridge a chat reply, a button pick and an
+Answer form submit DM the text to whoever asked while the channel gets only
+the "sent privately" note (the "couldn't DM it" note when the DM fails) and
+the session thread never holds it; `/session start` and `/work` do the same
+through `SlashContext.sendDm`.
+## Update post in the persona's voice (REQ-discord-025 / REQ-discord-024 modified, PERSONA-1.a, DISCORD-ANNOUNCE-4)
+
+- `tests/discord.update-post.test.ts` › "the bridge's update post on
+  ClientReady": `startBridge` with a null gateway capturing replies, an
+  in-memory DB with the announcements channel set and `version` 0.0.34 (a
+  version with a long section in the real CHANGELOG.md). After `onReady`:
+  exactly one reply, to the announcements channel, no pinged users, equal to
+  `formatBridgeLiveAnnouncement("0.0.34")`; under 400 characters; carries
+  `**v0.0.34**`, the `<…/releases/tag/v0.0.34>` link and the persona's 🐦‍⬛;
+  no `bridge live` header, no bullet or heading line, no newline, no
+  "changelog", none of the version's CHANGELOG bullets; `scrubSecrets` leaves
+  it unchanged. With no announcements channel nothing is posted.
+- Same file › "formatBridgeLiveAnnouncement": the exact template for 0.0.34;
+  a leading `v` and spaces dropped; the default is the package version; the
+  longest plain version (six-digit parts) stays under 400 characters with the
+  full link; an empty or blank version, a pre-release, `@everyone`, `@here`,
+  a runtime-built fake key, a newline bullet, markdown link text and a 20-digit
+  part all give the fixed Releases-page note, never echoing the input;
+  `postAnnouncement` sends the note once, as is, to the announcements channel.
+- `tests/discord.announce.test.ts`: default-deny and announce-channel-only
+  posting unchanged; its CHANGELOG-bullet tests were removed with the bullets.
+- Fails on the base sources (main 5aaf7f0 `src/discord/announce.ts`): 5 of 7
+  (the bridge posted an 838-character `bridge live **v0.0.34**` + bullets
+  note); passes after.
+## One verify gate; talk worktrees start verified (REQ-discord-085)
+
+- `tests/agent.verify-gate.test.ts`: a talk worktree made by
+  `ensureTalkWorkspace` holds the verified marker (`talkWorktreeGitDir`), its
+  first run that changes nothing has nothing to verify, and after a blocked
+  run with an edit the next run there verifies it (REQ-agent-015).
+- `tests/work.pr.test.ts`: the `/work` PR path finds the base and merge-base
+  through the shared `resolveBase` (`src/worktree/base.ts`).
+- `tests/spawn.argv.test.ts`, `tests/agent.ndjson-spawn.test.ts`: Discord
+  spawn argv has no `--no-verify` (REQ-discord-014 / 073).
 ## GitHub by numeric user id only (REQ-discord-367, IDENTITY-7.a)
 
 - `tests/identity.github-numeric-id.test.ts` — `resolvePerson` /

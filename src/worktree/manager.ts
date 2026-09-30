@@ -16,6 +16,7 @@ import {
   deleteBranch,
   forceRemoveWorktree,
 } from "./cleanup.ts";
+import { settleTalkVerified, talkWorktreeGitDir } from "./base.ts";
 
 export type WorktreeState = "active" | "parked" | "removed";
 
@@ -445,6 +446,10 @@ export async function ensureTalkWorkspace(
     if (!result.success) {
       return { ok: false, error: result.error ?? "worktree create failed" };
     }
+    // AGENT-15.a (REQ-agent-015): a new talk has nothing unverified yet, so
+    // its first run verifies from its own start snapshot.
+    const talkGitDir = talkWorktreeGitDir(result.worktreeDir);
+    if (talkGitDir) settleTalkVerified(talkGitDir, true);
     return {
       ok: true,
       workspace: {

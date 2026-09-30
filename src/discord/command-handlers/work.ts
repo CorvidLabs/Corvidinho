@@ -8,10 +8,12 @@ import { resolveDiscordActingRole } from "../permissions.ts";
 import { enrichPromptWithIdentity } from "../identity-inject.ts";
 import { enrichPromptWithProjectMemory, MEMORY_INJECT_LIMIT, memoryInjectOptsFor } from "../memory-inject.ts";
 import { fenceSpeakerText, inboundInjection, refuseInjectedSlash } from "../injection-guard.ts";
-import { loadDeclaredPeople } from "../../identity/people.ts";
+import { loadDeclaredPeople, type PersonRole } from "../../identity/people.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import { answerSpendFor } from "../rich-reply.ts";
+import { deliverPrivateReplies, withPrivateNote } from "../private-reply.ts";
 import { isOwnerDiscord } from "../../identity/owner.ts";
+import { NOT_AUTHORIZED } from "../types.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
 import { finishSlashWithThinking, recordSlashStub } from "../slash-finish.ts";
 import { formatTaskPlumbing } from "../../agent/task-summary.ts";
@@ -27,6 +29,14 @@ import {
   finishSlashWithOwnerNotice,
   slashOwnerNotice,
 } from "../spend-post.ts";
+
+/**
+ * IDENTITY-11.a — who may start /work: the owner (IDENTITY-9) and a declared
+ * team member (work tasks, IDENTITY-10); never community (IDENTITY-11).
+ */
+function workAllowedFor(role: PersonRole): boolean {
+  return role === "owner" || role === "team";
+}
 
 export async function handleWorkCommand(
   ctx: SlashContext,
@@ -68,6 +78,17 @@ export async function handleWorkCommand(
   const suspected = inboundInjection(description, actingRole);
   if (suspected) {
     await refuseInjectedSlash(ctx, interaction, suspected, "work-task");
+    return;
+  }
+
+  // IDENTITY-11.a: community (declared community, anyone undeclared, and a
+  // muted or deny-listed caller, IDENTITY-12) can't start /work. The role was
+  // just resolved from the live owner config and people list; the refusal is
+  // the quiet ephemeral "not authorized" of the owner-only commands
+  // (/announce channel, /schedule create, /admin), before any worktree,
+  // branch, work task or run exists. Owner and team keep /work unchanged.
+  if (!workAllowedFor(actingRole)) {
+    await interaction.reply({ content: NOT_AUTHORIZED, ephemeral: true });
     return;
   }
 
@@ -263,13 +284,23 @@ export async function handleWorkCommand(
     );
   }
 
+  // MEMORY-7.a (REQ-discord-710): the run's private replies go to the
+  // invoker by DM only; the channel gets the "sent privately" note.
+  const privateOutcome = await deliverPrivateReplies({
+    replies: result.privateReplies,
+    userId: interaction.userId,
+    sendDm: ctx.sendDm,
+  });
   // DISCORD-16: the whole answer; it is split into messages when long.
   // ROLES-CHAT-3: splits keep a closing role note instead of clipping it.
-  const summary = ask
-    ? ask.content
-    : result.ok
-      ? result.summary
-      : `failed (exit ${result.exitCode})`;
+  const summary = withPrivateNote(
+    ask
+      ? ask.content
+      : result.ok
+        ? result.summary
+        : `failed (exit ${result.exitCode})`,
+    privateOutcome,
+  );
   // AGENT-6 (REQ-discord-072): the answer joins the thread (a button ask as
   // its question and choices); a spend-cap stop records no answer
   // (REQ-discord-098).
@@ -289,8 +320,10 @@ export async function handleWorkCommand(
   // a draft PR only when the PR path is allowlisted; else one plain line why.
   // ROLES-CHAT-3 / IDENTITY-10: commit/push/PR are mutating — only the owner
   // (ADMIN) or a team member (work tasks, the role re-resolved from the live
-  // people list now) may ship /work as a PR; community keeps the changes on
-  // the work branch. The PR path's own gates (allowlist, GITHUB-6) still apply.
+  // people list now) may ship /work as a PR; a team member demoted to
+  // community during the run keeps the changes on the work branch (community
+  // never starts /work, IDENTITY-11.a). The PR path's own gates (allowlist,
+  // GITHUB-6) still apply.
   const shipRole = actingIsAdmin
     ? "owner"
     : actingRole === "team"

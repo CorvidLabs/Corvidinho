@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "shell-exec-refuses-foot-guns-and-says-why-sed-i-or-edits-downloads-piped-into-a-shell-deletes-outside-the-worktree",
+  "implementation_commit": "ef2cf382e1facc925aa5855ab940854d859e4e27",
+  "implementation_tree": "b46bcea7cb3f08bc365e058c3ed055f89a22d706",
+  "contract_digest": "20bff2b900bd83960b7c69725b6feb69a736e9b2f0414e4cc7296a33354ac858",
+  "workspace_digest": "e143021125e3a2bdeb24f7a565d3168d9a2d7b86e563c1fff3249cb21b17dcaf",
+  "closing_digest": "511fbd21bddaf77a230db2df27e44a76f8e190e1f933b1c3c447a2ed444dadb9",
+  "review_digest": "1f5c59ed048f9e5a42f52bef41365ffa7682e61118424c05618957636bf974a8",
+  "finalization_digest": "0d0dfb56b69c40cdf6c7b1f6c13437775a55492772a23cf9dafefb15f2a1e459",
+  "timestamp": 1790735006
+}

@@ -37,7 +37,8 @@ describe("createTaskExecute", () => {
       signal: new AbortController().signal,
     });
     expect(result.summary).toBe("demo task attempt 2");
-    expect(result.filesChanged).toEqual(["src/cli.ts"]);
+    // It changes nothing, so it claims nothing (AGENT-15, REQ-agent-085).
+    expect(result.filesChanged).toEqual([]);
   });
 
   test("LLM path uses fetch when key set", async () => {
@@ -233,7 +234,7 @@ describe("Planning SpecSync briefing reaches the model (REQ-agent-004)", () => {
     const result = await runTask({
       cwd,
       task,
-      verifyBeforeComplete: false,
+      verifyRunner: async () => ({ success: true, output: "ok" }),
       onEvent: (e) => events.push(e),
       execute: createTaskExecute({
         taskText: task,
@@ -281,7 +282,6 @@ describe("Planning SpecSync briefing reaches the model (REQ-agent-004)", () => {
     const result = await runTask({
       cwd,
       task: TASK,
-      verifyBeforeComplete: true,
       maxRetries: 2,
       verifyRunner: async () => {
         verifyN += 1;
@@ -308,7 +308,7 @@ describe("Planning SpecSync briefing reaches the model (REQ-agent-004)", () => {
     await runTask({
       cwd,
       task: "polish the readme wording",
-      verifyBeforeComplete: false,
+      verifyRunner: async () => ({ success: true, output: "ok" }),
       execute: async (ctx) => {
         briefings.push(ctx.specBriefing);
         return { summary: "noop", filesChanged: [] };
@@ -399,7 +399,7 @@ describe("Planning SpecSync briefing reaches the model (REQ-agent-004)", () => {
     await runTask({
       cwd,
       task,
-      verifyBeforeComplete: false,
+      verifyRunner: async () => ({ success: true, output: "ok" }),
       execute: async (ctx) => {
         briefings.push(ctx.specBriefing);
         return { summary: "ok", filesChanged: [] };

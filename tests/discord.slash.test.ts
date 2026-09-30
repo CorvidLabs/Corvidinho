@@ -245,7 +245,8 @@ describe("slash handlers", () => {
   });
 
   test("/work creates work stub and runs agent", async () => {
-    const ctx = makeCtx();
+    // The owner's /work (IDENTITY-11.a: community can't start /work).
+    const ctx = makeCtx({ owner: { discordId: "user-1" } });
     const ix = memoryInteraction({
       commandName: "work",
       options: { description: "open PR for slash" },

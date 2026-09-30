@@ -31,6 +31,20 @@
  * written to the index or object store. Files are opened without following
  * links and without blocking, so a path swapped for a symlink or a fifo is
  * never read. Gitignored paths are not seen.
+ *
+ * Talk worktrees carry their baseline (AGENT-15.a, REQ-agent-015): in a
+ * linked talk worktree (`src/worktree/base.ts`) the start takes the
+ * verified marker away. When it was there, the snapshot is the run's own
+ * start, as above. When it was not (the last run there ended blocked, failed
+ * or cancelled, or died), the baseline is the talk branch's merge-base
+ * (`resolveBase`) with no dirt, so every edit since the talk started counts,
+ * including ones an earlier attempt left; a merge-base git cannot give makes
+ * `changed()` unreadable (the gate then verifies anyway). `settle(done)`
+ * writes the marker back only when the run ended `done`. A run in any other
+ * checkout keeps the run-start snapshot. A nested run (a delegate or council
+ * worker in its lead's cwd) never takes or writes the marker and keeps its
+ * own run-start snapshot: the lead holds the marker for the whole run and
+ * its own gate covers the combined change.
  */
 
 import { createHash } from "node:crypto";
@@ -48,6 +62,12 @@ import {
 import { join, relative } from "node:path";
 import { runGit, type GitRun } from "../../plugins/git/exec.ts";
 import { parseStatusPorcelainZ } from "../../plugins/git/parse.ts";
+import {
+  resolveBase,
+  settleTalkVerified,
+  takeTalkVerified,
+  talkWorktreeGitDir,
+} from "../worktree/base.ts";
 import { findProjectRoot } from "./project-instructions.ts";
 import type { WorkspaceDiffTracker } from "./types.ts";
 
@@ -70,6 +90,19 @@ export const WORKSPACE_DIFF_MAX_FILES = 1000;
 export type WorkspaceDiffLimits = {
   /** Default `WORKSPACE_DIFF_HASH_BUDGET_BYTES`. */
   hashBudgetBytes?: number;
+};
+
+/** How the run relates to its talk worktree's verified marker (REQ-agent-015). */
+export type WorkspaceDiffRole = {
+  /**
+   * A delegate or council worker inside a lead's run (REQ-agent-117), which
+   * runs in the lead's cwd while the lead holds the marker. It never takes
+   * the marker (so it is never `carried`: its baseline is its own start) and
+   * never writes it (a worker's `done` must not mark the lead's unverified
+   * edits verified, even if the lead then dies); a worker that does not end
+   * `done` still removes one (fail closed).
+   */
+  nested?: boolean;
 };
 
 type Git = (args: string[]) => Promise<GitRun>;
@@ -192,13 +225,62 @@ async function headDiff(
 }
 
 /**
+ * Tracker for a baseline: `startHead` (null = unborn) plus the paths dirty at
+ * that point (`start`, fingerprinted); an empty `start` is a clean baseline.
+ */
+function tracker(
+  git: Git,
+  root: string,
+  pathspec: string[],
+  toCwd: (p: string) => string,
+  startHead: string | null,
+  start: Map<string, StartEntry>,
+): WorkspaceDiffTracker["changed"] {
+  return async () => {
+    try {
+      const now = await listing(git, pathspec);
+      if (!now) return null;
+      const out = new Set<string>();
+      if (now.head !== startHead) {
+        const moved = await headDiff(git, startHead, now.head, pathspec);
+        if (!moved) return null;
+        for (const p of moved) out.add(p);
+      }
+      const seen = new Set<string>();
+      for (const e of now.entries) {
+        seen.add(e.path);
+        const was = start.get(e.path);
+        // Only a path dirty at the start is fingerprinted again (same
+        // kind as then); newly dirty or untracked is a change by itself.
+        if (
+          !was ||
+          was.xy !== e.xy ||
+          fingerprint(join(root, e.path), was.kind).fp !== was.fp
+        ) {
+          out.add(e.path);
+        }
+      }
+      for (const p of start.keys()) {
+        if (!seen.has(p)) out.add(p);
+      }
+      return [...out].map(toCwd).sort();
+    } catch {
+      return null;
+    }
+  };
+}
+
+/**
  * Snapshot the git project around `cwd` for the verify gate (REQ-agent-085).
  * Null when `cwd` is not in a git work tree or git cannot read it: the gate
- * then uses tool-reported files only. Never throws.
+ * then uses tool-reported files only. In a talk worktree whose last run did
+ * not end verified, the baseline is the talk branch's merge-base instead
+ * (`carried`, REQ-agent-015). Never throws.
  */
 export async function startWorkspaceDiff(
   cwd: string,
   limits: WorkspaceDiffLimits = {},
+  role: WorkspaceDiffRole = {},
 ): Promise<WorkspaceDiffTracker | null> {
   try {
     const real = realpathSync(cwd);
@@ -211,9 +293,29 @@ export async function startWorkspaceDiff(
         maxStdoutBytes: WORKSPACE_DIFF_MAX_OUTPUT_BYTES,
       });
     const toCwd = (p: string) => (prefix ? relative(prefix, p) : p);
+    // AGENT-15.a: a talk worktree without the verified marker carries every
+    // edit since the talk started (the marker is taken away for this run).
+    const talkGitDir = talkWorktreeGitDir(root);
+    const settle = !talkGitDir
+      ? undefined
+      : role.nested
+        ? (done: boolean) => {
+            if (!done) settleTalkVerified(talkGitDir, false);
+          }
+        : (done: boolean) => settleTalkVerified(talkGitDir, done);
+    if (talkGitDir && !role.nested && !takeTalkVerified(talkGitDir)) {
+      const based = await resolveBase((_cwd, args) => git(args), root);
+      if (!based) {
+        return { carried: true, settle, changed: async () => null };
+      }
+      return {
+        carried: true,
+        settle,
+        changed: tracker(git, root, pathspec, toCwd, based.mergeBase, new Map()),
+      };
+    }
     const first = await listing(git, pathspec);
     if (!first) return null;
-    const startHead = first.head;
     const start = new Map<string, StartEntry>();
     let budget = limits.hashBudgetBytes ?? WORKSPACE_DIFF_HASH_BUDGET_BYTES;
     for (const e of first.entries) {
@@ -223,38 +325,8 @@ export async function startWorkspaceDiff(
       start.set(e.path, { xy: e.xy, kind, fp: f.fp });
     }
     return {
-      async changed() {
-        try {
-          const now = await listing(git, pathspec);
-          if (!now) return null;
-          const out = new Set<string>();
-          if (now.head !== startHead) {
-            const moved = await headDiff(git, startHead, now.head, pathspec);
-            if (!moved) return null;
-            for (const p of moved) out.add(p);
-          }
-          const seen = new Set<string>();
-          for (const e of now.entries) {
-            seen.add(e.path);
-            const was = start.get(e.path);
-            // Only a path dirty at the start is fingerprinted again (same
-            // kind as then); newly dirty or untracked is a change by itself.
-            if (
-              !was ||
-              was.xy !== e.xy ||
-              fingerprint(join(root, e.path), was.kind).fp !== was.fp
-            ) {
-              out.add(e.path);
-            }
-          }
-          for (const p of start.keys()) {
-            if (!seen.has(p)) out.add(p);
-          }
-          return [...out].map(toCwd).sort();
-        } catch {
-          return null;
-        }
-      },
+      ...(settle ? { settle } : {}),
+      changed: tracker(git, root, pathspec, toCwd, first.head, start),
     };
   } catch {
     return null;

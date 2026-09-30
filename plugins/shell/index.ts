@@ -12,7 +12,9 @@ export function loadShellPlugins(): void {
 export { shellCommands };
 export {
   firstDisallowedCd,
+  forEachSimpleCommand,
   isCdEscape,
   stripQuotes,
   clampRefuseMessage,
 } from "./clamp.ts";
+export { firstFootgun, footgunRefuseMessage } from "./footguns.ts";

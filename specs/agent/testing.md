@@ -39,7 +39,9 @@ streamed NDJSON result still parses; with the hash budget spent an untouched
 dirty file stays quiet and an edit to it is caught; the gate off takes no
 snapshot.
 `tests/agent.tool-loop.test.ts` "runTask: a real code-tier shell-exec edit
-reaches the verify gate": end to end through the real `shell-exec` plugin.
+reaches the verify gate": end to end through the real `shell-exec` plugin,
+writing with `cp broken.ts app.ts` (SAFE-21 refuses a `>` or `tee` edit,
+REQ-plugins-494).
 ## Allowlisted dangerous tools in task run (REQ-agent-501, REQ-agent-502)
 
 `tests/agent.allowlisted-dangerous.test.ts` (fake provider, fake `fledge` on
@@ -234,6 +236,39 @@ never run, `onInjection` gets the worker's notice once, the summary ends with
 the note and one row is audited; at delegation depth 1 an injected issue
 title is reported but records no row.
 
+## Private text kept from the model (REQ-agent-710, MEMORY-7.a)
+
+`tests/memory.private-view.test.ts` — a fake-LLM run whose model calls
+`memory-profile` and `memory-recall --category private` hands both texts to
+`onPrivateReply`; no request body, event or the result holds them and the
+model gets the "sent privately" placeholder; the prompt names the rule.
+## Verification can't be skipped; the real diff since the talk started decides (REQ-agent-003, REQ-agent-085, REQ-agent-015)
+
+- `tests/agent.verify-gate.test.ts`: a project `fledge.toml` with
+  `verify_before_complete = false` still verifies a real edit (runTask and
+  the real CLI with a fake `fledge`); a talk worktree made by
+  `ensureTalkWorkspace` starts verified; an edit left by a run that ended
+  blocked, failed, cancelled, or whose process died (marker taken, never
+  settled), and a commit made through a shell, are verified by the next run
+  that changes nothing (carried note, merge-base baseline); a talk whose base
+  branch is gone verifies anyway; the caller's own checkout keeps the
+  run-start baseline; marker take / settle / symlink / planted-marker cases;
+  a claimed path git does not show is left out of `filesChanged` yet runs the
+  lane (and its retry after a failed verify runs it again); a delegate or
+  council worker (`{ nested: true }`, and the real CLI with
+  `CORVIDINHO_DELEGATE_DEPTH=1`) in its lead's talk worktree keeps its own
+  baseline and never writes the marker, so a lead that dies still leaves its
+  edits carried.
+- `tests/agent.loop.test.ts`: a run that changed files verifies with no
+  option; a run that changed nothing ends `done` with one "no changes,
+  nothing to verify" note; the snapshot is always taken; the huge-diff cap
+  note counts all changed paths.
+- `tests/agent.allowlisted-dangerous.test.ts`: the non-git Fledge run in a
+  project whose `fledge.toml` sets the removed key still verifies and fails.
+- `tests/agent.config.test.ts`: `parseCorvidinhoSection` reads only
+  `max_retries`; `removedVerifyKeys` names the key only under `[corvidinho]`.
+- `tests/agent.execute.test.ts`, `tests/agent.tool-loop.test.ts`: the demo
+  execute reports no files.
 ## SAFE-13 WATCH owner exemption by numeric id (REQ-agent-071, REQ-watch-367)
 
 `tests/safe.injection.test.ts` › "the verdict skips the owner (by [owner]

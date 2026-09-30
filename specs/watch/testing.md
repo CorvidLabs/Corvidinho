@@ -104,6 +104,11 @@ module: watch
   403) does not hold up the next asks' outcomes. In a GitHub-shaped
   env `memory-forget-me` names the comment path and records nothing
   (REQ-plugins-1016).
+## One verify gate (REQ-watch-006, REQ-watch-073, REQ-watch-085)
+
+- `tests/agent.ndjson-spawn.test.ts`: the WATCH spawn argv has no
+  `--no-verify`; the gate itself (no switch, real diff, "no changes" note) is
+  covered by `tests/agent.loop.test.ts` and `tests/agent.verify-gate.test.ts`.
 ## GitHub numeric user id only (REQ-watch-367, IDENTITY-7.a)
 
 - `tests/watch.github-numeric-id.test.ts` — the live Octokit search client
