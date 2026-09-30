@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 94
+version: 95
 status: draft
 files:
   - src/discord/types.ts
@@ -628,6 +628,28 @@ session, deps)` (both `message-router.ts`: channel, actor and mute gates, no
 rate count). `/work` exports `WORK_STOPPED_PR_REASON` (the stopped run's PR
 line, also used when a stop lands after the agent exited, before the PR step).
 
+The Stop button (AGENT-3.a, REQ-discord-303): `run-control.ts` also exports
+`buildStopComponents(runId)` (one row, one danger-style `Stop` button),
+`stopRunCustomId(runId)` (`cvstop:<runId>`), `parseStopRunCustomId(raw)`
+(the run id, or null for any other id), `RUN_STOP_PREFIX` (`cvstop`),
+`RUN_STOP_LABEL`, `RUN_STOP_NOT_YOURS` (`This Stop button isn't for you.`)
+and `RUN_STOP_NOTHING_RUNNING` (`Nothing is running.`). `ThinkingStatusOpts`
+takes optional `components` (the chat, pick / Answer, `/session start` and
+`/work` runs pass `buildStopComponents(turn.runId)`): they go out with the
+progress embed (`ThinkingOutbound.sendEmbed` and the gateway's `sendEmbed`
+take optional `components`), or replace a reused stub's button; working edits
+leave them; `done` / `fail` edit with `components: null`
+(`ThinkingOutbound.editEmbed` and the gateway's `editEmbed` take optional
+`components`, `null` sent as an empty list), and `finalizeContent` / `discard`
+replace them. `recoverInterruptedReplies` edits the interrupted embed with
+`components: null`. `memoryThinkingOutbound` records `components` on `sends`
+and on `edits` that set them. The bridge's `onComponent` handles a
+`cvstop:` press in its own branch (before the ask ids, after the Approve
+cards), through `pressPassesGates` — the channel, actor and mute / rate gates
+the ask presses use, shared with them — then the run the pressed message
+shows (`byProgressMessage`, same channel and id), the requester-or-owner
+check and the stop words' `SessionRunControl.stop`.
+
 Outbound mention safety (REQ-discord-205, DISCORD-8):
 `src/discord/allowed-mentions.ts` exports `outboundAllowedMentions({ users,
 repliedUser })` (always `parse: []`) and `defangMassMentions` (re-exported by
@@ -901,7 +923,10 @@ a Discord session runs one turn at a time (chat, ask pick / Answer submit,
 out, and a stop never drops it; sessions run in parallel; only the
 requester (in their session or by a reply to the progress message) or the
 owner (by that reply) stops a run, and the stop kills its process tree
-(REQ-discord-301 / REQ-discord-302);
+(REQ-discord-301 / REQ-discord-302); the run's progress message carries a
+`Stop` button while it runs that only its requester or the owner can press
+to stop it, past the channel, actor and mute / rate gates, and that is gone
+once the run is done, failed or stopped (REQ-discord-303);
 a run summary's closing `(not allowed for your role)` note survives every cap
 between the agent and the post: schedule run rows and posts, `/work` and
 `/session start` answers (fitted under 1900), and an appended SAFE-13 line or
@@ -1110,6 +1135,12 @@ failed lookup writes nothing.
 - **When** they send `stop` in the thread
 - **Then** the second message is still waiting (no second run, no second progress message); the run's process tree is killed, the stop gets `⏹ Stopping the run.`, the first progress message becomes `⏹ Stopped` with the model and time in its footer (tokens and cost too if they are the owner); then the second message runs in the same session with its own progress message, and `⏹ Stopped` is in the thread it replays
 
+### Scenario: Press Stop on a run's progress message (AGENT-3.a)
+
+- **Given** a user's run whose progress message shows a red `Stop` button
+- **When** someone else presses it, and then the user (or the owner) presses it
+- **Then** the other person gets only the private `This Stop button isn't for you.` and the run goes on; the user's press gets the private `⏹ Stopping the run.`, the run's process tree is killed, the progress message becomes `⏹ Stopped` with its footer and no button, and a message they sent meanwhile then runs with its own progress message and button
+
 ### Scenario: Spawn with seeded identity
 
 - **Given** a MemoryStore row `person/identity` for Discord user U
@@ -1287,6 +1318,10 @@ failed lookup writes nothing.
 | 'stop' / 'cancel' with no run of the session in flight | Unchanged: 'cancel' clears the open asks with the short ack; 'stop' is an ordinary message (REQ-discord-302) |
 | 'stop' reply to a running progress message from anyone but its requester or the owner, or in another channel | Not a stop: routed as before (no mention ⇒ ignored) and the run goes on (REQ-discord-302) |
 | A second 'stop' while the run winds down | Same short ack; nothing aborted again; one `⏹ Stopped` (REQ-discord-302) |
+| Stop button pressed by anyone but the run's requester or the owner | Ephemeral `This Stop button isn't for you.`; the run goes on (REQ-discord-303) |
+| Stop button of a run that is not running on that message (finished or stopped run, another run's id, another channel, a button from before a restart) | Ephemeral `Nothing is running.`; nothing stopped (REQ-discord-303) |
+| Stop button pressed off the allowlist, by a deny-listed or unlisted user, or while muted / rate-limited | The ask press refusals (zero-width ack, the owner's allowlist tip, `MUTED` / `RATE_LIMITED`), all ephemeral; nothing stopped (REQ-discord-303) |
+| A form submit carrying a `cvstop:` id | Ignored: no reply, nothing stopped (REQ-discord-303) |
 | A waiting message's session ended, idled out or its requester was forgotten before its turn | Nothing runs or is posted; its in-flight row is cleared (REQ-discord-301) |
 | A waiting message's author (or a waiting pick's presser) was muted or deny-listed, or its channel dropped from the allowlist or deny-listed, before its turn | Nothing runs or is posted; its in-flight row is cleared; the rate limit is not counted again (REQ-discord-301) |
 | A 'stop' lands after the `/work` agent exited, before its PR step | Short ack; no PR (`PR: not opened — the run was stopped.`), task `failed` / `stopped` (REQ-discord-302) |
@@ -1461,3 +1496,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-30 | in-a-specsync-repo-it-opens-and-works-a-specsync-change-for-its-edits-and-on-corvidinho-it-approves-and-archives-its: In a SpecSync repo it opens and works a SpecSync change for its edits, and on Corvidinho it approves and archives its own change once verify is green (AGENT-18 SpecSync clause, AGENT-18.a) |
 | 2026-09-30 | rolling-24-hour-spend-caps-per-provider-plus-the-total-cap-each-warning-the-owner-at-80-and-stopping-to-ask-at-100-safe: Rolling 24-hour spend caps per provider plus the total cap, each warning the owner at 80% and stopping to ask at 100% (SAFE-14, SAFE-15): CORVIDINHO_PROVIDER_SPEND_CAPS_USD (provider=USD keyed on the configured provider id; a malformed or unknown key stops every call, value never echoed) next to CORVIDINHO_DAILY_SPEND_CAP_USD (the total cap); every provider call is recorded while any cap is set; SpendLedger.window(now, provider?) with a (provider, ts) index; reserve() checks the total and the call's provider cap in one IMMEDIATE transaction and names each tripped scope (total, provider:<id>) in owner-only text; spend_alerts gains a scope column (idempotent ALTER, scrubbed) so each cap warns once per crossing and pings once per episode; a cap stop is never a model failure; doctor and the owner's /status show each cap |
 | 2026-09-30 | at-a-spend-cap-the-run-asks-the-owner-on-a-dm-spend-approve-card-with-a-one-time-code-instead-of-refusing-approve-lets: At a spend cap the run asks the owner on a DM spend Approve card with a one-time code instead of refusing; Approve lets only the paused call through at the amount shown and the next call past the cap asks again (SAFE-8, SAFE-8.a, SAFE-15, SAFE-19 money) |
+| 2026-09-30 | a-stop-button-on-the-run-s-progress-message-lets-me-or-the-person-who-asked-stop-it-agent-3-a: A Stop button on the run's progress message lets me or the person who asked stop it (AGENT-3.a) |
