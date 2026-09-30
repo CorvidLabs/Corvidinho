@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "private-notes-profile-reads-and-the-owner-s-view-of-someone-s-memory-are-shown-only-privately-in-a-discord-conversation",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "ed934269ae026f2ee30d49a5e0e30f2dbc089b99",
+  "contract_digest": "8b9543c098305ff5d918f26a673149499c43751006e6b6713561c30bb95eb203",
+  "execution_digest": "afb72385a02a51f54e67197195d8a8d1bf855be08616187ee4981ad682908935",
+  "workspace_digest": "2010ffa88e71e6015a44bea9f9804d51a592deddce42af75cdc5c77cba96f687",
+  "timestamp": 1790738488
+}

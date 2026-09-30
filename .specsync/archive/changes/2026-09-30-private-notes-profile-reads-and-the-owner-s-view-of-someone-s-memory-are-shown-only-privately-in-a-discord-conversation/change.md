@@ -1,6 +1,6 @@
 ---
 id: private-notes-profile-reads-and-the-owner-s-view-of-someone-s-memory-are-shown-only-privately-in-a-discord-conversation
-state: verifying
+state: archived
 type: feature
 base_commit: 3b323f3258e3393aabcbb2f44092bf5524ff884c
 ---
