@@ -30,6 +30,16 @@
  * private notes and forget-me stay off on GitHub (a WATCH run is community
  * and its thread is public, MEMORY-7). A search (`--query`) is ranked by
  * relevance, then recency (MEMORY-9, src/memory/rank.ts).
+ *
+ * Shown only privately (MEMORY-7.a, #101 / REQ-plugins-710): a private
+ * read — private notes, a profile (`memory-profile`) or the owner's view of
+ * someone's memory (`--person`) — never goes to the model in a Discord
+ * conversation. Its text rides `privateText` (kept off `data` and `message`)
+ * to the bridge, which sends it to the person who asked in a direct message;
+ * the model gets only a "sent privately" placeholder, so nothing it writes
+ * can repeat it in a shared channel. With nowhere private to show it — a
+ * GitHub thread, a schedule — the read is refused; the local CLI (no role
+ * session) shows it on the operator's own terminal as before.
  */
 
 import { appendAudit, argsDigest, auditContextFromEnv, auditKeyFromEnv } from "../../src/audit/log.ts";
@@ -58,7 +68,12 @@ import {
   type ConfirmBinding,
   type MemorySubject,
 } from "../../src/memory/index.ts";
-import { resolveActingIsAdmin, resolveActingRole, ROLE_REFUSED_MESSAGE } from "../../src/plugins/roles.ts";
+import {
+  resolveActingIsAdmin,
+  resolveActingRole,
+  ROLE_REFUSED_MESSAGE,
+  roleSessionActive,
+} from "../../src/plugins/roles.ts";
 import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
 import { openCorvidinhoDb } from "../../src/store/db.ts";
 
@@ -252,6 +267,64 @@ async function mayUseProjectMemory(env: NodeJS.ProcessEnv): Promise<boolean> {
 /** A conversation with the acting person (chat, slash, button), not a schedule. */
 function inConversation(env: NodeJS.ProcessEnv): boolean {
   return !!env.CORVIDINHO_DISCORD_REPLY_CHANNEL_ID?.trim();
+}
+
+/**
+ * The model's whole tool result for a private read sent privately
+ * (MEMORY-7.a): it never sees the text, so it cannot repeat it.
+ */
+export const SENT_PRIVATELY_MESSAGE =
+  "sent privately (MEMORY-7.a): this result went only to the person who asked, in a direct message, and is not shown to you — do not guess or repeat what it says; tell them it was sent to them privately";
+
+const PROFILE_NOT_ON_GITHUB: PluginHandlerResult = {
+  ok: false,
+  error:
+    "refused: a profile is shown only privately to that person or the owner, never in a GitHub thread — it is public; ask on Discord (MEMORY-7.a)",
+  exitCode: 2,
+};
+
+const PRIVATE_VIEW_NEEDS_CONVERSATION: PluginHandlerResult = {
+  ok: false,
+  error:
+    "refused: a profile or the owner's view of someone's memory is shown only privately to that person or the owner, in a conversation with them — never in a schedule or other run's channel (MEMORY-7.a)",
+  exitCode: 2,
+};
+
+/**
+ * Where a private read may be shown (MEMORY-7.a): `dm` — a Discord
+ * conversation, privately to the person who asked (the bridge sends
+ * `privateText` by direct message); `terminal` — the local CLI, no role
+ * session (the operator's own terminal, as before); `none` — a GitHub
+ * thread, a schedule or any other run with no private place to show it.
+ */
+function privateReadSurface(env: NodeJS.ProcessEnv): "dm" | "terminal" | "none" {
+  if (actingGithub(env)) return "none";
+  if (!roleSessionActive(env)) return "terminal";
+  return inConversation(env) ? "dm" : "none";
+}
+
+/**
+ * A private read's result for a Discord conversation (MEMORY-7.a): the text
+ * rides `privateText` to the bridge; `data` and `message` — all the model,
+ * the run's events and its output see — are the placeholder.
+ */
+function sentPrivately(what: "private-notes" | "person-view" | "profile", text: string): PluginHandlerResult {
+  return {
+    ok: true,
+    data: { sentPrivately: true, what },
+    message: SENT_PRIVATELY_MESSAGE,
+    privateText: text,
+    exitCode: 0,
+  };
+}
+
+/** Rows as the person reading them privately sees them (MEMORY-7.a). */
+function privateListing(heading: string, rows: readonly { id: string; category: string; key: string; content: string }[]): string {
+  const body =
+    rows.length === 0
+      ? "(no memories)"
+      : rows.map((r) => `- ${r.category}/${r.key}: ${r.content.slice(0, 500)} (id ${r.id})`).join("\n");
+  return `${heading}\n${body}`;
 }
 
 type SubjectPick =
@@ -537,7 +610,8 @@ export const memoryCommands: PluginCommand[] = [
       'Project memory of this repo (MEMORY-6, owner/team; recall it before working on the repo): ["--project"]. ' +
       'Private notes are left out unless asked for: ["--category","private"] (only that person or the owner, in a conversation with them; never repeat them to anyone else, MEMORY-7). ' +
       'The owner may read someone else\'s memory: ["--person","tofu"] (declared person id or Discord user id). ' +
-      "On GitHub (a WATCH run) it recalls the commenter's own profile when they are on the owner's people list, and --project reads this thread's repo memory for anyone (MEMORY-8); private notes never there. " +
+      "Private notes and the owner's --person view are sent privately to the person who asked, in a direct message, and never shown to you or in the channel: you get only a \"sent privately\" note — tell them to check their DMs (MEMORY-7.a). " +
+      "On GitHub (a WATCH run) it recalls the commenter's own memory when they are on the owner's people list, and --project reads this thread's repo memory for anyone (MEMORY-8); private notes and --person never there. " +
       "Acting user from CORVIDINHO_ACTING_DISCORD_USER_ID, or the GitHub commenter the WATCH poller sets.",
     dangerous: false,
     minTier: 0,
@@ -573,6 +647,8 @@ export const memoryCommands: PluginCommand[] = [
       const wantsPrivate = category === PRIVATE_NOTE_CATEGORY;
       let scopes: string[];
       let heading: string | null = null;
+      // MEMORY-7.a: private notes or the owner's view of someone else's memory.
+      let privateRead: { what: "private-notes" | "person-view"; heading: string } | null = null;
       if (project) {
         // MEMORY-8: in a GitHub run anyone reads the thread's repo memory
         // (read-only); elsewhere the owner, team and the local CLI.
@@ -597,9 +673,19 @@ export const memoryCommands: PluginCommand[] = [
         const label = subjectLabel(pick.subject);
         if (wantsPrivate) {
           heading = `Private notes of ${label} — for them and the owner only; never repeat them to anyone else or where others can read them (MEMORY-7):`;
+          privateRead = {
+            what: "private-notes",
+            heading: `Private notes of ${label} — only for them and the owner (MEMORY-7.a):`,
+          };
         } else if (!pick.self) {
           heading = `Memory of ${label} (owner view; private to them and the owner, MEMORY-7):`;
+          privateRead = {
+            what: "person-view",
+            heading: `Memory of ${label} — owner view, private to them and the owner (MEMORY-7.a):`,
+          };
         }
+        // MEMORY-7.a: shown only privately; with no private place, refused.
+        if (privateRead && privateReadSurface(env) === "none") return PRIVATE_VIEW_NEEDS_CONVERSATION;
       }
       const { store, close } = openStore(env);
       try {
@@ -611,6 +697,9 @@ export const memoryCommands: PluginCommand[] = [
           limit: Number.isFinite(limit) ? limit : undefined,
           includeDeleted,
         });
+        if (privateRead && privateReadSurface(env) === "dm") {
+          return sentPrivately(privateRead.what, privateListing(privateRead.heading, rows));
+        }
         const listing =
           rows.length === 0
             ? "(no memories)"
@@ -637,8 +726,9 @@ export const memoryCommands: PluginCommand[] = [
     name: "memory-profile",
     description:
       "Show a person's profile (MEMORY-5): their role (from the owner's people list), projects, preferences and a history of their decisions, asks and approvals; private notes only counted. " +
+      "The profile is sent privately to the person who asked, in a direct message, and never shown to you or in the channel: you get only a \"sent privately\" note — tell them to check their DMs; it is refused on GitHub and in schedules (MEMORY-7.a). " +
       'argv examples: [] (the acting user\'s own), ["--person","tofu"] (owner only: a declared person id or Discord user id). ' +
-      "Acting user from CORVIDINHO_ACTING_DISCORD_USER_ID, or the GitHub commenter's declared person (MEMORY-8).",
+      "Acting user from CORVIDINHO_ACTING_DISCORD_USER_ID.",
     dangerous: false,
     minTier: 0,
     async handler(ctx) {
@@ -648,9 +738,14 @@ export const memoryCommands: PluginCommand[] = [
       if (!actingUser(env) && !actingGithub(env)) return NO_ACTOR;
       const pick = await pickSubject(env, flagValue(ctx.args, "--person"));
       if (!pick.ok) return pick.result;
+      // MEMORY-7.a: a profile read is shown only privately — never in a
+      // (public) GitHub thread or a schedule's channel.
+      const surface = privateReadSurface(env);
+      if (surface === "none") return actingGithub(env) ? PROFILE_NOT_ON_GITHUB : PRIVATE_VIEW_NEEDS_CONVERSATION;
       const { store, close } = openStore(env);
       try {
         const profile = buildMemoryProfile(store, pick.subject);
+        if (surface === "dm") return sentPrivately("profile", formatMemoryProfile(profile, pick.subject));
         return {
           ok: true,
           data: profile,

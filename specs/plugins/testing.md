@@ -236,3 +236,16 @@ mutating tool and a role refusal for `files-write`. `tests/web.fetch.test.ts`
 `delegate` over a fake worker bin whose result frame carries `injection`
 returns the validated `data.injection` (an unknown reason dropped, a bad
 source gives none); `runCouncil` keeps a voice's notice on its outcome.
+
+## Private reads shown only privately (REQ-plugins-710, MEMORY-7.a)
+
+`tests/memory.private-view.test.ts` — in a Discord-conversation env the
+person's own private notes and profile and the owner's `--person` recall,
+profile and private notes return their text only in `privateText`, with
+`data` `{ sentPrivately: true, what }` and the placeholder `message`; the
+person's own everyday recall still returns rows; a schedule refuses the
+owner's `--person` view and profile and a person's own profile, a GitHub
+thread refuses `memory-profile` (no content in any refusal); the local CLI
+shows the profile inline. `tests/memory.profiles.test.ts` and
+`tests/memory.recall-github.test.ts` read `privateText` where the model used
+to get the rows.

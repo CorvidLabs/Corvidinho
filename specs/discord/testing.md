@@ -851,6 +851,19 @@ differs is nobody; the undeclared-under-`[people]` owner, by `[owner]
 github_id`, on their Discord id) and
 `projectScopeForRepo`.
 
+## Private replies by DM only (REQ-discord-710, MEMORY-7.a)
+
+`tests/memory.private-view.test.ts` — `privateRepliesFromUnknown` (strings
+only, via `boundPrivateReplies`: at most 5, the last saying how many more were
+not sent, each scrubbed then cut to 6000 with a marker — a straddling token
+redacted, no lone surrogate — and a bounded list unchanged), `deliverPrivateReplies`
+(DM parts ≤1900 even after the gateway's defang of a text full of `@everyone`,
+scrubbed, header first; "failed" with no DM path, a null or a throwing send)
+and `withPrivateNote`; through the bridge a chat reply, a button pick and an
+Answer form submit DM the text to whoever asked while the channel gets only
+the "sent privately" note (the "couldn't DM it" note when the DM fails) and
+the session thread never holds it; `/session start` and `/work` do the same
+through `SlashContext.sendDm`.
 ## Update post in the persona's voice (REQ-discord-025 / REQ-discord-024 modified, PERSONA-1.a, DISCORD-ANNOUNCE-4)
 
 - `tests/discord.update-post.test.ts` › "the bridge's update post on

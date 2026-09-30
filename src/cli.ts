@@ -35,6 +35,7 @@ import {
   registerSlashCommandsLive,
   startBridge,
 } from "./discord/index.ts";
+import { boundPrivateReplies } from "./discord/private-reply.ts";
 import {
   goLiveChecklist as watchGoLiveChecklist,
   startWatchPoller,
@@ -852,9 +853,17 @@ async function taskRun(opts: {
     onInjection: (n) => {
       injection = n;
     },
+    // MEMORY-7.a (REQ-cli-710): text shown only privately rides the result
+    // (--json / ndjson) for the bridge to send by direct message; the model
+    // never saw it. A retried attempt's repeat read is kept once; the list is
+    // bounded (boundPrivateReplies) when the result is built.
+    onPrivateReply: (text) => {
+      if (!privateReplies.includes(text)) privateReplies.push(text);
+    },
   });
   let spendWarning: SpendWarning | undefined;
   let injection: InjectionNotice | undefined;
+  const privateReplies: string[] = [];
   // AGENT-3 (REQ-cli-244): SIGINT / SIGTERM abort the run so the verify lane
   // and tool loop stop and the cancelled result below is still printed (exit
   // 130). `once`: a second signal takes the default action. A signal this
@@ -892,6 +901,10 @@ async function taskRun(opts: {
   }
   if (spendWarning) result.spendWarning = spendWarning;
   if (injection) result.injection = injection;
+  // Bounded (count, scrubbed then cut with a marker, REQ-cli-710) so a run of
+  // large private reads cannot push the result frame past the parser's line
+  // cap and lose the whole answer.
+  if (privateReplies.length > 0) result.privateReplies = boundPrivateReplies(privateReplies);
 
   if (ndjson) {
     ndjson.result(result);

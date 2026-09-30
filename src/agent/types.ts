@@ -125,6 +125,13 @@ export type TaskResult = {
    * the surface tells the owner.
    */
   injection?: InjectionNotice;
+  /**
+   * MEMORY-7.a (REQ-agent-710 / REQ-cli-710): text shown only privately to
+   * the person who asked — private notes, a profile, the owner's view of
+   * someone's memory — that the model never saw. The Discord bridge sends it
+   * by direct message and never posts it in the channel. Absent when none.
+   */
+  privateReplies?: string[];
 };
 
 /**

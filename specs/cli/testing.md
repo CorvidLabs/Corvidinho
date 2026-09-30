@@ -33,6 +33,15 @@ the tool and reason ids once, which `task run` copies to
 `injectionNoticeFromUnknown` (tool-name source, known reasons only), and the
 bridge / WATCH tests drive the owner notice from it.
 
+## Private replies on the task-run result (REQ-cli-710)
+
+`tests/memory.private-view.test.ts` — the Discord agent client spawns the
+real `task run --output ndjson` against a local fake LLM that calls
+`memory-profile` and `memory-recall --category private`; the result frame's
+`privateReplies` holds both texts, the summary and every model request lack
+them. Spawned directly with seven private reads of different notes, its own
+result frame (read off stdout) carries the first five, the last saying 2 more
+were not sent.
 ## No verify skip (REQ-cli-085, REQ-cli-006, REQ-cli-007)
 
 - `tests/agent.cli.test.ts`: help has no `--no-verify`; `task run --no-verify`
