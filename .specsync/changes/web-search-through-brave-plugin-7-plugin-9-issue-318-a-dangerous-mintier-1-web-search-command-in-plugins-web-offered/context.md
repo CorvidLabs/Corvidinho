@@ -39,7 +39,9 @@ Base: rebased onto main 0aeb345, after #319 (must-ask gate in `runPlugin`),
 `CORVIDINHO_LLM_MODEL`), #321, #322, #323, #324 (SAFE-3.a), #325 (AGENT-11
 model fallback), #327 (v0.0.36), #328 (SAFE-14 / SAFE-15 per-provider spend
 caps), #329 (AGENT-18 SpecSync change tools) and #330 (DISCORD-SCHEDULE-1.a:
-a schedule the owner created runs as the owner). The modified REQ-agent-002,
+a schedule the owner created runs as the owner), then onto main 81ceb4a
+(#332 AGENT-3.a / AGENT-3.b run queue and stop, #333), which changed none of
+this change's requirements. The modified REQ-agent-002,
 REQ-agent-086, REQ-agent-098, REQ-cli-262 and REQ-plugins-065 deltas start
 from main 0aeb345's canonical text (those PRs changed all five), so they keep
 main's lines and add only this change's. After #328, `reserveFlatSpend`

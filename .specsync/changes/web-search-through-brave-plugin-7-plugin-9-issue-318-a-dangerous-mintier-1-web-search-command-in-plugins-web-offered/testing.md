@@ -77,7 +77,7 @@ Updated: `tests/web.fetch.test.ts` (web-search now exists),
 
 ## Fail on main
 
-### After the rebase onto main 0aeb345
+### After the rebase onto main 0aeb345 (then 81ceb4a)
 
 - The pre-change `src/agent/execute.ts`, `src/agent/task-summary.ts` and
   `src/agent/spend.ts` (the rebased branch before this step) swapped in:
@@ -155,6 +155,19 @@ On a worktree of untouched main 507d97b, measured on macOS:
   agent.loop-guards, safe.injection).
 
 ## Results (macOS host; the repo is Linux-only)
+
+On main 81ceb4a (the final base; #332 and #333 on top of 0aeb345):
+
+- `bun test` on the branch: 3195 pass, 1 skip, 97 fail, 7 errors. Untouched
+  main 81ceb4a on the same host: 3152 pass, 1 skip, 98 fail, 7 errors. Every
+  branch failure is one of main's: the 95 names listed below plus #332's two
+  macOS-only process-tree tests ("a stop kills the run's process tree; an
+  Approve card it waited on closes as a no (AGENT-3, SAFE-20) > a run waiting
+  on an Approve card is killed and the card closes as a no" and "… > the
+  spawned agent and what it started are killed"). Main's 98th is the flaky
+  schedule-worktree test described next, which passed on the branch this
+  run.
+- `tests/web.search.test.ts`: 42/42; `bunx tsc --noEmit`: clean.
 
 On main 0aeb345, after the rebase and the "Search by Brave" line:
 
