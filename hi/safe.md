@@ -23,6 +23,7 @@ Safety has to fire even when the model is having a bad day. Guards live in the t
   - **SAFE-6.a**  Ask questions and choice labels are scrubbed for secrets before they are cut or posted.
 - **SAFE-7**  Web fetch and search refuse private and link-local targets so the agent is not an SSRF helper.
 - **SAFE-8**  When a daily spend cap is set, I get a warning at 80% of it, and at 100% the agent asks me (an Approve card to continue) instead of refusing or quietly running up the bill.
+  - **SAFE-8.a**  One Approve and its code let only the paused call through, at the amount shown; the next call past the cap raises a new card and code.
 - **SAFE-9**  Expensive cross-agent networking tools stay hidden until a session is allowed to use them, so small models cannot wander off starting councils unprompted.
 - **SAFE-11**  A display name can't pass itself off as someone else: names are cleaned before the model sees them, and who someone is comes from their declared ids, never from what a message claims.
 - **SAFE-12**  Issue, PR, comment, web page and chat bodies are data to read, not instructions to follow; only the sender's role decides what may run.
