@@ -63,9 +63,10 @@ describe("schema v6 watch_sessions (REQ-discord-037)", () => {
     // v7 (AUTONOMY-2 schedule ping dedupe), v8 (pending ask), v9
     // (in-flight Discord replies, REQ-discord-311), v10 (schedule run
     // runner, REQ-discord-346), v11 (schedule run asks, REQ-discord-347),
-    // v12 (forget requests, REQ-discord-101) and v13 (retained
-    // conversations, REQ-discord-472) build on v6.
-    expect(SCHEMA_VERSION).toBe(13);
+    // v12 (forget requests, REQ-discord-101), v13 (retained
+    // conversations, REQ-discord-472) and v14 (approval cards,
+    // REQ-discord-096) build on v6.
+    expect(SCHEMA_VERSION).toBe(14);
     const v = db.query("SELECT value FROM schema_meta WHERE key = 'version'").get() as {
       value: string;
     };

@@ -286,7 +286,61 @@ CREATE INDEX IF NOT EXISTS idx_conversation_threads_updated
   ON conversation_threads(updated_at);
 `;
 
-export const SCHEMA_VERSION = 13;
+/**
+ * v14 — Approve/Deny card engine (SAFE-18..20, #96; REQ-discord-096,
+ * src/discord/approval-cards.ts). `approval_requests` holds a card any
+ * process on the data dir can raise (src/approvals/store.ts): its kind and
+ * class (plain | destructive | money), the exact action, target, amount and
+ * diff or text shown (SAFE-6 scrub targets), the action hash, the waiting
+ * process (`<pid>:<proc start>`), status and times. `approval_codes` holds
+ * one-time codes (src/approvals/code.ts): only a salted hash of each code,
+ * bound to its card and action hash, with expiry and use/void times.
+ * `forget_requests.action_hash` records the action a forget card showed
+ * (REQ-discord-101), so Approve never deletes more than the card said.
+ */
+const SCHEMA_V14_SQL = `
+CREATE TABLE IF NOT EXISTS approval_requests (
+  id TEXT PRIMARY KEY NOT NULL,
+  kind TEXT NOT NULL,
+  class TEXT NOT NULL,
+  title TEXT NOT NULL,
+  action TEXT NOT NULL,
+  target TEXT NOT NULL,
+  amount TEXT NOT NULL,
+  text TEXT,
+  text_label TEXT,
+  action_hash TEXT NOT NULL,
+  requester TEXT,
+  waiter TEXT,
+  status TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  card_channel_id TEXT,
+  card_message_id TEXT,
+  card_posted_at INTEGER,
+  decided_at INTEGER,
+  decided_by TEXT,
+  used_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_approval_requests_kind_status
+  ON approval_requests(kind, status);
+CREATE TABLE IF NOT EXISTS approval_codes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL,
+  request_id TEXT NOT NULL,
+  action_hash TEXT NOT NULL,
+  salt TEXT NOT NULL,
+  code_hash TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used_at INTEGER,
+  voided_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_approval_codes_request
+  ON approval_codes(kind, request_id);
+`;
+
+export const SCHEMA_VERSION = 14;
 
 export function migrateCorvidinhoDb(db: Database): void {
   db.exec("PRAGMA foreign_keys = ON;");
@@ -404,6 +458,16 @@ export function migrateCorvidinhoDb(db: Database): void {
     db.exec(SCHEMA_V13_SQL);
     db.run("UPDATE schema_meta SET value = '13' WHERE key = 'version'");
     version = 13;
+  }
+  if (version < 14) {
+    try {
+      db.exec("ALTER TABLE forget_requests ADD COLUMN action_hash TEXT");
+    } catch {
+      // Column already present
+    }
+    db.exec(SCHEMA_V14_SQL);
+    db.run("UPDATE schema_meta SET value = '14' WHERE key = 'version'");
+    version = 14;
   }
 }
 

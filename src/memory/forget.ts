@@ -23,6 +23,14 @@
  * `github:<numeric id>:<login>` (the person on GitHub) or `admin:<owner's
  * Discord id>` (the owner via /admin); a GitHub ask's thread is
  * `github:<owner/repo>#<n>` in `origin_channel_id`.
+ *
+ * SAFE-18..20 (#96): the card is the `forget` kind of the Approve/Deny card
+ * engine (src/discord/approval-cards.ts), class destructive, so Approve also
+ * needs a one-time code (SAFE-19). `action_hash` (schema v14) records the
+ * exact action the card showed — the targets and the counts
+ * {@link previewForgetTargets} gives — so Approve never deletes more than
+ * the card said: when they changed, nothing is deleted and a fresh card
+ * follows ({@link ForgetRequestStore.resetCard}).
  */
 
 import { randomUUID } from "node:crypto";
@@ -114,6 +122,8 @@ export type ForgetRequest = {
   cardChannelId?: string;
   cardMessageId?: string;
   cardPostedAt?: number;
+  /** The action hash the card showed (SAFE-18, schema v14). */
+  actionHash?: string;
   decidedAt?: number;
   decidedBy?: string;
   forgottenCount?: number;
@@ -133,6 +143,7 @@ type Row = {
   card_channel_id: string | null;
   card_message_id: string | null;
   card_posted_at: number | null;
+  action_hash?: string | null;
   decided_at: number | null;
   decided_by: string | null;
   forgotten_count: number | null;
@@ -155,6 +166,7 @@ function toRequest(r: Row): ForgetRequest {
   if (r.card_channel_id) out.cardChannelId = r.card_channel_id;
   if (r.card_message_id) out.cardMessageId = r.card_message_id;
   if (r.card_posted_at != null) out.cardPostedAt = r.card_posted_at;
+  if (r.action_hash) out.actionHash = r.action_hash;
   if (r.decided_at != null) out.decidedAt = r.decided_at;
   if (r.decided_by) out.decidedBy = r.decided_by;
   if (r.forgotten_count != null) out.forgottenCount = r.forgotten_count;
@@ -275,11 +287,26 @@ export class ForgetRequestStore {
     return this.unnotified().filter((r) => r.requester.via === "github");
   }
 
-  markCardPosted(id: string, channelId: string, messageId: string): void {
+  /** The card went out, showing the action `actionHash` binds (SAFE-18). */
+  markCardPosted(id: string, channelId: string, messageId: string, actionHash?: string): void {
     this.db.run(
-      `UPDATE forget_requests SET card_channel_id = ?, card_message_id = ?, card_posted_at = ?
+      `UPDATE forget_requests SET card_channel_id = ?, card_message_id = ?, card_posted_at = ?,
+         action_hash = ?
        WHERE id = ? AND status = 'pending'`,
-      [channelId, messageId, this.now(), id],
+      [channelId, messageId, this.now(), actionHash ?? null, id],
+    );
+  }
+
+  /**
+   * What the card showed no longer holds: forget the card, so the next
+   * delivery pass sends a fresh one with the current targets and counts.
+   */
+  resetCard(id: string): void {
+    this.db.run(
+      `UPDATE forget_requests SET card_channel_id = NULL, card_message_id = NULL,
+         card_posted_at = NULL, action_hash = NULL
+       WHERE id = ? AND status = 'pending'`,
+      [id],
     );
   }
 
@@ -362,6 +389,31 @@ function tableExists(db: Database, table: string): boolean {
   return (
     db.query("SELECT 1 AS x FROM sqlite_master WHERE type = 'table' AND name = ?").get(table) != null
   );
+}
+
+export type ForgetCounts = { memories: number; turns: number; conversations: number };
+
+/**
+ * What {@link forgetMemoryTargets} would delete now, deleting nothing: the
+ * same statements run inside an IMMEDIATE transaction that is always rolled
+ * back, so the counts on the owner's card are exactly what Approve deletes
+ * (SAFE-18).
+ */
+export function previewForgetTargets(
+  db: Database,
+  targets: Parameters<typeof forgetMemoryTargets>[1],
+): ForgetCounts {
+  const rollback = new Error("forget preview: roll back");
+  let counts: ForgetCounts = { memories: 0, turns: 0, conversations: 0 };
+  try {
+    db.transaction(() => {
+      counts = forgetMemoryTargets(db, targets);
+      throw rollback;
+    }).immediate();
+  } catch (err) {
+    if (err !== rollback) throw err;
+  }
+  return counts;
 }
 
 /**

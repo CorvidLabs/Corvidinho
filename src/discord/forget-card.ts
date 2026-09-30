@@ -2,24 +2,33 @@
  * MEMORY-ACL-6 — forget on request, approved by the owner on a DM card (#101).
  *
  * `memory-forget-me` records the ask (`forget_requests`, src/memory/forget.ts)
- * from a conversation with the person. The bridge then, on every scheduler
- * tick and right after a chat run:
- * - DMs the configured owner an Approve/Deny card (src/discord/approve-card.ts)
- *   naming who asked, exactly what would be deleted (how many memories; no
- *   content) and when an unanswered card lapses;
+ * from a conversation with the person. The ask is the `forget` kind of the
+ * Approve/Deny card engine (src/discord/approval-cards.ts, SAFE-18..20):
+ * class destructive, so Approve also needs a one-time code (SAFE-19). The
+ * engine's delivery pass (its own poll, right after a chat run, and on
+ * scheduler ticks):
+ * - DMs the configured owner the card: the exact action (delete, for good,
+ *   their memory …), the target (who, and who asked where), the amount (how
+ *   many memories, session turns and kept conversations — no content; the
+ *   same statements Approve runs, rolled back, `previewForgetTargets`), what
+ *   is kept, and when an unanswered card lapses;
  * - closes asks nobody answered in time as a no (expired), marking the card;
  * - tells each asker the outcome by DM, else in the conversation they asked
  *   in while it is still allowlisted (mentioning only them).
  *
- * A press counts only from the configured owner (re-checked at press time:
- * not muted, not deny-listed) on a still-pending, unexpired ask; a late press
- * is a no. Approve writes a SAFE-5 `started` row first (no row ⇒ nothing is
- * deleted, fail closed), then — in one transaction that also closes the ask —
+ * A press or code submit counts only from the configured owner (re-checked
+ * every time: not muted, not deny-listed) on a still-pending, unexpired ask;
+ * a late press is a no. Approve checks that the targets and counts are still
+ * the ones the card showed (else nothing is deleted and a fresh card
+ * follows), sends a one-time code, and on the right code writes a SAFE-5
+ * `started` row first (no row ⇒ nothing is deleted, fail closed), then — in
+ * one transaction that also closes the ask and re-checks the counts —
  * deletes every memory row of that person (profile, notes, private notes,
- * soft-deleted history), the stored turns of their Discord sessions and their
- * kept conversations (30-day summaries, AGENT-6.a), and confirms to both. Deny closes it as a no. Every step is audited (ids and
- * digests only). The people list entry is never touched (only the owner
- * edits it, IDENTITY-6).
+ * soft-deleted history), the stored turns of their Discord sessions and
+ * their kept conversations (30-day summaries, AGENT-6.a), and confirms to
+ * both. Deny closes it as a no. Every step is audited (ids and digests
+ * only). The people list entry is never touched (only the owner edits it,
+ * IDENTITY-6).
  *
  * MEMORY-ACL-6.a: the same card answers an ask a declared person made on
  * GitHub (src/watch/forget-me.ts; the card says so and names the thread) and
@@ -28,8 +37,8 @@
  * owner started tells nobody else (the card shows the outcome).
  */
 
+import { createHash } from "node:crypto";
 import type { Database } from "bun:sqlite";
-import { appendAudit, argsDigest, auditKeyFromEnv, type AuditOutcome } from "../audit/log.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import type { PeopleDirectory } from "../identity/people.ts";
 import {
@@ -41,24 +50,26 @@ import {
   githubOriginOf,
   MemoryStore,
   memorySubjectForRef,
+  previewForgetTargets,
   subjectLabel,
+  type ForgetCounts,
   type ForgetRequest,
 } from "../memory/index.ts";
 import {
-  buildApproveDenyComponents,
-  formatApproveCard,
-  formatDecidedCard,
-  isApproveCardExpired,
-  type ParsedApproveCardId,
-} from "./approve-card.ts";
-import type { ComponentInteraction } from "./gateway.ts";
+  APPROVAL_NOT_OWNER,
+  createApprovalCards,
+  type ApprovalCardView,
+  type ApprovalCards,
+  type ApprovalDeliveryResult,
+  type ApprovalKind,
+} from "./approval-cards.ts";
 
 /** Card kind in the button custom_id (`cvok:forget:…`). */
 export const FORGET_CARD_KIND = "forget";
 
 export const FORGET_CARD_TITLE = "Forget request (MEMORY-ACL-6)";
 
-export const FORGET_NOT_OWNER = "Only the owner can answer this card.";
+export const FORGET_NOT_OWNER = APPROVAL_NOT_OWNER;
 
 export type ForgetCardDeps = {
   db: Database;
@@ -91,17 +102,10 @@ export type ForgetCardDeps = {
   now?: () => number;
 };
 
-export type ForgetDeliveryResult = { posted: number; expired: number; notified: number };
+export type ForgetDeliveryResult = ApprovalDeliveryResult;
 
-export type ForgetCards = {
-  /** One delivery pass (cards, expiries, outcome notices). Never throws. */
-  deliver(): Promise<ForgetDeliveryResult>;
-  /**
-   * A press on a forget card. `mayDecide`: the presser is the configured
-   * owner, not muted or deny-listed (checked by the bridge at press time).
-   */
-  press(interaction: ComponentInteraction, parsed: ParsedApproveCardId, mayDecide: boolean): Promise<void>;
-};
+/** The engine with only the forget kind (tests and callers of #291's API). */
+export type ForgetCards = Pick<ApprovalCards, "deliver" | "press">;
 
 function who(req: ForgetRequest, dir: PeopleDirectory | null): string {
   if (req.subjectKind === "person") {
@@ -124,18 +128,40 @@ function askedBy(req: ForgetRequest): string {
   return `asked by <@${r.discordId}>${where}`;
 }
 
-/** Card text (counts only, never content); `stored` null once decided. */
-export function forgetCardText(req: ForgetRequest, dir: PeopleDirectory | null, stored: number | null): string {
-  return formatApproveCard({
-    title: FORGET_CARD_TITLE,
-    lines: [
-      `Who: ${who(req, dir)} — ${askedBy(req)}`,
-      `Approve deletes, for good, their memory: their profile (projects, preferences, history), notes and private notes${stored === null ? "" : ` (${stored} stored)`}, the turns of their open Discord sessions, and their kept conversations (30-day summaries)`,
-      "Kept: their entry on your people list (only you edit it), project memory, what others stored in their own memory, their schedules and /work records, and the audit trail",
-      `Request: ${req.id}`,
-    ],
-    expiresAt: req.expiresAt,
-  });
+const FORGET_ACTION =
+  "Delete, for good, their memory: their profile (projects, preferences, history), notes and private notes, the turns of their open Discord sessions, and their kept conversations (30-day summaries)";
+const FORGET_KEPT =
+  "Kept: their entry on your people list (only you edit it), project memory, what others stored in their own memory, their schedules and /work records, and the audit trail";
+
+type ForgetTargetSet = ReturnType<typeof forgetTargets>;
+
+/** SAFE-18: the exact action — who, every target id and every count. */
+function forgetActionHash(req: ForgetRequest, targets: ForgetTargetSet, stored: number, counts: ForgetCounts): string {
+  const sorted = (xs: readonly string[]) => [...xs].sort();
+  return createHash("sha256")
+    .update(
+      JSON.stringify([
+        "forget/v1",
+        req.id,
+        req.subjectKind,
+        req.subjectId,
+        sorted(targets.scopes),
+        sorted(targets.discordIds),
+        sorted(targets.githubLogins),
+        sorted(targets.githubIds),
+        stored,
+        counts.memories,
+        counts.turns,
+        counts.conversations,
+      ]),
+    )
+    .digest("hex");
+}
+
+function amountText(stored: number, c: ForgetCounts): string {
+  const older = Math.max(0, c.memories - stored);
+  const memories = `${c.memories} memories (${stored} stored${older > 0 ? `, ${older} earlier versions` : ""})`;
+  return `${memories}, ${c.turns} session turns and ${c.conversations} kept conversations`;
 }
 
 /** The asker's outcome notice. */
@@ -149,48 +175,30 @@ export function forgetOutcomeText(req: ForgetRequest): string {
   return `Your forget request (${req.id}) got no answer in time, so nothing was forgotten. You can ask again.`;
 }
 
-export function createForgetCards(deps: ForgetCardDeps): ForgetCards {
-  const env = deps.env ?? process.env;
+type ForgetDone = {
+  deleted: { memories: number; turns: number; conversations: number };
+  discordIds: readonly string[];
+};
+
+/** The `forget` card kind (class destructive: Approve needs a one-time code). */
+export function forgetApprovalKind(deps: ForgetCardDeps): ApprovalKind<ForgetRequest, ForgetDone> {
   const now = deps.now ?? Date.now;
   const store = new ForgetRequestStore({ db: deps.db, now });
-  let passing: Promise<ForgetDeliveryResult> | null = null;
 
-  /** How an ask's asker was (or will be) told. */
-  type Told = "told" | "not-yet" | "github" | "owner";
-
-  const audit = (action: string, actor: string, req: ForgetRequest, outcome: AuditOutcome) =>
-    appendAudit(
-      deps.db,
-      { action, actor, surface: "discord:forget-card", argsDigest: argsDigest([req.id]), outcome },
-      { key: auditKeyFromEnv(env), now: now() },
-    );
-  const auditBestEffort = (action: string, actor: string, req: ForgetRequest, outcome: AuditOutcome) => {
-    try {
-      audit(action, actor, req, outcome);
-    } catch (err) {
-      console.error(`[discord] forget card: could not record ${outcome} for ${action}: ${err instanceof Error ? err.message : err}`);
-    }
+  const live = (req: ForgetRequest) => {
+    const targets = forgetTargets(req, deps.people());
+    const counts = new MemoryStore({ db: deps.db }).countByCategory(targets.scopes);
+    const stored = Object.values(counts).reduce((n, v) => n + v, 0);
+    return { targets, stored };
   };
 
-  const storedCount = (req: ForgetRequest): number => {
-    const t = forgetTargets(req, deps.people());
-    const counts = new MemoryStore({ db: deps.db }).countByCategory(t.scopes);
-    return Object.values(counts).reduce((n, v) => n + v, 0);
-  };
-
-  const closeCard = async (req: ForgetRequest, outcome: string) => {
-    if (!req.cardChannelId || !req.cardMessageId || !deps.editMessage) return;
-    try {
-      await deps.editMessage({
-        channelId: req.cardChannelId,
-        messageId: req.cardMessageId,
-        content: formatDecidedCard(forgetCardText(req, deps.people(), null), outcome),
-        components: [],
-      });
-    } catch {
-      /* the card keeps its buttons; a press on it is answered as closed */
-    }
-  };
+  const view = (req: ForgetRequest, amount: string): ApprovalCardView => ({
+    title: FORGET_CARD_TITLE,
+    action: FORGET_ACTION,
+    target: `${who(req, deps.people())} — ${askedBy(req)}`,
+    amount,
+    notes: [FORGET_KEPT],
+  });
 
   /** Tell the asker; true when it went out (DM, else their conversation). */
   const notify = async (req: ForgetRequest): Promise<boolean> => {
@@ -226,181 +234,81 @@ export function createForgetCards(deps: ForgetCardDeps): ForgetCards {
     return ok;
   };
 
-  /**
-   * Tell a decided ask's asker (MEMORY-ACL-6.a): a Discord asker by DM or
-   * in their conversation; a GitHub asker is left to the WATCH poller (their
-   * thread); an ask the owner started needs nobody told (the card says it).
-   */
-  const tellAsker = async (req: ForgetRequest): Promise<Told> => {
-    if (req.requester.via === "admin") {
-      store.markNotified(req.id);
-      return "owner";
-    }
-    if (req.requester.via === "github") return "github";
-    return (await notifyAndMark(req)) ? "told" : "not-yet";
-  };
-
-  const pass = async (): Promise<ForgetDeliveryResult> => {
-    const result: ForgetDeliveryResult = { posted: 0, expired: 0, notified: 0 };
-    // No answer in time ⇒ no.
-    for (const req of store.expiredPending(now())) {
-      if (!store.decide(req.id, "expired")) continue;
-      result.expired += 1;
-      auditBestEffort("memory-forget-expire", forgetRequesterActor(req.requester), req, "denied");
-      await closeCard(req, "Expired — no answer, so nothing was forgotten.");
-    }
-    const owner = deps.owner();
-    if (owner && deps.sendDm) {
-      for (const req of store.undelivered(now())) {
-        const sent = await deps.sendDm({
-          userId: owner.discordId,
-          content: forgetCardText(req, deps.people(), storedCount(req)),
-          components: buildApproveDenyComponents(FORGET_CARD_KIND, req.id),
-        });
-        if (!sent) continue;
-        store.markCardPosted(req.id, sent.channelId, sent.messageId);
-        result.posted += 1;
-        auditBestEffort("memory-forget-card", forgetRequesterActor(req.requester), req, "ok");
-      }
-    }
-    for (const req of store.unnotified()) {
-      if ((await tellAsker(req)) === "told") result.notified += 1;
-    }
-    return result;
-  };
-
   return {
-    deliver() {
-      if (passing) return passing;
-      passing = pass()
-        .catch((err) => {
-          console.error(`[discord] forget card pass failed: ${err instanceof Error ? err.message : err}`);
-          return { posted: 0, expired: 0, notified: 0 };
-        })
-        .finally(() => {
-          passing = null;
-        });
-      return passing;
+    kind: FORGET_CARD_KIND,
+    class: "destructive",
+    audit: "memory-forget",
+    surface: "discord:forget-card",
+    nothingDone: "nothing was forgotten",
+    failed: "Forget failed",
+    store: {
+      get: (id) => store.get(id),
+      undelivered: (t) => store.undelivered(t),
+      expiredPending: (t) => store.expiredPending(t),
+      markCardPosted: (id, channelId, messageId, actionHash) =>
+        store.markCardPosted(id, channelId, messageId, actionHash),
+      resetCard: (id) => store.resetCard(id),
+      decide: (id, status, o) => store.decide(id, status, o),
     },
-
-    async press(interaction, parsed, mayDecide) {
-      const req = store.get(parsed.id);
-      const actor = interaction.userId;
-      if (!mayDecide) {
-        if (req) auditBestEffort(`memory-forget-${parsed.decision}`, actor, req, "denied");
-        await interaction.reply({ content: FORGET_NOT_OWNER, ephemeral: true });
-        return;
-      }
-      if (!req) {
-        await interaction.reply({ content: "This forget request is unknown.", ephemeral: true });
-        return;
-      }
-      const update = (content: string) => interaction.reply({ content, components: [], update: true });
-      const cardNow = () => forgetCardText(req, deps.people(), null);
-      /**
-       * A decided ask: answer the press first (Discord allows ~3 s for it),
-       * then tell the asker, then put whether they were told on the card.
-       */
-      const settle = async (outcome: string) => {
-        const text = (tail: string) => formatDecidedCard(cardNow(), `${outcome}${tail}`);
-        try {
-          await update(text(""));
-        } catch (err) {
-          console.error(`[discord] forget card: press answer failed: ${err instanceof Error ? err.message : err}`);
-        }
-        const closed = store.get(req.id);
-        const told: Told = closed ? await tellAsker(closed) : "not-yet";
-        // An ask the owner started: the card already says all there is.
-        if (told === "owner") return;
-        const channelId = req.cardChannelId ?? interaction.channelId;
-        const messageId = req.cardMessageId ?? interaction.messageId;
-        if (!deps.editMessage || !channelId || !messageId) return;
-        const tail =
-          told === "told"
-            ? " They have been told."
-            : told === "github"
-              ? " They will be told on their GitHub thread."
-              : " They could not be told yet; I keep trying for a day.";
-        try {
-          await deps.editMessage({
-            channelId,
-            messageId,
-            content: text(tail),
-            components: [],
-          });
-        } catch {
-          /* the card already shows the outcome */
-        }
+    auditActor: (req) => forgetRequesterActor(req.requester),
+    snapshot: (req) => {
+      const { targets, stored } = live(req);
+      const counts = previewForgetTargets(deps.db, targets);
+      return {
+        view: view(req, amountText(stored, counts)),
+        actionHash: forgetActionHash(req, targets, stored, counts),
       };
-      if (req.status !== "pending") {
-        await update(formatDecidedCard(cardNow(), `Already closed (${req.status}).`));
-        return;
-      }
-      if (isApproveCardExpired(req.expiresAt, now())) {
-        // A late answer is a no.
-        if (store.decide(req.id, "expired")) {
-          auditBestEffort("memory-forget-expire", forgetRequesterActor(req.requester), req, "denied");
-        }
-        await update(formatDecidedCard(cardNow(), "Expired — no answer in time, so nothing was forgotten."));
-        const closed = store.get(req.id);
-        if (closed) await tellAsker(closed);
-        return;
-      }
-      if (parsed.decision === "deny") {
-        if (!store.decide(req.id, "denied", { by: actor })) {
-          await update(formatDecidedCard(cardNow(), "Already closed."));
-          return;
-        }
-        auditBestEffort("memory-forget-deny", actor, req, "ok");
-        await settle("Denied by you — nothing was forgotten.");
-        return;
-      }
-      // Approve: SAFE-5 started row first; no row ⇒ nothing is deleted.
-      try {
-        audit("memory-forget-approve", actor, req, "started");
-      } catch (err) {
-        await interaction.reply({
-          content: `Audit log unavailable (SAFE-5) — nothing was forgotten; the request stays open. ${err instanceof Error ? err.message : ""}`.trim(),
-          ephemeral: true,
-        });
-        return;
-      }
-      let deleted: { memories: number; turns: number; conversations: number } | null = null;
-      let forgotIds: readonly string[] = [];
-      try {
-        const targets = forgetTargets(req, deps.people());
-        forgotIds = targets.discordIds;
-        deps.db
-          .transaction(() => {
-            if (!store.decide(req.id, "approved", { by: actor })) return;
-            deleted = forgetMemoryTargets(deps.db, targets);
-            deps.db.run(`UPDATE forget_requests SET forgotten_count = ? WHERE id = ?`, [deleted.memories, req.id]);
-          })
-          .immediate();
-      } catch (err) {
-        auditBestEffort("memory-forget-approve", actor, req, "error");
-        await interaction.reply({
-          content: `Forget failed — nothing was forgotten; the request stays open: ${err instanceof Error ? err.message : String(err)}`,
-          ephemeral: true,
-        });
-        return;
-      }
-      if (!deleted) {
-        auditBestEffort("memory-forget-approve", actor, req, "denied");
-        await update(formatDecidedCard(cardNow(), "Already closed."));
-        return;
-      }
-      const done: { memories: number; turns: number; conversations: number } = deleted;
-      auditBestEffort("memory-forget-approve", actor, req, "ok");
-      // What the running bridge still holds of their conversations goes too.
-      try {
-        deps.onForgotten?.({ discordIds: forgotIds });
-      } catch (err) {
-        console.error(`[discord] forget card: could not drop live session turns: ${err instanceof Error ? err.message : err}`);
-      }
-      // AGENT-6.a: kept conversations (30-day summaries) are counted when any went.
-      const kept = done.conversations > 0 ? ` and ${done.conversations} kept conversations` : "";
-      await settle(`Approved by you — forgot ${done.memories} memories and ${done.turns} conversation turns${kept}.`);
     },
+    summary: (req) => view(req, "as counted on the card when it was sent"),
+    onApprove: (req) => {
+      // Inside the engine's transaction: delete, then check it was exactly
+      // what the card showed; anything else rolls it all back.
+      const { targets, stored } = live(req);
+      const deleted = forgetMemoryTargets(deps.db, targets);
+      if (forgetActionHash(req, targets, stored, deleted) !== req.actionHash) {
+        throw new Error("what would be deleted changed since the card was sent; press Approve for the current card");
+      }
+      deps.db.run(`UPDATE forget_requests SET forgotten_count = ? WHERE id = ?`, [deleted.memories, req.id]);
+      return { deleted, discordIds: targets.discordIds };
+    },
+    afterApprove: (_req, done) => {
+      // What the running bridge still holds of their conversations goes too.
+      deps.onForgotten?.({ discordIds: done.discordIds });
+    },
+    approvedOutcome: (_req, done) => {
+      // AGENT-6.a: kept conversations (30-day summaries) are counted when any went.
+      const kept = done.deleted.conversations > 0 ? ` and ${done.deleted.conversations} kept conversations` : "";
+      return `Approved by you — forgot ${done.deleted.memories} memories and ${done.deleted.turns} conversation turns${kept}.`;
+    },
+    /**
+     * MEMORY-ACL-6.a: a Discord asker by DM or in their conversation; a
+     * GitHub asker is left to the WATCH poller (their thread); an ask the
+     * owner started needs nobody told (the card says it).
+     */
+    tell: async (req) => {
+      if (req.requester.via === "admin") {
+        store.markNotified(req.id);
+        return { told: false, tail: null };
+      }
+      if (req.requester.via === "github") {
+        return { told: false, tail: " They will be told on their GitHub thread." };
+      }
+      if (await notifyAndMark(req)) return { told: true, tail: " They have been told." };
+      return { told: false, retry: true, tail: " They could not be told yet; I keep trying for a day." };
+    },
+    unnotified: () => store.unnotified(),
   };
+}
+
+/** The card engine with only the forget kind. */
+export function createForgetCards(deps: ForgetCardDeps): ForgetCards {
+  return createApprovalCards({
+    db: deps.db,
+    ...(deps.env ? { env: deps.env } : {}),
+    owner: deps.owner,
+    ...(deps.sendDm ? { sendDm: deps.sendDm } : {}),
+    ...(deps.editMessage ? { editMessage: deps.editMessage } : {}),
+    ...(deps.now ? { now: deps.now } : {}),
+    kinds: [forgetApprovalKind(deps)],
+  });
 }

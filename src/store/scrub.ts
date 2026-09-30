@@ -215,6 +215,9 @@ export const SCRUB_TARGETS: ReadonlyArray<{
   // SESSION-5/6, AGENT-6.a (src/store/conversation.ts): the condensed summary
   // and the kept turns (JSON; each turn's text re-scrubbed value by value).
   { table: "conversation_threads", columns: ["summary"], json: ["turns"] },
+  // SAFE-18 (src/approvals/store.ts): what an Approve card shows — the
+  // exact action, target, amount and diff or text.
+  { table: "approval_requests", columns: ["title", "action", "target", "amount", "text"] },
   { table: "spend_ledger", columns: ["provider", "model"] },
   // AGENT-16.a (src/watch/owner-ask.ts): a stuck WATCH run's question waiting
   // for the bridge's owner DM (scrubbed on write; a new table, so no rules
