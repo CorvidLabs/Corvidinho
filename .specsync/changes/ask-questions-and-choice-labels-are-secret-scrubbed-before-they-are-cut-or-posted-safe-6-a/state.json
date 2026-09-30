@@ -7,10 +7,11 @@
   "title": "Ask questions and choice labels are secret-scrubbed before they are cut or posted (SAFE-6.a)",
   "description": "Ask questions and choice labels are secret-scrubbed before they are cut or posted (SAFE-6.a)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "c56ce4978bb7990e6064d6673aa60ba02267e056",
   "created_at": 1790727898,
-  "updated_at": 1790727910,
+  "updated_at": 1790727931,
   "affected_specs": [
     "discord",
     "agent"

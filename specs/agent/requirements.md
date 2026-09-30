@@ -567,6 +567,15 @@ Options whose ids are already unique SHALL come out byte-identical, so
 normalizing a stored ask again changes nothing and its open buttons keep
 working. No new env var, flag or protocol field.
 
+The question and every option label SHALL be SAFE-6 scrubbed before they
+are cut (SAFE-6.a): `normalizeQuestion` (used by `askFromToolArguments` and
+`askFromUnknown`) SHALL drop control characters and trim, then scrub, then cut
+at `ASK_QUESTION_MAX` (1500); `cleanAskLabel` SHALL collapse whitespace, then
+scrub, then cut at `ASK_OPTION_LABEL_MAX` (80), for structured options and
+for choices parsed from the question. A secret the cut would split SHALL show
+as `[redacted:<kind>]`, never as a raw piece. Option ids are unchanged: a
+secret-looking id still falls back to its position.
+
 Acceptance Criteria
 - Tool args with options:2+ → HumanAsk.options set.
 - Numbered question lines parse into options when structured options absent.
@@ -577,6 +586,9 @@ Acceptance Criteria
 - A dropped empty option holds no id (`[{id:"a",label:"  "},{id:"a"},{id:"b"}]` gives `a`, `b`).
 - Already-unique options normalize byte-identically, and normalizing the result again changes nothing.
 - ask-human arguments whose options repeat one id give option buttons with distinct `custom_id`s, and the second option's id finds the second label.
+- A question whose fake key starts where the whole marker fits before the 1500 cut comes out `…[redacted:github-token]…` (1500 chars) from `askFromToolArguments` and `askFromUnknown`, and `formatAskSummary` carries no raw piece; for every cut position across the key no raw piece survives and the question stays within 1500.
+- A label straddling the 80 cut comes out `…[redacted:github-token]…` from string options, `{id,label}` options and numbered question lines; for every cut position no raw piece survives and the label stays within 80; a secret-looking id still becomes its position.
+- A numbered choice the question cap cuts is parsed from the scrubbed question.
 
 ### REQ-agent-260
 
