@@ -1,6 +1,6 @@
 ---
 id: in-a-specsync-repo-it-opens-and-works-a-specsync-change-for-its-edits-and-on-corvidinho-it-approves-and-archives-its
-state: implementing
+state: archived
 type: feature
 base_commit: d238d2d4e59deb3924042b0dacb52fc4479dfc76
 ---
