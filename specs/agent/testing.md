@@ -298,3 +298,15 @@ the stuck ask.
   (the new module kept), the tool-loop, runTask and CLI cases fail (no steer,
   no ask; the loop runs out its rounds); the pure units and the "changes
   approach" guard pass on both.
+
+## Public spend text (REQ-agent-098 modified, SAFE-14.a)
+
+`tests/discord.spend-dm.test.ts` › "the public spend text" — `SPEND_PAUSED_TEXT`
+is "Work is paused for budget." and `SPEND_CAP_SUMMARY` equals it;
+`formatSpendPublicStatusLine` is undefined with no cap or under the cap and
+"Spend: Work is paused for budget." at the cap, for an unpriced model, an
+invalid value and an unreadable ledger (no amounts, no path); `spendPaused`
+flips exactly at the cap; the owner's `formatSpendStatusLine` keeps the
+amounts. `tests/agent.spend-ask.test.ts` and `tests/agent.spend.test.ts` keep
+asserting that a stopped run's summary is `SPEND_CAP_SUMMARY` (no `$`, no
+`CORVIDINHO_`) and that the question carries the details.

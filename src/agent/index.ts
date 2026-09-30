@@ -169,9 +169,12 @@ export {
 } from "./spend-alerts.ts";
 export {
   formatSpendDoctorLine,
+  formatSpendPublicStatusLine,
   formatSpendStatusLine,
   formatSpendWarningLine,
   SPEND_CAP_SUMMARY,
+  SPEND_PAUSED_TEXT,
+  spendPaused,
   SPEND_REARM_PERCENT,
   spendCapInvalidAsk,
   spendCapLedgerAsk,

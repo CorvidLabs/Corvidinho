@@ -18,6 +18,7 @@ import type { WorkPrRunner } from "../work/pr.ts";
 import type { SpendAlertOutbox } from "../agent/spend-outbox.ts";
 import type { ChannelPost } from "./spend-post.ts";
 import type { SendPrivateDm } from "./private-reply.ts";
+import type { SpendDm } from "./spend-dm.ts";
 import type { GithubUserLookup } from "../identity/github-user.ts";
 
 export type SlashOptionValue = string | number | boolean | null;
@@ -69,13 +70,24 @@ export type SlashContext = {
   announceStore?: AnnounceStore;
   /** SAFE-5 — one-line audit chain verify summary for /status. */
   auditLine?: () => string;
-  /** AUTONOMOUS-8 — rolling 24 h spend vs the daily cap for /status (SAFE-8). */
-  spendLine?: () => string;
   /**
-   * SAFE-8 — pending 80% warnings and the once-per-episode spend-cap ping
+   * AUTONOMOUS-8 / SAFE-14.a — the /status spend line: for the owner
+   * (`ownerView` true) rolling 24 h spend vs the daily cap (SAFE-8); for
+   * anyone else only "Work is paused for budget." while runs stop at the
+   * cap, else undefined (no line).
+   */
+  spendLine?: (ownerView: boolean) => string | undefined;
+  /**
+   * SAFE-8 — the once-per-episode spend-cap ping and the pending 80% warnings
    * (bridge wires the shared DB; src/agent/spend-outbox.ts).
    */
   spendAlerts?: SpendAlertOutbox;
+  /**
+   * SAFE-14.a — the owner's spend DMs (the 80% warning and a cap stop's
+   * details; src/discord/spend-dm.ts). Unset ⇒ nothing is DMed and the
+   * warning stays pending.
+   */
+  spendDm?: Pick<SpendDm, "deliver">;
   /**
    * Fresh channel post (bridge gateway reply) for owner notices after a slash
    * run: a deferred-reply edit may not notify a mention (spend-post.ts).

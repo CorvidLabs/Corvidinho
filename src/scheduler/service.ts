@@ -40,9 +40,9 @@ import {
   askPingKey,
   clipPostSummary,
   formatAskReply,
-  withSpendWarningPost,
 } from "../discord/ask-ping.ts";
-import { askPingOwner, takeSpendWarning } from "../discord/spend-post.ts";
+import { askPingOwner } from "../discord/spend-post.ts";
+import { spendStopFor, type SpendDm } from "../discord/spend-dm.ts";
 import {
   auditInboundInjection,
   fenceSpeakerText,
@@ -269,11 +269,17 @@ export type SchedulerServiceOpts = {
   /** Configured owner pinged when a tick needs a human (AUTONOMY-2). */
   owner?: OwnerRecord | null;
   /**
-   * SAFE-8 — pending 80% warnings and the once-per-episode spend-cap ping
-   * (the bridge wires its shared DB). Without it a post carries the run's
-   * own warning and a spend-cap ask pings per the schedule's ping key.
+   * SAFE-8 — the once-per-episode spend-cap ping (the bridge wires its shared
+   * DB). Without it a spend-cap ask pings per the schedule's ping key.
    */
   spendAlerts?: SpendAlertOutbox;
+  /**
+   * SAFE-14.a — the owner's spend DMs (the bridge's `createSpendDm`): every
+   * tick retries them, a run's 80% warning and a cap stop's details go there
+   * (never into the schedule's post). Without it (the daemon) the warning
+   * stays pending in the shared DB for a bridge.
+   */
+  spendDm?: Pick<SpendDm, "deliver">;
   /** Called once per run when it finishes or is abandoned (daemon logs). */
   onRunFinished?: (event: ScheduleRunFinished) => void;
   /**
@@ -327,6 +333,7 @@ export class SchedulerService {
   private readonly useWorktrees: boolean;
   private readonly owner: OwnerRecord | null;
   private readonly spendAlerts?: SpendAlertOutbox;
+  private readonly spendDm?: Pick<SpendDm, "deliver">;
   private readonly onRunFinished?: (event: ScheduleRunFinished) => void;
   private readonly onTick?: () => void;
   private readonly backup?: Pick<BackupTicker, "tick">;
@@ -356,6 +363,7 @@ export class SchedulerService {
     this.useWorktrees = opts.useWorktrees !== false;
     this.owner = opts.owner ?? null;
     this.spendAlerts = opts.spendAlerts;
+    this.spendDm = opts.spendDm;
     this.onRunFinished = opts.onRunFinished;
     this.onTick = opts.onTick;
     this.backup = opts.backup;
@@ -455,6 +463,9 @@ export class SchedulerService {
       // REQ-discord-347: post asks another ticker (the daemon) left pending.
       // Fire-and-forget like the runs: a slow post never delays a tick.
       this.deliverPendingAsks();
+      // SAFE-14.a: retry the owner's spend DMs (pending 80% warning, a held
+      // cap stop). Fire-and-forget; it never rejects.
+      void this.spendDm?.deliver();
       // OPS-1/2: the nightly backup / restore test when due, after the runs
       // are claimed; its owner notice post is fire-and-forget too.
       this.backup?.tick(now);
@@ -802,7 +813,6 @@ export class SchedulerService {
         // (and what the delivery pass shows from the row): the exit code.
         await this.postOwnRunAsk(schedule, run, done.ask, {
           context: result.ask ? result.summary : summary,
-          spendWarning: result.spendWarning,
           // SAFE-13: a run that ends with an ask still tells the owner.
           injection: result.injection,
           handBack: done.autoPaused,
@@ -811,35 +821,24 @@ export class SchedulerService {
         // Re-checked at post time: the allowlist can change mid-run.
         const gate = this.gateTick(schedule);
         if (gate.ok) {
-          // SAFE-8: a pending 80% spend warning (this run's or one recorded
-          // by any other run on the data dir) rides the post and pings the owner.
-          const pending = takeSpendWarning(this.spendAlerts, result.spendWarning);
-          // `false` until a post resolves (a poster returning void counts as sent).
-          let posted: void | boolean = false;
-          try {
-            const status = result.ok ? "✅" : "❌";
-            const head = `${status} ${scheduleTitle(schedule)}:\n`;
-            posted = await this.outbound.post(
-              // SAFE-13: a tool result that looked like an injection tells the owner.
-              withInjectionNotice(
-                withSpendWarningPost(
-                  {
-                    channelId: schedule.channelId,
-                    content: `${head}${clipPostSummary(summary, head.length)}`,
-                  },
-                  pending?.warning,
-                  this.owner,
-                ),
-                result.injection,
-                this.owner,
-              ),
-            );
-          } finally {
-            // Not posted: the next post carries the warning.
-            if (posted === false) pending?.release();
-          }
+          const status = result.ok ? "✅" : "❌";
+          const head = `${status} ${scheduleTitle(schedule)}:\n`;
+          await this.outbound.post(
+            // SAFE-13: a tool result that looked like an injection tells the owner.
+            withInjectionNotice(
+              {
+                channelId: schedule.channelId,
+                content: `${head}${clipPostSummary(summary, head.length)}`,
+              },
+              result.injection,
+              this.owner,
+            ),
+          );
         }
       }
+      // SAFE-14.a: this run's 80% warning (or one another run recorded)
+      // reaches the owner by DM, never in the schedule's post.
+      await this.spendDm?.deliver({ warning: result.spendWarning });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       const done = this.finish(schedule, run, { ok: false, error: msg });
@@ -916,7 +915,6 @@ export class SchedulerService {
     ask: HumanAsk,
     opts: {
       context?: string;
-      spendWarning?: SpendWarning;
       /** SAFE-13: a tool result in this run looked like an injection. */
       injection?: InjectionNotice;
       handBack?: boolean;
@@ -933,7 +931,6 @@ export class SchedulerService {
         schedule.channelId,
         ask,
         opts.context,
-        opts.spendWarning,
         opts.injection,
       );
     } finally {
@@ -946,18 +943,18 @@ export class SchedulerService {
    * question with the schedule prefix; stuck and spend-cap ping the owner,
    * clarify pings the schedule creator. The owner is pinged once per
    * question per schedule (`askPingKey`) and a spend-cap ask once per cap
-   * episode; a repeat still posts, without a ping. A pending 80% warning
-   * rides the post. Resolves true when the post went out (a poster
-   * returning void counts as sent); when it did not, the warning and the
-   * cap ping are handed back and no ping key is kept. The caller has
-   * already checked the channel against the allowlist.
+   * episode; a repeat still posts, without a ping. A spend-cap post says
+   * only that work is paused for budget (SAFE-14.a); when it claims the
+   * episode's ping, the stop's details go to the owner by DM. Resolves true
+   * when the post went out (a poster returning void counts as sent); when it
+   * did not, the cap ping is handed back and no ping key is kept. The caller
+   * has already checked the channel against the allowlist.
    */
   private async postRunAsk(
     schedule: Schedule,
     channelId: string,
     ask: HumanAsk,
     context: string | undefined,
-    spendWarning?: SpendWarning,
     injection?: InjectionNotice,
   ): Promise<boolean> {
     const outbound = this.outbound;
@@ -982,9 +979,6 @@ export class SchedulerService {
         withName: !scheduleInjection({ name: schedule.name }, this.creatorRole(schedule)),
       })}:`,
     });
-    // SAFE-8: a pending 80% spend warning (this run's or one recorded by
-    // any other run on the data dir) rides the post and pings the owner.
-    const pending = takeSpendWarning(this.spendAlerts, spendWarning);
     // `false` until a post resolves (a poster returning void counts as sent).
     let posted: void | boolean = false;
     try {
@@ -998,11 +992,7 @@ export class SchedulerService {
       posted = await outbound.post(
         // SAFE-13: a tool result that looked like an injection tells the owner.
         withInjectionNotice(
-          withSpendWarningPost(
-            { channelId, content: reply.content, mentionUserIds: reply.mentionUserIds },
-            pending?.warning,
-            this.owner,
-          ),
+          { channelId, content: reply.content, mentionUserIds: reply.mentionUserIds },
           injection,
           this.owner,
         ),
@@ -1012,11 +1002,12 @@ export class SchedulerService {
         this.store.setAskPingKey(schedule.id, pingKey);
       }
     } finally {
-      // Not posted: the next post carries the warning and the cap ping.
-      if (posted === false) {
-        pending?.release();
-        askOwner.release();
-      }
+      // Not posted: the next post carries the cap ping.
+      if (posted === false) askOwner.release();
+      // SAFE-14.a: the stop's details (amounts, cap, setting) to the owner by
+      // DM when this post claimed the episode's ping. Never throws.
+      const stop = spendStopFor(ask, askOwner, channelId);
+      if (stop) await this.spendDm?.deliver({ stop });
     }
     return posted !== false;
   }

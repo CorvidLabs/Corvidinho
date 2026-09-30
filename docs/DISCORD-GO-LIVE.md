@@ -158,6 +158,17 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   process must share the bridge's data dir, and the owner must accept DMs from server members). With no owner a stuck or spend-cap question still posts and the
   bridge logs
   `[discord] run needs a human but no owner is configured — owner ping skipped (AUTONOMY-2 / IDENTITY-3)`.
+- Spend is the owner's (SAFE-14.a): with `CORVIDINHO_DAILY_SPEND_CAP_USD` set, a run stopped at
+  the cap posts only "💸 Work is paused for budget." (the owner pinged once per cap episode) —
+  never the amounts, the cap or the setting name. The details (24 h spend, the next call's
+  estimate, the cap, which setting to change) and the 80% warning go to the owner by **direct
+  message** after each run and on every scheduler tick. Same DM rule as above: the owner must
+  share a server with the bot and accept DMs from its members; until then the DM is kept and
+  retried every tick, the bridge logs one
+  `[discord] spend DM to the owner did not go out (SAFE-14.a) …` line per failure streak (no
+  amounts), and the owner's `/status` spend line notes that a spend DM is waiting. `/status`
+  shows the spend line to the owner only; anyone else sees just "Spend: Work is paused for
+  budget." while runs are stopped at the cap.
 
 ### E.2 Protocol 2: restart the bridge, WATCH and daemon together (DISCORD-10)
 
@@ -358,7 +369,7 @@ Community sessions (every non-owner who is not team, plus all WATCH and schedule
   refusal is not posted on its own; the reply ends with a short `(not allowed for your role)`
   line instead, kept when a long reply is cut to fit: chat replies, `/session start` and
   `/work` answers, schedule posts and the run history they come from, a reply shortened for
-  the SAFE-8 80% spend warning, and the WATCH summary comment all lose the end of the text,
+  a SAFE-13 owner line or a slash owner notice, and the WATCH summary comment all lose the end of the text,
   never the line. A run that ends by asking a question
   posts the question, which can leave the line out. A call to a name that is not a plugin at
   all keeps the plain "not offered" refusal and adds no line. ADMIN is re-checked on every

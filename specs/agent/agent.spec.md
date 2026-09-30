@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 39
+version: 40
 status: draft
 files:
   - src/agent/types.ts
@@ -177,14 +177,20 @@ fetch alone; unchanged when no cap is set), `readSpendSnapshot` and
 `spendDoctorCheck` (doctor line). `src/agent/spend-notice.ts` holds the
 pure text: `formatSpendWarningLine`, `spendWarningFromUnknown`, the
 `spendCap*Ask` question builders, `formatSpendDoctorLine`,
-`formatSpendStatusLine` (Discord `/status`) and `spendPercent`.
+`formatSpendStatusLine` (the owner's Discord `/status` line), `spendPercent`,
+and (SAFE-14.a) `SPEND_PAUSED_TEXT` ("Work is paused for budget."),
+`spendPaused(snapshot)` (runs stop at the spend check: cap reached, unpriced
+model, invalid value, unreadable ledger) and
+`formatSpendPublicStatusLine(snapshot)` ("Spend: Work is paused for budget."
+while paused, else undefined — the only spend line anyone but the owner sees).
 `createTaskExecute` builds its fetch with `createSpendGuard`, emits the 80%
 warning as a `Text` event and through `onSpendWarning`, and passes every
 attempt's result through `finish`. `HumanAskReason` gains `spend-cap`;
 `TaskResult` gains optional `spendWarning` (`SpendWarning`: integer
 `spentMicroUsd` / `capMicroUsd` and `percent`). A run stopped at the cap
-reports the generic `SPEND_CAP_SUMMARY` as its summary (no amounts or env
-names; the details are in `ask.question`), and `SPEND_REARM_PERCENT` (70)
+reports the generic `SPEND_CAP_SUMMARY` (= `SPEND_PAUSED_TEXT`, SAFE-14.a) as
+its summary (no amounts or env names; the details are in `ask.question`, which
+Discord shows only to the owner, by DM), and `SPEND_REARM_PERCENT` (70)
 sets where the warning re-arms. `src/agent/spend-alerts.ts` owns the
 `spend_alerts` table (`ensureSpendAlerts`, adding `delivered_at` to an older
 table): `recordSpendWarning`, `rearmSpendAlerts`, `warnArmed`,
@@ -195,7 +201,8 @@ back under 80%, leaving the warning pending) / `releaseSpendWarnings` and
 (`SpendAlertOutbox`: `takeWarning(fallback)` → `TakenSpendWarning` with
 `release()`, and `claimCapPing()` → `SpendCapPingClaim` with `release()`, or
 null when the episode already pinged), the delivery side the Discord bridge
-uses.
+uses (its owner DM pass, `src/discord/spend-dm.ts`, takes the warning;
+SAFE-14.a).
 
 Autonomous gate + delegation core (REQ-agent-117, issue #117):
 `src/autonomous/enabled.ts` exports `parseAutonomousConfig`,
@@ -788,3 +795,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-30 | ask-questions-and-choice-labels-are-secret-scrubbed-before-they-are-cut-or-posted-safe-6-a: Ask questions and choice labels are secret-scrubbed before they are cut or posted (SAFE-6.a) |
 | 2026-09-30 | on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a: On GitHub people match only by their numeric user id: a renamed or re-registered login never counts as the owner or a declared person on WATCH (prompt, memory scope, SAFE-13 exemption); [owner] github_id declares the owner's id; /admin people link github stores the looked-up numeric id; doctor warns about logins without an id (IDENTITY-7.a, #36) |
 | 2026-09-30 | when-it-repeats-a-failing-call-it-is-steered-to-change-approach-then-asks-a-stuck-github-run-pings-the-owner-on-discord: When it repeats a failing call it is steered to change approach, then asks; a stuck GitHub run pings the owner on Discord (AGENT-16, AGENT-16.a) |
+| 2026-09-30 | only-the-owner-sees-spend-amounts-and-cap-settings-on-discord-everyone-else-sees-only-work-is-paused-for-budget-safe-14: Only the owner sees spend amounts and cap settings on Discord; everyone else sees only 'Work is paused for budget.' (SAFE-14.a): spend-cap posts, the /work PR line, the slash owner notice and SPEND_CAP_SUMMARY say only that; the question quote is dropped on every path including the daemon pending-ask pass; the 80% warning never rides a channel post and, with a cap stop's details, goes to the owner by DM (src/discord/spend-dm.ts, retried every scheduler tick); the /status spend line is owner-only |

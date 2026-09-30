@@ -214,11 +214,14 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   (free text or Choose stub) is followed by one fresh requester-only ping
   replying to the edited answer (a reply to it continues the session), a stuck
   ask by one owner-only ping, a clarify ask with a pending 80% warning by one
-  post pinging both; a spend-cap stop pings the owner once per episode; an
+  requester-only ping (the warning goes to the owner by DM, SAFE-14.a); a
+  spend-cap stop pings the owner once per episode; an
   answer with no mention, a fallback reply and a failed ping post add nothing;
   a button pick that gets stuck pings the owner; `/work` clarify pings the
   requester after the collapsed answer; the #160 owner notice is the only
-  owner ping (`/work` at the cap, owner-as-requester clarify); a notice that
+  owner ping at the cap (`/work`, without the warning, which is DMed); an
+  owner-as-requester clarify with a pending warning gets only the question's
+  ping (no owner notice; the warning is DMed); a notice that
   had to ride the collapsed answer is followed by one owner ping; the slash
   fallback adds no post. Allowed mentions equal exactly the mentioned users
   (no mass or role mentions, no components, one line).
@@ -385,8 +388,10 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   stores `ask_reason`/`ask_question` with `ask_posted_at` null and posts
   nothing; the bridge's next tick posts it once (prefix, stuck headline,
   question, owner mention) and remembers the ping key; clarify mentions only
-  the schedule creator; spend-cap pings the owner once per episode with the
-  pending 80% warning and no reply hint; the same question pings once and
+  the schedule creator; spend-cap pings the owner once per episode, posts only
+  the schedule line and "💸 Work is paused for budget." (no question, no
+  warning, no reply hint) and hands the stored question to the owner's DM pass
+  once per episode (SAFE-14.a); the same question pings once and
   only the newest of two pending asks posts; a later finished run or a
   deleted schedule leaves nothing; a refused channel posts nothing; a creator
   the live allowlist no longer lists (or deny-lists) gets no post until the
@@ -713,11 +718,11 @@ both.
 - Same file › "/session start answer for a non-owner keeps the closing role
   note within the 1900 cap": the answer is at most 1900 chars, its summary part
   at most 1500, and it ends with the note.
-- `tests/discord.spend.test.ts` › "the cut for the warning line keeps a
-  closing role note": `withSpendWarningPost` on an 1800-char body ending with
-  the note gives a 1900-char post ending `y…`, the note, a blank line and the
-  owner-pinging 80% line; a body that fits is untouched. The existing
-  "a long post is cut so the warning line always fits" (no note) still ends
+- `tests/discord.spend.test.ts` › "the cut for an appended line keeps a
+  closing role note": `appendPostLine` on an 1800-char body ending with the
+  note and a ~210-char owner notice line gives a 1900-char post ending `y…`,
+  the note, a blank line and the line; a body that fits is untouched. "a long
+  post is cut so the appended line always fits" (no note) still ends
   `…\n\nLINE`.
 - With `origin/main`'s `src/discord/ask-ping.ts`,
   `src/discord/command-handlers/work.ts`, `session.ts` and
@@ -1034,3 +1039,51 @@ and clears its mark on stop.
 - Fail on base: with the base's (5093b81) `src/discord/bridge.ts` swapped in,
   the bridge case fails (no mark, no DM); the DM text and delivery units pass
   on both (new module).
+
+## Only the owner sees spend (REQ-discord-098 modified, SAFE-14.a)
+
+Fixture tests (fake gateway recording replies and DMs, in-memory DB, fake
+thinking outbound; no live Discord, no network):
+
+- `tests/discord.spend.test.ts` — `formatAskReply` on a spend-cap ask is the
+  one line "💸 Work is paused for budget." plus the owner mention (no question,
+  amount, cap, setting name or `%`), status "💸 Work is paused for budget";
+  through `startBridge`: a chat spend-cap stop (fallback reply, collapsed edit,
+  both failing), a button-pick resume, `/work` (body, PR line "PR: not opened —
+  Work is paused for budget.", owner notice "💸 <@owner> /work `…`: Work is
+  paused for budget.") and `/session start` carry no spend detail, while the
+  owner gets one DM with the details per cap episode (again after a re-arm or
+  a handed-back ping) and one DM per pending 80% warning — also when the post
+  failed or the interaction token expired, and for a warning a WATCH-style
+  process recorded; a chat answer, collapsed edit and schedule ✅ post with a
+  warning pending carry no warning line and ping nobody; `/status` shows the
+  owner "Spend (24h): $4.10 of $5.00 daily cap (82%) — ⚠️ past 80%" (then
+  "$5.10 … (102%) — 🛑 cap reached") and "Spend cap: off (set
+  CORVIDINHO_DAILY_SPEND_CAP_USD …)" with no cap, and a declared team member
+  no spend line under the cap or with none set and "Spend: Work is paused for
+  budget." at the cap.
+- `tests/discord.spend-dm.test.ts` — `SPEND_PAUSED_TEXT` / `SPEND_CAP_SUMMARY`
+  and `formatSpendPublicStatusLine` / `spendPaused` (REQ-agent-098),
+  `formatSpendStopDm` (head, channel,
+  scrubbed and defanged question), `spendStopFor` (only a spend-cap ask whose
+  post claimed the ping), `createSpendDm`: the pending warning DMed once with
+  current amounts, the run's own warning without a DB, a DM that returns null
+  or throws keeps its claim, is retried on the next pass and is logged once
+  per failure streak without amounts, `waiting()` while one waits, a newer
+  held stop replaces an older one, no owner or no DM path claims nothing
+  (one log line), and concurrent passes send a held stop once.
+- `tests/discord.rich-replies.test.ts` — a split fallback answer to someone
+  else with an 80% warning is the answer alone (DISCORD-16 split unchanged,
+  no owner mention, footer model and time only, DISCORD-15.a) and the owner
+  gets the warning by DM; the DISCORD-15.a footer tests are unchanged.
+- `tests/discord.collapsed-ping.test.ts`, `tests/scheduler.ask-outbox.test.ts`,
+  `tests/discord.slash-pending-ask.test.ts` — the collapsed pings, the daemon
+  pending-ask post and the slash answers above; `tests/docs.operator-facts.test.ts`
+  — the `docs/discord.md` `/status` row says the spend line is the owner's.
+- Fail on base: with `origin/main`'s (f687a5a) `src/agent/{index,spend-alerts,spend-notice,spend-outbox}.ts`,
+  `src/discord/{ask-ping,bridge,slash-types,spend-post}.ts`,
+  `src/discord/command-handlers/{session,status,work}.ts`,
+  `src/scheduler/service.ts` and `docs/discord.md` swapped in (and
+  `src/discord/spend-dm.ts` removed), 29 tests in the six existing files fail
+  on their assertions and `tests/discord.spend-dm.test.ts` cannot load; with
+  the branch restored all 154 tests in the seven files pass.

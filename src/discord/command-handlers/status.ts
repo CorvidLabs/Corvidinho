@@ -2,9 +2,13 @@
  * /status — bridge metrics (DISCORD-4) + dogfood polish lines.
  * Steal shape from corvid-agent info-commands; keep ephemeral.
  * IDENTITY-1: owner configured yes/no + display only (no ids).
+ * SAFE-14.a: the spend line (amounts, cap, setting names) only for the owner
+ * (ADMIN, re-checked here); anyone else sees at most "Work is paused for
+ * budget." while runs stop at the cap.
  */
 
 import { formatOwnerStatus } from "../../identity/owner.ts";
+import { PermissionLevel, resolvePermissionLevel } from "../permissions.ts";
 import { formatLlmStatusLine } from "../../version.ts";
 import { formatAnnounceChannelLine } from "../announce.ts";
 import { SLASH_COMMAND_NAMES } from "../slash-commands.ts";
@@ -46,7 +50,10 @@ export type StatusReportInput = {
   ownerLine?: string;
   /** SAFE-5 — audit chain verify line (bridge supplies). */
   auditLine?: string;
-  /** AUTONOMOUS-8 — 24 h spend vs the daily cap (bridge supplies). */
+  /**
+   * AUTONOMOUS-8 — 24 h spend vs the daily cap for the owner; for anyone else
+   * only "Work is paused for budget." while paused (SAFE-14.a; bridge supplies).
+   */
   spendLine?: string;
 };
 
@@ -83,6 +90,21 @@ export function formatStatusReport(input: StatusReportInput): string {
   return lines.join("\n");
 }
 
+/** The invoker is the configured owner (ADMIN: not muted, not deny-listed). */
+function isOwnerViewer(ctx: SlashContext, interaction: SlashInteraction): boolean {
+  return (
+    resolvePermissionLevel({
+      userId: interaction.userId,
+      roleIds: interaction.roleIds,
+      mutedUsers: ctx.mutedUsers,
+      allowlist: ctx.allowlist,
+      adminUserIds: ctx.adminUserIds,
+      adminRoleIds: ctx.adminRoleIds,
+      owner: ctx.owner,
+    }) >= PermissionLevel.ADMIN
+  );
+}
+
 export async function handleStatusCommand(
   ctx: SlashContext,
   interaction: SlashInteraction,
@@ -109,7 +131,8 @@ export async function handleStatusCommand(
     announceChannelId: ctx.announceStore?.getChannelId() ?? null,
     ownerLine: formatOwnerStatus(ctx.owner),
     auditLine: ctx.auditLine?.(),
-    spendLine: ctx.spendLine?.(),
+    // SAFE-14.a: amounts and cap settings for the owner only (IDENTITY-2).
+    spendLine: ctx.spendLine?.(isOwnerViewer(ctx, interaction)),
   });
 
   await interaction.reply({

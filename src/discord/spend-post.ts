@@ -1,19 +1,20 @@
 /**
- * SAFE-8 (#98) with AUTONOMY-1/2 on Discord — who is pinged for a run's ask
- * and where the pending 80% spend warning goes. Shared by the chat reply,
- * `/work`, `/session start` and schedule posts so every bridge surface
- * treats the spend cap the same way.
+ * SAFE-8 (#98) with AUTONOMY-1/2 on Discord — who is pinged for a run's ask.
+ * Shared by the chat reply, `/work`, `/session start` and schedule posts so
+ * every bridge surface treats the spend cap the same way.
  *
  *  - A `spend-cap` ask pings the owner once per cap episode (the outbox's
  *    `claimCapPing`); later spend-cap asks still post, without a ping.
- *  - Every post takes the pending 80% warning from the outbox (recorded by
- *    whichever run crossed, on any surface) and pings the owner with it.
+ *  - SAFE-14.a: no channel post carries spend amounts or cap settings. The
+ *    pending 80% warning and a cap stop's details go to the owner by DM
+ *    (src/discord/spend-dm.ts); the channel says only that work is paused
+ *    for budget.
  *  - Slash runs answer in one message (the thinking message collapsed into
  *    the answer, DISCORD-ASK-7, else the deferred reply); an edit does not
  *    notify a mention, so the owner notice goes out as a fresh channel post
  *    with allowed mentions limited to the owner.
- *  - A post that did not go out hands its claims back (the warning and the
- *    episode's cap ping), so the next post carries them instead.
+ *  - A post that did not go out hands its claim back (the episode's cap
+ *    ping), so the next post carries it instead.
  *  - Any answer collapsed into the thinking message (chat, button pick or
  *    slash) that mentions someone is followed by one short fresh ping post
  *    for them (postCollapsedPing, REQ-discord-215), skipping whoever a fresh
@@ -21,9 +22,10 @@
  */
 
 import type { SpendAlertOutbox, TakenSpendWarning } from "../agent/spend-outbox.ts";
+import { SPEND_PAUSED_TEXT } from "../agent/spend-notice.ts";
 import type { HumanAsk, SpendWarning } from "../agent/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
-import { appendPostLine, formatCollapsedPing, formatSpendWarningReply } from "./ask-ping.ts";
+import { appendPostLine, formatCollapsedPing } from "./ask-ping.ts";
 import { DISCORD_ANSWER_MAX, DISCORD_MESSAGE_MAX } from "./rich-reply.ts";
 import { finishSlashWithThinking, type SlashFinishThinkingOpts } from "./slash-finish.ts";
 import type { DiscordEmbedPayload } from "./thinking-status.ts";
@@ -64,7 +66,7 @@ export function askPingOwner(
     : { owner: null, deduped: true, release: NOOP };
 }
 
-/** The pending 80% warning for a post: the outbox's, else the run's own. */
+/** The pending 80% warning to DM the owner (SAFE-14.a): the outbox's, else the run's own. */
 export function takeSpendWarning(
   outbox: SpendAlertOutbox | undefined,
   fallback?: SpendWarning,
@@ -132,11 +134,15 @@ export function askNeedsOwner(ask: HumanAsk): boolean {
   return ask.reason === "stuck" || ask.reason === "spend-cap";
 }
 
-/** One owner line pointing at a slash run's reply that needs them. */
+/**
+ * One owner line pointing at a slash run's reply that needs them. A
+ * spend-cap stop says only that work is paused for budget (SAFE-14.a): the
+ * channel sees it too; the details go to the owner by DM.
+ */
 export function ownerAskNoticeLine(ask: HumanAsk, ownerId: string, label: string): string {
   const who = `<@${ownerId}>`;
   if (ask.reason === "spend-cap") {
-    return `💸 ${who} ${label} paused at the daily spend cap — see the reply above.`;
+    return `💸 ${who} ${label}: ${SPEND_PAUSED_TEXT}`;
   }
   return `⚠️ ${who} ${label} is stuck and needs a human — see the reply above.`;
 }
@@ -144,26 +150,24 @@ export function ownerAskNoticeLine(ask: HumanAsk, ownerId: string, label: string
 export type OwnerNotice = {
   content: string;
   mentionUserIds: string[];
-  /** Hand back what the notice claimed (warning, cap ping) when it did not go out. */
+  /** Hand back what the notice claimed (the cap ping) when it did not go out. */
   release(): void;
 };
 
 /**
  * Owner notice for a finished slash run (`/work`, `/session start`): the
  * owner ping line for a stuck or spend-cap ask (a clarify ask addresses the
- * requester in the reply, AUTONOMY-4), the SAFE-13 line when a tool result
- * in the run looked like a prompt-injection attempt, plus the pending SAFE-8
- * warning (taken from the outbox here, so call it once per run). Null when
- * there is nothing to tell the owner (any cap-ping claim is then handed back).
+ * requester in the reply, AUTONOMY-4) and the SAFE-13 line when a tool result
+ * in the run looked like a prompt-injection attempt. It is a channel post, so
+ * it never carries the 80% spend warning (SAFE-14.a: that goes to the owner
+ * by DM). Null when there is nothing to tell the owner (any cap-ping claim is
+ * then handed back).
  */
 export function slashOwnerNotice(opts: {
   owner: OwnerRecord | null | undefined;
-  outbox?: SpendAlertOutbox;
   ask?: HumanAsk;
   /** From askPingOwner: whether this ask pings the owner, and its claim. */
   askOwner?: AskPingOwner | null;
-  /** The run's own warning (fallback when no outbox). */
-  spendWarning?: SpendWarning;
   /** SAFE-13: a tool result in the run looked like an injection. */
   injection?: InjectionNotice;
   /** How the run is named in the notice, e.g. "/work `work_…`". */
@@ -178,11 +182,6 @@ export function slashOwnerNotice(opts: {
   }
   if (opts.injection) {
     lines.push(formatInjectionOwnerLine(opts.injection, opts.owner).line);
-  }
-  const taken = takeSpendWarning(opts.outbox, opts.spendWarning);
-  if (taken) {
-    lines.push(formatSpendWarningReply(taken.warning, opts.owner).line);
-    releases.push(taken.release);
   }
   const release = () => {
     for (const r of releases) r();
@@ -200,7 +199,7 @@ export function slashOwnerNotice(opts: {
  * The body goes out as one message when practical (DISCORD-ASK-7:
  * finishSlashWithThinking collapses the thinking message into it and drops
  * the deferred reply; else the fallback status + reply). The owner notice
- * (stuck / spend-cap ping, pending 80% warning) is then a FRESH channel post
+ * (stuck / spend-cap ping, SAFE-13 line) is then a FRESH channel post
  * with allowed mentions limited to the owner — an edit does not notify a
  * mention. When that post cannot be sent, the notice is appended to the
  * answer that went out (the collapsed message is edited again, or the reply

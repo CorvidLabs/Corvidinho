@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 88
+version: 89
 status: draft
 files:
   - src/discord/types.ts
@@ -131,7 +131,9 @@ files:
   - tests/discord.presence.test.ts
   - src/discord/ask-ping.ts
   - src/discord/spend-post.ts
+  - src/discord/spend-dm.ts
   - tests/discord.spend.test.ts
+  - tests/discord.spend-dm.test.ts
   - tests/discord.status-audit.test.ts
   - tests/discord.ask-ping.test.ts
   - src/discord/thin-ack.ts
@@ -419,34 +421,53 @@ not-for-you reply. A press or submit on a free-text ask past its timeout gets
 Schedule asks keep posting text without a button.
 
 Daily spend cap on Discord (REQ-discord-098, issue #98, SAFE-8 as amended /
-AUTONOMOUS-8): a `spend-cap` ask posts through `formatAskReply` with
-`SPEND_CAP_HEADLINE` / `SPEND_CAP_STATUS` (paused, not an error) and the owner
-pinged; `askPingKey` keys a `spend-cap` ask on its reason only, so a schedule
-pings once per cap episode. `ask-ping.ts` also exports
-`formatSpendWarningReply`, `withSpendWarningPost` and `appendPostLine`:
+AUTONOMOUS-8, SAFE-14.a): a `spend-cap` ask posts through `formatAskReply`
+with `SPEND_CAP_HEADLINE` ("💸 Work is paused for budget.") /
+`SPEND_CAP_STATUS` (paused, not an error) and the owner pinged, and with no
+question quote — the question holds the amounts, the cap and the setting, so
+it never reaches a channel (SAFE-14.a; `SPEND_PAUSED_TEXT` from
+`src/agent/spend-notice.ts`); `askPingKey` keys a `spend-cap` ask on its
+reason only, so a schedule pings once per cap episode. `ask-ping.ts` also
+exports `appendPostLine` (a SAFE-13 line or a slash owner notice on a post).
 `AgentSpawnResult` gains optional `spendWarning` (amounts validated from the
-`result` frame by `spendWarningFromUnknown`), and the bridge reply and the
-schedule post append the 80% warning line with the owner added to
-`mentionUserIds`. `SlashContext.spendLine` / `StatusReportInput.spendLine`
-carry `/status`'s 24 h spend vs cap line (`formatSpendStatusLine` over
-`readSpendSnapshot` on the bridge's shared DB); no new slash command.
-The bridge builds one `createSpendAlertOutbox({ db, env })`
-(`src/agent/spend-outbox.ts`) and shares it as `SlashContext.spendAlerts` and
-`SchedulerServiceOpts.spendAlerts`; `SlashContext.post` is the gateway reply
-(a fresh channel post). `src/discord/spend-post.ts` exports `askPingOwner`
-(a `spend-cap` ask pings once per cap episode via `claimCapPing`; its
-`release` hands the ping back when the post fails), `askNeedsOwner` (stuck
-and spend-cap ping the owner; clarify addresses the requester, AUTONOMY-4),
-`takeSpendWarning`, `ownerAskNoticeLine`, `slashOwnerNotice`,
-`finishSlashWithOwnerNotice`, and the `ChannelPost` / `OwnerNotice` /
-`AskPingOwner` types. The chat reply (also the reply to a run a button pick
-resumed; a spend-cap stop never gets choice buttons; the warning line and
-owner mention ride the collapsed edit of the thinking message, DISCORD-ASK-6/7,
-or the fallback reply, and go back when neither went out), `/work`,
-`/session start` and the schedule post take the pending warning from the outbox (the run's own
-`spendWarning` only when there is no DB), and hand it and the cap ping back
-when the post does not go out (`SchedulerOutbound.post` may resolve `false`;
-a schedule then keeps no ping key). `OwnerNotice.release` hands back what a
+`result` frame by `spendWarningFromUnknown`); no channel post carries it.
+`SlashContext.spendLine(ownerView)` / `StatusReportInput.spendLine` carry
+`/status`'s spend line: for the owner (ADMIN, re-checked by the handler) the
+24 h spend vs cap line (`formatSpendStatusLine` over `readSpendSnapshot` on
+the bridge's shared DB, plus a note while a spend DM waits); for anyone else
+`formatSpendPublicStatusLine` ("Spend: Work is paused for budget." while runs
+stop at the cap, else no line); no new slash command. The bridge builds one
+`createSpendAlertOutbox({ db, env })` (`src/agent/spend-outbox.ts`) and shares
+it as `SlashContext.spendAlerts` and `SchedulerServiceOpts.spendAlerts`;
+`SlashContext.post` is the gateway reply (a fresh channel post).
+`src/discord/spend-dm.ts` (SAFE-14.a) exports `createSpendDm({ outbox, owner,
+sendDm, log? })` → `SpendDm` (`deliver({ stop?, warning? })` → `SpendDmPass`,
+never rejects, one pass at a time; `waiting()`), `spendStopFor(ask, askOwner,
+channelId?)`, `formatSpendStopDm`, `formatSpendWarningDm`,
+`SPEND_STOP_DM_HEAD`, `SPEND_DM_FAILED_LOG`, `SPEND_DM_NO_PATH_LOG` and the
+`SpendStop` / `SpendDmDeps` / `SpendDmOutcome` types: it DMs the configured
+owner (the gateway `sendDm`) a cap stop's details (the spend-cap question,
+scrubbed and defanged, naming the channel) when that stop's post claimed the
+episode's owner ping, and the pending 80% warning (`takeSpendWarning`: the
+outbox's, else the run's own; rebuilt with `formatSpendWarningLine`); a DM
+that does not go out keeps its claim (the warning released to the outbox, the
+stop held in memory, the newest replacing it) for the next pass and is logged
+once per failure streak without amounts; no owner or no DM path claims
+nothing. The bridge shares it as `SlashContext.spendDm` and
+`SchedulerServiceOpts.spendDm`, and runs a pass after each chat, button-pick,
+`/work` and `/session start` run and on every scheduler tick.
+`src/discord/spend-post.ts` exports `askPingOwner` (a `spend-cap` ask pings
+once per cap episode via `claimCapPing`; its `release` hands the ping back
+when the post fails), `askNeedsOwner` (stuck and spend-cap ping the owner;
+clarify addresses the requester, AUTONOMY-4), `takeSpendWarning`,
+`ownerAskNoticeLine` (a spend-cap line says only that work is paused for
+budget), `slashOwnerNotice` (the ask's owner line and the SAFE-13 line, never
+the warning), `finishSlashWithOwnerNotice`, and the `ChannelPost` /
+`OwnerNotice` / `AskPingOwner` types. The chat reply (also the reply to a run
+a button pick resumed; a spend-cap stop never gets choice buttons), `/work`,
+`/session start` and the schedule post hand the cap ping back when the post
+does not go out (`SchedulerOutbound.post` may resolve `false`; a schedule then
+keeps no ping key). `OwnerNotice.release` hands back what a
 slash notice claimed; `finishSlashWithOwnerNotice` answers through
 `finishSlashWithThinking` (DISCORD-ASK-7: the thinking message collapsed into
 the answer, else the ask/Done/fail status plus the reply; its `askStatus`
@@ -459,8 +480,8 @@ lift the cap), and a stored one loads as none. `/work` and
 `/session start` post `result.ask` through `formatAskReply` (paused status,
 not ✅; a clarify ask addresses the requester); `WorkTaskStatus` gains
 `blocked` (listed on `/status` as waiting for input when > 0); the owner
-ping (stuck and spend-cap only) and the warning go out as a fresh post after
-the answer. `formatAskReply` pings the owner for a `spend-cap` ask like a
+ping (stuck and spend-cap only) goes out as a fresh post after the answer
+(the 80% warning goes to the owner by DM, SAFE-14.a). `formatAskReply` pings the owner for a `spend-cap` ask like a
 stuck one. `formatAskReply` ignores `replyHint` for a `spend-cap` ask.
 `ScheduleRunFinished` gains optional `askReason` and `spendWarning`.
 
@@ -470,8 +491,9 @@ REQ-agent-333): `ask-ping.ts` exports `POST_SUMMARY_MAX` (1500) and
 chars and at what fits after a `headLength`-char post head within
 `ASK_REPLY_MAX` (1900) with `clipKeepingRoleNote`. The scheduler's run-row
 summary and schedule post, and the `/work` and `/session start` answers, use
-it; `appendPostLine` cuts the body for the SAFE-8 warning line the same way
-(ending the kept text in `…`). A closing `(not allowed for your role)` note
+it; `appendPostLine` cuts the body for an appended line (a SAFE-13 owner line,
+a slash owner notice riding the answer) the same way (ending the kept text in
+`…`). A closing `(not allowed for your role)` note
 stays last; a summary without it is cut exactly as before.
 
 Collapsed answers still notify (REQ-discord-215, AUTONOMY-2/4, SAFE-8 with
@@ -479,14 +501,14 @@ DISCORD-ASK-6/7): Discord does not notify a mention added by a message edit.
 `ask-ping.ts` exports `formatCollapsedPing` (one line: each mentioned user with
 `COLLAPSED_PING_QUESTION` "↑ question for you" for the requester a clarify ask
 addresses, `COLLAPSED_PING_NEEDS` "↑ needs you" for everyone else — the owner
-on stuck, spend cap or the 80% warning; users in `alreadyPinged` left out;
+on stuck, a spend-cap stop or a SAFE-13 line; users in `alreadyPinged` left out;
 null when nobody is left) and the `CollapsedPing` type. `spend-post.ts`
 exports `postCollapsedPing` (sends that line as a fresh post replying to the
 collapsed answer, allowed mentions exactly those users; best effort, never
 throws, null when nothing went out); `ChannelPost` gains optional
 `replyToMessageId`. The chat answer and the answer to a run a button pick
 resumed call it after `finalizeContent` succeeds with the answer's
-`mentionUserIds` (ask mention plus the 80% warning's owner) and track the ping
+`mentionUserIds` (ask mention plus a SAFE-13 line's owner) and track the ping
 post like the answer, so a reply to it continues the session.
 `finishSlashWithOwnerNotice` calls it after a collapsed slash answer (also
 when there is no owner notice), leaving out the users its owner notice post
@@ -740,8 +762,8 @@ no mentions from its content (`parse: []`,
 ask names (`mentionUserIds`) may be pinged (REQ-discord-205);
 a run summary's closing `(not allowed for your role)` note survives every cap
 between the agent and the post: schedule run rows and posts, `/work` and
-`/session start` answers (fitted under 1900), and the SAFE-8 warning append
-(REQ-discord-734);
+`/session start` answers (fitted under 1900), and an appended SAFE-13 line or
+slash owner notice (REQ-discord-734);
 `discord-send-file` attaches only in the channel the bridge set for the run
 (never a model-chosen one; none ⇒ refused), after the bridge's channel gate
 (`isMonitoredConversation` on the bridge's channel set: a thread passes as
@@ -829,10 +851,19 @@ its last update (a kept session's last activity).
 The spend warning line and `/status` spend line are built from integer
 amounts, never from child-written text; the spend-cap question is scrubbed and
 mention-defanged like every ask.
+Only the owner sees spend amounts and cap settings (SAFE-14.a): no channel
+post — chat answer, split part, collapsed edit, fallback reply, slash owner
+notice, `/work` PR line, schedule post or pending-ask post — and no one else's
+`/status` carries an amount, a cap value or a setting name; they see only
+"Work is paused for budget." (`SPEND_PAUSED_TEXT`), and `/status` shows them
+that only while runs stop at the cap. The owner's answer footers keep tokens
+and cost (DISCORD-15.a).
 Recording a SAFE-8 warning and delivering it are separate: whichever process
-crossed 80% records it, and the bridge delivers it on its next post to any
-allowlisted channel it already posts in (no new channel, no DM), claiming it
-in one IMMEDIATE transaction so two posts never repeat it. A spend-cap ask
+crossed 80% records it, and the bridge DMs it to the configured owner only
+(`src/discord/spend-dm.ts`, after each run and on every scheduler tick),
+claiming it in one IMMEDIATE transaction so two passes never repeat it and
+handing it back when the DM does not go out. A cap stop's details reach the
+owner by DM once per cap episode, with the channel ping. A spend-cap ask
 never carries the "reply to answer" hint (a reply cannot lift the cap); it
 pings the owner once per cap episode across chat, slash commands and
 schedules. A slash run's owner ping is a fresh post (an edit of a deferred
@@ -1021,6 +1052,12 @@ failed lookup writes nothing.
 - **Given** an undeclared user with an open Choose ask whose option labels the model wrote (possibly copied from that user's own words) and a configured owner
 - **When** they press Choose and pick an option, or press a pick button whose option id the ask does not have
 - **Then** the pick resumes the session with the label inside the untrusted-data fence (`role: community`, `source=ask-pick`), with `humanText` and the thread turn the plain label and the option buttons cleared at once as before; the owner's own pick reaches the run exactly as before; a pick whose option id matches none of the ask's options gets "that choice expired", runs nothing, leaves the ask open and never puts the raw id in a prompt (REQ-discord-548, REQ-discord-071)
+
+### Scenario: A stranger's run stops at the spend cap (SAFE-14.a)
+
+- **Given** a configured owner, `CORVIDINHO_DAILY_SPEND_CAP_USD` set and 24 h spend at the cap, with an 80% warning pending from an earlier run
+- **When** a declared team member @mentions the bot and the run stops before calling the model, then runs `/status`
+- **Then** the channel answer says only "💸 Work is paused for budget." with the owner mentioned (once per cap episode) — no question, amount, cap or setting name; the owner gets two DMs: the stop's details (spend, the call's estimate, the cap and the setting to change) and the 80% warning; the member's `/status` shows "Spend: Work is paused for budget." and no amounts, while the owner's `/status` shows the 24 h spend against the cap (REQ-discord-098)
 
 ### Scenario: A stranger named like the owner (SAFE-11)
 
@@ -1211,3 +1248,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-30 | a-non-owner-s-picked-choose-label-reaches-the-resumed-run-inside-the-untrusted-data-fence-like-their-typed-words-source: A non-owner's picked Choose label reaches the resumed run inside the untrusted-data fence like their typed words (source=ask-pick, the presser's role resolved at press time with their Discord role ids); the owner's pick prompt is byte-identical; a pressed option id that matches none of the ask's options is refused as expired and never reaches the run raw (SAFE-12.a, DISCORD-ASK-3/5/8) |
 | 2026-09-30 | req-discord-212-says-where-a-parent-deny-reaches-its-threads-a-deny-listed-thread-is-refused-on-every-path-while-a-deny: REQ-discord-212 says where a parent deny reaches its threads: a deny-listed thread is refused on every path, while a deny on the parent alone refuses a thread allowlisted by its own id only where the bridge knows the parent (MessageCreate, and a message-started thread session's ask buttons, restart rows and discord-send-file); slash, schedule and discord-post-message gate the id they are given; tests pin both cases |
 | 2026-09-30 | when-it-repeats-a-failing-call-it-is-steered-to-change-approach-then-asks-a-stuck-github-run-pings-the-owner-on-discord: When it repeats a failing call it is steered to change approach, then asks; a stuck GitHub run pings the owner on Discord (AGENT-16, AGENT-16.a) |
+| 2026-09-30 | only-the-owner-sees-spend-amounts-and-cap-settings-on-discord-everyone-else-sees-only-work-is-paused-for-budget-safe-14: Only the owner sees spend amounts and cap settings on Discord; everyone else sees only 'Work is paused for budget.' (SAFE-14.a): spend-cap posts, the /work PR line, the slash owner notice and SPEND_CAP_SUMMARY say only that; the question quote is dropped on every path including the daemon pending-ask pass; the 80% warning never rides a channel post and, with a cap stop's details, goes to the owner by DM (src/discord/spend-dm.ts, retried every scheduler tick); the /status spend line is owner-only |

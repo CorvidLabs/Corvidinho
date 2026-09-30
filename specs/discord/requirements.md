@@ -945,7 +945,7 @@ version bump) like every other persisted table under SAFE-6: the free-text
 `scrubSecrets` and SHALL be listed in `SCRUB_TARGETS`, so a scrub-rules
 re-scrub also covers them; `spend_alerts` SHALL hold no free text.
 
-On Discord (SAFE-8 as amended on #98, AUTONOMOUS-8), a run that stopped at
+On Discord (SAFE-8 as amended on #98, AUTONOMOUS-8, SAFE-14.a), a run that stopped at
 the spend cap (`ask.reason` `spend-cap`) SHALL be posted through the
 AUTONOMY-1/2 ask path on every bridge surface — chat reply, `/work`,
 `/session start` and schedule post — with a paused, not failed, status and
@@ -960,15 +960,15 @@ message, a substantive reply carries no cap text into the prompt, and a
 spend-cap pending ask persisted by an earlier build SHALL load as none;
 clarify and stuck pending asks are unchanged. `/work` SHALL record a run
 that stopped to ask as `blocked` (not `completed`; a stuck run stays
-`failed`), SHALL say the PR was not opened because the run paused at the
-spend cap, and `/status` SHALL count blocked work as waiting for input.
+`failed`), SHALL say only that the PR was not opened because work is paused
+for budget, and `/status` SHALL count blocked work as waiting for input.
 `/work` and `/session start` SHALL answer with the ask content in the one
 message DISCORD-ASK-7 leaves (the thinking message edited into the answer
 and the deferred reply deleted, else the status plus the reply), SHALL
 address the requester on a clarify ask (AUTONOMY-4) and ping the owner only
 for stuck and spend-cap asks; a run that stopped to ask SHALL never show "✅
-Done" (the fallback status is the ask's). That owner ping and the warning
-SHALL go out as a fresh channel post after the answer (allowed mentions
+Done" (the fallback status is the ask's). That owner ping SHALL go out as a
+fresh channel post after the answer (allowed mentions
 limited to the owner; an edit does not notify a mention), or be appended to
 the answer that went out (the collapsed message edited again, or the reply)
 when that post cannot be sent; when the answer itself fails (e.g. an
@@ -977,38 +977,80 @@ out as the fresh channel post and the answer's error SHALL still be raised.
 
 The 80% warning SHALL reach the owner even when the run that crossed it had
 no Discord reply (WATCH, the headless daemon, a delegate worker, a schedule
-whose channel left the allowlist): every bridge post SHALL take the pending
-warning from the outbox over the bridge's shared DB (the run's own
+whose channel left the allowlist): after each chat, button-pick, `/work` and
+`/session start` run and on every scheduler tick the bridge SHALL take the
+pending warning from the outbox over the bridge's shared DB (the run's own
 `spendWarning`, validated by `spendWarningFromUnknown`, only when the bridge
-has no DB) and append the warning line built from integer amounts, pinging
-the configured owner; a post that did not go out (a chat reply, a schedule
-post, or a slash run's owner notice that went out neither as a channel post
-nor in the reply) SHALL hand back both the warning and the cap episode's
-owner ping for the next post, and a schedule SHALL keep no ping key for a
-ping that was never posted. `/status` SHALL show the rolling 24-hour spend
+has no DB) and send the warning line built from integer amounts to the
+configured owner by DM only (SAFE-14.a); a DM that did not go out SHALL hand
+the warning back for the next pass. A post that did not go out (a chat
+reply, a schedule post, or a slash run's owner notice that went out neither
+as a channel post nor in the reply) SHALL hand back the cap episode's owner
+ping for the next post, and a schedule SHALL keep no ping key for a ping that
+was never posted. `/status` SHALL show the owner the rolling 24-hour spend
 against the cap with the percent, or that no cap is set, from the bridge's
 shared DB, with no new slash command.
+
+Only the owner SHALL see spend amounts and cap settings; everyone else SHALL
+only see that work is paused for budget (SAFE-14.a):
+
+- Every Discord post about a spend-cap stop — the chat answer, the answer to
+  a run a button pick resumed, the `/work` and `/session start` answers, a
+  schedule run's own ask post and the ask a bridge tick posts for a daemon
+  run (REQ-discord-347) — SHALL be `formatAskReply` with `SPEND_CAP_HEADLINE`
+  "💸 Work is paused for budget." (`SPEND_PAUSED_TEXT`), the owner mention
+  (once per cap episode) and the schedule line on a schedule post, and SHALL
+  NOT quote the ask's question. `SPEND_CAP_STATUS` SHALL be "💸 Work is paused
+  for budget", the `/work` PR line "PR: not opened — Work is paused for
+  budget." and a slash owner notice's spend-cap line "💸 <@owner> <label>:
+  Work is paused for budget.". No channel post (answer, split part, collapsed
+  edit, fallback reply, slash owner notice, schedule post) SHALL carry the 80%
+  warning, an amount, a cap value or a setting name.
+- The owner SHALL get a cap stop's details — the spend-cap question with the
+  24-hour spend, the call's estimate, the cap and the setting to change,
+  scrubbed (SAFE-6) and mention-defanged, naming the channel — by DM through
+  the gateway `sendDm` (`src/discord/spend-dm.ts`), once per cap episode:
+  when the stop's post claimed the episode's owner ping (`claimCapPing`), also
+  when that post then failed. A stop DM that does not go out SHALL be held in
+  memory (a newer stop replacing it) and retried with the warning on the next
+  pass; one pass SHALL run at a time. A failed DM SHALL be logged once per
+  failure streak, with no amounts. With no owner configured nothing is
+  claimed or sent; with no DM path yet nothing is claimed.
+- `/status` SHALL show the spend line only to the owner (ADMIN, IDENTITY-2,
+  re-checked by the handler), with a note while a spend DM waits; anyone else
+  SHALL see no spend line, and "Spend: Work is paused for budget." while runs
+  stop at the spend check (cap reached, unpriced model, invalid value,
+  unreadable ledger).
+- The owner's answer footers keep tokens and cost and everyone else's show
+  model and time (DISCORD-15.a, REQ-discord-457, unchanged). `corvidinho
+  doctor`, `task run` output and the daemon's logs stay the operator's.
+- No new env var, config key, table, column or schema version.
 
 Acceptance Criteria
 - A ledger row written with a vendor-key-looking provider or model persists redacted.
 - `SCRUB_TARGETS` contains `spend_ledger` with `provider` and `model`.
 - `rescrubDatabase` re-scrubs a raw `spend_ledger` row.
-- A `spend-cap` ask reply carries the spend-cap headline and the question, pings the owner, its thinking status is not an error, and it never carries the reply hint.
+- A `spend-cap` ask reply is the spend-cap headline "💸 Work is paused for budget." without the question, pings the owner, its thinking status ("💸 Work is paused for budget") is not an error, and it never carries the reply hint.
 - Two spend-cap asks with different amounts share one `askPingKey`.
 - Two chat messages at the cap: the first reply pings the owner, the second posts the ask with no mention; after spend is seen under 70% the next one pings again. A spend-cap stop leaves no pending ask: a later `ok` runs the agent (still at the cap: the ask again, no mention) and a substantive reply's prompt carries no prior-question or cap text; a stored spend-cap pending ask loads as none while a stored clarify ask loads unchanged.
 - `/work` with a clarify ask is `blocked`, mentions the requester in the reply and posts no owner notice.
-- `/work` at the cap: the task is `blocked`, the reply shows the ask and the spend-cap PR line (no ✅), and one fresh post pings the owner; a second `/work` in the same episode does not ping. `/session start` at the cap shows the ask and pings the owner.
+- `/work` at the cap: the task is `blocked`, the reply shows the spend-cap headline and the PR line "PR: not opened — Work is paused for budget." (no ✅, no question, no amount), and one fresh post "💸 <@owner> /work `…`: Work is paused for budget." pings the owner; a second `/work` in the same episode does not ping. `/session start` at the cap shows the headline and pings the owner.
 - A schedule spend-cap ask in an episode already pinged elsewhere posts without a mention.
-- A warning recorded by another process (a WATCH-style run on the same data dir) appears on the next bridge chat reply with the owner pinged, once; `/work` delivers a pending warning as a fresh post pinging the owner.
-- A result with `spendWarning` and no bridge DB gets the warning line and the owner in `mentionUserIds` (chat reply and schedule post); a malformed `spendWarning` in the result frame is dropped.
-- `/status` with a $5 cap and $4.10 spent shows `Spend (24h): $4.10 of $5.00 daily cap (82%)`.
-- `/work` whose final reply throws (expired interaction token) still posts the owner notice with the spend-cap ping and the pending warning, and the error is raised; `/session start` whose reply and notice both fail leaves the warning and the cap ping for the next chat reply, which pings the owner and carries the warning.
+- A warning recorded by another process (a WATCH-style run on the same data dir) reaches the owner by DM after the next bridge chat run, once, and the reply is the plain answer; `/work` DMs a pending warning to the owner and posts nothing more.
+- A result with `spendWarning` and no bridge DB is DMed to the owner (chat reply and schedule run) and the post carries no warning line and no owner mention; a malformed `spendWarning` in the result frame is dropped.
+- `/status` with a $5 cap and $4.10 spent shows the owner `Spend (24h): $4.10 of $5.00 daily cap (82%)`.
+- `/work` whose final reply throws (expired interaction token) still posts the owner notice with the spend-cap ping, the owner gets the details and the pending warning by DM, and the error is raised; `/session start` whose reply and notice both fail still DMs both at once and leaves the cap ping for the next chat reply, which pings the owner.
 - A chat spend-cap reply that failed to post leaves the episode's owner ping for the next reply.
 - A schedule spend-cap post that failed sets no ping key, and the next tick's post pings the owner.
-- `/work` at the cap with an editable thinking message: the thinking message becomes the answer (`(blocked)`, the spend-cap ask, no ✅, no mention), the deferred reply is deleted, and one fresh post pings the owner with the pending warning; a second `/work` in the episode posts no owner notice.
+- `/work` at the cap with an editable thinking message: the thinking message becomes the answer (`(blocked)`, the spend-cap headline, no ✅, no mention), the deferred reply is deleted, and one fresh post pings the owner without the warning (DMed); a second `/work` in the episode posts no owner notice.
 - `/session start` with a stuck ask collapses to the ask (no ✅) and the owner gets a fresh post; with a clarify ask the collapsed answer mentions only the requester and no owner post goes out.
 - The fresh owner post fails: the notice is appended to the collapsed answer (same message edited again, owner in its allowed mentions).
-- Collapse, reply and owner post all fail (reply throws): the error is raised and the next chat answer carries the owner ping and the warning.
+- Collapse, reply and owner post all fail (reply throws): the error is raised, the warning was DMed at once and the next chat answer carries the owner ping.
+- SAFE-14.a through `startBridge` with a memory DB (replies and DMs recorded) and a bridge-wired scheduler: no post about a spend-cap stop (chat fallback reply, collapsed edit, button-pick resume, `/work`, `/session start`, schedule post, daemon pending-ask post) carries the question, a `$` amount, a percent, `CORVIDINHO_`, "daily cap" or "SAFE-8"; the owner gets one DM with the details ("💸 Work is paused for budget. Only you see these details (SAFE-14.a).", the channel, the quoted question) per cap episode, and again after a re-arm or a handed-back ping; a chat answer, a split fallback answer, a collapsed edit and a schedule ✅ post with an 80% warning pending are the plain answer with no owner mention, and the owner gets the warning by DM once.
+- SAFE-14.a `/status`: the owner sees the 24 h spend line (82%, then 102% "cap reached") and "Spend cap: off (set CORVIDINHO_DAILY_SPEND_CAP_USD …)" with no cap; a declared team member sees no spend line under the cap or with none set, and "Spend: Work is paused for budget." at the cap.
+- SAFE-14.a `createSpendDm`: a DM that returns null or throws keeps its claim (the warning pending in `spend_alerts`, the stop held) and is sent on the next pass, once; the failure is logged once per streak with no amounts; a newer stop replaces a held one; no owner or no DM path claims nothing; concurrent passes send a held stop once.
+- DISCORD-15.a unchanged: someone else's answer footer shows model and time only; the owner's shows tokens and cost.
+- These SAFE-14.a tests fail on the base sources.
 
 ### REQ-discord-088
 
@@ -1677,7 +1719,7 @@ bridge delivers an answer by editing the thinking (or Choose stub) message
 (DISCORD-ASK-6/7: the chat answer, the answer to a run a button pick resumed,
 `/work` and `/session start`) and that answer mentions the requester (a
 clarify ask, AUTONOMY-4) and/or the configured owner (a stuck ask,
-AUTONOMY-2; a spend-cap ask or the 80% warning, SAFE-8), the bridge SHALL
+AUTONOMY-2; a spend-cap ask, SAFE-8; a SAFE-13 owner line), the bridge SHALL
 additionally send one short fresh post to the same channel, replying to the
 edited answer, whose content is only those mentions with a one-line pointer
 (`↑ question for you` for the requester the clarify ask addresses, `↑ needs
@@ -1697,12 +1739,12 @@ slash command, env var or schema change.
 Acceptance Criteria
 - A chat clarify ask collapsed into the thinking message (free text or Choose stub) is followed by exactly one fresh post, `<@requester> ↑ question for you`, replying to the edited answer, with allowed mentions exactly the requester; a reply to that post continues the session.
 - A chat stuck ask collapsed into the thinking message is followed by exactly one fresh post, `<@owner> ↑ needs you`, with allowed mentions exactly the owner (the requester is not pinged).
-- A collapsed clarify ask carrying a pending 80% warning is followed by one post pinging the requester (question) and the owner (needs you), allowed mentions exactly those two.
+- A collapsed clarify ask with a pending 80% warning carries no warning line and is followed by one post pinging only the requester (question); the owner gets the warning by DM (SAFE-14.a, REQ-discord-098).
 - Two chat spend-cap stops in one cap episode produce one owner ping post in total.
 - A collapsed answer that mentions nobody, an answer delivered as a fallback reply, and a failed ping post add no post; the turn still finishes.
 - A button pick whose resumed run gets stuck collapses the stub into the ask and is followed by one owner ping replying to the stub.
 - `/work` with a clarify ask collapses the answer, deletes the deferred reply and is followed by one requester ping, with no owner notice.
-- `/work` at the spend cap with a pending warning sends exactly one owner post (the REQ-discord-098 notice) and no duplicate ping; `/session start` with a clarify ask by the owner and a pending warning sends only the owner notice.
+- `/work` at the spend cap with a pending warning sends exactly one owner post (the REQ-discord-098 notice, without the warning) and no duplicate ping; `/session start` with a clarify ask by the owner and a pending warning sends no owner notice, only the question's ping (the warning goes by DM).
 - When the slash owner notice post fails and is appended to the collapsed answer, one owner ping post follows.
 - A slash answer delivered through the deferred reply (no collapse) adds no ping post.
 
@@ -1909,9 +1951,12 @@ Discord token (REQ-cli-108): it records the ask, and the bridge posts it.
   pinged for `stuck` and `spend-cap` and the schedule creator for `clarify`
   (AUTONOMY-4), at most once per question per schedule (`askPingKey`) and
   a `spend-cap` ask at most once per cap episode (`claimCapPing`, SAFE-8),
-  no reply hint on a `spend-cap` ask, and the pending 80% warning riding the
-  post. A post that does not go out (resolves `false` or throws) SHALL hand
-  the ask, the warning and the cap ping back, keep no ping key, log a
+  no reply hint on a `spend-cap` ask, and no question quote, amount or
+  warning on it (only "💸 Work is paused for budget.", SAFE-14.a): when the
+  post claims the episode's owner ping the stored question goes to the
+  owner by DM (REQ-discord-098), and every tick runs the owner's spend DM
+  pass. A post that does not go out (resolves `false` or throws) SHALL hand
+  the ask and the cap ping back, keep no ping key, log a
   scrubbed `[scheduler] ask failed: …` line when it threw, and be retried on
   a later tick. Only one delivery pass SHALL run at a time.
 - Staleness. An older pending ask SHALL NOT be posted once a later run of
@@ -1927,12 +1972,13 @@ Discord token (REQ-cli-108): it records the ask, and the bridge posts it.
 - A ticker with no outbound (the daemon) SHALL NOT take or post asks; it
   keeps logging `run.needs_human` (REQ-cli-098).
 
-No new slash command, env var, DM or channel.
+No new slash command, env var or channel; the only DM is the owner's spend
+DM (SAFE-14.a, REQ-discord-098).
 
 Acceptance Criteria
 - A daemon-wired scheduler's stuck run stores `ask_reason` `stuck` and the question with `ask_posted_at` null and posts nothing; a bridge-wired scheduler on the same DB posts it on its next tick once, to the schedule channel, with the prefix, the stuck headline, the question and the owner mention (`mentionUserIds` [owner]); later ticks post nothing more.
 - A daemon clarify ask posts with only the schedule creator mentioned.
-- A daemon spend-cap ask pings the owner with the pending 80% warning and no reply hint; a second one in the same episode posts without a ping; an episode another surface already pinged posts without a ping.
+- A daemon spend-cap ask posts the schedule line and "💸 Work is paused for budget." with the owner pinged, no question, no warning and no reply hint, and hands the stored question to the owner's DM pass once; a second one in the same episode posts without a ping or DM; an episode another surface already pinged posts without a ping.
 - The same question from two daemon runs pings once; of two pending asks of one schedule only the newest posts.
 - A later finished run, or deleting the schedule, leaves nothing to post.
 - A later run that finishes while a delivery pass is posting another schedule's ask makes that schedule's pending ask moot: it is not posted.
@@ -2266,10 +2312,11 @@ the note stays last.
   chars and at what fits after the answer's head (task, session, worktree,
   description and PR lines; session, topic and worktree lines) within 1900,
   so the gateway's 1900 cut never drops the note.
-- `appendPostLine`, which cuts a post's body so the SAFE-8 80% warning line
-  fits within 1900 (chat replies, schedule posts, a slash owner notice that
-  rides the answer), SHALL cut the body before the note, end the kept text
-  in `…`, and keep the note ahead of the warning line.
+- `appendPostLine`, which cuts a post's body so an appended line fits within
+  1900 (a SAFE-13 owner line on a reply or schedule post, a slash owner
+  notice that rides the answer; the SAFE-8 80% warning no longer rides a
+  post, SAFE-14.a), SHALL cut the body before the note, end the kept text in
+  `…`, and keep the note ahead of the appended line.
 
 `ask-ping.ts` SHALL export `POST_SUMMARY_MAX` and
 `clipPostSummary(summary, headLength = 0)` for these caps. A summary that
@@ -2281,7 +2328,7 @@ Acceptance Criteria
 - `tests/scheduler.service.test.ts` "a long summary ending with the note keeps it in the run row and the post; one without is cut as before": the run row's summary is 1500 chars ending with the note; the post (448-char schedule name) is at most 1900 chars and ends with the note; a run without the note stores and posts exactly its first 1500 chars.
 - `tests/discord.slash-ask7.test.ts` "/work answer for a non-owner keeps the closing role note within the 1900 cap": the collapsed answer is at most 1900 chars, its summary part is under 1500 (fitted after a long head) and it ends with the note.
 - Same file, "/session start answer for a non-owner keeps the closing role note within the 1900 cap": at most 1900 chars, the summary part at most 1500, ending with the note.
-- `tests/discord.spend.test.ts` "the cut for the warning line keeps a closing role note": an 1800-char body ending with the note plus the 80% line is a 1900-char post ending `y…`, the note, a blank line and the warning line; a body that fits is untouched; a long body without the note still ends `…\n\nLINE`.
+- `tests/discord.spend.test.ts` "the cut for an appended line keeps a closing role note": an 1800-char body ending with the note plus a ~210-char owner notice line is a 1900-char post ending `y…`, the note, a blank line and the line; a body that fits is untouched; a long body without the note still ends `…\n\nLINE`.
 - With main's `src/discord/ask-ping.ts`, `src/discord/command-handlers/work.ts`, `src/discord/command-handlers/session.ts` and `src/scheduler/service.ts`, these four tests fail; they pass on the branch.
 
 ### REQ-discord-036
@@ -2620,8 +2667,8 @@ A pick whose option id matches none of the ask's options SHALL get
 `ASK_CHOICE_EXPIRED` and never reach a run. The spawn client SHALL read the child's `result.injection`
 with `injectionNoticeFromUnknown` into `AgentSpawnResult.injection`, and the
 post that carries a run's answer SHALL then ping the owner with
-`formatInjectionOwnerLine`: chat and button-pick replies (`withInjectionNotice`,
-with the SAFE-8 warning), `/session start` and `/work` (`slashOwnerNotice`
+`formatInjectionOwnerLine`: chat and button-pick replies (`withInjectionNotice`;
+the SAFE-8 warning no longer rides a post, SAFE-14.a), `/session start` and `/work` (`slashOwnerNotice`
 `injection`) and a schedule run's result post or ask post. Replayed session
 turns SHALL strip invisible characters and mark a line that imitates a
 Corvidinho block or a turn label (`Human:`, `You (Corvidinho):`) `(quoted)`,

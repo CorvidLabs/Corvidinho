@@ -6,7 +6,9 @@
  *  - the spend-cap ask: the runner stops before a provider call that would
  *    pass the cap and asks the owner through the AUTONOMY-1/2 ask path
  *    instead of refusing or spending past the cap,
- *  - the `doctor` and Discord `/status` lines (24 h spend vs the cap).
+ *  - the `doctor` and Discord `/status` lines (24 h spend vs the cap; the
+ *    owner's line, and for anyone else only "Work is paused for budget."
+ *    while runs stop at the cap, SAFE-14.a).
  *
  * Bridges rebuild the warning from integer micro-USD (SpendWarning), never
  * from child-written text. A model id is SAFE-6 scrubbed before it is quoted.
@@ -14,8 +16,10 @@
  * the ask is addressed to the operator and names the operator action that
  * does (raise or unset the cap and restart, or wait for the window) instead
  * of asking a yes/no question. The run's summary (posted wherever the run
- * reports, e.g. a public GitHub comment for WATCH) is a generic line without
- * amounts or env internals; the details live in the ask question.
+ * reports, e.g. a public GitHub comment for WATCH) is the generic
+ * SPEND_PAUSED_TEXT without amounts or setting names (SAFE-14.a); the details
+ * live in the ask question, which on Discord reaches only the owner, by DM
+ * (src/discord/spend-dm.ts).
  */
 
 import { scrubSecrets } from "../store/scrub.ts";
@@ -36,11 +40,17 @@ export const SPEND_WARN_PERCENT = 80;
 export const SPEND_REARM_PERCENT = 70;
 
 /**
- * TaskResult summary of a run stopped by the spend cap: safe for any audience
- * (no amounts, no env names). The ask question carries the details.
+ * SAFE-14.a (#98): all anyone but the owner learns about spend — work is
+ * paused for budget. No amounts, no cap values, no setting names.
  */
-export const SPEND_CAP_SUMMARY =
-  "Paused before calling the model: the operator's daily spend cap (SAFE-8) needs attention, so nothing more was spent.";
+export const SPEND_PAUSED_TEXT = "Work is paused for budget.";
+
+/**
+ * TaskResult summary of a run stopped by the spend cap: safe for any audience
+ * (SAFE-14.a: no amounts, no cap or setting names). The ask question carries
+ * the details, for the operator (CLI, logs) and the owner's DM.
+ */
+export const SPEND_CAP_SUMMARY = SPEND_PAUSED_TEXT;
 
 /** Largest amount a bridge accepts from a child's result frame (micro-USD). */
 const MAX_MICRO_USD = 1e15;
@@ -235,7 +245,28 @@ export function formatSpendDoctorLine(s: SpendSnapshot): SpendDoctorLine {
   }
 }
 
-/** One `/status` line (Discord markdown, no ids, no raw errors). */
+/** True when runs stop and ask at the spend check right now (cap reached, unpriced model, bad value, no ledger). */
+export function spendPaused(s: SpendSnapshot): boolean {
+  switch (s.kind) {
+    case "off":
+      return false;
+    case "invalid":
+    case "unreadable":
+      return true;
+    case "cap":
+      return s.window.spentMicroUsd >= s.capMicroUsd || !s.priced;
+  }
+}
+
+/**
+ * SAFE-14.a: the `/status` spend line for anyone but the owner — only that
+ * work is paused for budget, while it is; otherwise nothing (undefined).
+ */
+export function formatSpendPublicStatusLine(s: SpendSnapshot): string | undefined {
+  return spendPaused(s) ? `Spend: ${SPEND_PAUSED_TEXT}` : undefined;
+}
+
+/** The owner's `/status` line (Discord markdown, no ids, no raw errors). */
 export function formatSpendStatusLine(s: SpendSnapshot): string {
   switch (s.kind) {
     case "off":

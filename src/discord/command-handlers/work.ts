@@ -18,6 +18,7 @@ import type { SlashContext, SlashInteraction } from "../slash-types.ts";
 import { finishSlashWithThinking, recordSlashStub } from "../slash-finish.ts";
 import { formatTaskPlumbing } from "../../agent/task-summary.ts";
 import { loadLlmEnv } from "../../agent/execute.ts";
+import { SPEND_PAUSED_TEXT } from "../../agent/spend-notice.ts";
 import { openWorkPr, type OpenWorkPrInput } from "../../work/pr.ts";
 import { scrubSecrets } from "../../store/scrub.ts";
 import { ASK_NO_OWNER_WARNING, formatAskReply } from "../ask-ping.ts";
@@ -29,6 +30,7 @@ import {
   finishSlashWithOwnerNotice,
   slashOwnerNotice,
 } from "../spend-post.ts";
+import { spendStopFor } from "../spend-dm.ts";
 
 /**
  * IDENTITY-11.a — who may start /work: the owner (IDENTITY-9) and a declared
@@ -336,8 +338,9 @@ export async function handleWorkCommand(
         people: loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner }),
       })
     : "community";
+  // SAFE-14.a: the public line says only that work is paused for budget.
   const prLine = result.ask?.reason === "spend-cap"
-    ? "PR: not opened — the work run paused at the daily spend cap (SAFE-8)."
+    ? `PR: not opened — ${SPEND_PAUSED_TEXT}`
     : shipRole !== "owner" && shipRole !== "team"
     ? "PR: not opened — only the owner (ADMIN) can ship /work as a PR, or a declared team member (IDENTITY-10); community runs cannot (ROLES-CHAT-3). The changes stay on the work branch."
     : await shipWorkPr(ctx, {
@@ -360,46 +363,53 @@ export async function handleWorkCommand(
   const body = `${head}${summary}`;
 
   // DISCORD-ASK-7 — collapse thinking into the final body (drop the deferred
-  // reply); the owner ping for the ask and the pending SAFE-8 80% warning go
-  // out as a fresh post (an edit does not notify), claims handed back when
-  // nothing carried them.
+  // reply); the owner ping for the ask goes out as a fresh post (an edit does
+  // not notify), its claim handed back when nothing carried it. SAFE-14.a:
+  // the 80% warning and a cap stop's details go to the owner by DM instead.
   const notice = slashOwnerNotice({
     owner: ctx.owner,
-    outbox: ctx.spendAlerts,
     ask: result.ask,
     askOwner,
-    spendWarning: result.spendWarning,
     // SAFE-13: a tool result that looked like an injection tells the owner.
     injection: result.injection,
     label: `/work \`${task.id}\``,
   });
-  await finishSlashWithOwnerNotice({
-    thinking,
-    body,
-    interaction,
-    sessionId: session.id,
-    trackBotMessage: ctx.trackBotMessage,
-    thinkExtras,
-    ok: result.ok,
-    failStatus: `❌ exit ${result.exitCode}`,
-    ...(ask ? { askStatus: { status: ask.status, failed: ask.failed }, mentionUserIds: ask.mentionUserIds } : {}),
-    ...(choice
-      ? {
-          components: choice.components,
-          onDelivered: (_mode: "collapsed" | "fallback", messageId?: string) =>
-            recordSlashStub(ctx.store, session, choice.pending, messageId),
-        }
-      : answerAsk
-      ? {
-          components: answerAsk.components,
-          keepFooter: true,
-          onDelivered: (_mode: "collapsed" | "fallback", messageId?: string) =>
-            recordSlashStub(ctx.store, session, answerAsk.pending, messageId),
-        }
-      : {}),
-    notice,
-    post: ctx.post,
-  });
+  try {
+    await finishSlashWithOwnerNotice({
+      thinking,
+      body,
+      interaction,
+      sessionId: session.id,
+      trackBotMessage: ctx.trackBotMessage,
+      thinkExtras,
+      ok: result.ok,
+      failStatus: `❌ exit ${result.exitCode}`,
+      ...(ask ? { askStatus: { status: ask.status, failed: ask.failed }, mentionUserIds: ask.mentionUserIds } : {}),
+      ...(choice
+        ? {
+            components: choice.components,
+            onDelivered: (_mode: "collapsed" | "fallback", messageId?: string) =>
+              recordSlashStub(ctx.store, session, choice.pending, messageId),
+          }
+        : answerAsk
+        ? {
+            components: answerAsk.components,
+            keepFooter: true,
+            onDelivered: (_mode: "collapsed" | "fallback", messageId?: string) =>
+              recordSlashStub(ctx.store, session, answerAsk.pending, messageId),
+          }
+        : {}),
+      notice,
+      post: ctx.post,
+    });
+  } finally {
+    // SAFE-14.a: the owner's DM — the stop's details when this run claimed
+    // the episode's ping, and the pending 80% warning. Never throws.
+    await ctx.spendDm?.deliver({
+      stop: spendStopFor(result.ask, askOwner, interaction.channelId),
+      warning: result.spendWarning,
+    });
+  }
 }
 
 /** One reply line for the /work PR step; never throws (REQ-discord-088). */
