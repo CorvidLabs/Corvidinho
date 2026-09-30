@@ -43,8 +43,10 @@ criterion.
    `/work` still pings the owner (SAFE-13) instead of the quiet reply.
 4. `/work` stays registered and visible to every guild member; the handler
    refuses. No per-role command visibility.
-5. With no owner configured (and nobody declared team) nobody can start
-   `/work` (IDENTITY-3 / IDENTITY-12 default-deny); before, anyone in an
-   allowlisted channel could run a read-only one.
+5. With no owner configured nobody is owner (IDENTITY-3), so only a
+   declared team member can start `/work` (the #285 resolver keeps team
+   without an owner); with nobody declared team, nobody can (IDENTITY-12
+   default-deny). Before, anyone in an allowlisted channel could run a
+   read-only one.
 6. `/session start` and chat stay open to community (read tools only), as
    IDENTITY-11.a names only `/work`.

@@ -527,10 +527,12 @@ always overwrites `CORVIDINHO_ACTING_ROLE` (`owner` when `actingIsAdmin`, else
 on every call (`resolveActingRole`, REQ-plugins-065); the stamp only lowers
 it. Community can't start `/work` (IDENTITY-11.a): right after the SAFE-13
 inbound check the handler refuses a community caller (declared community, no
-role, undeclared, muted or deny-listed, everyone with no owner) with the
-ephemeral `not authorized` of the owner-only commands, before any deferred
-reply, session, worktree, `talk/*` branch, work task, run or PR step; the role
-comes from the owner config and the people list re-read for the command.
+role, undeclared; muted or deny-listed callers too, though the dispatcher's
+mute and actor gates stop them first) with the ephemeral `not authorized` of
+the owner-only commands, before any deferred reply, session, worktree,
+`talk/*` branch, work task, run or PR step; the role comes from the owner
+config and the people list re-read for the command. With no owner configured
+only a declared team member can start it (IDENTITY-3).
 `/work` ships its PR for the owner or a team member (re-resolved after the
 run); a team member demoted during the run keeps the branch. `/admin people role person:<id>
 role:<team|community>` (ADMIN-3.b) writes the `role` key, owner-only and

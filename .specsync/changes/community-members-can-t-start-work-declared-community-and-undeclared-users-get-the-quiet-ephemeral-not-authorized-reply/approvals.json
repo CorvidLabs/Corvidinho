@@ -60,6 +60,67 @@
       "approved_delta_digests": {
         "discord": "c50349be9ead62c9c85b30ae121ddea7ce9df1ce71dfe0cd13708a6776495e88"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790727659,
+      "digest": "2775ca182e6a19603fa0455693c6734d1cbef3c8aaa130450e74a029ae96dc50",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "community-members-can-t-start-work-declared-community-and-undeclared-users-get-the-quiet-ephemeral-not-authorized-reply",
+        "title": "Community members can't start /work: declared community and undeclared users get the quiet ephemeral not-authorized reply and no worktree, branch, work task or run, while the owner and team keep /work (IDENTITY-11.a, #65)",
+        "description": "Community members can't start /work: declared community and undeclared users get the quiet ephemeral not-authorized reply and no worktree, branch, work task or run, while the owner and team keep /work (IDENTITY-11.a, #65)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "INTENT.md",
+          "allowlist.example.toml",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "hi/identity.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/requirements.md",
+          "specs/discord/testing.md",
+          "src/discord/command-handlers/work.ts",
+          "tests/discord.actor-gate.test.ts",
+          "tests/discord.allowed-mentions.test.ts",
+          "tests/discord.ask-answer-modal.test.ts",
+          "tests/discord.collapsed-ping.test.ts",
+          "tests/discord.session-thread.test.ts",
+          "tests/discord.session-worktree.test.ts",
+          "tests/discord.slash-ask7.test.ts",
+          "tests/discord.slash-choose-ask.test.ts",
+          "tests/discord.slash-pending-ask.test.ts",
+          "tests/discord.slash-reply-continuity.test.ts",
+          "tests/discord.slash.test.ts",
+          "tests/discord.spend.test.ts",
+          "tests/fixtures/team-people.ts",
+          "tests/identity.recognise.test.ts",
+          "tests/roles.community-no-work.test.ts",
+          "tests/roles.team.test.ts",
+          "tests/safe.injection.test.ts",
+          "tests/work.pr.test.ts",
+          "tests/worktree.project-scope.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A /work from a community member — declared community, a declared person with no role, or anyone undeclared (IDENTITY-12), including a muted or deny-listed team member and everyone when no owner is configured — gets only the ephemeral 'not authorized' reply the owner-only commands give (/announce channel, /schedule create, /admin), with no deferred public reply, no session, no git worktree or talk/* branch, no work task, no agent run (so no verify lane) and no PR step; the role comes from resolveDiscordActingRole over the owner config and the people list re-read when the command runs, so a promotion or demotion in the file applies to the next /work without a restart; the owner's and a declared team member's /work run unchanged (worktree, work flag, PR step); a community /work description that looks like an injection attempt still gets the SAFE-13 refusal and owner ping; tests/roles.community-no-work.test.ts fails on the base sources and passes on the branch"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "7b3c2f7787e4c55fdd26cab44af1d59ef2fc4787665157726851a67ae4357a8e"
+      }
     }
   ],
   "reopenings": []

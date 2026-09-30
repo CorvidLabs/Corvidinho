@@ -15,7 +15,8 @@ gateway. No live Discord, no network, no token.
 | Requirement | Test | Evidence |
 |---|---|---|
 | `REQ-discord-065` | `tests/roles.community-no-work.test.ts` (community refused) | Declared community (`role = "community"`), declared with no role, and undeclared: `handleSlashInteraction` returns handled; the only reply is `{ content: "not authorized", ephemeral: true }`; `deferReply` is never called; no agent run, no PR-step call, no session, no work task; the temp repo still has one worktree, no `talk/*` branch and an empty worktree base. Same with a `project` option, and with no owner and no people file. |
-| `REQ-discord-065` | `tests/roles.community-no-work.test.ts` (blocked team) | A team member who is muted, or on `deny_users`, calling `handleWorkCommand` directly: the same refusal and nothing created (community at the handler). |
+| `REQ-discord-065` | `tests/roles.community-no-work.test.ts` (no owner, people file) | No owner configured: declared community, no role and undeclared get the refusal and nothing is created; a declared team member still runs with `actingRole: "team"`, `actingIsAdmin: false` and the work flag. |
+| `REQ-discord-065` | `tests/roles.community-no-work.test.ts` (blocked team) | A team member who is muted, or on `deny_users`, calling `handleWorkCommand` directly: the same refusal and nothing created (community at the handler). Through `handleSlashInteraction` the dispatcher stops them first (the ephemeral mute reply / the zero-width ack) and nothing is created either (passes on the base too, guard). |
 | `REQ-discord-065` | `tests/roles.community-no-work.test.ts` (owner / team unchanged) | The owner and a team member: deferred reply, one run with `actingRole` owner / team, `workTask: true`, `cwd` under the worktree base, one PR-step call, a completed task, a second worktree in the repo. Passes on the base too (guard). |
 | `REQ-discord-065` | `tests/roles.community-no-work.test.ts` (live re-read) | After a team `/work`, the people file is edited (Tofu → community, Kyn → team): Tofu's next `/work` gets the refusal and adds no worktree; Kyn's runs with `actingRole: "team"` and the work flag. No restart. |
 | `REQ-discord-065` | `tests/roles.community-no-work.test.ts` (bridge) | `startBridge` with the people file as `CORVIDINHO_ALLOWLIST_FILE` and the git repo as the project: a declared community and an undeclared `/work` get the ephemeral refusal and spawn nothing, no session, no worktree; the owner's `/work` runs as owner with the work flag. |
@@ -24,11 +25,11 @@ gateway. No live Discord, no network, no token.
 | `REQ-discord-088` | `tests/worktree.project-scope.test.ts` | A team member's `/work` on an out-of-scope project is still refused by the project scope ("outside the bridge project root"); on an allowlisted sibling it runs in its own worktree. |
 
 Fail-on-base proof: with main's `src/discord/command-handlers/work.ts`
-(20a0f58) swapped in, `tests/roles.community-no-work.test.ts` ran 8 fail /
-1 pass (the owner / team guard), and the updated community cases in
-`tests/roles.team.test.ts`, `tests/work.pr.test.ts` and
-`tests/discord.actor-gate.test.ts` failed (11 fail / 59 pass across the
-five files run); restored, all pass. The other edited tests pass on both
+(20a0f58) swapped in, `tests/roles.community-no-work.test.ts` ran 9 fail /
+2 pass (the owner / team guard and the dispatcher mute / deny guard), and the
+updated community cases in `tests/roles.team.test.ts`,
+`tests/work.pr.test.ts` and `tests/discord.actor-gate.test.ts` failed (12
+fail / 148 pass across the five files run); restored, all pass. The other edited tests pass on both
 (they only declare the invoker team or run as owner).
 
 Full suite: `bun test` green; `bunx tsc --noEmit` clean;

@@ -1,6 +1,6 @@
 ---
 id: community-members-can-t-start-work-declared-community-and-undeclared-users-get-the-quiet-ephemeral-not-authorized-reply
-state: implementing
+state: verifying
 type: bug_fix
 base_commit: 39767a8f72e42f1d30b9fac717708f6eb3f41b26
 ---

@@ -24,7 +24,7 @@ import { CORVIDINHO_PROTOCOL_VERSION } from "../src/discord/protocol-version.ts"
 import { SessionStore } from "../src/discord/session-store.ts";
 import { handleSlashInteraction } from "../src/discord/slash-dispatch.ts";
 import type { SlashContext, SlashInteraction, SlashReplyPayload } from "../src/discord/slash-types.ts";
-import { NOT_AUTHORIZED } from "../src/discord/types.ts";
+import { EPHEMERAL_SILENT_ACK, MUTED, NOT_AUTHORIZED } from "../src/discord/types.ts";
 import { WorkStore } from "../src/discord/work-store.ts";
 import type { OwnerRecord } from "../src/identity/owner.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
@@ -231,6 +231,21 @@ describe("IDENTITY-11.a: community members can't start /work", () => {
     expectNothingStarted(h, ix);
   });
 
+  test("no owner configured: declared community and undeclared are refused; a declared team member still runs as team (IDENTITY-3: nobody is owner)", async () => {
+    for (const id of [KYN, GASPAR, STRANGER]) {
+      const h = harness({ owner: null });
+      const ix = workIx(id);
+      await handleSlashInteraction(h.ctx, ix);
+      expectNothingStarted(h, ix);
+    }
+    const h = harness({ owner: null });
+    const ix = workIx(TOFU);
+    await handleSlashInteraction(h.ctx, ix);
+    expect(h.runs).toHaveLength(1);
+    expect(h.runs[0]).toMatchObject({ actingUserId: TOFU, actingRole: "team", actingIsAdmin: false, workTask: true });
+    await endAll(h.ctx);
+  });
+
   test("a muted or deny-listed team member is community at the handler and can't start /work", async () => {
     const muted = harness();
     muted.ctx.mutedUsers!.add(TOFU);
@@ -243,6 +258,29 @@ describe("IDENTITY-11.a: community members can't start /work", () => {
     const ix2 = workIx(TOFU);
     await handleWorkCommand(denied.ctx, ix2);
     expectNothingStarted(denied, ix2);
+  });
+
+  test("through the dispatcher a muted or deny-listed team member is stopped by the mute / actor gate first, and nothing starts", async () => {
+    const muted = harness();
+    muted.ctx.mutedUsers!.add(TOFU);
+    const ix1 = workIx(TOFU);
+    expect(await handleSlashInteraction(muted.ctx, ix1)).toMatchObject({ ok: false, reason: "muted" });
+    expect(ix1.replies).toEqual([{ content: MUTED, ephemeral: true }]);
+
+    const denied = harness();
+    denied.ctx.allowlist.discord.denyUsers = [TOFU];
+    const ix2 = workIx(TOFU);
+    expect(await handleSlashInteraction(denied.ctx, ix2)).toMatchObject({ ok: false, reason: "user_not_allowlisted" });
+    expect(ix2.replies).toEqual([{ content: EPHEMERAL_SILENT_ACK, ephemeral: true }]);
+
+    for (const [h, ix] of [[muted, ix1], [denied, ix2]] as const) {
+      expect(ix.deferred()).toBe(false);
+      expect(h.runs).toHaveLength(0);
+      expect(h.prCalls()).toBe(0);
+      expect(h.ctx.store.list()).toHaveLength(0);
+      expect(h.ctx.workStore.list()).toHaveLength(0);
+    }
+    expect(traces()).toEqual({ branches: "", worktrees: 1, worktreeDirs: 0 });
   });
 
   test("the owner's and a team member's /work run unchanged: worktree, work flag, PR step", async () => {

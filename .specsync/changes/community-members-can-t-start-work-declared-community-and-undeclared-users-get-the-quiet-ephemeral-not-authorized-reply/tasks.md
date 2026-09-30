@@ -13,3 +13,4 @@ artifact: tasks
 - [x] Docs: `docs/discord.md`, `docs/DISCORD-GO-LIVE.md`, `allowlist.example.toml`.
 - [x] Spec prose and `files:` (`specs/discord/discord.spec.md`), `specs/discord/testing.md`; delta Modified REQ-discord-065 and REQ-discord-088.
 - [x] `specsync check --require-coverage 100`, `hi check`, `bunx tsc --noEmit`, `bun test`, `fledge lanes run verify --non-interactive`.
+- [x] Review fixes: REQ-discord-065 (delta), spec prose and change notes no longer say everyone is refused with no owner (a declared team member still starts `/work` then) or that a muted / deny-listed caller gets `not authorized` through the dispatcher (the mute / actor gates answer first); tests for both; `specs/discord/testing.md` REQ-discord-734 slash-ask7 entry names the team requester; `docs/DISCORD-GO-LIVE.md` PR-step line says owner or team.

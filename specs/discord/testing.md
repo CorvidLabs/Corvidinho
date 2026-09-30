@@ -619,11 +619,12 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   1500-char run-row summary ending with the note and posts at most 1900 chars
   ending with it; a run returning 1800 plain chars stores and posts exactly its
   first 1500.
-- `tests/discord.slash-ask7.test.ts` › "/work answer for a non-owner keeps the
-  closing role note within the 1900 cap": a `member-1` `/work` with a
-  207-char description (non-owner PR line) gets a collapsed answer of at most
-  1900 chars whose summary part is under 1500 (fitted after the head) and ends
-  with the note.
+- `tests/discord.slash-ask7.test.ts` › "/work answer for a non-owner (team)
+  keeps the closing role note in the rich answer": a declared team member's
+  `/work` (community can't start one, IDENTITY-11.a) with a 207-char
+  description (stub PR line) gets a collapsed answer of at most 1900 chars
+  whose summary part is under 1500 (fitted after the head) and ends with the
+  note.
 - Same file › "/session start answer for a non-owner keeps the closing role
   note within the 1900 cap": the answer is at most 1900 chars, its summary part
   at most 1500, and it ends with the note.
@@ -687,10 +688,13 @@ Community can't start /work (IDENTITY-11.a, REQ-discord-065 / REQ-discord-088):
 `tests/roles.community-no-work.test.ts` — a temp git repo as the project and a
 temp worktree base; through `handleSlashInteraction`, a `/work` by declared
 community, a declared person with no role and an undeclared user (also with a
-`project` option, and with no owner and nobody declared) gets exactly one
-ephemeral `not authorized` reply, no deferred reply, no session, work task,
-agent run or PR step, and the repo keeps one worktree and no `talk/*` branch;
-a muted or deny-listed team member is refused the same way at the handler;
+`project` option, with no owner and nobody declared, and with no owner but a
+people file) gets exactly one ephemeral `not authorized` reply, no deferred
+reply, no session, work task, agent run or PR step, and the repo keeps one
+worktree and no `talk/*` branch; with no owner a declared team member still
+runs as team; a muted or deny-listed team member is refused the same way at
+the handler, and through the dispatcher gets the mute reply / zero-width ack
+first with nothing started;
 the owner and a team member still run with a worktree under the base,
 `workTask: true` and the PR step; a demotion / promotion written to the
 people file applies to the next `/work`; through `startBridge` a community

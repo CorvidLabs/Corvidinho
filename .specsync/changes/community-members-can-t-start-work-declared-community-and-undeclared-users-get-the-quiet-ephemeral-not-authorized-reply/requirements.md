@@ -9,10 +9,12 @@ artifact: requirements
   `/work` starts only for the owner or a declared team member; the handler
   resolves the role from the live owner config and the people list re-read
   for the command (after the SAFE-13 check) and answers community — declared
-  community, no role, undeclared, muted / deny-listed, everyone with no owner
-  — with only the ephemeral `not authorized`, before any deferred reply,
+  community, no role, undeclared; muted / deny-listed callers too, though the
+  dispatcher's gates stop them first — with only the ephemeral
+  `not authorized`, before any deferred reply,
   session, worktree / `talk/*` branch, work task, agent run (verify) or PR
-  step. Owner and team unchanged; `/session start` and chat stay open to
+  step. With no owner configured only a declared team member can start it
+  (IDENTITY-3). Owner and team unchanged; `/session start` and chat stay open to
   community. New acceptance bullets for the refusal, a live role change, the
   unchanged owner / team runs and the regression test file.
 - Modified REQ-discord-088 (delta): the PR-step role paragraph no longer says
