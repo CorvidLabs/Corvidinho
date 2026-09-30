@@ -4,7 +4,7 @@
  * so a stub for a passing lane prints a `bun test` summary, as
  * `fledge lanes run verify` does for this repo (stdout, then bun's stderr).
  */
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -18,3 +18,4 @@ export const LANE_PASS_OUTPUT =
  * dir can be over its entry cap (then the run is not verified).
  */
 export const NON_GIT_CWD = mkdtempSync(join(tmpdir(), "corvidinho-non-git-cwd-"));
+process.once("exit", () => rmSync(NON_GIT_CWD, { recursive: true, force: true }));

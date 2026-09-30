@@ -171,8 +171,8 @@ export type WorkspaceDiffTracker = {
    */
   changed(): Promise<string[] | null>;
   /**
-   * AGENT-15 (REQ-agent-185): tests active at the baseline that are gone or
-   * no longer run now, by name across the whole repo root (a test moved to
+   * AGENT-15 (REQ-agent-185): tests at the baseline that are gone, or run
+   * less than they did, by name across the whole repo root (a test moved to
    * another file keeps its name); null when git or a test file could not be
    * read, so the run is not verified (fail closed).
    */

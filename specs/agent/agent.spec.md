@@ -157,14 +157,14 @@ never takes or writes the marker), `WORKSPACE_DIFF_MAX_OUTPUT_BYTES`,
 `RunTaskOptions.workspaceDiff` is a test seam like `verifyRunner`, not a
 product surface (`task run` sets it only in a delegate or council worker).
 Tests ran and none deleted (REQ-agent-185, AGENT-15): every
-`WorkspaceDiffTracker` has `testDrops()` (tests active at its baseline that
-are gone or no longer run, by name across the repo root; null when it cannot
-tell), and `startWorkspaceDiffFrom(cwd, commit)` is a tracker from a given
+`WorkspaceDiffTracker` has `testDrops()` (tests at its baseline that are
+gone, or run less than they did, by name across the repo root; null when it
+cannot tell), and `startWorkspaceDiffFrom(cwd, commit)` is a tracker from a given
 commit with no dirt (/work's merge-base check, REQ-discord-185).
 `src/agent/test-evidence.ts` exports `countExecutedTests(output)` (executed
 tests from the `bun test`, jest, vitest, `cargo test`, pytest and `go test`
 summaries, `TEST_SUMMARY_RUNNERS`), `isTestFilePath`, `testDeclarations(path,
-source)` (`TestDecl` name + active), `droppedTests(before, after)`,
+source)` (`TestDecl` name + active, or conditional), `droppedTests(before, after)`,
 `startTestNameWalk(dir)` (the non-git snapshot, a `TestDropCheck`),
 `judgeTestEvidence(laneOutput, drops)` (`{ ok, note }`), `formatTestDrops`
 and its caps (`TEST_SOURCE_MAX_BYTES`, `TEST_NAMES_BUDGET_BYTES`,
@@ -407,9 +407,10 @@ own run-start baseline; the lead's gate covers the combined change.
 REQ-agent-185): a passing lane counts only when its output has a recognised
 test summary (`bun test`, jest, vitest, `cargo test`, pytest, `go test`)
 with at least one executed test (skipped and todo don't count), and no test
-active at the baseline is gone or turned off (removed, retitled, `.skip`,
-`.todo`, conditional, a skip decorator or `#[ignore]`, silenced by `.only`)
-by name across the repo root; otherwise the attempt is a failed verify
+at the baseline is gone (removed or retitled, even a conditional or skipped
+one) or runs less than it did (a running test made conditional, `.skip`,
+`.todo`, skip-decorated, `#[ignore]` or silenced by `.only`; a conditional
+one turned off) by name across the repo root; otherwise the attempt is a failed verify
 whose note names what is missing or which tests, with no opt-out. With no
 git snapshot the names come from a bounded walk of the cwd's test files at
 run start; a walk or a baseline that cannot be read fails closed. The diff is read-only git plus in-process hashing: it never writes
@@ -722,7 +723,7 @@ instructions for …" or a browser's developer mode do not count.
 | `shell-exec`, `node-exec`, `python-exec`, `cargo-exec`, `fledge-lanes-run` or `fledge-run` named in the allowlist | still not in the catalog until the SAFE-3 decision; a model call is refused as not offered (REQ-agent-501) |
 | Git diff unreadable after a good start snapshot | fail closed: verify runs; one Text note says the diff could not be read (REQ-agent-085) |
 | Verify lane passes but prints no recognised test summary, or no test ran (all skipped / todo) | not verified: a failed verify whose note names the verify lane (or says no test ran); retried, then `failed` (REQ-agent-185) |
-| A test active at the baseline was deleted, retitled, skipped, made todo or conditional, or silenced by `.only` | not verified: the note names each (up to 10, `"name" (file)`), retried, then `failed`; a renamed file or a moved test keeps its name and passes (REQ-agent-185) |
+| A test at the baseline was deleted or retitled (even a conditional or skipped one), or a running test was skipped, made todo or conditional, or silenced by `.only`, or a conditional one turned off | not verified: the note names each (up to 10, `"name" (file)`), retried, then `failed`; a renamed file or a moved test keeps its name and passes (REQ-agent-185) |
 | Test names cannot be read (baseline git cannot give, a test file over 4 MiB or unreadable, over 2000 changed test files, a non-git walk over 20000 entries) | fail closed: not verified, with a "could not read the test files" note (REQ-agent-185) |
 | Real diff of thousands of paths (an install, a branch switch) | at most `WORKSPACE_DIFF_MAX_FILES` join filesChanged, the note counts them all, verify runs; the NDJSON result line stays under the parser cap (REQ-agent-085) |
 | Retry after a failed verify changes no files | filesChanged is the union across attempts, so verify runs again; never done unless it passes (REQ-agent-242) |

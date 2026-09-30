@@ -44,15 +44,21 @@ failure summary puts the note before the lane output) with no opt-out
    by stat identity, it is skipped); the other side from the working tree
    (no symlink followed). Test files are JS/TS `*.test.*`, `*.spec.*`,
    `*_test.*`, `*_spec.*`, `*_test_.*` and `__tests__/`, pytest `test_*.py`
-   / `*_test.py`, Go `*_test.go` and Rust `.rs`. A declaration is active
-   unless it is `.skip`, `.todo`, `x`-prefixed, conditional (`.if`,
-   `.skipIf`, `.todoIf`, `.runIf`), inside a skipped suite, silenced by an
-   `.only` elsewhere in its file, a skip-decorated pytest test or class, or a
-   Rust `#[ignore]` test; commented-out code is not a declaration.
-   `droppedTests` SHALL count names (once per declaration) across all the
-   changed files, so a renamed or moved file, or a test moved to another
-   file, keeps its name and is not a drop; a deleted, retitled or turned-off
-   test is, and the note SHALL name each as `"name" (file)` (up to 10 and
+   / `*_test.py`, Go `*_test.go` and Rust `.rs`. A declaration is off when
+   it is `.skip`, `.todo`, `x`-prefixed, inside a skipped suite, silenced by
+   an `.only` elsewhere in its file, a `skip`-marked pytest test, class or
+   module, or a Rust `#[ignore]` test; otherwise it is conditional (it may
+   run here) when it or its suite is `.if`, `.skipIf`, `.todoIf` or
+   `.runIf`, or pytest `skipif` / `skipUnless`; otherwise it runs.
+   Commented-out code is not a declaration. `droppedTests` SHALL match names
+   (once per declaration) across all the changed files: every baseline
+   declaration needs one with its name that runs at least as much (a running
+   test a running one, a conditional test a running or conditional one, a
+   test already off any declaration). So a renamed or moved file, or a test
+   moved to another file, keeps its name and is not a drop, while a deleted
+   or retitled test (conditional or already off included), a running test
+   made conditional or off, and a conditional test turned off are, and the
+   note SHALL name each as `"name" (file)` (up to 10 and
    1500 chars, then "and N more"). A baseline git cannot give (a carried talk
    whose base branch cannot be found, a commit that is gone), a status
    listing git cannot read, a test file over 4 MiB or unreadable, over 2000
@@ -77,6 +83,7 @@ Acceptance Criteria
 - `countExecutedTests` counts pass + fail for `bun test` (skip / todo not), recognises the real `bun test` output of this Bun (stdout then stderr, colour on), jest, vitest, `cargo test` (summed), pytest (`==` and `-q`, `no tests ran` = 0) and `go test` (`-v` or `ok` packages); "ok" and other lines are not a summary.
 - In a temp git repo with a passing stub lane: no recognised summary → not verified, the retry's feedback starts with the note naming the verify lane, both `VerifyResult` events `success: false`; an all-skipped summary → "no test ran"; a summary with tests and no drop → `done` verified with the "N test(s) ran … none were deleted" note.
 - Deleting a test file, `.skip`, `.todo`, a sibling `.only`, a retitle and commenting a test out each end not verified with `"<name>" (tests/math.test.ts)` in the note; a retry that restores the test ends `done` verified.
+- Deleting a `.skipIf` test, a test in a `describe.skipIf` suite or an already-skipped test ends not verified with each named, and touching their file while keeping them is verified; `droppedTests` makes a conditional test deleted or turned off, and a running test made conditional, a drop, and a conditional test kept conditional, made to run or moved not one; pytest `skipif` (a decorator or a module `pytestmark`) is conditional and `skip` is off.
 - A renamed or moved test file and a test moved to another file are verified; a deletion committed through a shell is seen; a test file dirty before the run is compared with its start text; a run in a subdirectory sees a test deleted outside it.
 - A carried talk whose blocked run deleted a test re-runs the lane on each later turn and stays unverified; a tracker whose base branch or commit git cannot give returns null from `testDrops()`.
 - Non-git: a `.skip` is named, a renamed file is verified; a walk over its entry cap or of a missing dir returns null.

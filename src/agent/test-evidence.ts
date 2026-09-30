@@ -12,11 +12,13 @@
  *   summary, or none executed, fails closed (there is no opt-out, AGENT-14).
  * - None deleted: test names are read from the source of the test files a
  *   run changed, before and after. A test counts as dropped when its name is
- *   gone from the changed set, or it is still there but no longer runs
- *   (`.skip`, `.todo`, `x`-prefixed, a conditional `.if` / `.skipIf`, a
- *   skip decorator or `#[ignore]`, or silenced by an `.only` elsewhere in its
- *   file). Renames and moves that keep the names are not deletions; a
- *   retitled test is, and the note names it.
+ *   gone from the changed set (whether it ran, was conditional or was
+ *   already skipped: a deleted test is deleted), or it is still there but
+ *   runs less than before: a running test that became conditional (`.if` /
+ *   `.skipIf`, `skipif`) or off (`.skip`, `.todo`, `x`-prefixed, a skip
+ *   decorator or `#[ignore]`, or silenced by an `.only` elsewhere in its
+ *   file), or a conditional one that became off. Renames and moves that keep
+ *   the names are not deletions; a retitled test is, and the note names it.
  *
  * The git side of the none-deleted check lives on the workspace tracker
  * (`WorkspaceDiffTracker.testDrops`, `src/agent/workspace-diff.ts`). A
@@ -199,8 +201,13 @@ export function countExecutedTests(output: string): TestRunEvidence {
 // ---------------------------------------------------------------------------
 // Test declarations in source
 
-/** One test a file declares; `active` = it would run. */
-export type TestDecl = { name: string; active: boolean };
+/**
+ * One test a file declares; `active` = it would run. `conditional` (never
+ * with `active`) = it runs only when a runtime condition holds (`.if`,
+ * `.skipIf`, `.runIf`, `.todoIf`, pytest `skipif` / `skipUnless`): it may
+ * well run here, so deleting it is a drop, and so is turning it off.
+ */
+export type TestDecl = { name: string; active: boolean; conditional?: true };
 
 /** The test declarations of one file. */
 export type FileTests = { file: string; decls: TestDecl[] };
@@ -374,8 +381,10 @@ const JS_TEST_FNS = new Set(["test", "it", "xit", "xtest", "fit"]);
 const JS_SUITE_FNS = new Set(["describe", "suite", "xdescribe", "fdescribe"]);
 /** Modifiers that are called before the declaration call: `test.each(t)("x")`. */
 const JS_CALL_MODS = new Set(["each", "if", "skipIf", "todoIf", "runIf", "failingIf", "for"]);
-/** Modifiers (and x-names) whose declaration does not run, or may not. */
-const JS_OFF_MODS = new Set(["skip", "todo", "if", "skipIf", "todoIf", "runIf"]);
+/** Modifiers (and x-names) whose declaration does not run. */
+const JS_OFF_MODS = new Set(["skip", "todo"]);
+/** Modifiers whose declaration runs only when a runtime condition holds. */
+const JS_COND_MODS = new Set(["if", "skipIf", "todoIf", "runIf"]);
 
 type JsDecl = {
   kind: "test" | "suite";
@@ -383,8 +392,14 @@ type JsDecl = {
   at: number;
   close: number;
   off: boolean;
+  cond: boolean;
   only: boolean;
 };
+
+function decl(name: string, off: boolean, cond: boolean): TestDecl {
+  if (off) return { name, active: false };
+  return cond ? { name, active: false, conditional: true } : { name, active: true };
+}
 
 function matchParen(toks: Tok[], open: number): number {
   let depth = 0;
@@ -444,6 +459,7 @@ function jsDeclarations(src: string): TestDecl[] {
       at: k,
       close: matchParen(toks, j),
       off: tok.v.startsWith("x") || plain.some((m) => JS_OFF_MODS.has(m)),
+      cond: plain.some((m) => JS_COND_MODS.has(m)),
       only: tok.v === "fit" || tok.v === "fdescribe" || plain.includes("only"),
     });
   }
@@ -453,9 +469,9 @@ function jsDeclarations(src: string): TestDecl[] {
   for (const d of decls) {
     if (d.kind !== "test") continue;
     const around = suites.filter((s) => s.at < d.at && d.at < s.close);
-    const off = d.off || around.some((s) => s.off);
     const only = d.only || around.some((s) => s.only);
-    out.push({ name: d.name, active: !off && (!anyOnly || only) });
+    const off = d.off || around.some((s) => s.off) || (anyOnly && !only);
+    out.push(decl(d.name, off, d.cond || around.some((s) => s.cond)));
   }
   return out;
 }
@@ -479,15 +495,31 @@ function parenDelta(line: string): number {
   return d;
 }
 
-const PY_SKIP_DECO_RE = /^@(?:[\w.]*\.)?(?:skip|skipif|skipIf|skipUnless)\b/;
+/** A skip decorator: `skip` turns the test off; the others are conditional. */
+const PY_SKIP_DECO_RE = /^@(?:[\w.]*\.)?(skip|skipif|skipIf|skipUnless)\b/;
+
+/** How a pytest skip mark leaves a test: off, conditional, or untouched (null). */
+type PySkip = "off" | "cond" | null;
+
+function worstSkip(skips: PySkip[]): PySkip {
+  if (skips.includes("off")) return "off";
+  return skips.includes("cond") ? "cond" : null;
+}
+
+function decoSkip(decos: string[]): PySkip {
+  return worstSkip(decos.map((d) => {
+    const m = PY_SKIP_DECO_RE.exec(d);
+    return m ? (m[1] === "skip" ? "off" : "cond") : null;
+  }));
+}
 
 function pyDeclarations(src: string): TestDecl[] {
   const out: TestDecl[] = [];
-  const classes: { indent: number; skip: boolean; test: boolean }[] = [];
+  const classes: { indent: number; skip: PySkip; test: boolean }[] = [];
   let decos: string[] = [];
   let decoDepth = 0;
   let triple: string | null = null;
-  let moduleSkip = false;
+  let moduleSkip: PySkip = null;
   for (const raw of src.split(/\r?\n/)) {
     if (triple) {
       if (raw.includes(triple)) triple = null;
@@ -512,8 +544,8 @@ function pyDeclarations(src: string): TestDecl[] {
       const name = def[1] ?? "";
       const inClass = classes[classes.length - 1];
       if (name.startsWith("test") && (!inClass || inClass.test)) {
-        const off = moduleSkip || decos.some((d) => PY_SKIP_DECO_RE.test(d)) || classes.some((c) => c.skip);
-        out.push({ name, active: !off });
+        const skip = worstSkip([moduleSkip, decoSkip(decos), ...classes.map((c) => c.skip)]);
+        out.push(decl(name, skip === "off", skip === "cond"));
       }
       decos = [];
       continue;
@@ -522,14 +554,17 @@ function pyDeclarations(src: string): TestDecl[] {
     if (cls) {
       classes.push({
         indent,
-        skip: decos.some((d) => PY_SKIP_DECO_RE.test(d)),
+        skip: decoSkip(decos),
         test: /^Test/.test(cls[1] ?? "") || /TestCase\b/.test(cls[2] ?? ""),
       });
       decos = [];
       continue;
     }
     decos = [];
-    if (indent === 0 && /^pytestmark\s*=/.test(stripped) && /\bskip/.test(stripped)) moduleSkip = true;
+    if (indent === 0 && /^pytestmark\s*=/.test(stripped)) {
+      const marks = [...stripped.matchAll(/\b(skipif|skipIf|skipUnless|skip)\b/g)];
+      moduleSkip = worstSkip([moduleSkip, ...marks.map((m): PySkip => (m[1] === "skip" ? "off" : "cond"))]);
+    }
     for (const q of ['"""', "'''"]) {
       const count = stripped.split(q).length - 1;
       if (count % 2 === 1) {
@@ -627,27 +662,47 @@ function rustDeclarations(src: string): TestDecl[] {
   return out;
 }
 
+/** 2 = runs, 1 = conditional, 0 = off (skip, todo, silenced). */
+function strength(d: TestDecl): 0 | 1 | 2 {
+  return d.active ? 2 : d.conditional ? 1 : 0;
+}
+
 /**
- * Tests active in `before` that are not active in `after`, by name across
- * all the files given (a name counted once per declaration), so a test
- * moved to another file or a renamed file keeps its name and is not
- * dropped; a retitled, deleted or turned-off test is.
+ * Tests in `before` that `after` deleted or turned down, by name across all
+ * the files given (a name counted once per declaration), so a test moved to
+ * another file or a renamed file keeps its name and is not dropped. Every
+ * declaration in `before` needs one in `after` with its name that runs at
+ * least as much: a running test needs a running one, a conditional one a
+ * running or conditional one, and one already off any declaration (deleting
+ * a skipped or todo test is still deleting a test). So a deleted or
+ * retitled test is dropped, and so is a running test made conditional or
+ * off, or a conditional one turned off. Drops come back in `before` order.
  */
 export function droppedTests(before: FileTests[], after: FileTests[]): TestDrop[] {
-  const left = new Map<string, number>();
+  // Per name, the `after` declarations not matched yet, counted by strength.
+  const left = new Map<string, [number, number, number]>();
   for (const f of after) {
-    for (const d of f.decls) if (d.active) left.set(d.name, (left.get(d.name) ?? 0) + 1);
-  }
-  const drops: TestDrop[] = [];
-  for (const f of before) {
     for (const d of f.decls) {
-      if (!d.active) continue;
-      const n = left.get(d.name) ?? 0;
-      if (n > 0) left.set(d.name, n - 1);
-      else drops.push({ name: d.name, file: f.file });
+      const c = left.get(d.name) ?? [0, 0, 0];
+      c[strength(d)] += 1;
+      left.set(d.name, c);
     }
   }
-  return drops;
+  const items = before.flatMap((f) => f.decls.map((d) => ({ d, file: f.file })));
+  const dropped: { at: number; drop: TestDrop }[] = [];
+  // Strongest first, each taking the weakest declaration that still keeps
+  // it, so no match is used up that a stronger test needed.
+  for (const need of [2, 1, 0] as const) {
+    items.forEach(({ d, file }, at) => {
+      if (strength(d) !== need) return;
+      const c = left.get(d.name);
+      let k: number = need;
+      while (c && k <= 2 && c[k] === 0) k += 1;
+      if (c && k <= 2) c[k] -= 1;
+      else dropped.push({ at, drop: { name: d.name, file } });
+    });
+  }
+  return dropped.sort((a, b) => a.at - b.at).map((x) => x.drop);
 }
 
 // ---------------------------------------------------------------------------

@@ -323,23 +323,30 @@ asserting that a stopped run's summary is `SPEND_CAP_SUMMARY` (no `$`, no
   "ok", "All checks passed." and the like are not recognised. The verdict
   note names the verify lane and the runners, says no test ran, names drops
   as `"name" (file)` and stays under 2000 chars for 40 long names.
-- Declarations: JS/TS `.skip`, `.todo`, `x`-names, `.skipIf`, a skipped
-  `describe` and comments are not active tests; `.each` and template titles
-  are; a `.only` silences its file's other tests. pytest skip decorators
-  (multi-line too), `Test*` classes, a skipped class, docstrings and comments;
-  Go `TestX(t *testing.T)` outside comments; Rust `#[test]` /
+- Declarations: JS/TS `.skip`, `.todo`, `x`-names, a skipped `describe` and
+  comments are not active tests, and `.skipIf` / `.if` / `describe.skipIf`
+  ones are conditional; `.each` and template titles are active; a `.only`
+  silences its file's other tests. pytest skip decorators (multi-line too;
+  `skip` off, `skipif` and a module `pytestmark` skipif conditional),
+  `Test*` classes, a skipped class, docstrings and comments; Go
+  `TestX(t *testing.T)` outside comments; Rust `#[test]` /
   `#[tokio::test]` with `#[ignore]` off, comments and lifetimes ignored.
   Test-file paths per language. `droppedTests`: a move or a renamed file is
-  not a drop, a retitle and a removed duplicate are, an already-off test is
-  not dropped again.
+  not a drop, a retitle and a removed duplicate are; deleting an already-off
+  test is a drop and keeping it off is not; a conditional test deleted or
+  turned off, or a running one made conditional, is a drop, and one kept
+  conditional, made to run or moved is not (one match per declaration,
+  strongest first); drops come back in baseline order.
 - The gate in temp git repos (stub lanes): no recognised summary → not
   verified, the retry's feedback starts with the note, both `VerifyResult`
   events `success: false` with the note; all-skipped lane → "no test ran";
   tests ran and none deleted → `done` verified with `Verify gate: 12 test(s)
   ran (bun test: 12), and none were deleted.`; a deleted test named in the
   feedback and a retry that restores it verified; deleting the file, `.skip`,
-  `.todo`, a sibling `.only`, a retitle and commenting out each named; a
-  renamed / moved file and a test moved to another file verified; a deletion
+  `.todo`, a sibling `.only`, a retitle and commenting out each named;
+  deleting a `.skipIf` test, a test in a `describe.skipIf` suite and a
+  `.skip` test each named, while touching their file and keeping them is
+  verified; a renamed / moved file and a test moved to another file verified; a deletion
   committed through a shell seen; a test file dirty before the run compared
   with its start text (untouched: verified; its extra test removed: named);
   a run in a subdirectory sees a test deleted outside it (root-wide); a

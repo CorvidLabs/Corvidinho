@@ -11,7 +11,9 @@ artifact: design
   tokenizer that drops comments, strings and regex literals and reads
   `test` / `it` / `describe` calls with their modifier chains and suite
   ranges; line-based pytest; comment-stripped Go and Rust), `droppedTests`
-  (multiset of active names across all changed files: moves keep names),
+  (names across all changed files, one match per declaration: each baseline
+  test needs one that runs at least as much, running > conditional > off;
+  moves keep names),
   `startTestNameWalk` (non-git snapshot), `judgeTestEvidence` (one note for
   every problem) and `formatTestDrops` (bounded).
 - **Tracker** (`src/agent/workspace-diff.ts`): every tracker gets

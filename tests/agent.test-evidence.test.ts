@@ -232,7 +232,7 @@ describe("test declarations (REQ-agent-185)", () => {
       { name: "skipped", active: false },
       { name: "later", active: false },
       { name: "each %i", active: true },
-      { name: "conditional", active: false },
+      { name: "conditional", active: false, conditional: true },
       { name: "inner", active: true },
       { name: "deep", active: false },
       { name: "x-named", active: false },
@@ -281,7 +281,7 @@ describe("test declarations (REQ-agent-185)", () => {
     expect(testDeclarations("tests/test_x.py", py)).toEqual([
       { name: "test_a", active: true },
       { name: "test_b", active: false },
-      { name: "test_c", active: false },
+      { name: "test_c", active: false, conditional: true },
       { name: "test_d", active: true },
       { name: "test_e", active: false },
     ]);
@@ -337,8 +337,58 @@ describe("test declarations (REQ-agent-185)", () => {
     expect(droppedTests([{ file: "a.test.ts", decls: t("x", "x") }], [{ file: "a.test.ts", decls: t("x") }])).toEqual([
       { name: "x", file: "a.test.ts" },
     ]);
-    // A test that was already off is not "dropped" again.
-    expect(droppedTests([{ file: "a.test.ts", decls: [{ name: "z", active: false }] }], [])).toEqual([]);
+    // A test that was already off is still a test: deleting it is a drop,
+    // keeping it off is not.
+    const off = [{ name: "z", active: false }];
+    expect(droppedTests([{ file: "a.test.ts", decls: off }], [])).toEqual([{ name: "z", file: "a.test.ts" }]);
+    expect(droppedTests([{ file: "a.test.ts", decls: off }], [{ file: "a.test.ts", decls: off }])).toEqual([]);
+  });
+
+  test("conditional tests (skipIf, if, runIf, pytest skipif) may run: deleting or turning one off is a drop; making a running one conditional is too", () => {
+    const on = { name: "c", active: true };
+    const cond = { name: "c", active: false, conditional: true as const };
+    const off = { name: "c", active: false };
+    const f = (...decls: { name: string; active: boolean; conditional?: true }[]) => [{ file: "a.test.ts", decls }];
+    const dropped = [{ name: "c", file: "a.test.ts" }];
+    expect(droppedTests(f(cond), f())).toEqual(dropped);
+    expect(droppedTests(f(cond), f(off))).toEqual(dropped);
+    expect(droppedTests(f(on), f(cond))).toEqual(dropped);
+    expect(droppedTests(f(cond), f(cond))).toEqual([]);
+    expect(droppedTests(f(cond), f(on))).toEqual([]);
+    expect(droppedTests(f(cond), [{ file: "b.test.ts", decls: [cond] }])).toEqual([]);
+    // One match per declaration, the strongest test first: [on, cond] → [cond, on] keeps both.
+    expect(droppedTests(f(cond, on), f(on, cond))).toEqual([]);
+    expect(droppedTests(f(off, on), f(on))).toEqual(dropped);
+    // Order follows `before`.
+    expect(
+      droppedTests(
+        [{ file: "a.test.ts", decls: [{ name: "x", active: false }, { name: "y", active: true }] }],
+        [],
+      ),
+    ).toEqual([
+      { name: "x", file: "a.test.ts" },
+      { name: "y", file: "a.test.ts" },
+    ]);
+    // Parsed: bun's skipIf / describe.skipIf and pytest's skipif and module skipif mark.
+    expect(
+      testDeclarations(
+        "a.test.ts",
+        'describe.skipIf(!haveReal)("real", () => { test("inner", () => {}); test.skip("off", () => {}); });\ntest.if(ok)("gated", () => {});\n',
+      ),
+    ).toEqual([
+      { name: "inner", active: false, conditional: true },
+      { name: "off", active: false },
+      { name: "gated", active: false, conditional: true },
+    ]);
+    expect(
+      testDeclarations(
+        "tests/test_m.py",
+        'import pytest, sys\npytestmark = pytest.mark.skipif(sys.platform == "win32", reason="posix")\n@pytest.mark.skip\ndef test_off(): pass\ndef test_on(): pass\n',
+      ),
+    ).toEqual([
+      { name: "test_off", active: false },
+      { name: "test_on", active: false, conditional: true },
+    ]);
   });
 });
 
@@ -428,6 +478,36 @@ describe("the gate: a passing lane is verified only when tests ran and none were
       expect(note).toContain(`${named.length} test(s) were deleted or turned off`);
     });
   }
+
+  test("deleting a conditional (skipIf) or already-skipped test is a drop; touching the file and keeping them is not", async () => {
+    const dir = makeRepo(tempBase());
+    const gated = [
+      'import { describe, test } from "bun:test";',
+      'test.skipIf(process.platform === "win32")("posix paths", () => {});',
+      'describe.skipIf(!process.env.PATH)("with a PATH", () => { test("finds git", () => {}); });',
+      'test.skip("parked", () => {});',
+      "",
+    ].join("\n");
+    writeFileSync(join(dir, "tests/gated.test.ts"), gated);
+    gitIn(dir, "add", ".");
+    gitIn(dir, "commit", "-q", "-m", "gated");
+    const kept = await run(
+      dir,
+      editing(dir, () => writeFileSync(join(dir, "tests/gated.test.ts"), `${gated}// touched\n`)),
+      lane().runner,
+    );
+    expect(kept.result.verified).toBe(true);
+
+    const gone = await run(
+      dir,
+      editing(dir, () => writeFileSync(join(dir, "tests/gated.test.ts"), 'import { test } from "bun:test";\n')),
+      lane().runner,
+    );
+    expect(gone.result.verified).toBe(false);
+    const note = texts(gone.events).find((t) => t.startsWith("Verify gate: not verified:"))!;
+    expect(note).toContain('3 test(s) were deleted or turned off');
+    for (const n of ["posix paths", "finds git", "parked"]) expect(note).toContain(`"${n}" (tests/gated.test.ts)`);
+  });
 
   test("renaming or moving a test file, and moving a test to another file, keep the names: verified", async () => {
     const dir = makeRepo(tempBase());
