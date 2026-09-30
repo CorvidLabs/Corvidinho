@@ -7,11 +7,11 @@
   "title": "Capture Leif-confirmed IDENTITY-7.a (GitHub matches people only by numeric user id, #36) into hi/ from the 2026-09-28 interview",
   "description": "Capture Leif-confirmed IDENTITY-7.a (GitHub matches people only by numeric user id, #36) into hi/ from the 2026-09-28 interview",
   "kind": "documentation",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "040087ff0413f3e96156f09366e8ff360fd3df66",
   "created_at": 1790726717,
-  "updated_at": 1790731133,
+  "updated_at": 1790731332,
   "affected_specs": [],
   "affected_paths": [
     "hi/identity.md",

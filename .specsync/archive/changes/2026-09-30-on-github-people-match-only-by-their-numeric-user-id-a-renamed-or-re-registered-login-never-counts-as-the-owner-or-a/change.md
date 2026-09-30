@@ -1,6 +1,6 @@
 ---
 id: on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a
-state: implementing
+state: archived
 type: feature
 base_commit: 61fbe1698da739fe1e05a104ce6411adde224a05
 ---
