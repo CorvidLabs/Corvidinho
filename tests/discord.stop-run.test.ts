@@ -369,6 +369,41 @@ describe("'stop' / 'cancel' stops the run in flight (AGENT-3.a, REQ-discord-302)
     await b.result.stop();
   });
 
+  test("'cancel' while a run is going stops it and leaves the session's open button ask open (REQ-discord-044)", async () => {
+    const { agent: gated, runs } = gatedAgent();
+    let first = true;
+    const agent: AgentClient = {
+      runChat(input) {
+        if (first) {
+          first = false;
+          return Promise.resolve({
+            ok: true,
+            sessionId: input.sessionId,
+            summary: "Pick",
+            exitCode: 0,
+            ask: { reason: "clarify", question: "Which?", options: [{ id: "a", label: "Alpha" }, { id: "b", label: "Beta" }] },
+          });
+        }
+        return gated.runChat(input);
+      },
+    };
+    const b = await bridgeWith(agent);
+    await b.handlers.onMessage(inThread("m1", ALICE, "choose", { mention: true }));
+    const askId = b.result.store.getByThread("thr-1", ALICE)!.pendingAsk!.askId;
+    // Chat goes on while the button ask is open; that run is going …
+    const second = b.handlers.onMessage(inThread("m2", ALICE, "meanwhile, this"));
+    expect(await until(() => runs.length === 1)).toBe(true);
+    // … and 'cancel' stops it instead of clearing the ask.
+    const before = b.replies.length;
+    await b.handlers.onMessage(inThread("c1", ALICE, "cancel"));
+    await second;
+    expect(runs[0]!.aborts).toBe(1);
+    expect(b.replies.slice(before).map((r) => r.content)).toEqual([RUN_STOP_ACK]);
+    expect(b.replies.map((r) => r.content)).not.toContain(ASK_CANCELLED_ACK);
+    expect(b.result.store.getByThread("thr-1", ALICE)!.pendingAsk?.askId).toBe(askId);
+    await b.result.stop();
+  });
+
   test("a pick's resumed run stops by a 'stop' reply to its stub (checked before the stub's session lookup)", async () => {
     const { agent: gated, runs } = gatedAgent();
     let first = true;
@@ -440,6 +475,82 @@ describe("'stop' / 'cancel' stops the run in flight (AGENT-3.a, REQ-discord-302)
       }
       await b.result.stop();
     }
+  });
+});
+
+describe("a stop after the /work agent exited, before its PR step (AGENT-3)", () => {
+  test("opens no PR: the task is failed / stopped and the PR line says the run was stopped", async () => {
+    let releaseDm!: () => void;
+    const dmGate = new Promise<void>((r) => (releaseDm = r));
+    let dmStarted = false;
+    const agent: AgentClient = {
+      async runChat(input) {
+        return {
+          ok: true,
+          sessionId: input.sessionId,
+          summary: "done",
+          exitCode: 0,
+          privateReplies: ["just for you"],
+        };
+      },
+    };
+    const box: { handlers: GatewayHandlers | null } = { handlers: null };
+    const outbound = memoryThinkingOutbound();
+    const replies: Array<{ channelId: string; content: string; replyToMessageId?: string }> = [];
+    const result = await startBridge({
+      env: {
+        DISCORD_BOT_TOKEN: "fake",
+        DISCORD_CHANNEL_IDS: "chan-1",
+        CORVIDINHO_DISCORD_DRY_RUN: "1",
+        CORVIDINHO_ALLOWLIST_FILE: teamPeopleFile(ALICE),
+        CORVIDINHO_OWNER_DISCORD_ID: OWNER,
+      },
+      projectRoot: tempDir("corvidinho-stop-proj-"),
+      skipProtocolCheck: true,
+      disableScheduler: true,
+      approvalPollMs: 0,
+      thinkingOutbound: outbound,
+      thinkingDebounceMs: 0,
+      thinkingTickMs: 60_000,
+      agent,
+      gatewayFactory: async (_cfg, handlers) => {
+        box.handlers = handlers;
+        handlers.reply = async (o) => {
+          replies.push(o);
+          return { messageId: `bot_${replies.length}` };
+        };
+        // The private reply's DM holds the /work turn after its agent exited.
+        handlers.sendDm = async () => {
+          dmStarted = true;
+          await dmGate;
+          return { channelId: "dm-chan", messageId: "dm_1" };
+        };
+        return createNullGateway();
+      },
+    });
+    if (!result.ok || !box.handlers) throw new Error("bridge did not start");
+    const ix: SlashInteraction = {
+      id: "ix_work",
+      commandName: "work",
+      channelId: "chan-1",
+      userId: ALICE,
+      options: { description: "do it" },
+      reply: async () => {},
+      deferReply: async () => {},
+      editReply: async () => {},
+      deleteReply: async () => {},
+    };
+    const slash = box.handlers.onSlash!(ix);
+    expect(await until(() => dmStarted)).toBe(true);
+    const progressId = outbound.sends[0]!.messageId;
+    await box.handlers.onMessage(replyInChannel("s_late", ALICE, "stop", progressId));
+    expect(replies.map((r) => r.content)).toEqual([RUN_STOP_ACK]);
+    releaseDm();
+    await slash;
+    const done = outbound.contentEdits.filter((e) => e.messageId === progressId && typeof e.content === "string").at(-1)!;
+    expect(done.content).toContain("PR: not opened — the run was stopped.");
+    expect(result.workStore.list()[0]).toMatchObject({ status: "failed", summary: "stopped" });
+    await result.stop();
   });
 });
 
@@ -532,7 +643,8 @@ describe("the stop_run route and the stop words (REQ-discord-302)", () => {
 
   test("a reply 'stop' to a running progress message routes to stop_run before the bot-message lookup, in its own channel only", async () => {
     const runs = new SessionRunControl();
-    const { store, deps } = routerDeps(runs);
+    const { store, deps, allowlist } = routerDeps(runs);
+    allowlist.discord.channels.push("chan-2");
     const session = store.create({ channelId: "chan-1", userId: ALICE });
     const turn = runs.enqueue({ sessionId: session.id, requesterId: ALICE, channelId: "chan-1" });
     expect(await turn.ready).toBe(true);
@@ -549,6 +661,8 @@ describe("the stop_run route and the stop words (REQ-discord-302)", () => {
     // Other text, or someone else: routed as before (the requester continues).
     expect(reply(ALICE, "stop it").kind).toBe("continue_session");
     expect(reply(BOB, "stop").kind).not.toBe("stop_run");
+    // Only in the progress message's own channel.
+    expect(reply(ALICE, "stop", "chan-2").kind).not.toBe("stop_run");
     // Once the run is done its progress message stops nothing.
     turn.done();
     expect(reply(ALICE, "stop").kind).toBe("continue_session");

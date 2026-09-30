@@ -409,8 +409,15 @@ async function runWork(
         people: loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner }),
       })
     : "community";
+  // AGENT-3: a stop that lands after the agent exited but before this PR
+  // step still opens no PR — nothing ships once a stop was acked; a run that
+  // had finished cleanly is then recorded `failed` / `stopped` too.
+  const stoppedBeforePr = stopped || turn?.stopReason === "stopped";
+  if (!stopped && stoppedBeforePr && task.status === "completed") {
+    ctx.workStore.setStatus(task, "failed", "stopped");
+  }
   // SAFE-14.a: the public line says only that work is paused for budget.
-  const prLine = stopped
+  const prLine = stoppedBeforePr
     ? `PR: not opened — ${WORK_STOPPED_PR_REASON}`
     : result.ask?.reason === "spend-cap"
     ? `PR: not opened — ${SPEND_PAUSED_TEXT}`

@@ -31,7 +31,15 @@ waiting, without a progress message until its turn starts; a pick's row is
 recorded before it waits too. After waiting, a turn whose session was ended or
 idled out (`SessionStore.get` no longer returns that session) or whose
 requester was forgotten meanwhile (MEMORY-ACL-6 `onForgotten` →
-`noteForgotten`) SHALL run nothing, post nothing and clear its row. Each turn
+`noteForgotten`), or that would no longer pass the gates it passed when it
+came in, SHALL run nothing, post nothing and clear its row: `/admin` list
+changes and mutes are live, so a chat message is checked again for its own
+channel (still allowlisted, not deny-listed: DISCORD-5, REQ-discord-212), its
+author's actor gate (REQ-discord-201, DISCORD-DENY-1) and mute (DISCORD-6)
+(`waitedMessageStillAllowed`, `src/discord/message-router.ts`), and a pick or
+Answer submit for the press and session channels (`componentChannelAllowlisted`),
+the presser's actor gate and mute (`waitedPressStillAllowed`); the rate limit
+is not counted again. Each turn
 SHALL carry an `AbortSignal` that its run passes to the spawn client
 (`AgentRunChatOpts.signal`, which kills the run's process tree), and its
 progress message SHALL be mapped to it while it runs (`setProgressMessage`,
@@ -50,6 +58,7 @@ Acceptance Criteria
 - Runs of different sessions (another user's thread session, another channel) are in flight at the same time.
 - A waiting chat message has its in-flight row (no progress message) while it waits; the row gets its progress message when its turn starts and is gone when it finishes.
 - A message whose session ended while it waited runs nothing and posts nothing.
+- A waiting message whose author is muted or deny-listed, or whose thread is deny-listed, while it waits runs nothing, posts nothing and leaves no in-flight row; a waiting Choose pick whose presser is muted meanwhile does not resume (its ephemeral ack is deleted).
 - A Choose pick made while a chat run of its session is going waits for it, then resumes with the picked label and that run's answer in its thread.
 - `/session start` and `/work` hold their new session's turn: the requester's @mention in that channel while the run is going waits for it.
 - The bridge's stop aborts the run going, starts no waiting message, posts nothing, and leaves both replies' in-flight rows.
@@ -90,7 +99,10 @@ chat path a free-text pending ask is cleared as after any turn that asks
 nothing. A stopped
 `/session start` answers its head lines and `⏹ Stopped`; a stopped `/work`
 SHALL be recorded `failed` with the summary `stopped`, SHALL open no PR (`PR:
-not opened — the run was stopped.`) and answers `⏹ Stopped`. After a stopped
+not opened — the run was stopped.`) and answers `⏹ Stopped`. A stop that
+lands after the `/work` agent exited but before its PR step SHALL still open
+no PR (the same PR line; a run that had finished cleanly is recorded `failed`
+/ `stopped`). After a stopped
 turn finishes the bridge SHALL run an Approve/Deny card pass, so a card the
 killed run was waiting on (its waiting process gone) closes as a no at once
 (SAFE-20; otherwise on the engine's next poll). With no run of the session in
@@ -109,9 +121,11 @@ Acceptance Criteria
 - With nothing running, 'cancel' clears an open ask with `ASK_CANCELLED_ACK` and 'stop' runs the agent with the text 'stop'.
 - A pick's resumed run stops by a 'stop' reply to its Choose stub.
 - `/session start` and `/work` stop by a 'stop' reply to their progress message; the stopped `/work` answer says `PR: not opened — the run was stopped.` and the task is `failed` / `stopped`.
+- A 'stop' reply that lands after the `/work` agent exited (while its private reply's DM is still going out) gets the ack; the answer says `PR: not opened — the run was stopped.` and the task is `failed` / `stopped`.
+- 'cancel' while a chat run is going and a button ask of the session is open stops the run with the stop ack only and leaves that ask pending.
 - The real spawn client over a fake agent bin: the agent process and the background process it started are both gone after the stop.
 - A fake agent bin that raised a must-ask Approve card (itself the waiting process) and waits: after the stop the card's request is `expired` (closed as a no).
-- `routeMessage`: a reply 'stop' / '<@bot> cancel' to a running progress message that is also a tracked bot message gives `stop_run` for the requester and the owner; 'stop it', a third user, or a finished run route as before; a deny-listed requester is refused quietly.
+- `routeMessage`: a reply 'stop' / '<@bot> cancel' to a running progress message that is also a tracked bot message gives `stop_run` for the requester and the owner; 'stop it', a third user, the same reply in another allowlisted channel, or a finished run route as before; a deny-listed requester is refused quietly.
 - `isStopRunText`: true for `stop`, `Stop`, ` STOP. `, `cancel`, `Cancel!`, `stop!!`; false for `stop it`, `please stop`, `cancel that`, `stopped`, empty, `nevermind`, `don't stop`.
 
 ## Modified

@@ -28,7 +28,9 @@ artifact: design
   run's session). A `continue_session` whose body is stop/cancel while
   `current(session)` exists → the same. Otherwise `enqueue`; a turn that must
   wait gets its in-flight row now; after `ready` (false ⇒ `keep()` the row and
-  return) a waited turn whose session is gone or requester forgotten returns;
+  return) a waited turn whose session is gone or requester forgotten, or that
+  no longer passes the channel, actor or mute gate (`waitedMessageStillAllowed`;
+  `/admin` changes and mutes are live), returns;
   the rest of the old body runs inside the same try (re-indented), with
   `inflight ??= trackInflight(...)`, `setProgressMessage`, `signal:
   turn.signal`, and after the run: `closed` ⇒ `keep()` + dispose, no post;
@@ -36,14 +38,16 @@ artifact: design
   footer extras; `finally` ends the row and `done()`s the turn.
 - **Pick / Answer path.** The same turn around the resumed run, taken after
   the pick is claimed and acked (Discord's 3 s), before the thread replay; the
-  row is recorded before it waits; a skipped turn deletes the "Got it"
-  ephemeral.
+  row is recorded before it waits; after waiting the press is re-gated
+  (`waitedPressStillAllowed`: press and session channels, actor, mute); a
+  skipped turn deletes the "Got it" ephemeral.
 - **Slash.** `SlashContext.runControl`; `/session start` and `/work` enqueue
   after their session exists and move the run into `runSessionStart` /
   `runWork` (same code, no re-indent) inside `try/finally done()`. A stopped
   run's `result` loses its `ask` and `ok`; `/session` answers its head lines +
   `⏹ Stopped`; `/work` records `failed` / `stopped` and the PR line
-  `WORK_STOPPED_PR_REASON`; `closed` posts nothing.
+  `WORK_STOPPED_PR_REASON` (also when the stop lands after the agent exited,
+  before the PR step); `closed` posts nothing.
 - **Bridge stop.** `runControl.close()` first, `settle(ABANDONED_SETTLE_MS)`
   before the gateway stops.
 - **Cards.** `onStopped` → `approvals.deliver()`: the killed run's card is

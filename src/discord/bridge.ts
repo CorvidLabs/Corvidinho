@@ -116,6 +116,8 @@ import {
   componentChannelAllowlisted,
   promptBodyForAskGate,
   routeMessage,
+  waitedMessageStillAllowed,
+  waitedPressStillAllowed,
 } from "./message-router.ts";
 import {
   defaultRateLimitConfig,
@@ -813,10 +815,18 @@ export async function startBridge(
           return;
         }
         // After waiting, the session may have ended, idled out or had its
-        // user forgotten (MEMORY-ACL-6): then nothing runs or is posted.
+        // user forgotten (MEMORY-ACL-6), or the channel or its author may no
+        // longer pass the channel, actor or mute gate (`/admin` changes and
+        // mutes are live): then nothing runs or is posted.
         if (
           turn.waited &&
-          (store.get(session.id) !== session || turn.requesterForgotten)
+          (store.get(session.id) !== session ||
+            turn.requesterForgotten ||
+            !waitedMessageStillAllowed(msg, {
+              allowlist: config.allowlist,
+              owner: config.owner ?? null,
+              mutedUsers,
+            }))
         ) {
           return;
         }
@@ -1724,10 +1734,18 @@ export async function startBridge(
           return;
         }
         // After waiting, the session may have ended, idled out or had its
-        // user forgotten (MEMORY-ACL-6): then nothing runs or is posted.
+        // user forgotten (MEMORY-ACL-6), or the press may no longer pass the
+        // channel, actor or mute gate (`/admin` changes and mutes are live):
+        // then nothing runs or is posted.
         if (
           turn.waited &&
-          (store.get(session.id) !== session || turn.requesterForgotten)
+          (store.get(session.id) !== session ||
+            turn.requesterForgotten ||
+            !waitedPressStillAllowed(interaction, session, {
+              allowlist: config.allowlist,
+              owner: config.owner ?? null,
+              mutedUsers,
+            }))
         ) {
           try {
             await interaction.deleteReply?.();

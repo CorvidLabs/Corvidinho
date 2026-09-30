@@ -25,6 +25,7 @@ import {
   gateInbound,
   gateRateOrMute,
   isMonitoredChannel,
+  isMuted,
   isMonitoredConversation,
   resolvePermissionLevel,
   type RateLimitConfig,
@@ -148,7 +149,7 @@ function silentChannelDeny(): RouteAction {
  * either is deny-listed (deny wins, REQ-plugins-005). The session's recorded
  * channel never stands in for it.
  */
-function ownChannelAllowlisted(msg: InboundMessage, deps: RouterDeps): boolean {
+function ownChannelAllowlisted(msg: InboundMessage, deps: Pick<RouterDeps, "allowlist">): boolean {
   if (msg.threadId === undefined) return isMonitoredChannel(msg.channelId, deps.allowlist);
   return isMonitoredConversation(msg.threadId, msg.channelId, deps.allowlist);
 }
@@ -185,7 +186,10 @@ export function componentChannelAllowlisted(
  * REQ-discord-201 / DISCORD-DENY-1 — deny-listed or unlisted actor: silent
  * refuse (no public reply). Null when the actor may proceed.
  */
-function refuseActor(msg: InboundMessage, deps: RouterDeps): RouteAction | null {
+function refuseActor(
+  msg: InboundMessage,
+  deps: Pick<RouterDeps, "allowlist" | "owner">,
+): RouteAction | null {
   const gate = gateActor({
     userId: msg.authorId,
     roleIds: msg.authorRoleIds,
@@ -194,6 +198,46 @@ function refuseActor(msg: InboundMessage, deps: RouterDeps): RouteAction | null 
   });
   if (gate.ok) return null;
   return { kind: "refuse", reason: "user_not_allowlisted" };
+}
+
+/**
+ * AGENT-3.a (REQ-discord-301) — a chat message that waited for its session's
+ * run goes on only while it still passes the gates it passed when it came in:
+ * its own channel is still allowlisted and not deny-listed (DISCORD-5,
+ * REQ-discord-212), its author still passes the actor gate (REQ-discord-201,
+ * DISCORD-DENY-1) and is not muted (DISCORD-6). `/admin` list changes and
+ * mutes are live, so they can land while it waits. The rate limit is not
+ * counted again. False: it runs nothing and posts nothing (DISCORD-DENY-3).
+ */
+export function waitedMessageStillAllowed(
+  msg: InboundMessage,
+  deps: Pick<RouterDeps, "allowlist" | "owner" | "mutedUsers">,
+): boolean {
+  if (!ownChannelAllowlisted(msg, deps)) return false;
+  if (refuseActor(msg, deps)) return false;
+  return !(deps.mutedUsers && isMuted(deps.mutedUsers, msg.authorId));
+}
+
+/**
+ * AGENT-3.a (REQ-discord-301) — the same re-check for an ask pick or Answer
+ * form submit that waited for its session's run: the press channel and the
+ * session's own channel (`componentChannelAllowlisted`), the actor gate and
+ * mute, as at press time. False: the resumed run does not start.
+ */
+export function waitedPressStillAllowed(
+  press: { channelId: string; userId: string; roleIds?: string[] },
+  session: Pick<SessionStub, "channelId" | "threadId">,
+  deps: Pick<RouterDeps, "allowlist" | "owner" | "mutedUsers">,
+): boolean {
+  if (!componentChannelAllowlisted(press.channelId, session, deps.allowlist)) return false;
+  const actor = gateActor({
+    userId: press.userId,
+    roleIds: press.roleIds,
+    allowlist: deps.allowlist,
+    owner: deps.owner,
+  });
+  if (!actor.ok) return false;
+  return !(deps.mutedUsers && isMuted(deps.mutedUsers, press.userId));
 }
 
 /**

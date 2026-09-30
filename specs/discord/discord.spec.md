@@ -607,8 +607,12 @@ and `/session start` / `/work` (through `SlashContext.runControl`) each take
 their session's turn, pass `turn.signal` as `AgentRunChatOpts.signal` and map
 their progress message; `RouterDeps.runs` gives `routeMessage` the
 `stop_run` route (`RouteAction` kind `stop_run` with `runId` and
-`sessionId`); `stop()` closes it first and settles it last. `/work` exports
-`WORK_STOPPED_PR_REASON` (the stopped run's PR line).
+`sessionId`); `stop()` closes it first and settles it last. After waiting, a
+chat turn re-checks its message with `waitedMessageStillAllowed(msg, deps)`
+and a pick or Answer turn its press with `waitedPressStillAllowed(press,
+session, deps)` (both `message-router.ts`: channel, actor and mute gates, no
+rate count). `/work` exports `WORK_STOPPED_PR_REASON` (the stopped run's PR
+line, also used when a stop lands after the agent exited, before the PR step).
 
 Outbound mention safety (REQ-discord-205, DISCORD-8):
 `src/discord/allowed-mentions.ts` exports `outboundAllowedMentions({ users,
@@ -1246,6 +1250,8 @@ failed lookup writes nothing.
 | 'stop' reply to a running progress message from anyone but its requester or the owner, or in another channel | Not a stop: routed as before (no mention ⇒ ignored) and the run goes on (REQ-discord-302) |
 | A second 'stop' while the run winds down | Same short ack; nothing aborted again; one `⏹ Stopped` (REQ-discord-302) |
 | A waiting message's session ended, idled out or its requester was forgotten before its turn | Nothing runs or is posted; its in-flight row is cleared (REQ-discord-301) |
+| A waiting message's author (or a waiting pick's presser) was muted or deny-listed, or its channel dropped from the allowlist or deny-listed, before its turn | Nothing runs or is posted; its in-flight row is cleared; the rate limit is not counted again (REQ-discord-301) |
+| A 'stop' lands after the `/work` agent exited, before its PR step | Short ack; no PR (`PR: not opened — the run was stopped.`), task `failed` / `stopped` (REQ-discord-302) |
 | Bridge stop with a run going and messages waiting | The run's tree is killed and nothing is posted; nothing waiting starts; their in-flight rows stay for the next start's interrupted notice; a `/work` stays `running` until restart recovery fails it (REQ-discord-301) |
 | Collapsed-answer ping post fails or throws | Nothing retried; the collapsed answer stays and the turn (or slash run) finishes normally; claims already taken are kept |
 | `discord-post-message` in a bridge-started run: `--requesting-user-id` names another user, or the acting user's requester check cannot run (Guild Members login refused / timeout / throw) | Refused, exit 3, nothing posted; the check failure is one scrubbed line naming Server Members Intent, no token value (REQ-discord-012) |

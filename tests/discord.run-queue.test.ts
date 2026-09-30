@@ -265,6 +265,32 @@ describe("a message sent while its session's run is going waits for it (AGENT-3.
     await b.result.stop();
   });
 
+  test("a waiting message runs nothing once its author is muted or deny-listed, or its thread deny-listed, while it waits", async () => {
+    const cases: Array<[string, (b: Awaited<ReturnType<typeof bridgeWith>>) => void]> = [
+      ["muted", (b) => b.result.muteUser(ALICE)],
+      ["deny user", (b) => b.result.config.allowlist.discord.denyUsers.push(ALICE)],
+      ["deny thread", (b) => b.result.config.allowlist.discord.denyChannels.push("thr-1")],
+    ];
+    for (const [label, gate] of cases) {
+      const db = openCorvidinhoDb({ memory: true });
+      const { agent, runs } = gatedAgent();
+      const b = await bridgeWith(agent, { db });
+      const first = b.handlers.onMessage(inThread("m1", ALICE, "one", { mention: true }));
+      expect(await until(() => runs.length === 1)).toBe(true);
+      const second = b.handlers.onMessage(inThread("m2", ALICE, "two"));
+      await settle();
+      // `/admin` list changes and mutes are live: this one lands while m2 waits.
+      gate(b);
+      runs[0]!.finish();
+      await Promise.all([first, second]);
+      await settle();
+      expect({ label, runs: runs.length, sends: b.outbound.sends.length }).toEqual({ label, runs: 1, sends: 1 });
+      expect({ label, replies: b.replies }).toEqual({ label, replies: [] });
+      expect({ label, rows: new InflightReplyStore(db).list() }).toEqual({ label, rows: [] });
+      await b.result.stop();
+    }
+  });
+
   test("an ask pick waits behind a chat run of its session, then resumes it", async () => {
     const calls: AgentRunChatOpts[] = [];
     const gates: Array<() => void> = [];
@@ -312,6 +338,52 @@ describe("a message sent while its session's run is going waits for it (AGENT-3.
     expect(calls[2]!.prompt).toContain("ran: meanwhile, this");
     gates[1]!();
     await Promise.all([chat, pick]);
+    await b.result.stop();
+  });
+
+  test("an ask pick that waited does not resume once its presser is muted while it waits", async () => {
+    const calls: AgentRunChatOpts[] = [];
+    const gates: Array<() => void> = [];
+    const agent: AgentClient = {
+      runChat(input) {
+        calls.push(input);
+        if (calls.length === 1) {
+          return Promise.resolve({
+            ok: true,
+            sessionId: input.sessionId,
+            summary: "Pick one",
+            exitCode: 0,
+            ask: { reason: "clarify", question: "Which one?", options: [{ id: "a", label: "Alpha" }, { id: "b", label: "Beta" }] },
+          });
+        }
+        return new Promise((resolve) => {
+          gates.push(() => resolve({ ok: true, sessionId: input.sessionId, summary: `ran: ${input.humanText}`, exitCode: 0 }));
+        });
+      },
+    };
+    const b = await bridgeWith(agent);
+    await b.handlers.onMessage(inThread("m1", ALICE, "choose for me", { mention: true }));
+    const session = b.result.store.getByThread("thr-1", ALICE)!;
+    const askId = session.pendingAsk!.askId;
+    const chat = b.handlers.onMessage(inThread("m2", ALICE, "meanwhile, this"));
+    expect(await until(() => calls.length === 2)).toBe(true);
+    let deleted = 0;
+    const pick = b.handlers.onComponent!({
+      id: "ix1",
+      customId: pickCustomId(askId, "a"),
+      channelId: "thr-1",
+      userId: ALICE,
+      messageId: session.pendingAsk!.stubMessageId ?? "stub",
+      reply: async () => {},
+      deleteReply: async () => void (deleted += 1),
+    } as never);
+    await settle();
+    b.result.muteUser(ALICE);
+    gates[0]!();
+    await Promise.all([chat, pick]);
+    await settle();
+    expect(calls).toHaveLength(2);
+    expect(deleted).toBe(1);
     await b.result.stop();
   });
 
