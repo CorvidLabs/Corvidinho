@@ -32,3 +32,13 @@ the tool and reason ids once, which `task run` copies to
 `TaskResult.injection`; the Discord and WATCH spawn clients read it back with
 `injectionNoticeFromUnknown` (tool-name source, known reasons only), and the
 bridge / WATCH tests drive the owner notice from it.
+
+## GitHub logins without a numeric id (REQ-cli-367, IDENTITY-7.a)
+
+`tests/cli.doctor-truth.test.ts` › "doctor warns about GitHub logins with no
+numeric id" — the real CLI with a clean env and a temp allowlist file: an
+`[owner]` with `github_login` but no `github_id` and a person with only
+`github_logins` give one `[warn] people-github: ada, the owner: …` line naming
+person ids only (no Discord id, GitHub id or login printed) and doctor still
+passes; with `[owner] github_id` and `github_ids` there is no such line. Both
+fail on the base sources (no line) and pass after.

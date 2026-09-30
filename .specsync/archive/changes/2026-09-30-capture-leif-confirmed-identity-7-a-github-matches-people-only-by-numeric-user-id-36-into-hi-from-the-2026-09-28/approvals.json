@@ -1,0 +1,43 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790726737,
+      "digest": "b6cbbc7fc95fe566e538f8c205f9dea62ba7ad4d92624f2a051aa55f0927c1bb",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "capture-leif-confirmed-identity-7-a-github-matches-people-only-by-numeric-user-id-36-into-hi-from-the-2026-09-28",
+        "title": "Capture Leif-confirmed IDENTITY-7.a (GitHub matches people only by numeric user id, #36) into hi/ from the 2026-09-28 interview",
+        "description": "Capture Leif-confirmed IDENTITY-7.a (GitHub matches people only by numeric user id, #36) into hi/ from the 2026-09-28 interview",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          "INTENT.md",
+          "hi/identity.md"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "HI capture only: hi/identity.md and the INTENT.md hi index record Leif's confirmed IDENTITY-7.a text verbatim (PROCESS-1); the code and canonical spec changes that build it are the on-github-people-match-only-by-their-numeric-user-id change",
+        "acceptance_criteria": [
+          "hi/identity.md holds IDENTITY-7.a under IDENTITY-7 with Leif's confirmed text verbatim (\"On GitHub it matches people only by their numeric user id, so a renamed or re-registered login never counts as them.\"); INTENT.md's hi index counts it (and the persona family hi regenerated); hi check passes; no other criterion is added or changed"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790731332,
+      "digest": "4222849fde20f1c6c8ab82376701b42ca8466de16da447d537ef126d61ae7794",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

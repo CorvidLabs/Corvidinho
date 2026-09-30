@@ -651,8 +651,9 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
 - `tests/identity.people.test.ts` — `[people.<id>]` TOML (plural + singular
   keys) and JSON parse; the allowlist loader and `[owner]` reader load the same
   file; unreadable entries skipped whole with id-free problems; `owner`
-  reserved; `resolvePerson` by Discord id / `<@id>` / GitHub login / numeric
-  id, never by display or nickname, renamed-login rule, clashes match nobody;
+  reserved; `resolvePerson` by Discord id / `<@id>` / GitHub numeric id,
+  never by GitHub login (IDENTITY-7.a), display or nickname, clashes match
+  nobody;
   the owner's built-in or declared person with `role: owner`;
   `loadDeclaredPeople` re-reads the loaded file and never throws.
 - `tests/discord.admin-people.test.ts` — `/admin people add|link|unlink|
@@ -769,6 +770,35 @@ GitHub commenter keys". `tests/memory.rank.test.ts` —
 `recallTerms` / `stemTerm`, `rankMemories` (idf, key weight, recency floor),
 a multi-scope search keeping the newest of a key once and no private notes, a
 question-words-only query matching as one substring, `recallRelevantThenRecent`,
-`memorySubjectForGithub` (id, login, a login whose id differs is nobody, the
-undeclared-under-`[people]` owner on their Discord id) and
+`memorySubjectForGithub` (numeric id only: a login alone or with an id that
+differs is nobody; the undeclared-under-`[people]` owner, by `[owner]
+github_id`, on their Discord id) and
 `projectScopeForRepo`.
+
+## GitHub by numeric user id only (REQ-discord-367, IDENTITY-7.a)
+
+- `tests/identity.github-numeric-id.test.ts` — `resolvePerson` /
+  `memorySubjectForGithub`: a login alone, or the owner's or a declared
+  person's login with another numeric id, resolves nobody; the declared id
+  resolves under any login. `[owner] github_id` from TOML (quoted or bare) and
+  JSON (string or number), an invalid one ignored with a value-free issue;
+  loaded from the file it joins the owner's person; an env-only owner login is
+  not the owner on GitHub. A login-only entry loads without an issue, matches
+  on Discord, not on GitHub, and matches once `github_ids` is added.
+  `/admin people link github:` through the slash dispatcher with an injected
+  `lookupGithubUser`: the looked-up id is written to `github_ids` (login kept),
+  `started` / `ok` rows, the reply deferred first, live at once, a second link
+  no change; a failed, missing or mismatched lookup writes nothing and audits
+  `error`; a refused request and `github_id:` links make no lookup.
+  `createGithubUserLookup` over a stubbed fetch: 200 → id + canonical login
+  (token sent as auth), 404 → no user, 500 → status only (token never in the
+  error), a payload without an id refused.
+- `tests/identity.people.test.ts`, `tests/identity.owner.test.ts`
+  (`isOwnerGithub` by numeric id only) and `tests/discord.admin-people.test.ts`
+  (fake lookup; unlinking a login says its id still matches; the owner's
+  person matched by its linked id, not the `[owner]` login) hold the rule.
+- Fail on base: with the base sources (main 20a0f58) swapped in,
+  `tests/identity.github-numeric-id.test.ts` fails 8 of 9 (the login still
+  matches; no `[owner] github_id`; `link github:` stores no id; no lookup
+  module — only "a refused request makes no lookup" holds on both) and all 9
+  pass on the branch; the updated cases in the four files above fail too.

@@ -3,11 +3,13 @@
  * Allowlist BEFORE any session spawn. Assignment and review-request events
  * also gate the user who assigned / requested (REQ-watch-302).
  *
- * IDENTITY-14 / IDENTITY-7: with the owner's declared people, the commenter
- * is recognised by their GitHub numeric id / login (never a display name)
- * and the prompt opens with a `[Corvidinho acting GitHub user …]` block
- * naming the declared person (Planning ignores that paragraph, as it does the
- * Discord identity block).
+ * IDENTITY-14 / IDENTITY-7 / IDENTITY-7.a: with the owner's declared people,
+ * the commenter is recognised by their GitHub numeric user id only (from the
+ * API event, `senderId`) — never a login, which can be renamed or
+ * re-registered, and never a display name — and the prompt opens with a
+ * `[Corvidinho acting GitHub user …]` block naming the declared person
+ * (Planning ignores that paragraph, as it does the Discord identity block).
+ * No id, or an id nobody declared, is undeclared (community), never the owner.
  *
  * SAFE-12 / SAFE-13 (#71): the issue / PR / comment title and body go to the
  * model inside an untrusted-data fence (clipped first, so the end marker
@@ -29,6 +31,7 @@ import {
 import {
   OWNER_PERSON_ID,
   resolvePerson,
+  validGithubLogin,
   type PeopleDirectory,
 } from "../identity/people.ts";
 import type { SessionStore } from "./session-store.ts";
@@ -50,28 +53,32 @@ export type RouterDeps = {
 };
 
 export const WATCH_IDENTITY_HEADER =
-  "[Corvidinho acting GitHub user — recognised from the owner's people list by GitHub account (numeric id / login), never by a name]";
+  "[Corvidinho acting GitHub user — recognised from the owner's people list by GitHub numeric user id only, never by a login or a name]";
 
 /**
  * Identity block for the commenter, or null when nobody is declared and the
  * commenter is not the owner. An undeclared commenter is marked as such once
- * anyone is declared, so a GitHub name never passes for a declared person.
+ * anyone is declared, so a GitHub name never passes for a declared person —
+ * and, with only the owner configured, whenever the commenter's login is one
+ * a person (the owner) has as a label but their numeric id is not theirs
+ * (IDENTITY-7.a: a renamed or re-registered login never passes for them,
+ * even silently).
  */
 export function formatWatchIdentityBlock(
   event: Pick<DetectedEvent, "sender" | "senderId">,
   people: PeopleDirectory | null | undefined,
 ): string | null {
   if (!people) return null;
-  const person = resolvePerson(people, {
-    githubLogin: event.sender,
-    githubId: event.senderId,
-  });
+  // IDENTITY-7.a: the numeric id only; the login is shown, never matched.
+  const person = resolvePerson(people, { githubId: event.senderId });
   if (!person) {
-    if (!people.people.some((p) => p.id !== OWNER_PERSON_ID)) return null;
+    const login = validGithubLogin(event.sender);
+    const labelOfSomeone = login !== undefined && people.people.some((p) => p.githubLogins.includes(login));
+    if (!labelOfSomeone && !people.people.some((p) => p.id !== OWNER_PERSON_ID)) return null;
     return [
       WATCH_IDENTITY_HEADER,
       `- github_login: ${event.sender}`,
-      "- declared_person: none (not on the owner's people list; a name never makes someone a declared person)",
+      "- declared_person: none (this GitHub user id is not on the owner's people list; a login or a name never makes someone a declared person)",
     ].join("\n");
   }
   const lines = [
@@ -144,15 +151,16 @@ function buildPrompt(event: DetectedEvent, people?: PeopleDirectory | null): str
 
 /**
  * SAFE-13 — the detector's verdict on the event's title and body, or null
- * when nothing tripped or the sender is the owner (recognised by GitHub id /
- * login in the owner's people list, never by a name).
+ * when nothing tripped or the sender is the owner (recognised by the owner's
+ * GitHub numeric user id in the people list, IDENTITY-7.a — never by a login
+ * or a name; no id ⇒ not the owner).
  */
 export function watchInjectionVerdict(
   event: Pick<DetectedEvent, "title" | "body" | "sender" | "senderId">,
   people: PeopleDirectory | null | undefined,
 ): InjectionVerdict | null {
   if (people?.ownerPersonId) {
-    const person = resolvePerson(people, { githubLogin: event.sender, githubId: event.senderId });
+    const person = resolvePerson(people, { githubId: event.senderId });
     if (person?.personId === people.ownerPersonId) return null;
   }
   const verdict = detectInjection(watchEventText(event));

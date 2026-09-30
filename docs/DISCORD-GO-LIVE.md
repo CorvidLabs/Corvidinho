@@ -35,7 +35,8 @@ cp allowlist.example.toml ~/.config/corvidinho/allowlist.toml
 # optional DISCORD-6: DISCORD_RATE_LIMIT_WINDOW_MS=60000 DISCORD_RATE_LIMIT_MAX=10
 # optional DISCORD-6 mute seed: DISCORD_MUTED_USER_IDS=
 # owner = the only ADMIN (IDENTITY-1/2/3): CORVIDINHO_OWNER_DISCORD_ID (+ _GITHUB_LOGIN, _DISPLAY)
-#   or allowlist [owner] discord_id / github_login / display (env wins). No owner = nobody ADMIN.
+#   or allowlist [owner] discord_id / github_id / github_login / display (env wins). No owner = nobody ADMIN.
+#   On GitHub the owner is recognised only by [owner] github_id (numeric user id; file only), never the login.
 #   CORVIDINHO_DISCORD_ADMIN_USERS / _ROLES are ignored (bridge + doctor warn if set).
 # optional DISCORD-8 strict: CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK=1
 # optional SAFE-1: CORVIDINHO_ALLOWLIST=…   # dangerous tool names allowed non-interactive (E.3)
@@ -105,15 +106,22 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
 | Source | Keys | Notes |
 |--------|------|-------|
 | Env (wins per field) | `CORVIDINHO_OWNER_DISCORD_ID`, `CORVIDINHO_OWNER_GITHUB_LOGIN`, `CORVIDINHO_OWNER_DISPLAY` | Discord id must be a digits-only snowflake |
-| Allowlist file `[owner]` | `discord_id`, `github_login`, `display` | same file as `CORVIDINHO_ALLOWLIST_FILE` / `~/.config/corvidinho/allowlist.toml`; in a `.json` file, quote `discord_id` (JSON numbers lose snowflake precision) |
+| Allowlist file `[owner]` | `discord_id`, `github_id`, `github_login`, `display` | same file as `CORVIDINHO_ALLOWLIST_FILE` / `~/.config/corvidinho/allowlist.toml`; in a `.json` file, quote `discord_id` (JSON numbers lose snowflake precision). `github_id` (your numeric GitHub user id, `gh api users/<login> --jq .id`) is read from the file only |
 
-- Matching is by Discord snowflake (or lowercased GitHub login) only, never by display name.
+- Matching is by Discord snowflake and, on GitHub, by the numeric user id (`[owner] github_id`)
+  only — never by display name and never by GitHub login (IDENTITY-7.a: a renamed or
+  re-registered login is someone else). Without `github_id` the owner is not recognised on
+  GitHub (WATCH treats the login as an undeclared commenter; `corvidinho doctor` prints
+  `[warn] people-github`); `github_login` is only used to @mention the owner there.
   The display name is shown in `doctor`, `/status` and `/admin config show`; ids are never printed.
 - Declared people (IDENTITY-13/14): add `[people.<id>]` sections to the same file
   (`display`, `nicknames`, `discord_ids`, `github_logins`, `github_ids`; template in
   [`allowlist.example.toml`](../allowlist.example.toml)) or use `/admin people add|link|unlink|remove`
-  (owner-only, SAFE-5 audited). Matched on Discord / GitHub ids only, never names (IDENTITY-7);
-  never changed through chat (IDENTITY-6). Read live, no restart. See [`discord.md`](discord.md) "Declared people".
+  (owner-only, SAFE-5 audited). Matched on Discord ids and GitHub numeric ids only, never names
+  or GitHub logins (IDENTITY-7 / IDENTITY-7.a); an entry with `github_logins` but no `github_ids`
+  still loads but is not recognised on GitHub until `/admin people link person:<id> github:<login>`
+  (looks the numeric id up once and stores it) or `github_ids` in the file. Never changed through
+  chat (IDENTITY-6). Read live, no restart. See [`discord.md`](discord.md) "Declared people".
 - Roles (IDENTITY-8..12): give each declared person `role = "team"` or `role = "community"`
   (no `role` = community), or use `/admin people role` (owner-only, SAFE-5 audited). The owner
   is always owner; anyone undeclared is community. See E.6.
