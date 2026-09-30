@@ -1032,9 +1032,10 @@ export class SchedulerService {
 
   /**
    * SAFE-13 (#71): a tick whose schedule text (by anyone but the owner)
-   * looks like an injection attempt. Nothing runs: one `injection-suspected`
-   * / `denied` SAFE-5 row (actor the creator, surface `scheduler:<id>`,
-   * never the text), the run recorded failed with a stuck ask
+   * looks like an injection attempt. Nothing runs: one
+   * `[scheduler] SAFE-13` log line, one `injection-suspected` / `denied`
+   * SAFE-5 row (actor the creator, surface `scheduler:<id>`, never the
+   * text), the run recorded failed with a stuck ask
    * (`injectedScheduleQuestion`), the schedule paused so no later tick runs
    * it or posts again, and that ask posted through the usual ask path — the
    * owner pinged once, handed back for the next delivery pass when the post
@@ -1045,6 +1046,10 @@ export class SchedulerService {
     run: ScheduleRun,
     verdict: InjectionVerdict,
   ): Promise<void> {
+    // Operator log too: a schedule without a channel has no post to carry it.
+    console.warn(
+      `[scheduler] SAFE-13: schedule ${schedule.id} not run: its text looks like a prompt-injection attempt (${verdict.reasons.join(", ")}); pausing it`,
+    );
     auditInboundInjection(this.recordAudit, {
       actor: schedule.createdByUserId,
       surface: `scheduler:${schedule.id}`,

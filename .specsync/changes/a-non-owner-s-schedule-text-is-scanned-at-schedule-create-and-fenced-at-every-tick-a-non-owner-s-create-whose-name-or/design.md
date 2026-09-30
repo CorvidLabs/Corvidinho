@@ -18,7 +18,8 @@ artifact: design
   - `runOne`: after `gateTick`, `creatorRole(schedule)`
     (`resolveDiscordActingRole` with the live allowlist, owner, mute set and
     `loadDeclaredPeople`; throws read as community). A hit →
-    `refuseInjectedRun`: `auditInboundInjection` (surface
+    `refuseInjectedRun`: a `[scheduler] SAFE-13` log line (reason ids, for a
+    schedule with no channel too), `auditInboundInjection` (surface
     `scheduler:<id>`, source `schedule-prompt`), `finish` failed with the
     stuck ask, `setStatus(paused)` unless the failure auto-paused it, then
     `postOwnRunAsk(..., { handBack: true })`. No worktree is created.
@@ -63,3 +64,6 @@ Design choices pending Leif:
    daemon has no audit trail wired today and logs the refusal
    (`run.finished` error, `run.needs_human`), and its ask is posted by the
    bridge.
+7. **A schedule without a channel** has no post to carry the owner's note:
+   the refusal is the log line, the audit row, the run row's ask and the
+   paused status. Alternative: send it to the `/announce` channel or a DM.

@@ -903,7 +903,7 @@ characters. No new env var, config key, table or column.
 | SAFE-13 refusal with no owner configured | The refusal still goes out and says no owner is configured; `INJECTION_NO_OWNER_WARNING` logged (REQ-discord-071) |
 | SAFE-13 audit trail unavailable (no DB, keyed chain without the key) | Refusal still sent; one `[discord] SAFE-13 audit row failed` warning (REQ-discord-071) |
 | Non-owner `/schedule create` name or prompt trips the SAFE-13 detector | Nothing stored; ephemeral refusal; one fresh channel post pinging only the owner; `injection-suspected` row, surface `discord:/schedule` (REQ-discord-713) |
-| A due schedule's stored non-owner name, description or prompt trips the SAFE-13 detector | No worktree, no agent run; run recorded failed with a stuck ask (never the text); schedule paused; the ask pings the owner once through the usual ask path (a daemon tick leaves it pending for a bridge); `injection-suspected` row, surface `scheduler:<id>`, when a trail is wired (REQ-discord-713) |
+| A due schedule's stored non-owner name, description or prompt trips the SAFE-13 detector | No worktree, no agent run; one `[scheduler] SAFE-13: schedule <id> not run …` log line (reason ids, never the text); run recorded failed with a stuck ask (never the text); schedule paused; the ask pings the owner once through the usual ask path (a daemon tick leaves it pending for a bridge); `injection-suspected` row, surface `scheduler:<id>`, when a trail is wired (REQ-discord-713) |
 
 ## Dependencies
 
