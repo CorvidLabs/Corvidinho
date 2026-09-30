@@ -21,6 +21,7 @@ import type {
   SlashReplyPayload,
 } from "../src/discord/slash-types.ts";
 import type { ThinkingOutbound } from "../src/discord/thinking-status.ts";
+import { teamPeopleFile } from "./fixtures/team-people.ts";
 
 /** Missing allowlist file: never read the operator's allowlist (ALLOW-4). */
 const NO_ALLOWLIST = join(
@@ -93,7 +94,7 @@ function slash(opts: {
   };
 }
 
-async function bridge(outbound: ThinkingOutbound) {
+async function bridge(outbound: ThinkingOutbound, allowlistFile = NO_ALLOWLIST) {
   const calls: Call[] = [];
   const box: { handlers: GatewayHandlers | null } = { handlers: null };
   const result = await startBridge({
@@ -101,7 +102,7 @@ async function bridge(outbound: ThinkingOutbound) {
       DISCORD_BOT_TOKEN: "fake",
       DISCORD_CHANNEL_IDS: CHAN,
       CORVIDINHO_DISCORD_DRY_RUN: "1",
-      CORVIDINHO_ALLOWLIST_FILE: NO_ALLOWLIST,
+      CORVIDINHO_ALLOWLIST_FILE: allowlistFile,
       CORVIDINHO_OWNER_DISCORD_ID: OWNER,
     },
     // Temp non-git project: never create real worktrees/branches in this repo.
@@ -250,7 +251,8 @@ describe("slash answer reply continuity (DISCORD-2 / SESSION-MULTI-1)", () => {
 
   test("a member's /work A then B: their reply continues A; the owner's reply never does", async () => {
     const outbound = memoryThinkingOutbound();
-    const { result, handlers, calls } = await bridge(outbound);
+    // IDENTITY-11.a: the member is declared team (community can't start /work).
+    const { result, handlers, calls } = await bridge(outbound, teamPeopleFile(OTHER));
     await handlers.onSlash!(slash({ n: 1, command: "work", userId: OTHER, text: "topic A" }));
     const answerA = outbound.sends[0]!.messageId;
     await handlers.onSlash!(slash({ n: 2, command: "work", userId: OTHER, text: "topic B" }));

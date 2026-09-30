@@ -206,12 +206,14 @@ also hold there pass by design).
 Memory on GitHub (MEMORY-8, #67 / REQ-plugins-067, which narrows REQ-plugins-101's
 WATCH `--project` refusal to writes):
 `tests/memory.recall-github.test.ts` › "MEMORY-8 memory in GitHub (WATCH)
-runs" — with GitHub-shaped env a declared commenter (numeric id or login, any
-case) stores into `person:tofu`, recalls with a plain-words `--query` and
-reads `memory-profile`, the same profile Discord reads; the `[owner]`
-GitHub login recalls the owner's Discord-id memory; on GitHub private notes,
+runs" — with GitHub-shaped env a declared commenter (by numeric id, under
+any login — IDENTITY-7.a) stores into `person:tofu`, recalls with a
+plain-words `--query` and reads `memory-profile`, the same profile Discord
+reads; the `[owner] github_id` recalls the owner's Discord-id memory and the
+`[owner]` login alone recalls nothing; on GitHub private notes,
 `memory-forget-me` and `--person` (any ref) are refused and another person's
-rows never show; a login whose numeric id differs saves nothing; an
+rows never show; a login whose numeric id differs, or with no id, saves
+nothing; an
 undeclared commenter saves nothing (own or `--project`), has no personal
 recall and reads only the thread repo's project memory with `--project`; a
 Discord actor always wins over stale GitHub keys.

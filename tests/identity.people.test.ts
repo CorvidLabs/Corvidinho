@@ -139,14 +139,14 @@ colour = "blue"
 });
 
 describe("resolvePerson (IDENTITY-14 recognise; IDENTITY-7 stable ids only)", () => {
-  test("Discord user id, GitHub login (any case, @) and GitHub numeric id each resolve", () => {
+  test("Discord user id and GitHub numeric id each resolve; a GitHub login alone never does (IDENTITY-7.a)", () => {
     const d = dir(SAMPLE);
     expect(resolvePerson(d, { discordId: TOFU_DC })).toMatchObject({ personId: "tofu", displayName: "Tofu # the dev" });
     expect(resolvePerson(d, { discordId: `<@${TOFU_DC}>` })?.personId).toBe("tofu");
-    expect(resolvePerson(d, { githubLogin: "@TOFU-dev" })?.personId).toBe("tofu");
     expect(resolvePerson(d, { githubId: 4242 })?.personId).toBe("tofu");
-    expect(resolvePerson(d, { githubId: "4242" })?.personId).toBe("tofu");
-    expect(resolvePerson(d, { githubLogin: "ada" })).toMatchObject({ personId: "ada", displayName: "Ada L" });
+    expect(resolvePerson(d, { githubId: "4242" })).toMatchObject({ personId: "tofu", displayName: "Tofu # the dev" });
+    expect(resolvePerson(d, { githubLogin: "@TOFU-dev" })).toBeNull();
+    expect(resolvePerson(d, { githubLogin: "ada" })).toBeNull();
     expect(resolvePerson(d, { discordId: TOFU_DC })?.role).toBeUndefined();
   });
 
@@ -160,17 +160,19 @@ describe("resolvePerson (IDENTITY-14 recognise; IDENTITY-7 stable ids only)", ()
     expect(resolvePerson(null, { discordId: TOFU_DC })).toBeNull();
   });
 
-  test("a login is not trusted when the GitHub id is known and differs (renamed / reused login)", () => {
+  test("a renamed or re-registered login never counts: only the numeric id matches (IDENTITY-7.a)", () => {
     const d = dir(SAMPLE);
     expect(resolvePerson(d, { githubLogin: "tofu-dev", githubId: 9999 })).toBeNull();
     expect(resolvePerson(d, { githubLogin: "tofu-dev", githubId: 4242 })?.personId).toBe("tofu");
-    // ada declared no GitHub id: the login alone still resolves.
-    expect(resolvePerson(d, { githubLogin: "ada", githubId: 9999 })?.personId).toBe("ada");
+    expect(resolvePerson(d, { githubLogin: "renamed-tofu", githubId: 4242 })?.personId).toBe("tofu");
+    // ada declared a login but no GitHub id: not recognised on GitHub at all.
+    expect(resolvePerson(d, { githubLogin: "ada", githubId: 9999 })).toBeNull();
+    expect(resolvePerson(d, { githubLogin: "ada" })).toBeNull();
   });
 
   test("ids pointing at two different people, or one id linked to two people, resolve nobody", () => {
     const d = dir(SAMPLE);
-    expect(resolvePerson(d, { discordId: TOFU_DC, githubLogin: "ada" })).toBeNull();
+    expect(resolvePerson(d, { discordId: ADA_DC, githubId: 4242 })).toBeNull();
     const clash = dir(`[people.a]\ndiscord_ids = ["${TOFU_DC}"]\n[people.b]\ndiscord_ids = ["${TOFU_DC}"]\n`);
     expect(resolvePerson(clash, { discordId: TOFU_DC })).toBeNull();
     expect(clash.issues.join("\n")).toContain("a Discord id is linked to more than one person (a, b)");
@@ -185,7 +187,13 @@ describe("resolvePerson (IDENTITY-14 recognise; IDENTITY-7 stable ids only)", ()
       displayName: "Leif",
       role: "owner",
     });
-    expect(resolvePerson(builtIn, { githubLogin: "0xLeif" })?.role).toBe("owner");
+    // IDENTITY-7.a: the [owner] login alone is not the owner on GitHub; the
+    // [owner] github_id is.
+    expect(resolvePerson(builtIn, { githubLogin: "0xLeif" })).toBeNull();
+    const withId = dir(SAMPLE, { ...OWNER, githubId: "8268288" });
+    expect(resolvePerson(withId, { githubLogin: "0xLeif", githubId: 8268288 })?.role).toBe("owner");
+    expect(resolvePerson(withId, { githubId: "8268288" })?.personId).toBe(OWNER_PERSON_ID);
+    expect(resolvePerson(withId, { githubLogin: "0xLeif", githubId: 1 })).toBeNull();
 
     const declared = dir(`${SAMPLE}\n[people.leif]\nnicknames = ["L"]\ndiscord_ids = ["${OWNER_ID}"]\ngithub_ids = ["1"]\n`);
     expect(declared.ownerPersonId).toBe("leif");
@@ -193,6 +201,10 @@ describe("resolvePerson (IDENTITY-14 recognise; IDENTITY-7 stable ids only)", ()
     const leif = resolvePerson(declared, { githubLogin: "0xleif", githubId: 1 });
     expect(leif).toMatchObject({ personId: "leif", displayName: "Leif", role: "owner" });
     expect(leif?.person.githubLogins).toEqual(["0xleif"]);
+    // The [owner] github_id joins the owner's declared person.
+    const both = dir(`${SAMPLE}\n[people.leif]\ndiscord_ids = ["${OWNER_ID}"]\n`, { ...OWNER, githubId: "8268288" });
+    expect(both.people.find((p) => p.id === "leif")?.githubIds).toEqual(["8268288"]);
+    expect(resolvePerson(both, { githubId: 8268288 })).toMatchObject({ personId: "leif", role: "owner" });
 
     const noOwner = dir(SAMPLE, null);
     expect(noOwner.ownerPersonId).toBeNull();

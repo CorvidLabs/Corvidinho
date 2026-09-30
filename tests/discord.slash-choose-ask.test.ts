@@ -36,6 +36,7 @@ import { recordSlashStub } from "../src/discord/slash-finish.ts";
 import type { SlashInteraction, SlashReplyPayload } from "../src/discord/slash-types.ts";
 import type { BridgeConfig } from "../src/discord/types.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
+import { teamPeopleFile } from "./fixtures/team-people.ts";
 
 const OWNER_ID = "111122223333444455";
 const REQUESTER = "222233334444555566";
@@ -109,7 +110,8 @@ async function bridgeWith(
       DISCORD_BOT_TOKEN: "fake",
       DISCORD_CHANNEL_IDS: "chan-1",
       CORVIDINHO_DISCORD_DRY_RUN: "1",
-      CORVIDINHO_ALLOWLIST_FILE: join(mkdtempSync(join(tmpdir(), "corvidinho-slash-choose-")), "none.toml"),
+      // IDENTITY-11.a: the requester is declared team (community can't start /work).
+      CORVIDINHO_ALLOWLIST_FILE: teamPeopleFile(REQUESTER),
       CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID,
     },
     projectRoot: mkdtempSync(join(tmpdir(), "corvidinho-slash-choose-proj-")),

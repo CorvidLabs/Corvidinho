@@ -25,6 +25,7 @@ import { handleWorkCommand } from "../src/discord/command-handlers/work.ts";
 import { SessionStore } from "../src/discord/session-store.ts";
 import type { SlashContext, SlashReplyPayload } from "../src/discord/slash-types.ts";
 import { WorkStore } from "../src/discord/work-store.ts";
+import { NOT_AUTHORIZED } from "../src/discord/types.ts";
 import { CORVIDINHO_PROTOCOL_VERSION } from "../src/discord/protocol-version.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { clearRegistry } from "../src/plugins/registry.ts";
@@ -637,18 +638,22 @@ describe("/work reply carries the PR line (AUTONOMOUS-3)", () => {
     );
   });
 
-  test("ROLES-CHAT-3: a non-owner's /work never runs the PR step", async () => {
+  test("ROLES-CHAT-3 / IDENTITY-11.a: a community /work never runs, so never reaches the PR step", async () => {
     const store = new SessionStore({
       defaultProjectRoot: mkdtempSync(join(base, "proj-")),
     });
+    let runs = 0;
     const agent: AgentClient = {
-      runChat: async ({ sessionId }) => ({
-        ok: true,
-        sessionId,
-        summary: "did it",
-        exitCode: 0,
-        task: { verified: true, verifySkipped: false, state: "done" },
-      }),
+      runChat: async ({ sessionId }) => {
+        runs += 1;
+        return {
+          ok: true,
+          sessionId,
+          summary: "did it",
+          exitCode: 0,
+          task: { verified: true, verifySkipped: false, state: "done" },
+        };
+      },
     };
     let called = 0;
     const openPr = async (): Promise<WorkPrOutcome> => {
@@ -658,8 +663,10 @@ describe("/work reply carries the PR line (AUTONOMOUS-3)", () => {
     const ctx = { ...ctxFor(store, agent, openPr), owner: { discordId: "someone-else" } };
     const { ix, edits } = interaction("Add greeting");
     await handleWorkCommand(ctx, ix);
+    expect(runs).toBe(0);
     expect(called).toBe(0);
-    expect(edits.at(-1)?.content ?? "").toContain("only the owner (ADMIN) can ship /work as a PR");
+    expect(store.list()).toHaveLength(0);
+    expect(edits).toEqual([{ content: NOT_AUTHORIZED, ephemeral: true }]);
   });
 
   test("a throwing PR step never breaks the reply", async () => {

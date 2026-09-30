@@ -13,9 +13,10 @@
  *   real path of its main checkout, so every worktree of it shares one scope.
  *
  * The acting person comes from the bridge-set acting Discord id — or, in a
- * GitHub WATCH run, the poller-set commenter's GitHub id / login (MEMORY-8,
- * `memorySubjectForGithub`) — matched in the owner's people list re-read now
- * (stable ids only, IDENTITY-7), never from argv or the prompt. Who may
+ * GitHub WATCH run, the poller-set commenter's GitHub numeric user id
+ * (MEMORY-8, `memorySubjectForGithub`; never the login, IDENTITY-7.a) —
+ * matched in the owner's people list re-read now (stable ids only,
+ * IDENTITY-7), never from argv or the prompt. Who may
  * read which scope is decided in plugins/memory and the Discord / WATCH
  * injects: a person's memory only by them and the owner (MEMORY-7); project
  * memory by the owner and team, and by the local CLI (no role session), and
@@ -152,18 +153,20 @@ export function memorySubjectForRef(
 
 /**
  * The subject for a GitHub commenter (MEMORY-8, #67): the declared person
- * their GitHub numeric id / login resolves to in the owner's people list
- * (stable ids only, IDENTITY-7; never a name), the same profile as on
- * Discord. The configured owner while not declared under `[people]` keeps
- * their Discord-id scope, as on Discord. Undeclared (or ids pointing at two
- * people) ⇒ null: no personal memory on GitHub.
+ * their GitHub numeric user id resolves to in the owner's people list (stable
+ * ids only, IDENTITY-7; on GitHub the numeric id only, IDENTITY-7.a — never a
+ * login or a name), the same profile as on Discord. The configured owner
+ * while not declared under `[people]` keeps their Discord-id scope, as on
+ * Discord. No id, undeclared (or an id pointing at two people) ⇒ null: no
+ * personal memory on GitHub.
  */
 export function memorySubjectForGithub(
   dir: PeopleDirectory | null | undefined,
+  /** `login` is accepted and ignored (IDENTITY-7.a); only `id` matches. */
   q: { login?: string | null; id?: string | number | null },
 ): MemorySubject | null {
   if (!dir) return null;
-  const resolved = resolvePerson(dir, { githubLogin: q.login, githubId: q.id });
+  const resolved = resolvePerson(dir, { githubId: q.id });
   if (!resolved) return null;
   if (resolved.personId === OWNER_PERSON_ID) {
     const ownerDiscord = dir.owner?.discordId;

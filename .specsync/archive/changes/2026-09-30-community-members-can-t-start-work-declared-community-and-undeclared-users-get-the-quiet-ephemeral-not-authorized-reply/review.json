@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "community-members-can-t-start-work-declared-community-and-undeclared-users-get-the-quiet-ephemeral-not-authorized-reply",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "88eca58a74f91228b3b9ca71817ec84b94c0a9f4",
+  "contract_digest": "2775ca182e6a19603fa0455693c6734d1cbef3c8aaa130450e74a029ae96dc50",
+  "execution_digest": "b3f028083142c265c870eaeb88b92523d6a8db9f2a276f928ab893289607261c",
+  "workspace_digest": "1573f6fd52f684186f4a2d29ebeef73d2796f0784fd20ffdcabb4537aebd6241",
+  "timestamp": 1790734150
+}
