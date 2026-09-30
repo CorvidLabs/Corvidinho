@@ -57,6 +57,7 @@ files:
   - tests/fixtures/lane-output.ts
   - src/agent/providers.ts
   - tests/agent.providers.test.ts
+  - tests/agent.fallback.test.ts
   - tests/fixtures/fake-llm.ts
 
 db_tables: []
@@ -75,10 +76,25 @@ the operator configures every model, and none is built in as a default.
 `CORVIDINHO_LLM_MODEL` and the per-tier keys hold `kind:model` entries
 (`openai`, `ollama`, `anthropic`; a bare or unknown prefix is
 OpenAI-compatible), each with its vendor endpoint and key, all over the one
-OpenAI-compatible chat transport and the SAFE-8 guard. Only a tier's first
-entry is called (the AGENT-11 fallback is a later change; no headless-CLI kind
+OpenAI-compatible chat transport and the SAFE-8 guard (no headless-CLI kind
 yet). With no usable provider for the run's tier the attempt calls nothing and
 fails with the no-provider notice; there is no demo stub.
+
+Model fallback (AGENT-11, REQ-agent-080; `callChain` in
+`src/agent/providers.ts`): a tier's list is a chain. A run calls its first
+entry; when that model fails (an HTTP error, 404 / 410 for a retired model
+included, a network error, a timeout or a malformed reply) the run goes on at
+once with the next entry — no retry, no backoff — and keeps it for the rest of
+the process; a new `task run` process tries the head again (nothing stored). A
+SAFE-8 spend-cap stop, the run's own stop, and a Deny or lapsed card on a
+must-ask tool are not model failures and never fail over. Each failover is an
+`[operator] <a> failed (<reason>); falling back to <b>` Text event, a closing
+`(model fallback: …)` note on every later summary (clips keep it, like the
+role note), and `TaskResult.modelFallback`; the result names the model that
+answered (`model`) and the usage per model (`usageByModel`), and each NDJSON
+`usage` frame names its `model` and the running `byModel`. A delegate or
+council worker's failovers reach its lead's result the same way, marked
+`via`.
 
 Agent execute tool-loop also carries MEMORY instructions (AGENT-7 / MEMORY-2/4)
 so Discord/CLI chats trust injected facts and call memory-store/recall
@@ -141,7 +157,14 @@ owner's OK on an Approve card" — REQ-agent-097). Frames:
 (`name`, `argsSummary`) / `ToolResult` / `VerifyResult`, plus `usage`
 (running prompt / completion / total tokens) and a final `result`
 (`TaskResult`). `createTaskExecute({ onUsage })` reports running provider
-totals; `extractUsage` reads OpenAI-compatible `usage`. `collectTaskRunStream`
+totals with `{ model, byModel }` (the model that reported it and the running
+totals per configured model, AGENT-11); `usageFrame(u, detail?)` adds them to
+the frame as `model` / `byModel` (validated when parsed), and
+`collectTaskRunStream` returns the last frame's `byModel` as `usageByModel`.
+`createTaskExecute({ onModelFallback, onModel })` reports each failover and
+the model each reply came from; `task run` puts `model`, `usageByModel` and
+`modelFallback` on its `TaskResult` (REQ-agent-080). `extractUsage` reads
+OpenAI-compatible `usage`. `collectTaskRunStream`
 returns the last `usage` frame as `usage` (the Discord answer footer prices
 it, DISCORD-15) and takes an optional `bodyMax` for the result-frame chat body
 (default `CHAT_BODY_MAX`, 1800; the Discord spawn client passes a larger cap
@@ -167,7 +190,20 @@ key `ANTHROPIC_API_KEY`; `usable` false when the kind's key is missing),
 `providerId` (the endpoint host, as the SAFE-8 ledger records it),
 `providerForTier`, `entryLabel`, `defaultProviderLabel`, `providerNotice(env,
 tiers?)` (starts with `NO_PROVIDER_NOTICE`, names the tiers and the missing
-setting or key, never a value), and `providerStatus`. The chat transport sends
+setting or key, never a value), and `providerStatus`. The fallback chain
+(REQ-agent-080, AGENT-11): `modelChain(env, tier)` (the tier's entries,
+resolved, with the current `index` and its `fallbacks`), `callChain(chain, fn,
+onFallback?)` (`ChainCall` results; `failure: null` never fails over; a next
+entry without its key is skipped with `<KEY> is not set`), `ModelFailure` /
+`modelFailureReason` (`HTTP <status>`, `timed out`, `network error`,
+`malformed reply`), `modelFallbackEventText`, `MODEL_FALLBACK_NOTE_PREFIX`,
+`modelFallbackNote`, `withModelFallbackNote`, `formatModelFallbackLog`
+(`llm.fallback: …`), `answeredModelLabel` (`b (fell back from a)`),
+`modelIdOfLabel`, `modelFallbackFromUnknown` / `modelUsageFromUnknown` /
+`modelLabelFromUnknown` (a child's result read back: scrubbed, one line,
+bounded, at most `MODEL_FALLBACK_MAX` 16), `mergeModelFallbacks` and
+`addModelUsage`. `ModelUsage` and `ModelFallback` are in
+`src/agent/types.ts`. The chat transport sends
 `authorization: Bearer <key>` only when the kind has a key. `modelKeyForTier(env, tier)` names the key that set a tier's
 model (the SAFE-8 unpriced ask names it via `createSpendGuard({ modelKey })`),
 and `perTierModels(env)` lists each tier's model when any per-tier key is set
@@ -276,7 +312,9 @@ Council core (REQ-agent-118, issue #118, AUTONOMOUS-6):
 `COUNCIL_DEFAULT_TIER` read, `COUNCIL_MAX_VOICE_TIER` tool).
 `DelegateChildOutcome` gains optional `resultText` (the worker's own result
 summary, scrubbed and capped at `DELEGATE_SUMMARY_MAX` rather than the
-1800-char chat body).
+1800-char chat body) and `modelFallback` (the worker's own failovers from its
+result frame, validated, AGENT-11); `CouncilOutcome.modelFallback` holds its
+voices' and chair's, each once (REQ-agent-080).
 
 Project instructions (REQ-agent-084, AGENT-1, issue #84):
 `src/agent/project-instructions.ts` exports `findProjectRoot`,
@@ -315,7 +353,9 @@ Personality traits, Background, Communication style, Example messages).
 `task-summary` exports `formatTaskPlumbing`, `chatBodyFromTaskResult` (optional
 `max`, default `CHAT_BODY_MAX` 1800), and
 `chatBodyFromTaskRunOutput` alongside `summarizeTaskResult`, plus
-`ROLE_REFUSED_SUMMARY_NOTE` and `clipKeepingRoleNote` (REQ-agent-333). Discord/NDJSON
+`ROLE_REFUSED_SUMMARY_NOTE`, `closingNotesTail` and `clipKeepingRoleNote`
+(REQ-agent-333; it keeps the AGENT-11 `(model fallback: …)` note before the
+role note too, REQ-agent-080). Discord/NDJSON
 bridge summaries SHALL use the chat-body helpers so operator plumbing never
 appears in the final chat reply (DISCORD-3.a).
 
@@ -398,6 +438,16 @@ gains optional `injection?: InjectionNotice` (additive on the NDJSON
 `result` frame: protocol stays 2). No env var, config key or flag.
 
 ## Invariants
+
+A failed model hands the run to the next configured one and says so (AGENT-11,
+REQ-agent-080): one `ModelChain` per `createTaskExecute` (every surface's
+`task run`, workers included), shared by every round and attempt; only an
+HTTP error, a network error, a timeout or a malformed reply moves it on, at
+once and once per failure; a spend-cap stop (`SpendCapRefusal`), the run's own
+abort, a Deny or a lapsed card never does, so a cap stop asks and never routes
+around the cap. Each failover is one Text event, one `onModelFallback` call
+and a part of the closing note on every later summary of the run; reasons are
+fixed short texts, never provider output.
 
 A repeated failing call is steered, then asks (AGENT-16, REQ-agent-086): one
 guard per `createTaskExecute` (every surface's `task run`, workers included)
@@ -742,6 +792,12 @@ instructions for …" or a browser's developer mode do not count.
 - **When** the run starts
 - **Then** the no-provider notice is the first stderr line (text output), no provider is called, and the run ends `failed` with that notice as its summary and no files; there is no `gpt-4o-mini` default and no demo answer (REQ-agent-179)
 
+### Scenario: the configured model is retired
+
+- **Given** `CORVIDINHO_LLM_MODEL=ollama:gone-model, ollama:fake-model` and a provider that answers `gone-model` with HTTP 404
+- **When** `task run --output ndjson` runs
+- **Then** it calls `gone-model` once, then `fake-model`; a Text frame says `[operator] ollama:gone-model failed (HTTP 404); falling back to ollama:fake-model`; the result is `done`, its summary ends with `(model fallback: ollama:gone-model failed (HTTP 404), fell back to ollama:fake-model)`, and it carries `model` `ollama:fake-model`, `usageByModel` and `modelFallback` (REQ-agent-080)
+
 ### Scenario: the model repeats a failing call
 
 - **Given** a tool-tier run whose model calls `files-read` on a missing file
@@ -769,6 +825,9 @@ instructions for …" or a browser's developer mode do not count.
 | Real diff of thousands of paths (an install, a branch switch) | at most `WORKSPACE_DIFF_MAX_FILES` join filesChanged, the note counts them all, verify runs; the NDJSON result line stays under the parser cap (REQ-agent-085) |
 | Retry after a failed verify changes no files | filesChanged is the union across attempts, so verify runs again; never done unless it passes (REQ-agent-242) |
 | No usable provider for the run's tier (no entry, or the kind's key unset) | no provider call; `ExecuteResult.error` with the no-provider notice as summary; state failed, no files, no verify; `task run` exits 1 (REQ-agent-179) |
+| The current model fails (HTTP error incl. 404 / 410, network error, timeout, malformed reply) and a next entry exists | the same request goes to the next entry at once; the chain keeps it for the process; Text event, `onModelFallback`, closing note (REQ-agent-080) |
+| Every configured model failed | the last model's error is the summary with the note after it; `error: true`, state failed (REQ-agent-080) |
+| A call stops at the spend cap, the run is stopped, or a must-ask call is denied or its card lapses | no failover; the cap stop asks as before, the stop stops, the tool gets its refusal (REQ-agent-080) |
 | Provider / HTTP / network failure in execute | `ExecuteResult.error`; state failed, verified=false, summary is the provider error (then the earlier verify output when a verify already failed), `task run` exits 1 (REQ-agent-242) |
 | Model calls ask-human | state blocked, verifySkipped=true, `ask` reason clarify, summary `Needs your input: …` |
 | ask-human with empty question | ToolResult success=false fed back to the model; loop continues |

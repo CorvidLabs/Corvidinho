@@ -6,7 +6,13 @@
  * protocol lockstep (DISCORD-10).
  */
 
-import type { AgentTokenUsage, HumanAsk, SpendWarning } from "../agent/types.ts";
+import type {
+  AgentTokenUsage,
+  HumanAsk,
+  ModelFallback,
+  ModelUsage,
+  SpendWarning,
+} from "../agent/types.ts";
 import type { InjectionNotice } from "../agent/untrusted.ts";
 import type { PendingAsk } from "./ask-buttons.ts";
 import type { AllowlistConfig } from "../allowlist/types.ts";
@@ -146,6 +152,18 @@ export type AgentSpawnResult = {
    * arrived — priced for the owner's answer footer (DISCORD-15/15.a).
    */
   usage?: AgentTokenUsage;
+  /**
+   * AGENT-11: that usage per configured model (validated), so the owner's
+   * footer prices each model at its own price.
+   */
+  usageByModel?: ModelUsage[];
+  /**
+   * AGENT-11: the configured model that answered (the result frame's
+   * `model`, validated); the footer names it.
+   */
+  model?: string;
+  /** AGENT-11: the run's failovers (the result frame's `modelFallback`, validated). */
+  modelFallback?: ModelFallback[];
   /**
    * SAFE-13: a tool result in this run looked like a prompt-injection attempt
    * (validated tool name + reason ids); the post tells the owner.

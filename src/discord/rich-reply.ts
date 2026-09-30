@@ -13,17 +13,20 @@
  * fits one embed goes out as one embed instead of two split messages.
  *
  * DISCORD-15 / DISCORD-15.a: the answer's footer (model, tokens, cost, time)
- * rides the last part. `answerSpendFor` turns the run's provider-reported
- * usage into the tokens and cost the footer shows on the owner's own runs;
- * a cost with no known price (or no usage) stays unknown, never $0 (SAFE-16).
+ * rides the last part. `answerModelFor` names the model that answered, with
+ * `(fell back from …)` after a failover (AGENT-11); `answerSpendFor` turns
+ * the run's provider-reported usage into the tokens and cost the footer shows
+ * on the owner's own runs, each model priced at its own price; a cost with no
+ * known price (or no usage) stays unknown, never $0 (SAFE-16).
  *
  * Used by the chat reply, the button-pick resume, `/work` and
  * `/session start`; WATCH comments and schedule posts keep their own caps.
  */
 
+import { answeredModelLabel, modelIdOfLabel } from "../agent/providers.ts";
 import { costMicroUsd, priceForModel } from "../agent/spend.ts";
-import { ROLE_REFUSED_SUMMARY_NOTE, clipKeepingRoleNote } from "../agent/task-summary.ts";
-import type { AgentTokenUsage } from "../agent/types.ts";
+import { clipKeepingRoleNote, closingNotesTail } from "../agent/task-summary.ts";
+import type { AgentTokenUsage, ModelFallback, ModelUsage } from "../agent/types.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import { defangMassMentions } from "./allowed-mentions.ts";
 import {
@@ -52,7 +55,6 @@ export const DISCORD_ANSWER_MAX = 3 * DISCORD_MESSAGE_MAX;
 
 const FENCE = "```";
 const CLOSE_FENCE = `\n${FENCE}`;
-const ROLE_NOTE_TAIL = `\n\n${ROLE_REFUSED_SUMMARY_NOTE}`;
 
 /** How many ``` runs a line holds (each opens or closes a Discord code block). */
 function fenceMarks(line: string): number {
@@ -168,13 +170,14 @@ function splitBody(text: string, max: number): string[] {
 
 /**
  * DISCORD-16 — split an answer at Discord's 2000-character limit without
- * breaking code fences. Text within `max` comes back as is (one part). A
- * closing ROLES-CHAT-3 role note stays whole in the last part. Callers scrub
- * first (SAFE-6); `planAnswerParts` does.
+ * breaking code fences. Text within `max` comes back as is (one part). The
+ * closing notes — the AGENT-11 model fallback note and the ROLES-CHAT-3 role
+ * note — stay whole in the last part. Callers scrub first (SAFE-6);
+ * `planAnswerParts` does.
  */
 export function splitDiscordMessage(text: string, max = DISCORD_MESSAGE_MAX): string[] {
   if (text.length <= max) return [text];
-  const note = text.endsWith(ROLE_NOTE_TAIL) ? ROLE_NOTE_TAIL : "";
+  const note = closingNotesTail(text);
   const head = note ? text.slice(0, text.length - note.length) : text;
   const parts = splitBody(head, max);
   if (note) {
@@ -324,22 +327,55 @@ export async function postAnswerParts(
   return ids;
 }
 
+function tokensOf(usage: AgentTokenUsage): number {
+  return Math.max(usage.totalTokens, usage.promptTokens + usage.completionTokens);
+}
+
 /**
  * DISCORD-15 / SAFE-16 — tokens and cost for an answer footer from the run's
  * provider-reported usage and the model's known price. Tokens are unknown
  * without usage; the cost is unknown without usage or without a known price
  * for `model` (MODEL_PRICES_USD_PER_MTOK, exact id) — never counted as $0.
- * Only the owner's own runs show these (DISCORD-15.a, SAFE-14.a): callers pass
- * the result to the footer for those runs only.
+ * With `byModel` (the run's usage per configured model, AGENT-11) each
+ * model's tokens are priced at its own price and summed; one model with
+ * tokens and no known price makes the cost unknown. Only the owner's own runs
+ * show these (DISCORD-15.a, SAFE-14.a): callers pass the result to the
+ * footer for those runs only.
  */
 export function answerSpendFor(
   usage: AgentTokenUsage | undefined,
   model: string | undefined,
+  byModel?: readonly ModelUsage[],
 ): AnswerSpend {
   if (!usage) return {};
-  const tokens = Math.max(usage.totalTokens, usage.promptTokens + usage.completionTokens);
+  const tokens = tokensOf(usage);
   if (!(tokens > 0)) return {};
-  const price = model?.trim() ? priceForModel(model) : null;
-  const cost = price ? costMicroUsd(price, usage) : 0;
+  let cost = 0;
+  if (byModel && byModel.length > 0) {
+    for (const row of byModel) {
+      if (!(tokensOf(row) > 0)) continue;
+      const price = priceForModel(modelIdOfLabel(row.model));
+      if (!price) return { totalTokens: tokens };
+      cost += costMicroUsd(price, row);
+    }
+  } else {
+    const price = model?.trim() ? priceForModel(model) : null;
+    cost = price ? costMicroUsd(price, usage) : 0;
+  }
   return cost > 0 ? { totalTokens: tokens, costMicroUsd: cost } : { totalTokens: tokens };
+}
+
+/**
+ * DISCORD-15 / AGENT-11 — the model an answer footer names: the configured
+ * model that answered (the run's result `model`), with `(fell back from …)`
+ * when its own chain failed over, e.g. `b (fell back from a)`; `configured`
+ * (the bridge's configured model) when the run reported none. Shown to
+ * everyone (DISCORD-15.a: model and time).
+ */
+export function answerModelFor(
+  run: { model?: string; modelFallback?: readonly ModelFallback[] },
+  configured: string,
+): string {
+  const answered = run.model?.trim();
+  return answered ? answeredModelLabel(answered, run.modelFallback) : configured;
 }

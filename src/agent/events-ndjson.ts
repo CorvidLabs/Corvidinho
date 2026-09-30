@@ -12,6 +12,10 @@
  * stream-only frames. Raw tool arguments are never streamed: ToolCall frames
  * carry a truncated, secret-scrubbed `argsSummary` (SAFE-6). Event-frame free
  * text (Text, ToolResult detail, VerifyResult output) is scrubbed and capped.
+ * A `usage` frame also names the model that reported it and the running
+ * totals per configured model (`model`, `byModel`, AGENT-11), and the
+ * `result` carries the model that answered, `usageByModel` and
+ * `modelFallback[]` — optional fields, so protocol 2 is unchanged.
  * The `result` frame carries the same TaskResult as `--json` — not scrubbed,
  * same exposure as `--json` — except an over-long `summary` is secret-scrubbed
  * and then capped at NDJSON_LIMITS.resultSummary (frame then says
@@ -23,6 +27,7 @@
  */
 
 import { scrubSecrets } from "../store/scrub.ts";
+import { modelLabelFromUnknown, modelUsageFromUnknown } from "./providers.ts";
 import {
   chatBodyFromTaskResult,
   chatBodyFromTaskRunOutput,
@@ -32,6 +37,7 @@ import type {
   AgentEvent,
   AgentState,
   AgentTokenUsage,
+  ModelUsage,
   TaskResult,
 } from "./types.ts";
 
@@ -88,7 +94,15 @@ export type NdjsonEventFrame =
       truncated?: true;
     });
 
-export type NdjsonUsageFrame = Versioned & { type: "usage" } & AgentTokenUsage;
+export type NdjsonUsageFrame = Versioned & { type: "usage" } & AgentTokenUsage & {
+  /** AGENT-11: the configured model (entry label) whose reply reported this usage. */
+  model?: string;
+  /** AGENT-11: running totals per configured model (each priced at its own price). */
+  byModel?: ModelUsage[];
+};
+
+/** What a usage frame adds about models (AGENT-11). */
+export type UsageModelDetail = { model: string; byModel: readonly ModelUsage[] };
 
 export type NdjsonResultFrame = Versioned & {
   type: "result";
@@ -265,14 +279,21 @@ function tokenCount(n: number): number {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
 }
 
-export function usageFrame(u: AgentTokenUsage): NdjsonUsageFrame {
-  return {
+export function usageFrame(u: AgentTokenUsage, detail?: UsageModelDetail): NdjsonUsageFrame {
+  const frame: NdjsonUsageFrame = {
     protocol: CORVIDINHO_PROTOCOL_VERSION,
     type: "usage",
     promptTokens: tokenCount(u.promptTokens),
     completionTokens: tokenCount(u.completionTokens),
     totalTokens: tokenCount(u.totalTokens),
   };
+  if (detail) {
+    // Model ids come from the operator's env; scrubbed and bounded anyway.
+    const model = modelLabelFromUnknown(detail.model);
+    if (model) frame.model = model;
+    frame.byModel = modelUsageFromUnknown(detail.byModel) ?? [];
+  }
+  return frame;
 }
 
 /**
@@ -310,7 +331,7 @@ export function serializeFrame(frame: NdjsonFrame): string {
 
 export type NdjsonWriter = {
   event(e: AgentEvent): void;
-  usage(u: AgentTokenUsage): void;
+  usage(u: AgentTokenUsage, detail?: UsageModelDetail): void;
   result(r: TaskResult): void;
 };
 
@@ -318,7 +339,7 @@ export type NdjsonWriter = {
 export function createNdjsonWriter(writeLine: (line: string) => void): NdjsonWriter {
   return {
     event: (e) => writeLine(serializeFrame(frameFromEvent(e))),
-    usage: (u) => writeLine(serializeFrame(usageFrame(u))),
+    usage: (u, detail) => writeLine(serializeFrame(usageFrame(u, detail))),
     result: (r) => writeLine(serializeFrame(resultFrame(r))),
   };
 }
@@ -417,16 +438,24 @@ function frameFromVersioned({ protocol, v }: VersionedObject): NdjsonFrame | nul
           ? { protocol, type: "VerifyResult", success: v.success, output: v.output, truncated: true }
           : { protocol, type: "VerifyResult", success: v.success, output: v.output }
         : null;
-    case "usage":
-      return isCount(v.promptTokens) && isCount(v.completionTokens) && isCount(v.totalTokens)
-        ? {
-            protocol,
-            type: "usage",
-            promptTokens: v.promptTokens,
-            completionTokens: v.completionTokens,
-            totalTokens: v.totalTokens,
-          }
-        : null;
+    case "usage": {
+      if (!(isCount(v.promptTokens) && isCount(v.completionTokens) && isCount(v.totalTokens))) {
+        return null;
+      }
+      const frame: NdjsonUsageFrame = {
+        protocol,
+        type: "usage",
+        promptTokens: v.promptTokens,
+        completionTokens: v.completionTokens,
+        totalTokens: v.totalTokens,
+      };
+      // AGENT-11: optional model fields, kept only when well-formed.
+      const model = modelLabelFromUnknown(v.model);
+      if (model) frame.model = model;
+      const byModel = modelUsageFromUnknown(v.byModel);
+      if (byModel) frame.byModel = byModel;
+      return frame;
+    }
     case "result": {
       const r = v.result;
       if (!isRecord(r)) return null;
@@ -681,6 +710,8 @@ export type TaskRunStreamOutcome = {
    * arrived — what the Discord answer footer prices (DISCORD-15).
    */
   usage?: AgentTokenUsage;
+  /** AGENT-11: that frame's running totals per configured model, when it had them. */
+  usageByModel?: ModelUsage[];
   frames: number;
   /** Protocol the binary streamed when it differs from the bridge's. */
   protocolMismatch?: number;
@@ -708,6 +739,7 @@ export async function collectTaskRunStream(opts: {
 }): Promise<TaskRunStreamOutcome> {
   let totalTokens: number | undefined;
   let usage: AgentTokenUsage | undefined;
+  let usageByModel: ModelUsage[] | undefined;
   const expected = opts.protocol ?? CORVIDINHO_PROTOCOL_VERSION;
   const [streamed, stderr, exitCode] = await Promise.all([
     readNdjsonStream(
@@ -719,6 +751,7 @@ export async function collectTaskRunStream(opts: {
             completionTokens: frame.completionTokens,
             totalTokens: frame.totalTokens,
           };
+          usageByModel = frame.byModel;
         }
         const p = progressFromFrame(frame);
         if (!p) return;
@@ -745,6 +778,7 @@ export async function collectTaskRunStream(opts: {
     result: streamed.result,
     totalTokens,
     ...(usage ? { usage } : {}),
+    ...(usageByModel ? { usageByModel } : {}),
     frames: streamed.frames,
   };
   if (streamed.protocolMismatch !== undefined) {

@@ -337,3 +337,12 @@ no request is sent, and a `git-push` of `main` to its remote is refused
 `tests/git.plugins.test.ts`, `tests/discord.requester-perms.test.ts` and
 `tests/discord.allowed-mentions.test.ts` approve the card
 (`tests/fixtures/must-ask.ts`) where they push `main` or post for real.
+
+## Worker failovers in delegate / council tool data (REQ-plugins-080; AGENT-11)
+
+`tests/agent.fallback.test.ts` ("a delegate or council worker's failover
+reaches the lead …") — `createCouncilCommand` with a fake bin whose result
+frames report a failover returns `data.modelFallback` with it once;
+`runDelegateChild` returns the worker's failovers for the `delegate` data;
+the lead's tool loop reports a `delegate` result's `modelFallback` as its own
+(`via: "delegate"`). Fail on base (no field).

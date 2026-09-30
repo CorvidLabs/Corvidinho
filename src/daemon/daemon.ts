@@ -22,7 +22,7 @@
  */
 
 import type { Database } from "bun:sqlite";
-import { defaultProviderLabel, providerNotice } from "../agent/providers.ts";
+import { defaultProviderLabel, formatModelFallbackLog, providerNotice } from "../agent/providers.ts";
 import { formatSpendWarningLine, SPEND_CAP_SUMMARY } from "../agent/spend-notice.ts";
 import { loadAllowlist, tryLoadAllowlist } from "../allowlist/load.ts";
 import type { AllowlistConfig } from "../allowlist/types.ts";
@@ -170,7 +170,20 @@ export async function startDaemon(
         log("warn", "daemon.protocol_unverified", { reason: hs.reason });
       }
     }
-    agent = opts.agent ?? createSpawnAgentClient({ bin, cwd: projectRoot });
+    agent =
+      opts.agent ??
+      createSpawnAgentClient({
+        bin,
+        cwd: projectRoot,
+        // AGENT-11: a scheduled run that failed over is a warn line here (the
+        // run's post carries the note too); no owner DM.
+        onModelFallback: (hops, sessionId) =>
+          log("warn", "llm.fallback", {
+            sessionId,
+            fallbacks: hops,
+            message: formatModelFallbackLog(hops),
+          }),
+      });
   } catch (err) {
     return fail("daemon.start_failed", errorText(err));
   }

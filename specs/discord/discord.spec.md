@@ -711,7 +711,9 @@ carries none unless `keepFooter` (a free-text ask's Answer button,
 REQ-discord-548), and a later re-edit keeps the first footer (time frozen by
 `elapsedMs` / `answerFooter`) and outcome (REQ-discord-457). The bridge chat
 and button-pick paths and `finishSlashWithThinking` pass the run's
-`thinkExtras` (with `spend: answerSpendFor(result.usage, model)` when
+`thinkExtras` (`model: answerModelFor(result, model)` — the configured model
+that answered, `b (fell back from a)` after a failover, AGENT-11 — with
+`spend: answerSpendFor(result.usage, model, result.usageByModel)` when
 `isOwnerDiscord(owner, actor)`) and the same failed/done outcome as their
 fallback status; their fallback replies carry `answerFooter` on the last part.
 `DiscordEmbedPayload.description` is optional (omitted on that embed).
@@ -719,7 +721,8 @@ fallback status; their fallback replies carry `answerFooter` on the last part.
 Rich replies (REQ-discord-075, DISCORD-16): `src/discord/rich-reply.ts`
 exports `DISCORD_MESSAGE_MAX` (2000), `DISCORD_EMBED_DESCRIPTION_MAX` (4096),
 `DISCORD_ANSWER_MAX` (6000), `splitDiscordMessage` (fence-safe line split,
-role note kept whole in the last part), `readsBetterAsEmbed` /
+the closing notes — the AGENT-11 `(model fallback: …)` note and the role note —
+kept whole in the last part), `readsBetterAsEmbed` /
 `planAnswerParts` (scrub first, SAFE-6, then cut to `DISCORD_ANSWER_MAX`
 keeping a role note; one plain message within 2000, one
 embed for long plain prose with no fence or mention, else split parts with the
@@ -727,15 +730,21 @@ footer on the last), `postAnswerParts` (fresh-reply paths: first part replies
 with the answer's mentions, later parts reply to nothing and allow only users
 first mentioned in them, so a mention past the first part still pings once;
 `keepFooter` keeps the footer beside an Answer button, DISCORD-ASK-4.a)
-and `answerSpendFor` (tokens and cost from the run's
-`usage` and `priceForModel`). `finalizeContent` edits the first part into the
+`answerSpendFor` (tokens and cost from the run's
+`usage` and `priceForModel`; with `usageByModel` each model's tokens at its own
+price, one unpriced model making the cost unknown, REQ-discord-080) and
+`answerModelFor` (the footer's model, REQ-discord-080). `finalizeContent` edits the first part into the
 progress message, posts later parts with the optional
 `ThinkingOutbound.sendMessage` (no pings; wired to the gateway reply) and
 returns `FinalizedAnswer { messageId, messageIds, complete }`; a re-edit edits
 only changed parts. `finishSlashWithThinking` takes optional `post` for the
 parts after the deferred reply; `finishSlashWithOwnerNotice` appends the
 notice without cutting a split answer. The Discord spawn client passes
-`bodyMax: DISCORD_ANSWER_MAX` and returns `AgentSpawnResult.usage`; the
+`bodyMax: DISCORD_ANSWER_MAX` and returns `AgentSpawnResult.usage`, and from
+the result frame `model`, `modelFallback` and `usageByModel` (validated); a run
+that failed over calls `onModelFallback(hops, sessionId)` — by default one
+`[discord] llm.fallback: …` warn line (`warnModelFallback`), the daemon passes
+its structured logger (REQ-discord-080, AGENT-11); the
 gateway `reply` takes an optional `embed`, and gateway / slash adapters cap
 content at 2000.
 
@@ -925,6 +934,11 @@ notice, `/work` PR line, schedule post or pending-ask post — and no one else's
 "Work is paused for budget." (`SPEND_PAUSED_TEXT`), and `/status` shows them
 that only while runs stop at the cap. The owner's answer footers keep tokens
 and cost (DISCORD-15.a).
+The answer footer names the configured model that answered, for everyone
+(DISCORD-15.a), with `(fell back from …)` when the run's own chain failed over
+(AGENT-11); a run that failed over is told to its requester by the answer's
+closing note and to the owner by the `llm.fallback` log line, never by a DM
+(REQ-discord-080).
 Recording a SAFE-8 warning and delivering it are separate: whichever process
 crossed 80% records it, and the bridge DMs it to the configured owner only
 (`src/discord/spend-dm.ts`, after each run and on every scheduler tick),

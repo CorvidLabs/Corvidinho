@@ -389,7 +389,8 @@ one that says it is waiting) as nothing.
 unknown prefixes are OpenAI-compatible, comma lists), per-tier resolution with
 no default, each kind's endpoint and key (`resolveEntry`, `OLLAMA_HOST`
 forms, `providerId`), the transport per kind over a mock fetch (ollama: no
-authorization header; anthropic: its own key; only a list's head is called),
+authorization header; anthropic: its own key; a list calls only its head
+while the head answers),
 the no-provider notice per case, `runTask` ending `failed` with the notice and
 no provider call, the real `task run` against a localhost keyless `ollama:`
 fake, and the `ANTHROPIC_API_KEY` SAFE-6 redaction.
@@ -401,3 +402,44 @@ picks no model; an attempt with no provider fails with the notice.
   `tests/fixtures/fake-llm.ts` (a localhost fake, an injected fetch, or a
   configured model for bridge footers).
 
+## Model fallback (REQ-agent-080, REQ-agent-179, REQ-agent-007, REQ-agent-079; AGENT-11)
+
+`tests/agent.fallback.test.ts` — mock providers only (an injected fetch keyed
+by `body.model`, a localhost `Bun.serve` for the real CLI, fake `corvidinho`
+sh bins), no network, no key:
+- `callChain`: the head fails once and the next entry answers; the chain keeps
+  it (no retry of the head); `failure: null` never fails over; the last
+  entry's failure comes back; a next entry without its key is skipped
+  uncalled with `ANTHROPIC_API_KEY is not set`. The operator line, the note
+  (idempotent), the log line and `answeredModelLabel`; child failovers and
+  usage validated, scrubbed and bounded; `mergeModelFallbacks` dedupes.
+- The tool loop fails over on HTTP 404, 410 and 500, a network error, a
+  timeout (`llmTimeoutMs` 40), a non-JSON reply and a reply with no assistant
+  message: requests go `model-a` then `model-b`, the summary ends with the
+  note, one `[operator] model-a failed (<reason>); falling back to model-b`
+  Text event, `onModelFallback` and `onModel` report it. Later rounds and a
+  second attempt stay on `model-b` (the head is called once); a fresh
+  `createTaskExecute` tries the head again. The read tier fails over too.
+  Every model failing ends `failed` with the last error and the note listing
+  each failover. Usage is kept per model (`onUsage` `{ model, byModel }`).
+- Never a failover: an unpriced head under a SAFE-8 cap (nothing sent, the
+  spend-cap ask, no note); a cap stop on the model it fell back to (the next
+  entry is never called); the run's own abort; a must-ask call that is denied
+  or whose card lapses (the same model answers next).
+- Workers: a `delegate` result's `modelFallback` is the lead's (`via:
+  "delegate"`, one Text event, the note; a second identical report is not
+  added again); `runDelegateChild` reads a worker's failovers from its result
+  frame (validated); `runCouncil` and the `council` tool data carry each
+  voice's failover once.
+- Clips: `resultFrame`, `chatBodyFromTaskResult` (with and without a role note
+  after it) and `splitDiscordMessage` keep the note whole.
+- NDJSON: `usageFrame` with the model detail round-trips (and is unchanged
+  without it); the real `task run --output ndjson` against a localhost
+  provider answering `gone-model` 404 streams the Text frame, usage frames
+  with `model` / `byModel`, and a result with `model`, `usageByModel` and
+  `modelFallback`; text mode with a 410 head prints the line on stderr and the
+  note in the answer.
+- Fail on base: with the base's (507d97b) sources swapped in
+  (`src/agent/providers.ts` and `src/agent/types.ts` kept so imports resolve),
+  26 of 35 fail; the 9 that pass are the 5 pure units of the providers module
+  and the 4 "never fails over" cases (the base never fails over at all).

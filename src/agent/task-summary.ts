@@ -14,6 +14,7 @@
 
 import { ROLE_REFUSED_MESSAGE } from "../plugins/roles.ts";
 import { scrubSecrets } from "../store/scrub.ts";
+import { MODEL_FALLBACK_NOTE_PREFIX } from "./providers.ts";
 
 /**
  * ROLES-CHAT-3 (REQ-agent-333): the short in-session note a run's summary
@@ -24,9 +25,34 @@ export const ROLE_REFUSED_SUMMARY_NOTE = `(${ROLE_REFUSED_MESSAGE})`;
 const ROLE_NOTE_TAIL = `\n\n${ROLE_REFUSED_SUMMARY_NOTE}`;
 
 /**
- * Clip already-scrubbed `text` longer than `max` with `clip`, keeping a
- * closing role note (REQ-agent-333): a long reply loses the end of its body,
- * never the note. Text within `max` is returned as is.
+ * AGENT-11: a closing `(model fallback: …)` paragraph (one line) at the end
+ * of `text` (providers `modelFallbackNote`).
+ */
+const FALLBACK_NOTE_TAIL_RE = new RegExp(
+  `\\n\\n${MODEL_FALLBACK_NOTE_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^\\n]*\\)$`,
+);
+
+/**
+ * The closing notes `text` ends with, as they stand (each after a blank
+ * line): the model fallback note (AGENT-11), then the role note
+ * (REQ-agent-333), either or both; "" when none.
+ */
+export function closingNotesTail(text: string): string {
+  let rest = text;
+  let tail = "";
+  if (rest.endsWith(ROLE_NOTE_TAIL)) {
+    tail = ROLE_NOTE_TAIL;
+    rest = rest.slice(0, rest.length - ROLE_NOTE_TAIL.length);
+  }
+  const fallback = FALLBACK_NOTE_TAIL_RE.exec(rest);
+  return fallback ? `${fallback[0]}${tail}` : tail;
+}
+
+/**
+ * Clip already-scrubbed `text` longer than `max` with `clip`, keeping its
+ * closing notes (`closingNotesTail`: the model fallback note, AGENT-11, and
+ * the role note, REQ-agent-333): a long reply loses the end of its body,
+ * never a note. Text within `max` is returned as is.
  */
 export function clipKeepingRoleNote(
   text: string,
@@ -34,9 +60,10 @@ export function clipKeepingRoleNote(
   clip: (head: string, max: number) => string,
 ): string {
   if (text.length <= max) return text;
-  if (!text.endsWith(ROLE_NOTE_TAIL)) return clip(text, max);
-  const head = text.slice(0, text.length - ROLE_NOTE_TAIL.length);
-  return `${clip(head, Math.max(0, max - ROLE_NOTE_TAIL.length)).trimEnd()}${ROLE_NOTE_TAIL}`;
+  const tail = closingNotesTail(text);
+  if (!tail) return clip(text, max);
+  const head = text.slice(0, text.length - tail.length);
+  return `${clip(head, Math.max(0, max - tail.length)).trimEnd()}${tail}`;
 }
 
 /** Scrub, trim, then clip (SAFE-6: scrub before the clip). */

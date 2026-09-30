@@ -6,8 +6,14 @@
  * `_TOOL`, `_CODE`, AGENT-5) each hold a comma-separated list of entries. An
  * entry is `kind:model` with kind `openai`, `ollama` or `anthropic`; a bare
  * entry, or one whose prefix is not a kind (`qwen3:30b`), is OpenAI-compatible.
- * Only the first entry of a tier is called for now; the fallback chain
- * (AGENT-11) is a later change.
+ *
+ * The list is a fallback chain (AGENT-11, {@link callChain}): a run calls the
+ * tier's first entry, and when that model fails (an HTTP error, 404 / 410 for
+ * a retired model included, a network error, a timeout or a malformed reply)
+ * it goes on at once with the next entry and says so — no retry, no backoff.
+ * A spend-cap stop, a Deny or a lapsed card is not a model failure and never
+ * fails over. Nothing is remembered across processes: each `task run` process
+ * tries the head once, then keeps the model it fell back to.
  *
  * Each kind has its vendor endpoint (the endpoint of a provider the operator
  * chose, not a default model):
@@ -22,7 +28,9 @@
  * Keys are read from env only and never printed (SAFE-6).
  */
 
+import { scrubSecrets } from "../store/scrub.ts";
 import { loadTierFromEnv, TIER_MODEL_ENV, type CapabilityTier } from "./tier.ts";
+import type { AgentTokenUsage, ModelFallback, ModelUsage } from "./types.ts";
 
 export const PROVIDER_KINDS = ["openai", "ollama", "anthropic"] as const;
 export type ProviderKind = (typeof PROVIDER_KINDS)[number];
@@ -254,4 +262,273 @@ export function providerStatus(env: NodeJS.ProcessEnv): ProviderStatus {
     },
     notice: providerNotice(env),
   };
+}
+
+// ─── Fallback chain (AGENT-11) ────────────────────────────────────────────
+
+/**
+ * Why a configured model's call failed (AGENT-11). Only these fail over; a
+ * spend-cap stop (SpendCapRefusal), an abort, a Deny or a lapsed card is not
+ * a model failure.
+ */
+export type ModelFailure =
+  | { kind: "http"; status: number }
+  | { kind: "timeout" }
+  | { kind: "network" }
+  | { kind: "malformed" }
+  /** A fallback entry whose kind needs a key that is not set: skipped, never called. */
+  | { kind: "no-key"; keyEnv: string };
+
+/** A failure's short, fixed reason — never provider output (SAFE-6). */
+export function modelFailureReason(f: ModelFailure): string {
+  switch (f.kind) {
+    case "http":
+      return `HTTP ${f.status}`;
+    case "timeout":
+      return "timed out";
+    case "network":
+      return "network error";
+    case "malformed":
+      return "malformed reply";
+    case "no-key":
+      return `${f.keyEnv} is not set`;
+  }
+}
+
+/**
+ * One call to one configured model. `failure: null` means the call did not
+ * fail as a model (a spend-cap stop, the run's own abort): the chain stops
+ * there and never fails over.
+ */
+export type ChainCall<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: string; failure: ModelFailure | null };
+
+/**
+ * A tier's configured models in order, and which one calls go to now. One
+ * per `task run` process (`createTaskExecute`), never stored: each process
+ * tries the head once, then keeps the model it fell back to.
+ */
+export type ModelChain = {
+  readonly entries: readonly ResolvedProvider[];
+  /** Index of the entry calls go to now. */
+  index: number;
+  /** This chain's failovers so far, in order. */
+  readonly fallbacks: ModelFallback[];
+};
+
+/** The chain of `tier` (its configured entries, resolved; AGENT-5 / AGENT-13). */
+export function modelChain(env: NodeJS.ProcessEnv, tier: CapabilityTier): ModelChain {
+  return {
+    entries: modelChainForTier(env, tier).map((e) => resolveEntry(e, env)),
+    index: 0,
+    fallbacks: [],
+  };
+}
+
+/**
+ * Call the chain's current model with `fn` (AGENT-11). When it fails as a
+ * model (`failure` set) and a next entry exists, record the failover, call
+ * `onFallback` and go on at once with that entry — no retry, no backoff; the
+ * chain keeps the new entry for every later call. A next entry whose key is
+ * not set is skipped the same way without being called. A failure that is not
+ * a model's (`failure: null`) or on the last entry comes back as it is.
+ * `provider` is the entry the result came from (null for an empty chain).
+ */
+export async function callChain<T>(
+  chain: ModelChain,
+  fn: (provider: ResolvedProvider) => Promise<ChainCall<T>>,
+  onFallback?: (hop: ModelFallback) => void,
+): Promise<ChainCall<T> & { provider: ResolvedProvider | null }> {
+  for (;;) {
+    const p = chain.entries[chain.index];
+    if (!p) return { ok: false, error: NO_PROVIDER_NOTICE, failure: null, provider: null };
+    const r: ChainCall<T> = p.usable
+      ? await fn(p)
+      : {
+          ok: false,
+          error: `${entryLabel(p.entry)} needs ${p.keyEnv}, which is not set`,
+          failure: { kind: "no-key", keyEnv: p.keyEnv ?? "its key" },
+        };
+    if (r.ok || r.failure === null) return { ...r, provider: p };
+    const next = chain.entries[chain.index + 1];
+    if (!next) return { ...r, provider: p };
+    const hop: ModelFallback = {
+      from: entryLabel(p.entry),
+      to: entryLabel(next.entry),
+      reason: modelFailureReason(r.failure),
+    };
+    chain.index += 1;
+    chain.fallbacks.push(hop);
+    onFallback?.(hop);
+  }
+}
+
+/** One line of text: whitespace runs collapsed (model ids come from env). */
+function oneLine(s: string): string {
+  return s.replace(/\s+/g, " ").trim();
+}
+
+function hopPrefix(hop: ModelFallback): string {
+  return hop.via ? `${hop.via} worker: ` : "";
+}
+
+/**
+ * The live operator line for one failover (AGENT-11): a `Text` event, shown
+ * by the CLI and streamed to bridges.
+ */
+export function modelFallbackEventText(hop: ModelFallback): string {
+  return `[operator] ${hopPrefix(hop)}${oneLine(hop.from)} failed (${oneLine(hop.reason)}); falling back to ${oneLine(hop.to)}`;
+}
+
+/** Start of the closing note a run's summary carries after a failover. */
+export const MODEL_FALLBACK_NOTE_PREFIX = "(model fallback: ";
+
+/**
+ * The closing note of a run that failed over (AGENT-11): every failover, one
+ * line, e.g. `(model fallback: gpt-5 failed (HTTP 404), fell back to
+ * anthropic:claude-sonnet-5)`. Clips keep it (task-summary
+ * `clipKeepingRoleNote`), so every surface's reply carries it.
+ */
+export function modelFallbackNote(hops: readonly ModelFallback[]): string {
+  return `${MODEL_FALLBACK_NOTE_PREFIX}${hopsText(hops)})`;
+}
+
+function hopsText(hops: readonly ModelFallback[]): string {
+  return hops
+    .map((h) => `${hopPrefix(h)}${oneLine(h.from)} failed (${oneLine(h.reason)}), fell back to ${oneLine(h.to)}`)
+    .join("; ");
+}
+
+/** `summary` with the failover note after it, added once. */
+export function withModelFallbackNote(summary: string, hops: readonly ModelFallback[]): string {
+  if (hops.length === 0) return summary;
+  const note = modelFallbackNote(hops);
+  if (summary.includes(note)) return summary;
+  const body = summary.trim();
+  return body ? `${body}\n\n${note}` : note;
+}
+
+/**
+ * The bridge / daemon / WATCH log text for a run's failovers (`llm.fallback`,
+ * AGENT-11): how the owner hears of one in a run that is not theirs.
+ */
+export function formatModelFallbackLog(hops: readonly ModelFallback[]): string {
+  return `llm.fallback: ${hopsText(hops)}`;
+}
+
+/**
+ * The model an answer footer names (AGENT-11): `answered`, and when this
+ * run's own chain failed over, `answered (fell back from a, b)`. A worker's
+ * failover (`via`) is not the answering model's and is left out.
+ */
+export function answeredModelLabel(
+  answered: string,
+  hops: readonly ModelFallback[] | undefined,
+): string {
+  const from: string[] = [];
+  for (const h of hops ?? []) {
+    if (h.via || h.from === answered || from.includes(h.from)) continue;
+    from.push(h.from);
+  }
+  return from.length > 0 ? `${answered} (fell back from ${from.join(", ")})` : answered;
+}
+
+/** The model id a label prices at (`body.model`: the label without its `kind:`). */
+export function modelIdOfLabel(label: string): string {
+  return parseModelEntry(label)?.model ?? label.trim();
+}
+
+/** Failovers kept on a result or tool data; more are dropped. */
+export const MODEL_FALLBACK_MAX = 16;
+/** Longest label or reason kept when a child's result is read back. */
+export const MODEL_FIELD_MAX = 200;
+
+function boundedField(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const s = oneLine(scrubSecrets(v));
+  return s ? s.slice(0, MODEL_FIELD_MAX) : null;
+}
+
+/**
+ * A model label read back from a child's result (`TaskResult.model`):
+ * scrubbed, one line, bounded; undefined when absent or blank.
+ */
+export function modelLabelFromUnknown(v: unknown): string | undefined {
+  return boundedField(v) ?? undefined;
+}
+
+/**
+ * Validate failovers read back from a child's result frame or tool data (a
+ * delegate / council worker, a spawned `task run`): scrubbed, one-line,
+ * bounded, at most {@link MODEL_FALLBACK_MAX}. Undefined when none is valid.
+ */
+export function modelFallbackFromUnknown(v: unknown): ModelFallback[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out: ModelFallback[] = [];
+  for (const item of v) {
+    if (out.length >= MODEL_FALLBACK_MAX) break;
+    if (!item || typeof item !== "object") continue;
+    const r = item as Record<string, unknown>;
+    const from = boundedField(r.from);
+    const to = boundedField(r.to);
+    const reason = boundedField(r.reason);
+    if (!from || !to || !reason) continue;
+    const hop: ModelFallback = { from, to, reason };
+    if (r.via === "delegate" || r.via === "council") hop.via = r.via;
+    out.push(hop);
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+/** `list` plus the hops of `add` not in it yet (same from, to, reason, via). */
+export function mergeModelFallbacks(
+  list: readonly ModelFallback[],
+  add: readonly ModelFallback[],
+): ModelFallback[] {
+  const out = [...list];
+  for (const h of add) {
+    if (out.length >= MODEL_FALLBACK_MAX) break;
+    if (out.some((o) => o.from === h.from && o.to === h.to && o.reason === h.reason && o.via === h.via)) continue;
+    out.push(h);
+  }
+  return out;
+}
+
+function tokenCount(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : null;
+}
+
+/**
+ * Validate per-model usage read back from a child's frame (AGENT-11):
+ * `{ model, promptTokens, completionTokens, totalTokens }` rows, at most
+ * {@link MODEL_FALLBACK_MAX} + 1. Undefined when none is valid.
+ */
+export function modelUsageFromUnknown(v: unknown): ModelUsage[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out: ModelUsage[] = [];
+  for (const item of v) {
+    if (out.length > MODEL_FALLBACK_MAX) break;
+    if (!item || typeof item !== "object") continue;
+    const r = item as Record<string, unknown>;
+    const model = boundedField(r.model);
+    const promptTokens = tokenCount(r.promptTokens);
+    const completionTokens = tokenCount(r.completionTokens);
+    const totalTokens = tokenCount(r.totalTokens);
+    if (!model || promptTokens === null || completionTokens === null || totalTokens === null) continue;
+    out.push({ model, promptTokens, completionTokens, totalTokens });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+/** Add `usage` to `model`'s row of `rows` (a new row at the end when none). */
+export function addModelUsage(rows: ModelUsage[], model: string, usage: AgentTokenUsage): void {
+  const row = rows.find((r) => r.model === model);
+  if (row) {
+    row.promptTokens += usage.promptTokens;
+    row.completionTokens += usage.completionTokens;
+    row.totalTokens += usage.totalTokens;
+  } else {
+    rows.push({ model, ...usage });
+  }
 }

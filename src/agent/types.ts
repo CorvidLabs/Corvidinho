@@ -34,6 +34,27 @@ export type AgentTokenUsage = {
 };
 
 /**
+ * Provider-reported token totals of one configured model (AGENT-11): `model`
+ * is its entry label (`entryLabel`: the bare model for `openai`, else
+ * `kind:model`), so each model's tokens are priced at its own price.
+ */
+export type ModelUsage = AgentTokenUsage & { model: string };
+
+/**
+ * One failover (AGENT-11): the configured model `from` failed for `reason`
+ * (a short fixed text such as `HTTP 404` or `timed out`, never provider
+ * output) and the run went on with the next configured model `to`. Both are
+ * entry labels. `via` marks a failover inside a `delegate` or `council`
+ * worker this run started, rather than in its own model chain.
+ */
+export type ModelFallback = {
+  from: string;
+  to: string;
+  reason: string;
+  via?: "delegate" | "council";
+};
+
+/**
  * Why a run stopped for a human (AUTONOMY-1/2, #44): `clarify` = the agent
  * called ask-human; `stuck` = the runner gave up (verify retries exhausted);
  * `spend-cap` = the next provider call would pass the daily spend cap, so the
@@ -132,6 +153,22 @@ export type TaskResult = {
    * by direct message and never posts it in the channel. Absent when none.
    */
   privateReplies?: string[];
+  /**
+   * AGENT-11: the configured model (entry label) whose reply the run ended
+   * on — the one that answered. Absent when no model answered.
+   */
+  model?: string;
+  /**
+   * Provider-reported token totals per configured model (AGENT-11), in the
+   * order each first reported usage. Absent when no usage was reported.
+   */
+  usageByModel?: ModelUsage[];
+  /**
+   * AGENT-11: every failover of this run, in order — its own model chain's
+   * and (with `via`) those of the delegate or council workers it started.
+   * Absent when no model failed over.
+   */
+  modelFallback?: ModelFallback[];
 };
 
 /**

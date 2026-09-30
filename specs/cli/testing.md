@@ -108,3 +108,15 @@ checks the `llm.no_provider` Logs row.
 - Fail on base: the notice, daemon, doctor, init, preload and `--task -h`
   cases fail with the base's sources (and the base preload).
 
+## Model fallback in task run and the daemon (REQ-cli-080; AGENT-11)
+
+`tests/agent.fallback.test.ts` ("NDJSON: …", "daemon: …"): the real
+`task run --output ndjson` against a localhost provider whose head answers
+404 streams the `[operator] … falling back to …` Text frame, usage frames
+with `model` / `byModel`, and a `done` result with the note, `model`,
+`usageByModel` and `modelFallback`; text mode with a 410 head prints the line
+on stderr and the note after the answer. A daemon with its own spawn client
+(`CORVIDINHO_BIN` a fake bin whose result frame reports a failover) logs an
+`llm.fallback` warn event with `sessionId`, `fallbacks` and `message` for a
+due schedule. `tests/docs.operator-facts.test.ts` keeps the Logs table whole.
+- Fail on base: all of these fail with the base's sources.

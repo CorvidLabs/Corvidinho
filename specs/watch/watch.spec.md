@@ -140,6 +140,12 @@ first use, no schema version bump), `WatchOwnerAsk`, `threadUrl(repo, n)`,
 `noteWatchRunAsk(opts)` → `WatchRunAskOutcome` (`none` / `queued` /
 `no-bridge` / `not-sent`). `AgentSpawnResult` gains `ask?: HumanAsk` (the
 spawn client validates the result frame's `ask` with `askFromUnknown`).
+A run whose result frame reports model failovers (AGENT-11,
+`modelFallbackFromUnknown`) makes the spawn client call its
+`onModelFallback(hops, sessionId)` option, by default one
+`[watch] llm.fallback: …` warn line (`warnWatchModelFallback`); the summary
+comment keeps the run's closing `(model fallback: …)` note when it clips
+(REQ-watch-080).
 
 ## Invariants
 

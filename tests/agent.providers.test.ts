@@ -192,7 +192,7 @@ describe("every kind goes through the one OpenAI-compatible transport (AGENT-13)
     ]);
   });
 
-  test("openai: CORVIDINHO_LLM_BASE_URL and its key; only the first entry of a list is called for now", async () => {
+  test("openai: CORVIDINHO_LLM_BASE_URL and its key; a list calls only its first entry while that one answers (AGENT-11)", async () => {
     const f = recordingFetch();
     await runOnce(
       { CORVIDINHO_LLM_MODEL: "openai:gpt-4.1, ollama:later", CORVIDINHO_LLM_API_KEY: "k1", CORVIDINHO_LLM_BASE_URL: "https://gw.test/v1" },
