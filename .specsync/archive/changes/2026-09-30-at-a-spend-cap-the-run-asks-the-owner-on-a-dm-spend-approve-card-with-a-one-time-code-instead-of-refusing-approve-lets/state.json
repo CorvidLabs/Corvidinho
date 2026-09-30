@@ -7,11 +7,11 @@
   "title": "At a spend cap the run asks the owner on a DM spend Approve card with a one-time code instead of refusing; Approve lets only the paused call through at the amount shown and the next call past the cap asks again (SAFE-8, SAFE-8.a, SAFE-15, SAFE-19 money)",
   "description": "At a spend cap the run asks the owner on a DM spend Approve card with a one-time code instead of refusing; Approve lets only the paused call through at the amount shown and the next call past the cap asks again (SAFE-8, SAFE-8.a, SAFE-15, SAFE-19 money)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "519c58fd304adeb29ea4867ce7eb23426dda595c",
   "created_at": 1790798656,
-  "updated_at": 1790805365,
+  "updated_at": 1790805834,
   "affected_specs": [
     "agent",
     "discord"

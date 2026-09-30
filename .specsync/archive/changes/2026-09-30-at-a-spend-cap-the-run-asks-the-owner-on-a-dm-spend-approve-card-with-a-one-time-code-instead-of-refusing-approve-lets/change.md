@@ -1,6 +1,6 @@
 ---
 id: at-a-spend-cap-the-run-asks-the-owner-on-a-dm-spend-approve-card-with-a-one-time-code-instead-of-refusing-approve-lets
-state: implementing
+state: archived
 type: feature
 base_commit: 519c58fd304adeb29ea4867ce7eb23426dda595c
 ---
