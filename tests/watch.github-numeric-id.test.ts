@@ -177,6 +177,18 @@ describe("live Octokit search client: GitHub user.id → DetectedEvent.senderId 
     expect(formatWatchIdentityBlock(real, dir)).toContain("- role: owner");
     expect(watchInjectionVerdict(real, dir)).toBeNull();
 
+    // Only the owner configured (nobody under [people]): the owner's login
+    // without the owner's id is still marked undeclared, never left unsaid;
+    // any other undeclared login keeps the prompt as before (no block).
+    const ownerOnly = buildPeopleDirectory(parsePeopleToml(""), OWNER);
+    for (const id of ["comment-1002", "comment-1003"]) {
+      const block = formatWatchIdentityBlock(byId(events, id), ownerOnly);
+      expect(block).toContain("- declared_person: none");
+      expect(block).not.toContain("role: owner");
+    }
+    expect(formatWatchIdentityBlock(real, ownerOnly)).toContain("- role: owner");
+    expect(formatWatchIdentityBlock({ sender: "stranger", senderId: 777 }, ownerOnly)).toBeNull();
+
     // Memory scope (MEMORY-8): the owner's rows only for the owner's id.
     const db = openCorvidinhoDb({ memory: true });
     try {

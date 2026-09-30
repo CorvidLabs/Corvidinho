@@ -29,7 +29,8 @@ The owner's GitHub id SHALL be declared as `github_id` in the allowlist file's
 `[owner]` section (TOML quoted or bare digits; JSON string or safe integer),
 read into `OwnerRecord.githubId` and added to the owner's person (the declared
 entry holding the owner's Discord id, else the built-in `owner` entry); an
-invalid value SHALL be ignored with a value-free issue. There is no env var
+invalid value — including `0`, since GitHub ids start at 1 — SHALL be ignored
+with a value-free issue. There is no env var
 for it; env still overrides the other owner fields. `isOwnerGithub(owner,
 githubId)` SHALL be true only for that numeric id.
 

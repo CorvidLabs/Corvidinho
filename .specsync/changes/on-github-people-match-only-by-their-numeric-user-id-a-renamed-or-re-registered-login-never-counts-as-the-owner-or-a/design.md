@@ -19,7 +19,12 @@ artifact: design
 - **WATCH.** `formatWatchIdentityBlock` and `watchInjectionVerdict` pass
   `senderId` only; `enrichWatchPromptWithMemories` passes `{ id }`;
   `WATCH_IDENTITY_HEADER` and the `declared_person: none` line say the match
-  is by numeric id.
+  is by numeric id. With only the owner configured, an unresolved commenter
+  whose login is the owner's still gets the `declared_person: none` block, so
+  the owner's login never passes for the owner unsaid (review follow-up).
+- **Zero is not an id.** `normalizeGithubId` rejects `0` / `000` as a string,
+  as it already did as a number (GitHub ids start at 1), so the example's
+  `github_id = "0"` placeholder is ignored with an issue instead of read.
 - **`/admin people link github:<login>`.** The handler plans the request
   first (a refusal keeps its reason and calls nothing), then defers the
   ephemeral reply, looks the login up once (`createGithubUserLookup`,

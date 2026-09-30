@@ -72,14 +72,20 @@ export function normalizeGithubLogin(raw: string | undefined | null): string | u
   return t.replace(/^@/, "").toLowerCase();
 }
 
-/** GitHub numeric user id as digits (no leading zeros), else undefined. */
+/**
+ * GitHub numeric user id as digits (no leading zeros), else undefined. GitHub
+ * ids start at 1, so zero (a placeholder such as `github_id = "0"`) is not an
+ * id, as a string or a number.
+ */
 export function normalizeGithubId(raw: string | number | undefined | null): string | undefined {
   if (raw === undefined || raw === null) return undefined;
   if (typeof raw === "number") {
     return Number.isSafeInteger(raw) && raw > 0 ? String(raw) : undefined;
   }
   const t = String(raw).trim();
-  return GITHUB_ID_RE.test(t) ? t.replace(/^0+(?=\d)/, "") : undefined;
+  if (!GITHUB_ID_RE.test(t)) return undefined;
+  const id = t.replace(/^0+(?=\d)/, "");
+  return id === "0" ? undefined : id;
 }
 
 export function normalizeDisplay(raw: string | undefined | null): string | undefined {

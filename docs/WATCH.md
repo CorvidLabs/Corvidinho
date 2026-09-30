@@ -31,7 +31,9 @@ run prompt then opens with a `[Corvidinho acting GitHub user …]` paragraph
 their numeric id — `[owner] github_id`, or `github_ids` on the owner's declared
 person — and marked `role: owner`, still without
 ADMIN tools). Once anyone is declared, an undeclared commenter is marked
-`declared_person: none`. People are re-read per event, so VM edits and
+`declared_person: none`; with only the owner configured, so is a commenter
+using the owner's `[owner] github_login` without the owner's numeric id (a
+renamed or re-registered login never passes for the owner unsaid). People are re-read per event, so VM edits and
 `/admin people` changes apply without restarting the watch. See
 [`discord.md`](discord.md) "Declared people".
 

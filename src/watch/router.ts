@@ -31,6 +31,7 @@ import {
 import {
   OWNER_PERSON_ID,
   resolvePerson,
+  validGithubLogin,
   type PeopleDirectory,
 } from "../identity/people.ts";
 import type { SessionStore } from "./session-store.ts";
@@ -57,7 +58,11 @@ export const WATCH_IDENTITY_HEADER =
 /**
  * Identity block for the commenter, or null when nobody is declared and the
  * commenter is not the owner. An undeclared commenter is marked as such once
- * anyone is declared, so a GitHub name never passes for a declared person.
+ * anyone is declared, so a GitHub name never passes for a declared person —
+ * and, with only the owner configured, whenever the commenter's login is one
+ * a person (the owner) has as a label but their numeric id is not theirs
+ * (IDENTITY-7.a: a renamed or re-registered login never passes for them,
+ * even silently).
  */
 export function formatWatchIdentityBlock(
   event: Pick<DetectedEvent, "sender" | "senderId">,
@@ -67,7 +72,9 @@ export function formatWatchIdentityBlock(
   // IDENTITY-7.a: the numeric id only; the login is shown, never matched.
   const person = resolvePerson(people, { githubId: event.senderId });
   if (!person) {
-    if (!people.people.some((p) => p.id !== OWNER_PERSON_ID)) return null;
+    const login = validGithubLogin(event.sender);
+    const labelOfSomeone = login !== undefined && people.people.some((p) => p.githubLogins.includes(login));
+    if (!labelOfSomeone && !people.people.some((p) => p.id !== OWNER_PERSON_ID)) return null;
     return [
       WATCH_IDENTITY_HEADER,
       `- github_login: ${event.sender}`,

@@ -134,6 +134,16 @@ describe("[owner] github_id — the owner on GitHub (IDENTITY-1 / IDENTITY-7.a)"
     expect(bad.owner).toEqual({ discordId: OWNER_DC });
     expect(bad.issues.join(" ")).toContain("owner github_id is not a numeric GitHub user id");
     expect(bad.issues.join(" ")).not.toContain("leif-8268288");
+    // GitHub ids start at 1: the example's `github_id = "0"` placeholder is no id (a value-free issue).
+    for (const zero of ["0", "000"]) {
+      const z = resolveOwner({ discordId: OWNER_DC, githubId: zero, githubLogin: "0xLeif" }, {});
+      expect(z.owner).toEqual({ discordId: OWNER_DC, githubLogin: "0xleif" });
+      expect(z.issues.join(" ")).toContain("owner github_id is not a numeric GitHub user id");
+    }
+    expect(ownerFieldsFromJson({ owner: { discord_id: OWNER_DC, github_id: 0 } }).fields.githubId).toBeUndefined();
+    const zeroPeople = parsePeopleToml(`[people.zed]\ndiscord_ids = ["${ADA_DC}"]\ngithub_ids = ["0"]\n`);
+    expect(zeroPeople.people.find((p) => p.id === "zed")).toBeUndefined();
+    expect(zeroPeople.invalid).toContain("zed");
   });
 
   test("loaded from the allowlist file, it joins the owner's person; the [owner] / env login alone never makes the owner", async () => {

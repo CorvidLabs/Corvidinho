@@ -213,7 +213,8 @@ export function goLiveChecklist(): string {
   4. Optional rate/mute (DISCORD-6): DISCORD_RATE_LIMIT_WINDOW_MS (default 60000),
      DISCORD_RATE_LIMIT_MAX (default 10), DISCORD_MUTED_USER_IDS (comma snowflakes)
   5. Owner = the only ADMIN (IDENTITY-1/2/3): CORVIDINHO_OWNER_DISCORD_ID
-     (+ _GITHUB_LOGIN, _DISPLAY) or allowlist file [owner] discord_id / github_login / display.
+     (+ _GITHUB_LOGIN, _DISPLAY) or allowlist file [owner] discord_id / github_id / github_login / display.
+     On GitHub the owner matches [owner] github_id (numeric user id, file only), never the login.
      No owner = nobody ADMIN (default-deny). CORVIDINHO_DISCORD_ADMIN_USERS / _ROLES
      no longer grant ADMIN (ignored; the bridge warns if set).
   6. Optional DISCORD-8 strict: CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK=1
