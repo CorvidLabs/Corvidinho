@@ -2175,8 +2175,10 @@ pass ping the owner:
   `askPingKey`, with its REQ-discord-606 controls; with no channel, to the
   owner by DM); the pausing run's ask SHALL replace its plain `❌` post.
   When the pausing run had no ask of its own, the post's context SHALL be
-  only what that `❌` post showed (`failed (exit N)`, the summary the run
-  row keeps and the delivery pass posts), never the run's own output; a run
+  only what that `❌` post showed (its DISCORD-3.b failed line,
+  REQ-discord-032: the reason on the owner's own schedule, else `That didn't
+  work — the owner has been told.` or `That didn't work.`; the summary the
+  run row keeps and the delivery pass posts), never the run's own output; a run
   that throws posts its pause ask at once with no context. An in-process
   post of the pause ask that does not go out (resolves `false` or throws)
   SHALL hand the ask back with no ping key kept, so a later delivery pass
@@ -2206,9 +2208,9 @@ the existing ADMIN subcommand. The columns that keep an ask open or closed
 are schema v15 (REQ-discord-606).
 
 Acceptance Criteria
-- A daemon-claimed run that makes 5 failures in a row pauses the schedule and stores `ask_reason` `stuck` with the pause question and `ask_posted_at` null; `onRunFinished` reports `autoPaused: true` and `askReason: "stuck"`; the bridge's next tick posts it once with the schedule prefix, the stuck headline, the pause line, the `failed (exit 1)` context and `mentionUserIds` [owner]; the 4 earlier failures record no ask and post nothing.
+- A daemon-claimed run that makes 5 failures in a row pauses the schedule and stores `ask_reason` `stuck` with the pause question and `ask_posted_at` null; `onRunFinished` reports `autoPaused: true` and `askReason: "stuck"`; the bridge's next tick posts it once with the schedule prefix, the stuck headline, the pause line, the run's DISCORD-3.b failed line as context (`That didn't work.` for someone else's schedule the daemon ran, which cannot DM the owner) and `mentionUserIds` [owner]; the 4 earlier failures record no ask and post nothing.
 - A stuck run that makes the 5th failure posts one ask: the pause line followed by `Last failure: <its question>`.
-- A bridge-claimed run that makes the 5th failure posts the pause ask with the owner ping and the `failed (exit 1)` context (not the run's output) instead of the `❌` line (the 4 earlier ones post `❌` with no ping), records the ping key and is not posted again.
+- A bridge-claimed run that makes the 5th failure posts the pause ask with the owner ping and the run's DISCORD-3.b failed line as context (not the run's output) instead of the `❌` line (the 4 earlier ones post `❌` with no ping), records the ping key and is not posted again.
 - A bridge-claimed pause ask whose post resolves `false` or throws stays pending with no ping key; the next tick posts it once with the owner ping.
 - A bridge run that throws and makes the 5th failure posts the pause ask at once with the owner ping and without the error text.
 - Refused runs that auto-pause the schedule spawn no agent and post nothing; once the creator is allowed again the next tick posts the pause ask with the owner ping.
@@ -3555,12 +3557,16 @@ line) when any tier has no usable model provider
 (`providerNotice(env)`, REQ-agent-179) and nothing when every tier has one.
 Runs it starts on such a tier (chat, button answers, `/session start`,
 `/work`, schedules) fail and call no model (REQ-agent-179): the run's result
-summary is the notice, while the channel gets the usual failed reply
-(`… failed (exit 1)`), as for any failed run; the start-up line and `/status`
-say why. No new slash command, setting or schema change.
+summary and `error` are the notice, while the channel gets the DISCORD-3.b
+failed reply like any failed run (REQ-discord-032): the owner's own run
+answers with the notice cut to one line, anyone else's with `That didn't
+work — the owner has been told.` (the owner DMed that line) or `That didn't
+work.`; the start-up line and `/status` say why too. No new slash command,
+setting or schema change.
 
 Acceptance Criteria
 - A dry-run bridge started with no model logs `[discord] No model provider is configured: CORVIDINHO_LLM_MODEL is not set. …` once; with `CORVIDINHO_LLM_MODEL=ollama:qwen3` it logs no no-provider line.
+- With no model, the owner's own failed chat run answers `No model provider is configured: …` as its one line (REQ-discord-032).
 
 ### REQ-discord-080
 
