@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "a-schedule-s-question-can-be-answered-or-cancelled-by-the-owner-or-its-creator-and-its-next-runs-wait-with-one-note",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "9f8355eb617ee6786d4f386d98164fc14ad6ae4d",
+  "contract_digest": "78cbbf817a1741c00027b62bdfb11a9ea0629b61a62fc7a5b02ed77ebf6871ab",
+  "execution_digest": "9b4ee376af28e6a1c898b328fac33da8849b95789e262f8287b17c0f5a506711",
+  "workspace_digest": "f35ef0e7e4212bb681033f4983005e1211e3ef88f98fc0767cb9c3802cf39157",
+  "timestamp": 1790782556
+}
