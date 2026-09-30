@@ -7,7 +7,7 @@
 
 <!-- hi:index -->
 - [admin](hi/admin.md): ADMIN (7 criteria)
-- [agent](hi/agent.md): AGENT (22 criteria)
+- [agent](hi/agent.md): AGENT (23 criteria)
 - [allow](hi/allow.md): ALLOW, WALLET (9 criteria)
 - [autonomous](hi/autonomous.md): AUTONOMOUS (9 criteria)
 - [autonomy](hi/autonomy.md): AUTONOMY (12 criteria)
@@ -18,6 +18,7 @@
 - [identity](hi/identity.md): IDENTITY (14 criteria)
 - [memory](hi/memory.md): MEMORY (9 criteria)
 - [ops](hi/ops.md): OPS (2 criteria)
+- [persona](hi/persona.md): PERSONA (3 criteria)
 - [plugin](hi/plugin.md): PLUGIN (7 criteria)
 - [roles](hi/roles.md): ROLES (0 criteria)
 - [safe](hi/safe.md): SAFE (21 criteria)
