@@ -203,7 +203,7 @@ function readSmall(path: string): string | null {
 
 /** True when `text` opens with `---` front matter holding a `hi:` line. */
 export function hasHiFrontMatter(text: string): boolean {
-  const m = text.match(/^﻿?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  const m = text.match(/^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
   return Boolean(m && /^hi:[ \t]*\S/m.test(m[1]!));
 }
 
