@@ -12,7 +12,7 @@
 - [autonomous](hi/autonomous.md): AUTONOMOUS (9 criteria)
 - [autonomy](hi/autonomy.md): AUTONOMY (14 criteria)
 - [cli](hi/cli.md): CLI (5 criteria)
-- [discord](hi/discord.md): DISCORD (18 criteria)
+- [discord](hi/discord.md): DISCORD (19 criteria)
 - [fledge](hi/fledge.md): FLEDGE (7 criteria)
 - [github](hi/github.md): GITHUB (8 criteria)
 - [identity](hi/identity.md): IDENTITY (16 criteria)

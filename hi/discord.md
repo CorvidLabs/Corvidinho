@@ -17,6 +17,7 @@ Discord is how I talk to the agent while I am not in a terminal. Mentions become
   - **DISCORD-2.a**  Inside a thread it keeps one session for that thread so the conversation stays coherent.
 - **DISCORD-3**  While it thinks I see a live status (time, current tool, rough token use) instead of a silent void.
   - **DISCORD-3.a**  Thinking/progress embed shows model name and useful status (session id OK); state/verified/verifySkipped/attempts live in the embed footer or description, never in the final chat reply body
+  - **DISCORD-3.b**  When a run fails, my own runs tell me why in one plain line; everyone else gets 'That didn't work — the owner has been told.', and the reason is always logged.
 - **DISCORD-4**  Slash commands let me manage sessions, see agents, check status, and drive work tasks without leaving Discord.
 - **DISCORD-5**  It only listens and posts in channels I allowlisted. Outside those channels (or from a non-configured user when a user allowlist applies), refuse means: silent for non-admins, ephemeral allowlist tip for admins on slash — never a public "not authorized" leak. See DISCORD-DENY-1..3.
 - **DISCORD-6**  Rate limits and mutes stop one user from melting the box, without punishing everyone else.
