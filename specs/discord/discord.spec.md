@@ -89,6 +89,8 @@ files:
   - src/work/pr.ts
   - src/work/pr-body.ts
   - tests/work.pr.test.ts
+  - tests/roles.community-no-work.test.ts
+  - tests/fixtures/team-people.ts
   - src/discord/command-handlers/mute.ts
   - tests/discord.rate-mute-limits.test.ts
   - src/discord/command-handlers/schedule.ts
@@ -552,8 +554,16 @@ always overwrites `CORVIDINHO_ACTING_ROLE` (`owner` when `actingIsAdmin`, else
 `team` only when asked, else `community` — schedules pass none) and
 `CORVIDINHO_ACTING_WORK_TASK` (`1` / `0`). The tool layer re-resolves the role
 on every call (`resolveActingRole`, REQ-plugins-065); the stamp only lowers
-it. `/work` ships its PR for the owner or a team member (re-resolved after the
-run); community keeps the branch. `/admin people role person:<id>
+it. Community can't start `/work` (IDENTITY-11.a): right after the SAFE-13
+inbound check the handler refuses a community caller (declared community, no
+role, undeclared; muted or deny-listed callers too, though the dispatcher's
+mute and actor gates stop them first) with the ephemeral `not authorized` of
+the owner-only commands, before any deferred reply, session, worktree,
+`talk/*` branch, work task, run or PR step; the role comes from the owner
+config and the people list re-read for the command. With no owner configured
+only a declared team member can start it (IDENTITY-3).
+`/work` ships its PR for the owner or a team member (re-resolved after the
+run); a team member demoted during the run keeps the branch. `/admin people role person:<id>
 role:<team|community>` (ADMIN-3.b) writes the `role` key, owner-only and
 SAFE-5 audited like the other people mutations; `/admin people list` shows
 each role and `config show` counts them.
@@ -1090,6 +1100,7 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |
 | 2026-09-29 | discord-rich-final-replies-answer-footer-with-model-tokens-cost-and-time-tokens-and-cost-owner-only-and-fence-safe: Discord rich final replies: answer footer with model, tokens, cost and time (tokens and cost owner-only) and fence-safe splits at 2000 (DISCORD-15/15.a/16) |
 | 2026-09-29 | condense-long-chats-at-about-80-of-the-model-s-window-with-the-task-and-latest-instruction-pinned-resume-from-the: Condense long chats at about 80% of the model's window with the task and latest instruction pinned, resume from the summary after the soft TTL, and keep each thread's summary 30 days (SESSION-5/6, SESSION-3.a, AGENT-6.a; #72) |
+| 2026-09-30 | community-members-can-t-start-work-declared-community-and-undeclared-users-get-the-quiet-ephemeral-not-authorized-reply: Community members can't start /work: declared community and undeclared users get the quiet ephemeral not-authorized reply and no worktree, branch, work task or run, while the owner and team keep /work (IDENTITY-11.a, #65) |
 | 2026-09-30 | on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a: On GitHub people match only by their numeric user id: a renamed or re-registered login never counts as the owner or a declared person on WATCH (prompt, memory scope, SAFE-13 exemption); [owner] github_id declares the owner's id; /admin people link github stores the looked-up numeric id; doctor warns about logins without an id (IDENTITY-7.a, #36) |
 | 2026-09-30 | safe-2-a-the-file-tools-refuse-fledge-like-fledge-toml-and-specs-so-a-run-cannot-weaken-the-verify-lane-it-is-judged-by: SAFE-2.a: the file tools refuse .fledge/ like fledge.toml and specs/, so a run cannot weaken the verify lane it is judged by |
 | 2026-09-29 | an-answer-typed-in-the-private-answer-form-is-fenced-and-scanned-like-a-chat-reply-a-non-owner-s-submit-that-looks-like: An answer typed in the private Answer form is fenced and scanned like a chat reply: a non-owner's submit that looks like an injection starts no run, keeps the ask open, pings only the owner once and appends an injection-suspected audit row; an ordinary non-owner answer reaches the model inside the untrusted-data fence; the owner's answer is unchanged (SAFE-12/13, DISCORD-ASK-4.a) |

@@ -19,8 +19,9 @@ import type {
   SlashInteraction,
   SlashReplyPayload,
 } from "../src/discord/slash-types.ts";
-import { EPHEMERAL_SILENT_ACK, type InboundMessage } from "../src/discord/types.ts";
+import { EPHEMERAL_SILENT_ACK, NOT_AUTHORIZED, type InboundMessage } from "../src/discord/types.ts";
 import { WorkStore } from "../src/discord/work-store.ts";
+import { declareTeam } from "./fixtures/team-people.ts";
 
 const OWNER = { discordId: "boss" };
 
@@ -225,12 +226,18 @@ describe("slash actor gate (ALLOW-3/5, DISCORD-5, DISCORD-DENY-3)", () => {
     }
   });
 
-  test("listed user may /work; unlisted owner may /status", async () => {
+  test("listed team member may /work; a listed community user passes the gate but gets not authorized for /work (IDENTITY-11.a); unlisted owner may /status", async () => {
     const spawned: string[] = [];
-    const c = ctx(LISTED(), spawned);
-    const work = ix({ commandName: "work", userId: "leif", options: { description: "fix it" } });
+    const team = "700000000000000007";
+    const c = ctx(declareTeam(cfg({ users: ["leif", team], denyUsers: ["mallory"] }), team), spawned);
+    const work = ix({ commandName: "work", userId: team, options: { description: "fix it" } });
     expect(await handleSlashInteraction(c, work)).toEqual({ ok: true, handled: true });
-    expect(spawned).toEqual(["leif: fix it"]);
+    expect(spawned).toEqual([`${team}: fix it`]);
+
+    const community = ix({ commandName: "work", userId: "leif", options: { description: "fix it" } });
+    expect(await handleSlashInteraction(c, community)).toEqual({ ok: true, handled: true });
+    expect(community.replies).toEqual([{ content: NOT_AUTHORIZED, ephemeral: true }]);
+    expect(spawned).toHaveLength(1);
 
     const status = ix({ commandName: "status", userId: "boss" });
     expect(await handleSlashInteraction(c, status)).toEqual({ ok: true, handled: true });
