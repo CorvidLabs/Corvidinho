@@ -85,6 +85,25 @@ module: watch
 - `tests/memory.spawn-env.test.ts` › "WATCH spawn clears the acting env" still
   holds (no Discord actor, no confirm tokens, non-ADMIN, non-interactive).
 
+## Forget me from GitHub (REQ-watch-1016, MEMORY-ACL-6.a)
+
+- `tests/watch.forget-me.test.ts` — through `startWatchPoller` (injected
+  events, echo ack client, fake agent) on a data dir shared with
+  `startBridge`: a declared person's `@corvid-agent forget me` (numeric id
+  match) runs no model, records one pending ask (`github:<id>:<login>`,
+  `github:<repo>#<n>`) with `memory-forget-request` started / ok as
+  `github:<login>`, posts one reply with the request id and deletes nothing;
+  the bridge's card names the GitHub asker and thread; after Approve the next
+  poll posts "was approved" on the thread once (no count) and marks it told.
+  A stranger gets "not on the owner's people list" and no ask; a login-only
+  declared person with another id gets "can't confirm"; "don't forget me …",
+  a quoted "forget me" and an assignment event are normal runs; a forget ask
+  and another comment on the same issue both count; a run's kept thread lists
+  `github-id:<n>`; a Deny is posted as "did not approve". A rate limit on an
+  outcome post stops that cycle's outcome pass, but a locked thread (a bare
+  403) does not hold up the next asks' outcomes. In a GitHub-shaped
+  env `memory-forget-me` names the comment path and records nothing
+  (REQ-plugins-1016).
 ## One verify gate (REQ-watch-006, REQ-watch-073, REQ-watch-085)
 
 - `tests/agent.ndjson-spawn.test.ts`: the WATCH spawn argv has no

@@ -504,6 +504,15 @@ export function githubParticipant(login: string): string {
   return `github:${login.trim().toLowerCase()}`;
 }
 
+/**
+ * A GitHub account by its numeric id (IDENTITY-7), kept next to the login
+ * so a forget reaches the threads of a person declared by id only
+ * (MEMORY-ACL-6.a).
+ */
+export function githubIdParticipant(id: string | number): string {
+  return `github-id:${String(id).trim()}`;
+}
+
 function parseJsonArray(raw: string): unknown[] {
   try {
     const v = JSON.parse(raw);
@@ -731,10 +740,19 @@ export class ConversationStore {
    * that is theirs (Discord user id, GitHub login) or holds their words (a
    * WATCH thread they commented on). Returns the records deleted.
    */
-  deleteForPerson(person: { discordUserIds?: readonly string[]; githubLogins?: readonly string[] }): number {
+  deleteForPerson(person: {
+    discordUserIds?: readonly string[];
+    githubLogins?: readonly string[];
+    githubIds?: readonly string[];
+  }): number {
     const discord = (person.discordUserIds ?? []).map((s) => s.trim()).filter(Boolean);
     const github = (person.githubLogins ?? []).map((s) => s.trim().toLowerCase()).filter(Boolean);
-    const qualified = [...discord.map(discordParticipant), ...github.map(githubParticipant)];
+    const githubIds = (person.githubIds ?? []).map((s) => s.trim()).filter((s) => /^\d{1,20}$/.test(s));
+    const qualified = [
+      ...discord.map(discordParticipant),
+      ...github.map(githubParticipant),
+      ...githubIds.map(githubIdParticipant),
+    ];
     if (qualified.length === 0) return 0;
     const marks = (n: number) => Array.from({ length: n }, () => "?").join(", ");
     const clauses: string[] = [];
@@ -763,7 +781,7 @@ export class ConversationStore {
  */
 export function forgetConversations(
   db: Database,
-  person: { discordUserIds?: readonly string[]; githubLogins?: readonly string[] },
+  person: { discordUserIds?: readonly string[]; githubLogins?: readonly string[]; githubIds?: readonly string[] },
 ): number {
   return new ConversationStore({ db }).deleteForPerson(person);
 }

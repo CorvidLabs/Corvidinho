@@ -20,6 +20,11 @@
  *                                         ADMIN-3.b set a declared person's one
  *                                         role (IDENTITY-8; the owner role is
  *                                         [owner] / env only)
+ *   /admin people forget person:<id>      MEMORY-ACL-6.a start a forget for a
+ *                                         declared person: the same forget
+ *                                         request and DM Approve/Deny card as
+ *                                         their own ask; nothing is forgotten
+ *                                         until the owner approves on the card
  *
  * Owner-only (IDENTITY-2): dispatch enforces minPermission ADMIN and this
  * handler re-checks ADMIN itself before anything else (ADMIN-4 / DISCORD-7);
@@ -33,6 +38,12 @@
 
 import { argsDigest, type AuditEntryInput, type AuditOutcome } from "../../audit/index.ts";
 import { formatOwnerStatus } from "../../identity/owner.ts";
+import {
+  encodeForgetRequester,
+  FORGET_REQUEST_TTL_MS,
+  memorySubjectForPerson,
+  subjectLabel,
+} from "../../memory/index.ts";
 import {
   DEFAULT_PERSON_ROLE,
   loadDeclaredPeople,
@@ -129,6 +140,12 @@ const PEOPLE_USAGE: Record<PeopleAdminOp, string> = {
 
 const LINK_OPTIONS: readonly PersonLinkKind[] = ["discord", "github", "github_id", "nickname"];
 
+/** MEMORY-ACL-6.a — `/admin people forget` (audited like the people ops). */
+const PEOPLE_FORGET_ROUTE = "people forget";
+export const PEOPLE_FORGET_ACTION = "admin-people-forget";
+const PEOPLE_FORGET_USAGE =
+  "usage: /admin people forget person:<id> — a declared person (see /admin people list); you then approve or deny it on the card I DM you";
+
 function isAdmin(ctx: SlashContext, interaction: SlashInteraction): boolean {
   return (
     resolvePermissionLevel({
@@ -189,6 +206,9 @@ export async function handleAdminCommand(
     const pop = PEOPLE_OPS[route];
     if (m) auditSoft(ctx, auditEntry(interaction, m.action, "denied", [group, sub]));
     else if (pop) auditSoft(ctx, auditEntry(interaction, `admin-people-${pop}`, "denied", [group, sub]));
+    else if (route === PEOPLE_FORGET_ROUTE) {
+      auditSoft(ctx, auditEntry(interaction, PEOPLE_FORGET_ACTION, "denied", [group, sub]));
+    }
     await interaction.reply({ content: NOT_AUTHORIZED, ephemeral: true });
     return;
   }
@@ -206,6 +226,11 @@ export async function handleAdminCommand(
   const pop = PEOPLE_OPS[route];
   if (pop) {
     await handlePeopleMutation(ctx, interaction, pop, [group, sub]);
+    return;
+  }
+
+  if (route === PEOPLE_FORGET_ROUTE) {
+    await handlePeopleForget(ctx, interaction, [group, sub]);
     return;
   }
 
@@ -457,6 +482,93 @@ async function handlePeopleMutation(
   }
   const okSeq = auditSoft(ctx, auditEntry(interaction, action, "ok", args));
   await interaction.reply({ content: formatPeopleApplied(plan, startedSeq, okSeq), ephemeral: true });
+}
+
+/**
+ * MEMORY-ACL-6.a — the owner starts a forget for any declared person: the
+ * same `forget_requests` row and DM Approve/Deny card as the person's own
+ * ask (src/discord/forget-card.ts); nothing is forgotten here. Audited like
+ * the other people ops: `started` first (no trail ⇒ refused), then `ok`;
+ * an undeclared id is refused (`denied`). One open ask per person: an ask
+ * already pending is reused. The card goes out right after the reply.
+ */
+async function handlePeopleForget(
+  ctx: SlashContext,
+  interaction: SlashInteraction,
+  route: string[],
+): Promise<void> {
+  const raw = interaction.options.person;
+  const personId = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (!personId) {
+    await interaction.reply({ content: PEOPLE_FORGET_USAGE, ephemeral: true });
+    return;
+  }
+  const args = [...route, personId];
+  // Exactly who chat, slash and WATCH see: the file this process loaded.
+  const dir = loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner });
+  const subject = memorySubjectForPerson(dir, personId);
+  if (!subject) {
+    auditSoft(ctx, auditEntry(interaction, PEOPLE_FORGET_ACTION, "denied", args));
+    await interaction.reply({
+      content: `Refused: "${personId}" is not a declared person (see /admin people list), so there is nothing to forget from here. Nothing was asked.`,
+      ephemeral: true,
+    });
+    return;
+  }
+  if (!ctx.requestForget) {
+    await interaction.reply({
+      content: "Refused: no database is wired to this bridge, so a forget request cannot be recorded. Nothing was asked.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // SAFE-5: the intent is on the trail before the request; fail closed.
+  let startedSeq: number;
+  try {
+    if (!ctx.recordAudit) throw new Error("no audit database is wired to this bridge");
+    startedSeq = ctx.recordAudit(auditEntry(interaction, PEOPLE_FORGET_ACTION, "started", args)).seq;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await interaction.reply({
+      content: `Refused: audit log unavailable (SAFE-5): ${msg}. Nothing was asked.`,
+      ephemeral: true,
+    });
+    return;
+  }
+  let made: ReturnType<NonNullable<SlashContext["requestForget"]>>;
+  try {
+    made = ctx.requestForget({
+      subject,
+      requesterUserId: encodeForgetRequester({ via: "admin", discordId: interaction.userId }),
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    auditSoft(ctx, auditEntry(interaction, PEOPLE_FORGET_ACTION, "error", args));
+    await interaction.reply({
+      content: `Error: could not record the forget request: ${msg}. Nothing was asked.`,
+      ephemeral: true,
+    });
+    return;
+  }
+  const okSeq = auditSoft(ctx, auditEntry(interaction, PEOPLE_FORGET_ACTION, "ok", args));
+  const who = subjectLabel(subject);
+  const r = made.request;
+  const lines = made.created
+    ? [
+        `✅ /admin people forget: asked to forget ${who} (request ${r.id}). Approve or Deny it on the card I DM you — nothing is forgotten until you approve, and no answer within ${Math.round(FORGET_REQUEST_TTL_MS / 3_600_000)} h means no.`,
+      ]
+    : [
+        `No change: ${who} already has an open forget request (${r.id}) — answer it on its card. Nothing is forgotten until you approve.`,
+      ];
+  lines.push(`Audit: #${startedSeq} started${okSeq !== undefined ? ` · #${okSeq} ok` : " · ok row not recorded (see bridge log)"}.`);
+  await interaction.reply({ content: lines.join("\n"), ephemeral: true });
+  // The card goes out now (the scheduler tick would also send it).
+  try {
+    await ctx.deliverForgetCards?.();
+  } catch (e) {
+    console.error(`[discord] /admin people forget: card delivery failed: ${e instanceof Error ? e.message : e}`);
+  }
 }
 
 function personLabel(p: DeclaredPerson): string {

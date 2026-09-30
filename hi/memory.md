@@ -29,3 +29,4 @@ Corvidinho keeps conversations, people, entities, and personality notes in a loc
 - **MEMORY-ACL-4**  Empty admin/owner lists stay deny-all for forget/override. **Self-forget of one’s own memories also requires ADMIN** (Leif amendment 2026-09-26) — there is no non-admin forget path.
 - **MEMORY-ACL-5**  No on-chain memory ACL; local SQLite only (**MEMORY-3**). Cross-link #41 MEMORY impl and closed duplicate #35.
 - **MEMORY-ACL-6**  Anyone can ask to be forgotten, and it forgets once I approve on a card.
+  - **MEMORY-ACL-6.a**  Someone known only on GitHub can ask there to be forgotten, and I can start it for any declared person with /admin; either way it forgets only after I approve on the card.

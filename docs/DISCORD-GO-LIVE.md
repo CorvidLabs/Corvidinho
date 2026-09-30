@@ -138,7 +138,10 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   gets it by direct message, never in the channel, MEMORY-7.a),
   mutating tools in a chat session (E.6),
   and the `/work` draft-PR step (E.3).
-- Forget requests (MEMORY-ACL-6): anyone may ask the bot to forget them; the bridge sends the
+- Forget requests (MEMORY-ACL-6): anyone may ask the bot to forget them — on Discord, or on GitHub
+  with a "forget me" comment to the watch user when they are a declared person matched by their
+  GitHub account id (MEMORY-ACL-6.a; the watch process must share the bridge's data dir) — and the
+  owner can start one for any declared person with `/admin people forget`; the bridge sends the
   owner a **direct message** with Approve / Deny buttons (no answer within 24 h is a no). The bot
   can DM the owner only when they share a server with it and accept DMs from its members (the
   server's Privacy Settings); until the card goes out the ask stays pending and then lapses as a

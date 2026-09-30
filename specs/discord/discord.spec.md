@@ -54,6 +54,7 @@ files:
   - src/discord/approve-card.ts
   - src/discord/forget-card.ts
   - tests/discord.forget-card.test.ts
+  - tests/discord.admin-forget.test.ts
   - tests/memory.store.test.ts
   - tests/memory.spawn-env.test.ts
   - tests/memory.rank.test.ts
@@ -198,7 +199,8 @@ store (`ConversationStore`: `get`, `forSession`, `latestForThread`,
 `byBotMessage`, `save`, `delete`, `purgeExpired`, `deleteForPerson`;
 `forgetConversations(db, person)`; `ConversationRecord`,
 `discordThreadKey`, `watchThreadKey`, `discordParticipant`,
-`githubParticipant`, `CONVERSATION_RETENTION_MS` 30 days,
+`githubParticipant`, `githubIdParticipant` (`github-id:<n>`, MEMORY-ACL-6.a),
+`CONVERSATION_RETENTION_MS` 30 days,
 `CONVERSATION_KEEP_TURNS` 20, `CONVERSATION_KEEP_BOT_MESSAGES` 100).
 `SessionStoreOptions.contextWindowTokens` (bridge:
 `resolveContextWindowTokens(env)`); `SessionStore.threadPrompt(session,
@@ -210,8 +212,10 @@ when it is gone, and keeps the conversation's project); `forgetConversations(use
 `purgeExpiredConversations()`; `forgetTurnsOfUsers(userIds)` (the approved
 forget-me, REQ-discord-101) also drops those users' live summaries and
 retained records. `forgetMemoryTargets` (`src/memory/forget.ts`) deletes the
-person's retained records (Discord ids, a declared person's GitHub logins) in
-the approval's transaction and returns their count (`conversations`). `src/discord/bridge.ts` exports
+person's retained records (Discord ids, a declared person's GitHub logins and
+numeric ids, and the login and numeric id a GitHub ask came from,
+MEMORY-ACL-6.a / REQ-discord-1016) in the approval's transaction and returns
+their count (`conversations`). `src/discord/bridge.ts` exports
 `CONVERSATION_PURGE_INTERVAL_MS` (hourly purge while running).
 
 Scrub at rest (REQ-discord-066, SAFE-6): `src/store/scrub.ts` exports
@@ -581,6 +585,27 @@ role:<team|community>` (ADMIN-3.b) writes the `role` key, owner-only and
 SAFE-5 audited like the other people mutations; `/admin people list` shows
 each role and `config show` counts them.
 
+Forget from GitHub and from /admin (MEMORY-ACL-6.a, REQ-discord-1016):
+`/admin people forget person:<id>` (owner only; handler-time ADMIN re-check;
+SAFE-5 `admin-people-forget` `started` then `ok`, `denied` for an id that is
+not a declared person, fail closed without the trail) records the same
+`forget_requests` ask a person's own request does (`memorySubjectForPerson`,
+requester `admin:<owner id>`; an open ask is reused) through
+`SlashContext.requestForget` and sends the card at once
+(`SlashContext.deliverForgetCards`); the bridge wires both to its DB and
+forget cards. The ask kinds live in `requester_user_id` with no schema change
+(`ForgetRequester`: a Discord id, `github:<id>:<login>` from a WATCH "forget
+me" comment, `admin:<owner id>`; a GitHub ask's thread is
+`github:<owner/repo>#<n>` in `origin_channel_id`; `parseForgetRequester`,
+`githubOriginOf`, `ForgetRequest.requester`). The card names a GitHub asker
+and thread ("asked on GitHub by @login (GitHub account id N) in
+owner/repo#n") or "started by you with /admin people forget"; a GitHub asker
+is never DMed (the WATCH poller posts the outcome on the thread;
+`ForgetRequestStore.unnotifiedGithub`) and an ask the owner started tells
+nobody else (marked told when decided; the card shows the outcome).
+`forgetTargets` never takes a GitHub or /admin asker for a Discord id and adds
+the ask's GitHub login and numeric id (`githubIds`).
+
 `ThinkingStatus` accepts optional `model`, `plumbing` and `showUsage`; footer
 shows model and, on done/error, plumbing (`state`/`verified`/`verifySkipped`/
 `attempts`); the live token use (`~tok`) shows only when `showUsage` (the
@@ -877,6 +902,12 @@ failed lookup writes nothing.
 - **When** the next delivery pass DMs the owner the Approve/Deny card and the owner presses Approve before it lapses
 - **Then** a SAFE-5 `started` row is written, every memory row of that person (profile, notes, private notes, superseded history, rows under their Discord ids) and their session turns are deleted in one transaction with the ask closed `approved`, the card shows the outcome without buttons, and the asker is told by DM (else in their allowlisted conversation); the people list and project memory are untouched
 
+### Scenario: The owner starts a forget for a declared person with /admin (MEMORY-ACL-6.a)
+
+- **Given** a declared person with memory, and the owner's own memory under their Discord id
+- **When** the owner runs `/admin people forget person:<id>` and later presses Approve on the DM card it sends
+- **Then** `admin-people-forget` `started` / `ok` rows are written, nothing is deleted before the press, and Approve deletes that person's memory and session turns but never the owner's, and nobody else is DMed
+
 ### Scenario: Empty owner scope
 
 - **Given** no memories for user U
@@ -1113,6 +1144,7 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |
 | 2026-09-29 | discord-rich-final-replies-answer-footer-with-model-tokens-cost-and-time-tokens-and-cost-owner-only-and-fence-safe: Discord rich final replies: answer footer with model, tokens, cost and time (tokens and cost owner-only) and fence-safe splits at 2000 (DISCORD-15/15.a/16) |
 | 2026-09-29 | condense-long-chats-at-about-80-of-the-model-s-window-with-the-task-and-latest-instruction-pinned-resume-from-the: Condense long chats at about 80% of the model's window with the task and latest instruction pinned, resume from the summary after the soft TTL, and keep each thread's summary 30 days (SESSION-5/6, SESSION-3.a, AGENT-6.a; #72) |
+| 2026-09-30 | forget-from-github-and-from-admin-approved-on-the-card-a-declared-person-matched-by-github-numeric-id-who-comments: Forget from GitHub and from /admin, approved on the card: a declared person (matched by GitHub numeric id) who comments 'forget me' to the watch user raises the owner's existing Approve/Deny forget card with no model run and gets a reply on the thread (an undeclared sender is told nothing is kept, no card), the outcome is posted on that thread; the owner can start a forget for any declared person with owner-only, SAFE-5 audited /admin people forget, the same card; either way nothing is forgotten until the owner approves, and Approve also deletes the person's kept WATCH conversations by the GitHub login and numeric id the ask came from, never the owner who started it (MEMORY-ACL-6.a, #101) |
 | 2026-09-30 | community-members-can-t-start-work-declared-community-and-undeclared-users-get-the-quiet-ephemeral-not-authorized-reply: Community members can't start /work: declared community and undeclared users get the quiet ephemeral not-authorized reply and no worktree, branch, work task or run, while the owner and team keep /work (IDENTITY-11.a, #65) |
 | 2026-09-30 | on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a: On GitHub people match only by their numeric user id: a renamed or re-registered login never counts as the owner or a declared person on WATCH (prompt, memory scope, SAFE-13 exemption); [owner] github_id declares the owner's id; /admin people link github stores the looked-up numeric id; doctor warns about logins without an id (IDENTITY-7.a, #36) |
 | 2026-09-30 | safe-2-a-the-file-tools-refuse-fledge-like-fledge-toml-and-specs-so-a-run-cannot-weaken-the-verify-lane-it-is-judged-by: SAFE-2.a: the file tools refuse .fledge/ like fledge.toml and specs/, so a run cannot weaken the verify lane it is judged by |

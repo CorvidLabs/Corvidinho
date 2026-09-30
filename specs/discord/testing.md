@@ -793,6 +793,30 @@ one pending ask per subject, re-running is a no-op.
 `tests/scheduler.ask-outbox.test.ts` expect `SCHEMA_VERSION` 13 (v13, kept
 conversations, follows v12; REQ-discord-472).
 
+## Forget from GitHub and /admin people forget (REQ-discord-1016, MEMORY-ACL-6.a)
+
+- `tests/discord.admin-forget.test.ts` — `/admin people forget` is registered
+  with one required `person` string; through `startBridge` the owner's
+  `/admin people forget person:Tofu` writes `admin-people-forget` started /
+  ok, one pending ask (`admin:<owner>` → `person:tofu`), replies with the
+  request id and DMs the owner the card ("started by you with /admin people
+  forget", no content) at once; a second run reuses the ask; Approve deletes
+  Tofu's memory and session turn but never the owner's own note or turn, DMs
+  nobody else, adds no "told" line and marks the ask told; an undeclared id
+  and a Discord id are refused (`denied`), no person gives the usage, a
+  non-owner gets `not authorized` (dispatch floor; called directly, the
+  handler's re-check with a `denied` row), no DB and a keyed chain without the
+  key refuse with nothing asked; `forgetTargets` for a GitHub ask adds its
+  login and numeric id and never takes a `github:` / `admin:` asker for a
+  Discord id.
+- `tests/watch.forget-me.test.ts` (watch spec) drives the GitHub ask through
+  the same bridge card: the card names `@login (GitHub account id N) in
+  owner/repo#n`, the bridge never DMs a GitHub asker and marks the card "They
+  will be told on their GitHub thread.", and Approve deletes kept WATCH
+  threads by login and by `github-id:<n>`.
+- `tests/discord.admin-slash.test.ts`: the `people` group ends with `role`,
+  `forget`.
+
 ## Untrusted text on Discord (REQ-discord-071, SAFE-11/12/13)
 
 `tests/safe.injection.test.ts` — the acting-user block for a stranger named

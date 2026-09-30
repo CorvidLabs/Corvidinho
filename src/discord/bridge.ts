@@ -158,7 +158,7 @@ import {
   verifyAudit,
   type AuditEntryInput,
 } from "../audit/index.ts";
-import { MemoryStore } from "../memory/index.ts";
+import { ForgetRequestStore, MemoryStore } from "../memory/index.ts";
 import {
   ABANDONED_SETTLE_MS,
   ScheduleStore,
@@ -579,6 +579,10 @@ export async function startBridge(
       // MEMORY-7.a: /session start and /work send private replies by DM.
       ...(sendDmRef.fn ? { sendDm: sendDmRef.fn } : {}),
       recordAudit,
+      // MEMORY-ACL-6.a: `/admin people forget` records the ask in the shared
+      // DB and sends the owner's card at once.
+      ...(db ? { requestForget: (i) => new ForgetRequestStore({ db }).request(i) } : {}),
+      ...(forgetCards ? { deliverForgetCards: () => forgetCards.deliver() } : {}),
       // Same object/arrays as the router + scheduler: /admin splices in place.
       allowlist: config.allowlist,
       agent,

@@ -13,6 +13,10 @@
  * with that thread's condensed conversation (30 days, scrubbed), and a
  * follow-up on the same issue or PR gets it replayed ahead of the new event,
  * condensed at about 80% of the model's window.
+ * MEMORY-ACL-6.a (REQ-watch-1016): a clear "forget me" to the watch user
+ * never starts a run — the poller records it for the owner's Approve/Deny
+ * card and replies on the thread (src/watch/forget-me.ts), and each cycle
+ * posts the outcome of decided GitHub asks on their threads.
  */
 
 import type { Database } from "bun:sqlite";
@@ -26,6 +30,7 @@ import {
   type Conversation,
   ConversationStore,
   formatConversationBlock,
+  githubIdParticipant,
   githubParticipant,
   resolveContextWindowTokens,
   watchThreadKey,
@@ -53,6 +58,11 @@ import {
   type ConfigResult,
 } from "./config.ts";
 import { dedupeByIssue, ProcessedIdStore } from "./dedup.ts";
+import {
+  deliverWatchForgetOutcomes,
+  handleWatchForgetMe,
+  isWatchForgetMeRequest,
+} from "./forget-me.ts";
 import {
   DEFAULT_RATE_LIMIT_BACKOFF_MS,
   formatRateLimitLog,
@@ -414,6 +424,23 @@ export async function startWatchPoller(
       result.backoffMs = Math.max(result.backoffMs ?? 0, waitMs);
     };
 
+    // MEMORY-ACL-6.a: the outcome of each decided GitHub forget ask goes on
+    // its thread (the bridge decides it on the owner's card).
+    if (db) {
+      try {
+        await deliverWatchForgetOutcomes({
+          db,
+          github: config.allowlist.github,
+          ackClient,
+          now,
+          log,
+          onPostFailed: backoffOnCommentFailure,
+        });
+      } catch (err) {
+        logError("[watch] forget outcomes failed", err);
+      }
+    }
+
     let events: DetectedEvent[];
     try {
       events = opts.fetchEvents
@@ -449,7 +476,37 @@ export async function startWatchPoller(
       opts.onAction?.({ kind: "refuse", event: d });
     }
 
-    const deduped = dedupeByIssue(eligible);
+    // MEMORY-ACL-6.a: a clear "forget me" to the watch user never starts a
+    // run and never hides another request on its issue: each is handled on
+    // its own — recorded for the owner's card (declared people, matched by
+    // GitHub numeric id) and answered once on the thread.
+    const forgetAsks = eligible.filter((e) => isWatchForgetMeRequest(e, config.mentionUsername));
+    for (const event of forgetAsks) {
+      if (!running) break;
+      try {
+        processed.add(event.id);
+      } catch (err) {
+        logError(`[watch] forget-me ${event.id}: id write failed; retried next cycle`, err);
+        continue;
+      }
+      try {
+        await handleWatchForgetMe({
+          event,
+          people: loadDeclaredPeople({ allowlist: config.allowlist, owner }),
+          db,
+          ackClient,
+          env,
+          now,
+          log,
+          onPostFailed: backoffOnCommentFailure,
+        });
+      } catch (err) {
+        logError(`[watch] forget-me ${event.repo}#${event.number} (${event.id}) failed`, err);
+      }
+      opts.onAction?.({ kind: "forget_me", event });
+    }
+    const forgetIds = new Set(forgetAsks.map((e) => e.id));
+    const deduped = dedupeByIssue(eligible.filter((e) => !forgetIds.has(e.id)));
 
     let triggered = 0;
     for (const event of deduped) {
@@ -659,6 +716,9 @@ export async function startWatchPoller(
               ...(retained?.participants ?? []),
               githubParticipant(action.session.userId),
               githubParticipant(event.sender),
+              // MEMORY-ACL-6.a: the numeric id too, so a forget reaches a
+              // person declared by GitHub id only.
+              ...(event.senderId !== undefined ? [githubIdParticipant(event.senderId)] : []),
             ],
           });
         } catch (err) {

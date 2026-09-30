@@ -43,6 +43,7 @@ export {
   loadPeopleForMemory,
   memorySubjectFor,
   memorySubjectForGithub,
+  memorySubjectForPerson,
   memorySubjectForRef,
   personScopeId,
   projectKeyFor,
@@ -73,8 +74,15 @@ export {
 export {
   FORGET_REQUEST_TTL_MS,
   ForgetRequestStore,
+  encodeForgetRequester,
+  encodeGithubOrigin,
   forgetMemoryTargets,
+  forgetRequesterActor,
   forgetTargets,
+  githubOriginOf,
+  parseForgetRequester,
+  type ForgetGithubThread,
   type ForgetRequest,
+  type ForgetRequester,
   type ForgetRequestStatus,
 } from "./forget.ts";

@@ -1417,6 +1417,17 @@ Acceptance Criteria
 - A Discord actor wins over stale GitHub keys.
 - `tests/memory.recall-github.test.ts` covers each and fails on the stacked base sources.
 
+### REQ-plugins-1016
+
+`memory-forget-me` in a GitHub WATCH run (no Discord actor, a GitHub
+commenter set by the poller) SHALL keep refusing and record nothing, and its
+refusal SHALL name the path that works there (MEMORY-ACL-6.a, #101): a comment
+that @mentions the watch user and says just "forget me", which the WATCH
+poller records for the owner's Approve/Deny card (REQ-watch-1016).
+
+Acceptance Criteria
+- With the GitHub commenter env set, `memory-forget-me` fails with an error naming `says just "forget me"` and MEMORY-ACL-6.a, and `forget_requests` stays empty.
+- `tests/watch.forget-me.test.ts` covers it and fails on main.
 ### REQ-plugins-710
 
 Private notes, profile reads and the owner's view of someone's memory are
