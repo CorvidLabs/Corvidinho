@@ -973,3 +973,17 @@ through `SlashContext.sendDm`.
   matches; no `[owner] github_id`; `link github:` stores no id; no lookup
   module — only "a refused request makes no lookup" holds on both) and all 9
   pass on the branch; the updated cases in the four files above fail too.
+
+## Stuck WATCH asks reach the owner by DM (REQ-discord-086, AGENT-16.a)
+
+`tests/watch.stuck-ask.test.ts` ("Discord bridge: …"): `formatWatchStuckAskDm`
+(the GitHub line, the stuck headline, the quoted question, no mention);
+`createWatchAskDelivery` (a failed DM is handed back and retried only after
+`WATCH_ASK_RETRY_MS`, a sent DM takes the ask once, no owner or no `sendDm`
+leaves it pending, past a day it is given up and never sent, a stop while the
+DM hangs hands it back); a dry-run `startBridge` with a `sendDm` stub marks
+itself running, DMs the owner once for a recorded assignment ask on its tick
+and clears its mark on stop.
+- Fail on base: with the base's (5093b81) `src/discord/bridge.ts` swapped in,
+  the bridge case fails (no mark, no DM); the DM text and delivery units pass
+  on both (new module).

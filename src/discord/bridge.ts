@@ -95,6 +95,8 @@ import { loadDeclaredPeople } from "../identity/people.ts";
 import { enrichPromptWithMemories, memoryInjectOptsFor } from "./memory-inject.ts";
 import { parseApproveCardCustomId } from "./approve-card.ts";
 import { createForgetCards, FORGET_CARD_KIND, type ForgetDeliveryResult } from "./forget-card.ts";
+import { createWatchAskDelivery } from "./watch-ask.ts";
+import { clearBridgeRunning, markBridgeRunning } from "../watch/owner-ask.ts";
 import { deliverPrivateReplies, withPrivateNote } from "./private-reply.ts";
 import {
   DISCORD_ANSWER_MAX,
@@ -512,6 +514,15 @@ export async function startBridge(
         onForgotten: ({ discordIds }) => {
           store.forgetTurnsOfUsers(discordIds);
         },
+      })
+    : undefined;
+  // AGENT-16.a: a stuck WATCH run (the watch process shares this data dir)
+  // reaches the owner as a DM, like other stuck asks ping them.
+  const watchAsks = db
+    ? createWatchAskDelivery({
+        db,
+        owner: () => config.owner ?? null,
+        sendDm: () => sendDmRef.fn,
       })
     : undefined;
   const rateLimitState: RateLimitState = { userMessageTimestamps: new Map() };
@@ -1898,8 +1909,16 @@ export async function startBridge(
       defaultProjectRoot: config.projectRoot,
       owner: config.owner ?? null,
       spendAlerts,
-      // MEMORY-ACL-6: every tick delivers forget cards, expiries and notices.
-      ...(forgetCards ? { onTick: () => void forgetCards.deliver() } : {}),
+      // MEMORY-ACL-6: every tick delivers forget cards, expiries and notices;
+      // AGENT-16.a: and DMs the owner each stuck WATCH ask.
+      ...(forgetCards || watchAsks
+        ? {
+            onTick: () => {
+              void forgetCards?.deliver();
+              void watchAsks?.deliver();
+            },
+          }
+        : {}),
       backup,
       // SAFE-12/13 (#71): a tick resolves the creator's role with the live
       // mute set, and its injection refusal lands on the bridge's trail.
@@ -1967,6 +1986,10 @@ export async function startBridge(
     );
   }
   scheduler?.start();
+  // AGENT-16.a: tell the watch process a bridge that can DM the owner runs
+  // on this data dir (its ticker delivers stuck WATCH asks).
+  const bridgeRunner =
+    db && scheduler && watchAsks && sendDmRef.fn ? markBridgeRunning(db) : undefined;
   // AGENT-6.a: retained conversations go 30 days after their last update,
   // also while the bridge sits idle (reads and writes purge too).
   const conversationPurge = setInterval(
@@ -1994,6 +2017,16 @@ export async function startBridge(
     stop: async () => {
       clearInterval(conversationPurge);
       scheduler?.stop();
+      // AGENT-16.a: no further stuck WATCH ask is taken, and the watch
+      // process no longer counts on this bridge to DM the owner.
+      watchAsks?.stop();
+      if (db && bridgeRunner) {
+        try {
+          clearBridgeRunning(db, bridgeRunner);
+        } catch (err) {
+          console.error(`[discord] bridge mark not cleared: ${formatErrorLine(err)}`);
+        }
+      }
       // OPS-1: no further backup notice is taken; one in flight is waited
       // for below, and handed back if it outlasts the grace (never lost).
       backup?.stop();
@@ -2016,6 +2049,9 @@ export async function startBridge(
         await scheduler.settleAskDelivery(ABANDONED_SETTLE_MS);
       }
       await backup?.settle(ABANDONED_SETTLE_MS);
+      // AGENT-16.a: a stuck WATCH ask's DM in flight gets the same grace,
+      // then is handed back for the next start.
+      await watchAsks?.settle(ABANDONED_SETTLE_MS);
       await gateway.stop();
     },
   };

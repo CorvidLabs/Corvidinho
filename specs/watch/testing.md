@@ -132,3 +132,20 @@ module: watch
   identity, memory and SAFE-13 cases fail (the owner's re-registered login is
   treated as the owner); the live mapping case passes on both (it pins the
   mapping the guard relies on).
+
+## Stuck GitHub runs ping the owner on Discord (REQ-watch-086, AGENT-16.a)
+
+`tests/watch.stuck-ask.test.ts` ("WATCH: …", "the WATCH spawn client …"):
+the poller with injected events, a stub agent and an in-memory DB records a
+stuck ask for an assignment (no GitHub post) and a review request (thread
+URL), logs that the Discord ping could not be sent with no bridge mark and
+that it is queued with a live one (the summary comment still carries the
+question), drops it on a later run with no ask, never stores a clarify ask,
+keeps it when a later spawn throws, stores nothing with no owner Discord id
+(IDENTITY-3 line) or no DB; the bridge mark counts only a live process; the
+stored question is scrubbed and a re-scrub target; the spawn client returns a
+blocked result frame's `ask`.
+- Fail on base: with the base's (5093b81) `src/watch/{poller,agent-client,types}.ts`
+  and `src/store/scrub.ts` swapped in (the new module kept), every poller,
+  spawn-client and scrub-target case fails (nothing recorded, no `ask`); the
+  no-DB note and bridge-mark units pass on both.

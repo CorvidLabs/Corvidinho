@@ -45,6 +45,16 @@ import {
   type InjectionNotice,
 } from "./untrusted.ts";
 import {
+  callSignature,
+  changedState,
+  createRepeatFailureGuard,
+  errorExcerpt,
+  REPEAT_FAILURE_BLOCK_DETAIL,
+  repeatedFailureAsk,
+  repeatFailureSteer,
+  type RepeatFailureGuard,
+} from "./loop-guards.ts";
+import {
   claimsIgnorance,
   injectedMemorySearches,
   MEMORY_RECALL_TOOL,
@@ -582,6 +592,8 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   let roleRefused = false;
   // SAFE-13: the first tool result this run found that looked like an injection.
   let injection: InjectionNotice | null = null;
+  // AGENT-16: failing-call counts for the whole run (verify retries included).
+  const repeatGuard = createRepeatFailureGuard();
 
   const run: ExecuteFn = async ({ attempt, verifyFeedback, signal, specBriefing }) => {
     if (personaNote) {
@@ -677,6 +689,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
         opts.onInjection?.(notice);
       },
       onPrivateReply: (text) => opts.onPrivateReply?.(text),
+      repeatGuard,
       // AGENT-4 (REQ-agent-502): a delegate worker gets this run's allowlist
       // and, outside a role session, may run an allowlisted Fledge command
       // whose edits no result reports (a role-session worker is non-ADMIN).
@@ -729,6 +742,8 @@ type LoopArgs = {
   onPrivateReply: (text: string) => void;
   /** A worker `delegate` starts may change files no result reports (REQ-agent-502). */
   workerEditsUnreported?: boolean;
+  /** AGENT-16: the run's repeat-failure guard (src/agent/loop-guards.ts). */
+  repeatGuard?: RepeatFailureGuard;
 };
 
 async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
@@ -756,7 +771,10 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     onInjection,
     onPrivateReply,
     workerEditsUnreported = false,
+    repeatGuard = createRepeatFailureGuard(),
   } = args;
+  // AGENT-16: a new conversation — no steer has reached the model in it yet.
+  repeatGuard.newConversation();
 
   const filesChanged = new Set<string>();
   // AGENT-4: tools run this attempt whose file edits no result reports.
@@ -979,6 +997,24 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         return askExecuteResult(asked.ask, filesChanged);
       }
 
+      // AGENT-16: this exact call kept failing with nothing changed and the
+      // model already saw the steer in this conversation — don't run it
+      // again; stop with the "stuck" ask (the owner is pinged, AUTONOMY-2/4).
+      const signature = callSignature(name, rawArgs);
+      if (repeatGuard.before(signature, round) === "ask") {
+        emit(onEvent, {
+          type: "ToolResult",
+          name: eventName,
+          success: false,
+          detail: REPEAT_FAILURE_BLOCK_DETAIL,
+        });
+        emit(onEvent, {
+          type: "Text",
+          text: `[operator] AGENT-16: ${eventName} repeated after the steer with nothing changed; stopped to ask (last error: ${errorExcerpt(repeatGuard.lastError(signature))})`,
+        });
+        return askExecuteResult(repeatedFailureAsk(eventName), filesChanged);
+      }
+
       // ROLES-CHAT-3: a mutating / dangerous plugin a non-ADMIN caller names
       // without it being offered gets the role refusal, not the catalog one
       // (ADMIN re-checked at this call, ROLES-CHAT-6). Either way it never runs.
@@ -1055,6 +1091,18 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         tool_call_id: tc.id || name,
         content: untrustedToolContent(name, result, offered.has(name), onInjection, onEvent),
       };
+      // AGENT-16: count the failure (a real change resets every count); the
+      // 2nd identical failure gets the steer after its result, outside any
+      // SAFE-12 fence, the result itself left whole.
+      const repeat = repeatGuard.after(
+        signature,
+        round,
+        { ok: Boolean(result.ok), error: result.error },
+        changedState(name, result),
+      );
+      if (repeat.steer) {
+        toolMessage.content = `${toolMessage.content}\n\n${repeatFailureSteer(eventName, repeat.failures, result.error)}`;
+      }
       messages.push(toolMessage);
       if (result.ok && result.image) {
         const opened = { tool: toolMessage, result: { ...result, image: result.image } };
