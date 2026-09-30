@@ -249,14 +249,16 @@ describe("a schedule's open question makes its next runs wait, with one note (AU
     expect(h.scheduleRow().execution_count).toBe(1);
     expect(h.scheduleRow().next_run_at).toBe(getNextCronDate("0 * * * *", new Date(h.clock.now)).getTime());
     expect(h.scheduleRow().next_run_at).toBeGreaterThan(h.clock.now);
-    // One wait note, no ping, no controls.
+    // One wait note, no ping; it carries the ask's own controls (so a lost
+    // ask post still leaves a way to answer or cancel it).
     expect(h.posts).toHaveLength(2);
     const note = h.posts[1]!;
     expect(waitNote(note)).toBe(true);
     expect(note.channelId).toBe(CHANNEL);
     expect(note.content).not.toContain("<@");
     expect(note.mentionUserIds ?? []).toEqual([]);
-    expect(note.components).toBeUndefined();
+    expect(buttonLabels(note.components)).toEqual(["Answer", "Cancel"]);
+    expect(buttonIds(note.components)).toEqual([openCustomId(runId), cancelCustomId(runId)]);
     expect(h.row().ask_note_at).not.toBeNull();
 
     // Still waiting: more due slots, no second note, nothing runs.
@@ -366,10 +368,11 @@ describe("the ask post carries its own controls (AUTONOMY-6.a)", () => {
     expect(buttonLabels(post.components)).toEqual(["Cancel"]);
     expect(post.content.split("\n").slice(1)).toEqual([`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`]);
     expect(post.content).not.toMatch(/\$\d|CORVIDINHO_|daily cap/);
-    // Its wait note names no amount either.
+    // Its wait note names no amount either, and carries Cancel only.
     await h.due("ok");
     expect(waitNote(h.posts[1]!)).toBe(true);
     expect(h.posts[1]!.content).not.toMatch(/\$\d|CORVIDINHO_|cap/);
+    expect(buttonLabels(h.posts[1]!.components)).toEqual(["Cancel"]);
   });
 
   test("an ask post that does not go out is handed back and posted by the next tick (there is no next run to post it)", async () => {
@@ -393,6 +396,27 @@ describe("the ask post carries its own controls (AUTONOMY-6.a)", () => {
   });
 });
 
+describe("an ask whose post was lost still has a way out (AUTONOMY-6.a, restarts)", () => {
+  test("claimed but never posted (a crash between the claim and the post): the one wait note carries its controls, and they close it", async () => {
+    const h = harness();
+    // A daemon's run records the ask; a bridge claims it and dies before
+    // its post goes out (ask_posted_at set, nothing in the channel).
+    await h.due(PICK, h.daemon);
+    const runId = h.openRunId();
+    expect(h.store.claimRunAsk(runId, h.clock.now)).toBe(true);
+    await h.idleTick();
+    expect(h.posts).toHaveLength(0);
+    // The next slot waits; the note is the only post and it can answer.
+    expect((await h.due("ok")).started).toEqual([]);
+    expect(h.posts).toHaveLength(1);
+    expect(waitNote(h.posts[0]!)).toBe(true);
+    expect(buttonLabels(h.posts[0]!.components)).toEqual(["Choose", "Cancel"]);
+    expect(buttonIds(h.posts[0]!.components)).toEqual([openCustomId(runId), cancelCustomId(runId)]);
+    expect(h.store.closeRunAsk(runId, { outcome: "cancelled", closedBy: CREATOR_ID })).toBe(true);
+    expect((await h.due("ok")).started).toEqual([h.schedule.id]);
+  });
+});
+
 describe("a schedule with no channel asks the owner by DM (AUTONOMY-6.a)", () => {
   test("the ask, its controls and the one note go to the owner's DM, never to a channel", async () => {
     const h = harness({ channel: null });
@@ -407,6 +431,7 @@ describe("a schedule with no channel asks the owner by DM (AUTONOMY-6.a)", () =>
     expect(h.dms).toHaveLength(2);
     expect(waitNote(h.dms[1]!)).toBe(true);
     expect(h.dms[1]!.userId).toBe(OWNER_ID);
+    expect(buttonIds(h.dms[1]!.components)).toEqual([openCustomId(runId), cancelCustomId(runId)]);
     await h.due("ok");
     expect(h.dms).toHaveLength(2);
     expect(h.posts).toHaveLength(0);
@@ -467,21 +492,27 @@ describe("the answer reaches the next run once (AUTONOMY-6.a, SAFE-12/13)", () =
 });
 
 describe("schema v15: blocking schedule asks (forward-only migration)", () => {
-  test("a v14 DB migrates to v15: the new columns exist, an ask recorded before is closed and never blocks or posts; a re-run changes nothing", async () => {
+  test("a v14 DB migrates to v15: the new columns exist; an ask posted before (or moot) is closed and never blocks; one still pending is posted with its controls and blocks; a re-run changes nothing", async () => {
     expect(SCHEMA_VERSION).toBe(15);
     const db = new SqliteDatabase(":memory:");
     cleanups.push(() => db.close());
     migrateCorvidinhoDb(db);
     const store = new ScheduleStore({ db });
-    const s = store.create({
-      name: "Old",
-      cronExpression: "0 * * * *",
-      project: "p",
-      prompt: "x",
-      createdByUserId: CREATOR_ID,
-      channelId: CHANNEL,
-    });
-    // Back to v14 (main before this change) with a posted and an unposted ask.
+    const mk = (name: string) =>
+      store.create({
+        name,
+        cronExpression: "0 * * * *",
+        project: "p",
+        prompt: "x",
+        createdByUserId: CREATOR_ID,
+        channelId: CHANNEL,
+      });
+    // "Pending": its newest run's ask no bridge posted yet (a daemon's).
+    // "Posted": its newest run's ask went out before (as text, no Cancel),
+    // after an older one that never went out and is moot.
+    const pending = mk("Pending");
+    const posted = mk("Posted");
+    // Back to v14 (main before this change).
     const v15 = [
       "ask_options",
       "ask_blocking",
@@ -498,8 +529,10 @@ describe("schema v15: blocking schedule asks (forward-only migration)", () => {
     db.run(
       `INSERT INTO schedule_runs (id, schedule_id, status, summary, started_at, completed_at, ask_reason, ask_question, ask_posted_at)
        VALUES ('srun_old000000001', ?, 'failed', 'failed (exit 1)', 1, 2, 'stuck', 'Old question?', 3),
-              ('srun_old000000002', ?, 'completed', 'done', 4, 5, 'clarify', 'Newer question?', NULL)`,
-      [s.id, s.id],
+              ('srun_old000000002', ?, 'completed', 'done', 4, 5, 'clarify', 'Newer question?', NULL),
+              ('srun_old000000003', ?, 'failed', 'failed (exit 1)', 1, 2, 'stuck', 'Moot question?', NULL),
+              ('srun_old000000004', ?, 'completed', 'done', 4, 5, 'clarify', 'Posted question?', 6)`,
+      [pending.id, pending.id, posted.id, posted.id],
     );
     migrateCorvidinhoDb(db);
     const version = () =>
@@ -513,21 +546,26 @@ describe("schema v15: blocking schedule asks (forward-only migration)", () => {
         .all();
     expect(rows()).toEqual([
       { id: "srun_old000000001", ask_blocking: 0, ask_outcome: "superseded", closed: 1 },
-      { id: "srun_old000000002", ask_blocking: 0, ask_outcome: "superseded", closed: 1 },
+      { id: "srun_old000000002", ask_blocking: 1, ask_outcome: null, closed: 0 },
+      { id: "srun_old000000003", ask_blocking: 0, ask_outcome: "superseded", closed: 1 },
+      { id: "srun_old000000004", ask_blocking: 0, ask_outcome: "superseded", closed: 1 },
     ]);
     const fresh = new ScheduleStore({ db });
-    expect(fresh.openAsk(s.id)).toBeUndefined();
-    expect(fresh.pendingAsks()).toEqual([]);
-    expect(fresh.openRunAsk("srun_old000000002")).toBeUndefined();
+    expect(fresh.openAsk(posted.id)).toBeUndefined();
+    expect(fresh.openRunAsk("srun_old000000004")).toBeUndefined();
+    expect(fresh.openAsk(pending.id)?.runId).toBe("srun_old000000002");
+    expect(fresh.pendingAsks().map((p) => p.runId)).toEqual(["srun_old000000002"]);
     const before = rows();
     migrateCorvidinhoDb(db);
     expect(version()).toBe("15");
     expect(rows()).toEqual(before);
 
-    // The schedule is not blocked: its next due run goes.
+    // Both come due: the schedule whose old question went out runs; the one
+    // whose question was still pending waits, and that question is posted
+    // now with Answer + Cancel, then the one wait note.
     const posts: Post[] = [];
     const steps: { next: Step; prompts: string[] } = { next: "ok", prompts: [] };
-    db.run("UPDATE schedules SET next_run_at = ? WHERE id = ?", [Date.now() - 1000, s.id]);
+    db.run("UPDATE schedules SET next_run_at = ?", [Date.now() - 1000]);
     const svc = new SchedulerService({
       store: fresh,
       agent: stepAgent(steps),
@@ -537,11 +575,20 @@ describe("schema v15: blocking schedule asks (forward-only migration)", () => {
       owner: OWNER,
       outbound: { post: async (p) => void posts.push(p) },
     });
-    expect((await svc.tick()).started).toEqual([s.id]);
+    expect(await svc.tick()).toEqual({ started: [posted.id], skipped: [pending.id] });
     await runsSettled(svc);
     await svc.settleAskDelivery();
-    expect(posts).toHaveLength(1);
-    expect(posts[0]!.content).toStartWith("✅ Schedule **Old**");
+    const ask = posts.find((p) => p.content.includes("Newer question?"));
+    expect(ask).toBeDefined();
+    expect(buttonLabels(ask!.components)).toEqual(["Answer", "Cancel"]);
+    expect(buttonIds(ask!.components)).toEqual([
+      openCustomId("srun_old000000002"),
+      cancelCustomId("srun_old000000002"),
+    ]);
+    expect(posts.filter((p) => p.content.startsWith("⏸️ Schedule **Pending**"))).toHaveLength(1);
+    expect(posts.filter((p) => p.content.startsWith("✅ Schedule **Posted**"))).toHaveLength(1);
+    expect(posts.some((p) => /Old question|Moot question|Posted question/.test(p.content))).toBe(false);
+    expect(posts).toHaveLength(3);
   });
 
   test("the answer and the listed choices are re-scrub targets (SAFE-6)", async () => {

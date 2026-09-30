@@ -351,9 +351,14 @@ CREATE INDEX IF NOT EXISTS idx_approval_codes_request
  * `superseded`) / `ask_closed_by` say when, how and by whom it closed,
  * `ask_answer` is the answer handed to the next run (SAFE-6 scrubbed, a
  * re-scrub target), `ask_skip_at` is when a due run first waited on it and
- * `ask_note_at` when the one wait note went out. Asks recorded before v15
- * are closed as `superseded`, so an upgrade never blocks a schedule on a
- * question that had no Cancel.
+ * `ask_note_at` when the one wait note went out. An ask recorded before v15
+ * that no bridge has posted yet, on its schedule's newest finished run (a
+ * daemon's question waiting for a bridge, REQ-discord-347, or a handed-back
+ * auto-pause ask, REQ-discord-353), has been shown to nobody: it becomes a
+ * blocking ask and is posted with its controls like a new one, so the
+ * upgrade never drops it. Every other ask recorded before v15 (posted
+ * without a Cancel, or moot) is closed as `superseded`, so an upgrade never
+ * blocks a schedule on a question that had no Cancel.
  */
 const SCHEMA_V15_RUN_COLUMNS = [
   ["ask_options", "TEXT"],
@@ -509,7 +514,22 @@ export function migrateCorvidinhoDb(db: Database): void {
       }
     }
     db.exec(SCHEMA_V15_SQL);
-    // Asks recorded before v15 had no Cancel: close them, so none blocks.
+    // A pending ask (never posted) on its schedule's newest finished run is
+    // still owed to a human: it blocks and is posted with its controls.
+    db.run(
+      `UPDATE schedule_runs SET ask_blocking = 1
+       WHERE ask_reason IS NOT NULL AND ask_posted_at IS NULL AND ask_closed_at IS NULL
+         AND ask_blocking = 0 AND completed_at IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM schedule_runs l
+           WHERE l.schedule_id = schedule_runs.schedule_id AND l.completed_at IS NOT NULL
+             AND (l.completed_at > schedule_runs.completed_at
+                  OR (l.completed_at = schedule_runs.completed_at
+                      AND l.rowid > schedule_runs.rowid))
+         )`,
+    );
+    // Every other ask recorded before v15 was posted without a Cancel (or is
+    // moot): close it, so none blocks.
     db.run(
       `UPDATE schedule_runs SET ask_closed_at = ?, ask_outcome = 'superseded'
        WHERE ask_reason IS NOT NULL AND ask_closed_at IS NULL AND ask_blocking = 0`,

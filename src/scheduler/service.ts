@@ -580,7 +580,10 @@ export class SchedulerService {
       }
       // AUTONOMY-6.a: the one wait note of each open ask a due run waited
       // on (after its ask went out), pinging nobody; taken with a
-      // compare-and-set and handed back when it does not go out.
+      // compare-and-set and handed back when it does not go out. It carries
+      // the ask's controls too, so an ask whose post was lost (a crash
+      // between its claim and its post, a deleted message) still has a way
+      // to be answered or cancelled.
       for (const open of this.store.pendingWaitNotes()) {
         if (this.stopped) break;
         const schedule = this.store.get(open.scheduleId);
@@ -593,6 +596,7 @@ export class SchedulerService {
             content: formatScheduleWaitNote(scheduleTitle(schedule, {
               withName: !scheduleInjection({ name: schedule.name }, this.creatorRole(schedule)),
             })),
+            components: scheduleAskComponents(open.runId, open.ask),
           });
         } catch (err) {
           logSchedulerError("ask", err);

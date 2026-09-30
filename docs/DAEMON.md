@@ -67,7 +67,8 @@ on the same data dir:
   **Choose** / **Answer** and **Cancel** buttons on its post; a spend-cap
   stop has **Cancel** only). Until then each due run is skipped, in the
   daemon as in the bridge, and not made up later, and the bridge posts one
-  note saying the schedule is waiting (no ping). `/schedule resume` does
+  note saying the schedule is waiting (no ping; it carries the same
+  buttons). `/schedule resume` does
   not answer it. The answer goes to the schedule's next run.
 
 ## Nightly backup (OPS-1/2)

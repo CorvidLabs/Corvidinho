@@ -38,6 +38,7 @@ import {
   SCHEDULE_ASK_ANSWERED_ACK,
   SCHEDULE_ASK_CANCELLED_ACK,
   SCHEDULE_ASK_NOT_YOURS,
+  SCHEDULE_ASK_PAUSED_NOTE,
   isScheduleAskId,
 } from "../src/discord/schedule-ask.ts";
 import { ALLOWLIST_DENY_TIP, EPHEMERAL_SILENT_ACK, MUTED } from "../src/discord/types.ts";
@@ -326,6 +327,36 @@ describe("schedule ask controls: Choose, Answer, Cancel (AUTONOMY-6.a)", () => {
     const cancel: Reply[] = [];
     await b.handlers.onComponent!(press(cancelCustomId(runId), CREATOR_ID, cancel));
     expect(cancel).toEqual([{ content: SCHEDULE_ASK_CANCELLED_ACK, ephemeral: true }]);
+  });
+
+  test("on a paused schedule (the auto-pause, a SAFE-13 refusal) the ack says closing the question does not resume it", async () => {
+    const b = await scheduleBridge();
+    /** An ask recorded while active; then the schedule is paused. */
+    const pausedAsk = (ask: HumanAsk) => {
+      b.scheduleStore.setStatus(b.schedule.id, "active");
+      const runId = b.recordAsk(ask);
+      b.scheduleStore.setStatus(b.schedule.id, "paused");
+      return runId;
+    };
+    const cancel: Reply[] = [];
+    await b.handlers.onComponent!(press(cancelCustomId(pausedAsk(FREE)), OWNER_ID, cancel));
+    expect(cancel).toEqual([
+      { content: `${SCHEDULE_ASK_CANCELLED_ACK}\n${SCHEDULE_ASK_PAUSED_NOTE}`, ephemeral: true },
+    ]);
+    const typed: Reply[] = [];
+    await b.handlers.onComponent!(submit(pausedAsk(FREE), CREATOR_ID, "Use the staging branch.", typed));
+    expect(typed).toEqual([
+      { content: `${SCHEDULE_ASK_ANSWERED_ACK}\n${SCHEDULE_ASK_PAUSED_NOTE}`, ephemeral: true },
+    ]);
+    const pick: Reply[] = [];
+    await b.handlers.onComponent!(press(pickCustomId(pausedAsk(PICK), "lite"), OWNER_ID, pick));
+    expect(pick[0]!.content).toContain("**SQLite**");
+    expect(pick[0]!.content).toEndWith(`\n${SCHEDULE_ASK_PAUSED_NOTE}`);
+    // Active: no such line.
+    b.scheduleStore.setStatus(b.schedule.id, "active");
+    const active: Reply[] = [];
+    await b.handlers.onComponent!(press(cancelCustomId(b.recordAsk(FREE)), OWNER_ID, active));
+    expect(active).toEqual([{ content: SCHEDULE_ASK_CANCELLED_ACK, ephemeral: true }]);
   });
 
   test("the controls never lapse while the ask is open (DISCORD-ASK-5's expiry is for session asks)", async () => {

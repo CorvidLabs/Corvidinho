@@ -7,7 +7,7 @@ artifact: tasks
 
 - [x] Confirm AUTONOMY-6.a is already captured on main (no new `hi` capture); `hi check` passes.
 - [x] Research: where schedule asks are recorded, posted and never answered on main; the reusable ask controls, gates and the #316 `sendDm`.
-- [x] Schema v15 in `src/store/db.ts` (columns, index, legacy asks closed) and the `SCRUB_TARGETS` entry in `src/store/scrub.ts`.
+- [x] Schema v15 in `src/store/db.ts` (columns, index; legacy asks closed, except a still-pending newest one, which blocks and is posted) and the `SCRUB_TARGETS` entry in `src/store/scrub.ts`.
 - [x] `src/scheduler/store.ts`: open / close / skip / wait-note / answered-ask store methods; closed asks never pending.
 - [x] `src/scheduler/service.ts`: tick skip with no catch-up, one wait note, controls + hint, owner DM for channel-less schedules, hand-back of every in-process ask post, the answer in the next run.
 - [x] `src/discord/ask-buttons.ts` (`cancel`), `src/discord/ask-ping.ts` (`hint`), new `src/discord/schedule-ask.ts`, `src/discord/bridge.ts` routing and outbound wiring.

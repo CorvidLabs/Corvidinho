@@ -1169,20 +1169,24 @@ live Discord, no network, no token.
 - `tests/scheduler.ask-block.test.ts` — a clarify ask blocks: the next due
   slots are skipped (`{ started: [], skipped: [id] }`, `next_run_at` on the
   next slot, no run row, `execution_count` unchanged), one wait note (no
-  mention, no controls) and no second one; after Cancel nothing is made up
+  mention; the ask's Answer + Cancel controls) and no second one; after Cancel nothing is made up
   and the next slot runs with no answer. A stuck ask, a spend-cap stop and a
   run that could not start block the same way (never reaching the
   auto-pause); the auto-pause ask blocks and `/schedule resume` leaves it
-  open; a daemon's due run waits too (`ask_skip_at`) and the bridge posts the
+  open; an ask claimed but never posted (a crash between the claim and the
+  post) still gets its controls on the one wait note, and they close it; a daemon's due run waits too (`ask_skip_at`) and the bridge posts the
   ask, then the note. Controls: Choose + Cancel for listed choices, Answer +
   Cancel for free text, their hints, no reply hint; a spend-cap stop Cancel
-  only with "💸 Work is paused for budget." and a note without amounts; an
+  only (its note too) with "💸 Work is paused for budget." and a note
+  without amounts; an
   in-process post that fails is posted by the next tick. No channel: the
-  ask, its controls and the note by DM to the owner, nothing without an
-  owner. The owner's pick reaches the next run unfenced and once; the
+  ask and the note, each with its controls, by DM to the owner, nothing
+  without an owner. The owner's pick reaches the next run unfenced and once; the
   creator's typed answer is scrubbed at rest and fenced; a closed ask cannot
-  close again. A v14 DB migrates to v15 (the eight columns, earlier asks
-  closed `superseded`, not open or pending, the schedule runs, a re-run
+  close again. A v14 DB migrates to v15 (the eight columns; earlier asks
+  that were posted or are moot closed `superseded`, not open or pending, and
+  that schedule runs; a still-pending ask on its schedule's newest run open
+  and blocking, posted with Answer + Cancel, its schedule waiting; a re-run
   changes nothing); `ask_answer` / `ask_options` are re-scrubbed.
 - `tests/discord.schedule-ask.test.ts` — through `startBridge`: the
   `srun_` ask id and the `cancel` kind; Choose shows the creator the choices
@@ -1196,7 +1200,9 @@ live Discord, no network, no token.
   owner's tip, the schedule's channel off the allowlist), a deny-listed and a
   muted creator; a channel-less schedule answered in the owner's DM and
   refused from a guild channel; the creator's injection-like answer closes
-  nothing and pings the owner; a Cancel id on a session ask is refused. With
+  nothing and pings the owner; a Cancel id on a session ask is refused; on
+  a paused schedule the ack of a Cancel, a typed answer or a pick ends with
+  `SCHEDULE_ASK_PAUSED_NOTE`. With
   the bridge's own scheduler: the ask post carries Choose + Cancel, a reply
   to it leaves it open, Cancel closes it; a channel-less schedule DMs its ask
   and controls to the owner.

@@ -82,6 +82,14 @@ export const SCHEDULE_ASK_ANSWERED_ACK = "Got it — the schedule's next run get
 export const SCHEDULE_ASK_CANCELLED_ACK =
   "Cancelled — the schedule's next runs go ahead without an answer.";
 
+/**
+ * Added to the private ack when the schedule is paused (the auto-pause, a
+ * SAFE-13 refusal, or `/schedule pause`): closing its question does not
+ * resume it (REQ-discord-353), so its next run waits for `/schedule resume`.
+ */
+export const SCHEDULE_ASK_PAUSED_NOTE =
+  "The schedule is paused, so its next run waits for `/schedule resume`.";
+
 /** Someone else's press, or a press on an ask that is no longer open. */
 export const SCHEDULE_ASK_NOT_YOURS = "This choice isn’t for you (or it was already answered).";
 
@@ -124,7 +132,10 @@ export function scheduleAskComponents(runId: string, ask: HumanAsk): DiscordActi
 /**
  * The one wait note (AUTONOMY-6.a) a schedule gets when a due run waits on
  * its open question. It pings nobody and names no amount (a spend-cap stop's
- * note reads the same).
+ * note reads the same). The scheduler sends it with the ask's own controls
+ * (`scheduleAskComponents`), so a question whose post was lost (a crash
+ * between its claim and its post, or a deleted message) can still be
+ * answered or cancelled instead of blocking the schedule for good.
  */
 export function formatScheduleWaitNote(title: string): string {
   return (
@@ -274,7 +285,10 @@ export async function handleScheduleAskPress(
       await notYours(interaction);
       return;
     }
-    await interaction.reply({ content: SCHEDULE_ASK_CANCELLED_ACK, ephemeral: true });
+    await interaction.reply({
+      content: withPausedNote(SCHEDULE_ASK_CANCELLED_ACK, schedule),
+      ephemeral: true,
+    });
     return;
   }
 
@@ -318,7 +332,10 @@ export async function handleScheduleAskPress(
     }
     // DISCORD-ASK-8: the private choice buttons go away with the ack.
     await interaction.reply({
-      content: `Got it — **${label}**. The schedule's next run goes ahead with it.`,
+      content: withPausedNote(
+        `Got it — **${label}**. The schedule's next run goes ahead with it.`,
+        schedule,
+      ),
       ephemeral: true,
       update: true,
       components: [],
@@ -337,7 +354,10 @@ export async function handleScheduleAskPress(
       await notYours(interaction);
       return;
     }
-    await interaction.reply({ content: SCHEDULE_ASK_CANCELLED_ACK, ephemeral: true });
+    await interaction.reply({
+      content: withPausedNote(SCHEDULE_ASK_CANCELLED_ACK, schedule),
+      ephemeral: true,
+    });
     return;
   }
   // AUTONOMY-5: a thin answer is no answer — restated privately, still open.
@@ -383,7 +403,15 @@ export async function handleScheduleAskPress(
     await notYours(interaction);
     return;
   }
-  await interaction.reply({ content: SCHEDULE_ASK_ANSWERED_ACK, ephemeral: true });
+  await interaction.reply({
+    content: withPausedNote(SCHEDULE_ASK_ANSWERED_ACK, schedule),
+    ephemeral: true,
+  });
+}
+
+/** An ack, plus SCHEDULE_ASK_PAUSED_NOTE when the schedule is paused. */
+function withPausedNote(ack: string, schedule: Pick<Schedule, "status">): string {
+  return schedule.status === "paused" ? `${ack}\n${SCHEDULE_ASK_PAUSED_NOTE}` : ack;
 }
 
 async function notYours(interaction: Pick<ComponentInteraction, "reply">): Promise<void> {
