@@ -108,6 +108,100 @@
       "requirement_ids": [
         "REQ-plugins-461"
       ]
+    },
+    {
+      "timestamp": 1790787351,
+      "commit": "6433d7781d811ce730df524db5d7ae221c3e2dd2",
+      "contract_digest": "af02ef88ff80b1d79ff54d1786a703808fb8555cffdd2cd85c2065f242deb5e4",
+      "execution_digest": "c4f464c16dc6b39ec28b13dde91526599528a618ae9f6c41963eb89285a43a7d",
+      "workspace_digest": "0fd5c7024709356085334562fde1650251ffe2f7a76d75d92809d55cf35bfc92",
+      "acceptance_input_digest": "842723ca5b73d0588edbd5ddf2f1ce9603e929c2a1247fba253605eb2ef69b7b",
+      "acceptance_manifest": {
+        "schema_version": 1,
+        "entries": [
+          {
+            "path": "plugins/fledge/core.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "5a2a0f8ba6a61447a2a2c03c992f4de6a36dca33edd7aa94bcb4d833fb0ab94c",
+            "entry_digest": "1b473f759d5d8bef6c9c0bef0255f89c2b3567a3e6ec95afe157ce15f9691804",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/context.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "bde5693042c3127e0d04336a6911b85bc5eff9f0b432d42c71ac5544e6d98a73",
+            "entry_digest": "3484832e2b821051fe802d8fc90c872354b6d9f68a08d917a4d9109e3bc3772c",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/plugins.spec.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "e999308603523fc1476959e93cd88e70d99e17217faf6c667d9393e047dcfb30",
+            "entry_digest": "c8baee70f96cc6a18ed2ceaef9b1a0da36e08b110eebcc112c7d680d403abfd2",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/requirements.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "5972f9d70a2e0306d410b9f3be22e6601e7bb786029e5c180207aa7a53963071",
+            "entry_digest": "52e391da91d23b98920cf2505dd8e4f95a78467a785a9d3a4f6bb617344d0213",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/tasks.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "4fbcf0b7f5af3942f58ab90d5f38ebb0cf4fcd9d77112db6011bc147a6c45bcd",
+            "entry_digest": "c304de7eefe1a9a16d20288d10416125717ec528ef4ddc52ecbf82108e53e9ca",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "specs/plugins/testing.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "f2d9e729e67cbb2f4c4f06af37a34cc5c362ab35e042a4fa69a428127cba8281",
+            "entry_digest": "7d8be2acd8a25fa976a211b3e46389ff1cc38933dd2f92edda84963262c5d6f6",
+            "owners": [
+              "plugins"
+            ]
+          },
+          {
+            "path": "tests/fledge.core.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "43767fbb3aee8efd0d2acd248223d8adc2c5f03e317f537fb4c2368545a3cf52",
+            "entry_digest": "5b13632963138056e61e57669eaa928dec42acb2b4824ce18b784a6b9b908a81",
+            "owners": [
+              "@exact:test"
+            ]
+          }
+        ]
+      },
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-461"
+      ]
     }
   ]
 }

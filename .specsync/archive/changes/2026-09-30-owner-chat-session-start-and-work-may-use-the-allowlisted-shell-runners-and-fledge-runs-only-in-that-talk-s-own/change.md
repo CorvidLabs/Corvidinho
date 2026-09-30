@@ -1,6 +1,6 @@
 ---
 id: owner-chat-session-start-and-work-may-use-the-allowlisted-shell-runners-and-fledge-runs-only-in-that-talk-s-own
-state: implementing
+state: archived
 type: feature
 base_commit: 507d97b75b08ebe86c5e0c5ab19322ea82d683cb
 ---
