@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "bun-test-keeps-every-temp-dir-it-makes-under-one-per-run-root-in-tmpdir-and-removes-that-root-when-the-run-ends-instead",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "c890b3e62cd3f7c3c1364f733bb7f5995f6321dd",
+  "contract_digest": "58b8f4e261542d735c60d382dc5bd473477bfd6cf95c0a6b1ae4773154f31688",
+  "execution_digest": "147350c5ad9289714e9b1e8748baf6f6a134eef2d1163741ba20fc1eb1e951e1",
+  "workspace_digest": "74a34e70eb207e253f1089cd15624c012cf5afc7393326ab58985ddc89b26978",
+  "timestamp": 1790746459
+}
