@@ -7,10 +7,11 @@
   "title": "A CLI task run in a git repo works in its own worktree by default; --here runs it in my checkout (SESSION-WORKTREE-1.a)",
   "description": "A CLI task run in a git repo works in its own worktree by default; --here runs it in my checkout (SESSION-WORKTREE-1.a)",
   "kind": "feature",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "9ea40051c5cd6841c201e1210319ee621aa4bde0",
   "created_at": 1790808223,
-  "updated_at": 1790808535,
+  "updated_at": 1790808566,
   "affected_specs": [
     "cli",
     "agent",

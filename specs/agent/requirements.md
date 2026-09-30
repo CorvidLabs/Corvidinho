@@ -325,8 +325,9 @@ cap) is below 2. Otherwise they SHALL be absent from the catalog at every tier
 loop SHALL pass its capability tier and abort signal to `runPlugin`.
 
 The delegation core (`src/autonomous/delegate.ts`) SHALL run a worker as
-`task run --non-interactive --tier <t> --output ndjson --task <text>`
-through `buildCorvidinhoArgv` (so a `.ts` bin runs as `bun --no-env-file`), with
+`task run --here --non-interactive --tier <t> --output ndjson --task <text>`
+through `buildCorvidinhoArgv` (`--here`: the worker works in its lead's cwd
+and never makes a worktree of its own, REQ-cli-122) (so a `.ts` bin runs as `bun --no-env-file`), with
 the `--task` value last and never `--no-verify` (REQ-cli-085): a worker keeps
 the project's prove-before-done gate (AGENT-4) and reports its `verified` /
 `verifySkipped` outcome. The worker bin SHALL be `CORVIDINHO_BIN` when set,
@@ -370,6 +371,7 @@ Acceptance Criteria
 - Worker timeout, lead abort, and a grandchild holding the pipe do not hang the lead; a `.env` in the cwd is not loaded by a `.ts` worker.
 - Worker timeout and lead abort kill the worker's same-group and `setsid` grandchildren, not just the worker.
 - A lead abort after the worker exited, while its background grandchild still holds the pipe, kills that grandchild.
+- Spawn argv has `--here` right after `task run` (REQ-cli-122): a worker never makes a worktree of its own.
 
 ### REQ-agent-118
 
@@ -1579,8 +1581,9 @@ hold, each read again at that call:
 - delegation depth 0 (`delegateDepthFromEnv`): a delegate or council worker
   never gets them;
 - a role session (`CORVIDINHO_ACTING_IS_ADMIN` present): a local CLI run has
-  no per-run talk worktree yet and is refused (the CLI half of SAFE-3.a is
-  later work);
+  no role session and is refused, whether it works in its own worktree
+  (REQ-cli-122) or, with `--here`, in the checkout (the CLI half of SAFE-3.a
+  is later work);
 - `CORVIDINHO_WATCH_SESSION_ID` empty and not a scheduled run
   (`isScheduleRunEnv`), whatever the stamp says;
 - the surface stamp `CORVIDINHO_ACTING_SURFACE` (`ACTING_SURFACE_ENV`,
@@ -1616,6 +1619,7 @@ Acceptance Criteria
 - `tests/agent.safe3a-owner-shell.test.ts`: the owner's chat in its own talk worktree is offered `shell-exec` at code tier and runs it there (so do `session`, `work` and `ask`); `kubectl get pods; touch ran.marker` raises exactly one `mustask` destructive card, a deny runs nothing and an approval runs it once; the main checkout, a team member, WATCH, a schedule, a delegate worker and a local CLI run are not offered it, the call is refused and nothing runs, with one `[operator] SAFE-3.a` line per run over two attempts and none in the summaries; muting the owner after attempt 1 removes it from attempt 2.
 - The prod command in those tests runs a stand-in `kubectl` the test puts first on PATH, which records each call in the directory it ran in; it never runs the host's real `kubectl` (whose run time the test can't bound: ubuntu-latest CI runners ship one, and with an operator's KUBECONFIG it would contact a real cluster). An approval records exactly one call (`get pods`) in the talk worktree and none in the main checkout; a deny records none. A `kubectl` elsewhere on the host PATH, however slow, does not change the test's time.
 - With the base's sources, the gate test cannot load and 8 of 9 end-to-end tests fail; they pass on the branch.
+- A local CLI run's refusal reason is `a local CLI run has no role session (the CLI half of SAFE-3.a is not built yet)` (REQ-cli-122 gives it a worktree of its own, so it no longer says it has none).
 
 ### REQ-agent-741
 

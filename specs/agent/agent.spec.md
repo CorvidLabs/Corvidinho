@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 45
+version: 46
 status: draft
 files:
   - src/agent/types.ts
@@ -1243,3 +1243,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-30 | at-a-spend-cap-the-run-asks-the-owner-on-a-dm-spend-approve-card-with-a-one-time-code-instead-of-refusing-approve-lets: At a spend cap the run asks the owner on a DM spend Approve card with a one-time code instead of refusing; Approve lets only the paused call through at the amount shown and the next call past the cap asks again (SAFE-8, SAFE-8.a, SAFE-15, SAFE-19 money) |
 | 2026-09-30 | the-safe-3-a-approved-prod-command-test-runs-a-stand-in-kubectl-first-on-path-instead-of-the-host-s-real-one-which-took: The SAFE-3.a approved-prod-command test runs a stand-in kubectl first on PATH instead of the host's real one, which took 2.4-3.1 s on CI runners and once passed the 5 s test timeout |
 | 2026-09-30 | if-it-only-plans-or-says-done-without-changing-anything-it-gets-one-nudge-to-the-same-model-a-second-stall-stands-with: If it only plans or says 'Done.' without changing anything, it gets one nudge to the same model; a second stall stands with an operator note (AGENT-17, nudge half) |
+| 2026-09-30 | a-cli-task-run-in-a-git-repo-works-in-its-own-worktree-by-default-here-runs-it-in-my-checkout-session-worktree-1-a: A CLI task run in a git repo works in its own worktree by default; --here runs it in my checkout (SESSION-WORKTREE-1.a) |

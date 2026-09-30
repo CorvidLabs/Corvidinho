@@ -1,6 +1,6 @@
 ---
 id: a-cli-task-run-in-a-git-repo-works-in-its-own-worktree-by-default-here-runs-it-in-my-checkout-session-worktree-1-a
-state: approved
+state: implementing
 type: feature
 base_commit: 9ea40051c5cd6841c201e1210319ee621aa4bde0
 ---
