@@ -1,0 +1,46 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790797576,
+      "digest": "2c21f2f941172f5aa82d8cad1e0927ea8969780ac47bf21ee1b405ecf4ff9193",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "the-safe-3-a-approved-prod-command-test-runs-a-stand-in-kubectl-first-on-path-instead-of-the-host-s-real-one-which-took",
+        "title": "The SAFE-3.a approved-prod-command test runs a stand-in kubectl first on PATH instead of the host's real one, which took 2.4-3.1 s on CI runners and once passed the 5 s test timeout",
+        "description": "The SAFE-3.a approved-prod-command test runs a stand-in kubectl first on PATH instead of the host's real one, which took 2.4-3.1 s on CI runners and once passed the 5 s test timeout",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent"
+        ],
+        "affected_paths": [
+          "tests/agent.safe3a-owner-shell.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "The SAFE-3.a approved test runs its prod command against a stand-in kubectl first on PATH: the stand-in records exactly one call (get pods) in the talk worktree and none in the main checkout, and the deny test records none; with a kubectl on the host PATH that takes 5.5 s (like the CI runner run that timed out) the file passes 20 of 20 under 4 concurrent copies with the approved test at 123-214 ms, where before the fix it failed 20 of 20 at the 5 s timeout; the full suite passes"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "4c2131f856772a955b5d7e8239b325544c6d83d5b60ff2e136adda1df53cbdb3"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790800095,
+      "digest": "1a01b36a929601fb9660b9620107d0114edf2968316e4c32ab78a77ba00b667e",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}
