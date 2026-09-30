@@ -254,8 +254,21 @@ the poller sets (`CORVIDINHO_ACTING_GITHUB_LOGIN` / `_ID`, thread repo
 profile; an undeclared one gets community scope — `memory-recall --project`
 reads the thread repo's project memory, nothing is saved; from GitHub project
 memory is never written and `--person`, private notes and `memory-forget-me`
-are refused. `memory-recall --query` is ranked by relevance, then recency
+are refused — `memory-forget-me` names the path that works there instead: a
+comment that @mentions the watch user and says just "forget me", which the
+WATCH poller records for the owner's card (MEMORY-ACL-6.a / REQ-plugins-1016).
+`memory-recall --query` is ranked by relevance, then recency
 (MEMORY-9).
+Private reads are shown only privately (MEMORY-7.a / REQ-plugins-710): in a
+Discord conversation (a role session with the bridge's reply channel set) the
+text of `memory-recall --category private`, of the owner's `--person` view and
+of `memory-profile` (own or `--person`) comes back only in the result's
+`privateText`; `data` (`{ sentPrivately: true, what }`) and `message` (the
+`SENT_PRIVATELY_MESSAGE` placeholder) — all the tool loop gives the model —
+never hold it. Where there is no private place to show it (a schedule or other
+run with no conversation, a GitHub thread) those reads are refused, including
+`memory-profile` on GitHub; the local CLI (no role session) shows them on the
+operator's terminal as before.
 Memory plugin command descriptions SHALL include concrete argv examples so the
 LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for
 `memory-*` is enriched similarly in `buildOpenAiTools`.
@@ -1009,6 +1022,8 @@ and current rows for plugins host evolution.
 | 2026-09-29 | verify-retry-feedback-never-ends-on-half-a-surrogate-pair-a-non-git-lead-verifies-after-a-delegate-worker-that-returned: Verify retry feedback never ends on half a surrogate pair; a non-git lead verifies after a delegate worker that returned no result frame; github-pr-create attribution check is exact; doctor and the Octokit plugins treat a blank GITHUB_TOKEN / GH_TOKEN as missing |
 | 2026-09-29 | safe-5-safe-6-regression-tests-audit-chain-tamper-on-any-audit-log-column-dangerous-run-error-rows-with-exit-codes-re: SAFE-5/SAFE-6 regression tests: audit chain tamper on any audit_log column, dangerous-run error rows with exit codes, re-scrub of every listed column, and the bridge start and /status audit line from the real DB and key |
 | 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |
+| 2026-09-30 | forget-from-github-and-from-admin-approved-on-the-card-a-declared-person-matched-by-github-numeric-id-who-comments: Forget from GitHub and from /admin, approved on the card: a declared person (matched by GitHub numeric id) who comments 'forget me' to the watch user raises the owner's existing Approve/Deny forget card with no model run and gets a reply on the thread (an undeclared sender is told nothing is kept, no card), the outcome is posted on that thread; the owner can start a forget for any declared person with owner-only, SAFE-5 audited /admin people forget, the same card; either way nothing is forgotten until the owner approves, and Approve also deletes the person's kept WATCH conversations by the GitHub login and numeric id the ask came from, never the owner who started it (MEMORY-ACL-6.a, #101) |
+| 2026-09-29 | private-notes-profile-reads-and-the-owner-s-view-of-someone-s-memory-are-shown-only-privately-in-a-discord-conversation: Private notes, profile reads and the owner's view of someone's memory are shown only privately: in a Discord conversation the memory plugins hand that text past the model (privateText; the model gets a sent-privately placeholder), task run carries it as privateReplies, and the bridge sends it by DM to whoever asked on chat, button pick and Answer form resumes, /session start and /work, with a short sent-privately note in the channel and never the text; refused in schedules and GitHub threads (MEMORY-7.a, #101) |
 | 2026-09-30 | on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a: On GitHub people match only by their numeric user id: a renamed or re-registered login never counts as the owner or a declared person on WATCH (prompt, memory scope, SAFE-13 exemption); [owner] github_id declares the owner's id; /admin people link github stores the looked-up numeric id; doctor warns about logins without an id (IDENTITY-7.a, #36) |
 | 2026-09-30 | safe-2-a-the-file-tools-refuse-fledge-like-fledge-toml-and-specs-so-a-run-cannot-weaken-the-verify-lane-it-is-judged-by: SAFE-2.a: the file tools refuse .fledge/ like fledge.toml and specs/, so a run cannot weaken the verify lane it is judged by |
 | 2026-09-30 | shell-exec-refuses-foot-guns-and-says-why-sed-i-or-edits-downloads-piped-into-a-shell-deletes-outside-the-worktree: Shell-exec refuses foot-guns and says why (sed -i or > edits, downloads piped into a shell, deletes outside the worktree, secret reads), env -C and symlinked cd can't leave the root, and the shell and language runners start without GitHub or git credentials (SAFE-21, SAFE-21.a, SAFE-3) |

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "forget-from-github-and-from-admin-approved-on-the-card-a-declared-person-matched-by-github-numeric-id-who-comments",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "690bd95c61429db3a58916ee12f9232d993bd82d",
+      "contract_digest": "1b2dd6cec3d9dc8f2f25ffb447213b108b994d51ed06c13ec90a82d167d98a80",
+      "execution_digest": "651b516c17451f2a9b2ff088cfb460b99e9e915b1a2738de521dd9086e6b10dc",
+      "workspace_digest": "8be84081ba464bfa97cb8f7b7a540b569650e1563fe24b00aeaa7777598fbef5",
+      "timestamp": 1790740253
+    }
+  ]
+}

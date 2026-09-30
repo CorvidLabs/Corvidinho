@@ -17,6 +17,8 @@ files:
   - src/watch/rate-limit.ts
   - src/watch/index.ts
   - src/watch/memory-inject.ts
+  - src/watch/forget-me.ts
+  - tests/watch.forget-me.test.ts
   - tests/watch.auth-stop.test.ts
   - tests/watch.request-actor.test.ts
   - tests/watch.conversation.test.ts
@@ -49,7 +51,12 @@ login / numeric id and the thread's repo so the memory plugins act for the
 commenter's declared person, matched by the numeric id only (REQ-watch-367;
 undeclared: the repo's project memory, read-only), and before each run the poller searches the commenter's profile
 and the repo's project memory for the comment and prepends what it found
-(`src/watch/memory-inject.ts`).
+(`src/watch/memory-inject.ts`). Forget from GitHub (MEMORY-ACL-6.a,
+REQ-watch-1016): a clear "forget me" to the watch user never starts a run —
+the poller matches the sender by GitHub numeric id, records a declared
+person's ask for the owner's Discord Approve/Deny card, replies once on the
+thread, and posts the outcome there once the owner decides
+(`src/watch/forget-me.ts`).
 
 ## Public API
 
@@ -104,6 +111,15 @@ REQ-watch-067).
 `WATCH_THREAD_HEADER` / `WATCH_THREAD_FOOTER` (`src/watch/poller.ts`) frame
 an issue or PR thread's replayed conversation (REQ-watch-472); the retained
 store and condensing are `src/store/conversation.ts` (REQ-discord-472).
+
+`src/watch/forget-me.ts` (MEMORY-ACL-6.a, REQ-watch-1016):
+`isWatchForgetMeRequest(event, mentionUsername)`,
+`forgetSubjectForGithubId(people, githubId)`, `recordWatchForgetMe(opts)` →
+`WatchForgetMeOutcome` (`requested` / `not_declared` / `unconfirmed` /
+`no_owner` / `error`), `watchForgetMeReplyBody(login, outcome)`,
+`handleWatchForgetMe(opts)`, `watchForgetOutcomeBody(req)`,
+`deliverWatchForgetOutcomes(opts)`, `WATCH_FORGET_AUDIT_SURFACE`
+(`watch:forget-me`).
 
 ## Invariants
 
@@ -167,6 +183,19 @@ the `watchInjectionLine` (owner @mentioned) in its summary comment, or, when
 no summary comment is posted (an event type WATCH does not ack, or no
 successful ack), in one `maybePostWatchInjectionNotice` comment of its own,
 once per event id (REQ-watch-071).
+A clear "forget me" to the watch user (`isWatchForgetMeRequest`: an
+issue_comment / issues / review-comment event, not the watch user's own, that
+@mentions it outside quoted lines and says only that) that passed the
+allowlist gates never starts a run and is taken out before the per-issue
+dedupe; its id is marked processed first; a declared person matched by GitHub
+numeric id only gets a `forget_requests` ask (SAFE-5 `memory-forget-request`
+`started` first, fail closed) and every sender gets one reply on the thread;
+nothing is deleted there; each cycle (after the rate-limit wait) posts the
+outcome of decided GitHub asks on their thread while its repo is allowlisted,
+stopping at the first rate-limited (or unanswered) post — a locked or deleted
+thread holds up nobody else — and giving up a day after the decision; a
+run's retained conversation also keeps the commenter's `github-id:<n>`
+(REQ-watch-1016).
 Every WATCH recognition of the sender — identity block, memory inject, memory
 plugins, SAFE-13 owner exemption — uses `senderId` only, never `sender`; no id
 or an undeclared id is community, never the owner (IDENTITY-7.a,
@@ -188,6 +217,10 @@ gets the thread's earlier events and answers replayed ahead of the new event
 (REQ-watch-472). A non-owner comment whose body claims to be the
 owner and asks for the API keys → no run; one refusal comment @mentioning the
 owner's GitHub login; an `injection-suspected` audit row (REQ-watch-071).
+A declared person's `@watch-user forget me` → no run, one ask for the owner's
+card, one reply "I've asked the owner…"; an undeclared sender's → "not on the
+owner's people list", no ask; after the owner approves or denies, the next
+poll posts the outcome on that thread once (REQ-watch-1016).
 A comment from the owner's login re-registered by someone else (another
 numeric id) → `declared_person: none`, no owner memory, and its injection is
 refused like anyone's; the owner's own id → `role: owner` (REQ-watch-367).
@@ -204,7 +237,7 @@ record (REQ-watch-472).
 
 ## Dependencies
 
-src/allowlist/github.ts, @octokit/rest (live), agent task --no-verify,
+src/allowlist/github.ts, @octokit/rest (live), agent `task run` (verify gate always on, AGENT-14),
 src/store (shared SQLite DB, session TTL, SAFE-6 scrub).
 
 ## Change Log
@@ -236,4 +269,6 @@ WATCH poll-first thin (#19, 2026-09-26, corvid-agent): mention/review_request/is
 | 2026-09-29 | watch-assignment-and-review-request-events-also-pass-the-user-allowlist-on-the-user-who-assigned-or-requested-the-actor: WATCH assignment and review-request events also pass the user allowlist on the user who assigned or requested (the actor), not only the thread author; a missing, non-allowlisted or deny-listed actor is refused quietly with no session, ack or run (ALLOW-1/2/5) |
 | 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |
 | 2026-09-29 | condense-long-chats-at-about-80-of-the-model-s-window-with-the-task-and-latest-instruction-pinned-resume-from-the: Condense long chats at about 80% of the model's window with the task and latest instruction pinned, resume from the summary after the soft TTL, and keep each thread's summary 30 days (SESSION-5/6, SESSION-3.a, AGENT-6.a; #72) |
+| 2026-09-30 | forget-from-github-and-from-admin-approved-on-the-card-a-declared-person-matched-by-github-numeric-id-who-comments: Forget from GitHub and from /admin, approved on the card: a declared person (matched by GitHub numeric id) who comments 'forget me' to the watch user raises the owner's existing Approve/Deny forget card with no model run and gets a reply on the thread (an undeclared sender is told nothing is kept, no card), the outcome is posted on that thread; the owner can start a forget for any declared person with owner-only, SAFE-5 audited /admin people forget, the same card; either way nothing is forgotten until the owner approves, and Approve also deletes the person's kept WATCH conversations by the GitHub login and numeric id the ask came from, never the owner who started it (MEMORY-ACL-6.a, #101) |
+| 2026-09-30 | verification-can-t-be-skipped-and-the-real-diff-since-the-talk-started-decides-what-changed-agent-14-agent-15-agent-15: Verification can't be skipped and the real diff since the talk started decides what changed (AGENT-14, AGENT-15, AGENT-15.a): task run refuses --no-verify, [corvidinho] verify_before_complete is ignored, filesChanged comes from the real git diff alone (a claimed path git does not show still runs the lane), and a talk worktree whose last run did not end verified verifies from the talk branch's merge-base |
 | 2026-09-30 | on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a: On GitHub people match only by their numeric user id: a renamed or re-registered login never counts as the owner or a declared person on WATCH (prompt, memory scope, SAFE-13 exemption); [owner] github_id declares the owner's id; /admin people link github stores the looked-up numeric id; doctor warns about logins without an id (IDENTITY-7.a, #36) |

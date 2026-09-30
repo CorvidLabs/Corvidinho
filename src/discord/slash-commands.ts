@@ -5,7 +5,7 @@
  * Steal shape from corvid-agent session/status/agents/work + mute/unmute ADMIN
  * + /schedule list|create|pause|resume|delete (single-project; skip templates)
  * + /admin users|channels|config (corvid-agent admin-commands.ts, trimmed to
- * the captured ADMIN-1..3 surface) + /admin people (ADMIN-3.a, #36; role ADMIN-3.b, #65). Channel options use STRING + autocomplete
+ * the captured ADMIN-1..3 surface) + /admin people (ADMIN-3.a, #36; role ADMIN-3.b, #65; forget MEMORY-ACL-6.a, #101). Channel options use STRING + autocomplete
  * (searchable names/ids) instead of the limited native CHANNEL picker.
  */
 
@@ -50,7 +50,7 @@ export type SlashCommandBody = {
  * (DISCORD-SCHEDULE), /announce channel|show (DISCORD-ANNOUNCE),
  * /admin users add | channels add|remove | config show (ADMIN-1..3)
  * | people list|add|link|unlink|remove (ADMIN-3.a / IDENTITY-13) | people role
- * (ADMIN-3.b / IDENTITY-8).
+ * (ADMIN-3.b / IDENTITY-8) | people forget (MEMORY-ACL-6.a).
  */
 export function buildSlashCommandBodies(): SlashCommandBody[] {
   return [
@@ -460,6 +460,19 @@ export function buildSlashCommandBodies(): SlashCommandBody[] {
                     { name: "team", value: "team" },
                     { name: "community", value: "community" },
                   ],
+                },
+              ],
+            },
+            {
+              type: OPT_SUB_COMMAND,
+              name: "forget",
+              description: "Start forgetting a declared person; you approve it on the DM card (owner only)",
+              options: [
+                {
+                  type: OPT_STRING,
+                  name: "person",
+                  description: "Person id, e.g. tofu",
+                  required: true,
                 },
               ],
             },

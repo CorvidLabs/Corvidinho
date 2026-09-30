@@ -3,8 +3,9 @@
  * to the model, and what happens when they look like an injection attempt.
  *
  * - SAFE-12: a non-owner's message (chat, `/session start` topic, `/work`
- *   description, an answer typed in an ask's private Answer form) goes to
- *   the model inside an untrusted-data fence
+ *   description, an answer typed in an ask's private Answer form, and the
+ *   label of a Choose option they picked, SAFE-12.a) goes to the model
+ *   inside an untrusted-data fence
  *   (`fenceUntrustedData`) that says it is their request but data, not
  *   instructions; only their role (resolved again in the tool layer on every
  *   call) decides what may run. The owner's own words are the principal's
@@ -45,15 +46,17 @@ export const INJECTION_NO_OWNER_WARNING =
 /**
  * Where the speaker's words came from (fence source; no module names).
  * `ask-answer` is an answer typed in an ask's private Answer form
- * (DISCORD-ASK-4.a). `schedule-prompt` is a schedule's name / description /
- * prompt, written by its creator at `/schedule create` and replayed on every
- * tick.
+ * (DISCORD-ASK-4.a); `ask-pick` is the label of the Choose option they
+ * picked (DISCORD-ASK-3, SAFE-12.a). `schedule-prompt` is a schedule's
+ * name / description / prompt, written by its creator at `/schedule create`
+ * and replayed on every tick.
  */
 export type SpeakerSurface =
   | "chat-message"
   | "session-topic"
   | "work-task"
   | "ask-answer"
+  | "ask-pick"
   | "schedule-prompt";
 
 /** Header line of a non-owner speaker's fenced message (SAFE-12). */

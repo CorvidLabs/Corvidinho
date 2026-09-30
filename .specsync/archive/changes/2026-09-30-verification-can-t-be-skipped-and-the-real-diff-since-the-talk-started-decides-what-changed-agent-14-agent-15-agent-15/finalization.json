@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "verification-can-t-be-skipped-and-the-real-diff-since-the-talk-started-decides-what-changed-agent-14-agent-15-agent-15",
+  "implementation_commit": "93dedcbd0d247647db8c3da29653790ef7351f70",
+  "implementation_tree": "c612b050d82174bc28315642cf716671f9e12ccd",
+  "contract_digest": "0734cf4ed993685becf38d94f1758da8a1c7787fefb6c31e3bc00564d34a49f6",
+  "workspace_digest": "a3f61d5e96ff009551a1364a00867200077486ee85b6b8684e9d7bb5ae7f6194",
+  "closing_digest": "49b1b3acd55f2ff59537ea6c2471e98a93daad795008483e306432bb2af2504f",
+  "review_digest": "13fe7c0526742775c7409f63d8167fa9f3cbbc8809862db09f82852a0c2757df",
+  "finalization_digest": "f374c1e99c067336948cf99b7c75e3845e9e90daacdd66511ff6cf92f7048f36",
+  "timestamp": 1790735920
+}

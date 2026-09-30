@@ -38,7 +38,6 @@ describe("runTask prove-before-done", () => {
     };
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: true,
       maxRetries: 3,
       verifyRunner: verify,
       onEvent: c.onEvent,
@@ -66,7 +65,6 @@ describe("runTask prove-before-done", () => {
     };
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: true,
       maxRetries: 3,
       verifyRunner: verify,
       onEvent: c.onEvent,
@@ -98,7 +96,6 @@ describe("runTask prove-before-done", () => {
     const feedbacks: (string | undefined)[] = [];
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: true,
       maxRetries: 3,
       verifyRunner: async () => {
         verifyN += 1;
@@ -128,7 +125,6 @@ describe("runTask prove-before-done", () => {
     const feedbacks: (string | undefined)[] = [];
     await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: true,
       maxRetries: 1,
       verifyRunner: async () => {
         verifyN += 1;
@@ -150,7 +146,6 @@ describe("runTask prove-before-done", () => {
     });
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: true,
       maxRetries: 1,
       verifyRunner: verify,
       onEvent: c.onEvent,
@@ -167,37 +162,38 @@ describe("runTask prove-before-done", () => {
     expect(c.states().at(-1)).toBe("failed");
   });
 
-  test("--no-verify / flag off skips gate", async () => {
+  test("a run that changed files is verified: there is no skip (AGENT-14, REQ-agent-003)", async () => {
     let called = 0;
     const verify: VerifyRunner = async () => {
       called += 1;
-      return { success: false, output: "should not run" };
+      return { success: false, output: "lint broke" };
     };
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: false,
+      maxRetries: 0,
       verifyRunner: verify,
       execute: async () => ({
         summary: "chat reply",
         filesChanged: ["anything.ts"],
       }),
     });
-    expect(called).toBe(0);
-    expect(result.verifySkipped).toBe(true);
+    expect(called).toBe(1);
+    expect(result.verifySkipped).toBe(false);
     expect(result.verified).toBe(false);
-    expect(result.state).toBe("done");
+    expect(result.state).toBe("failed");
   });
 
-  test("empty filesChanged skips verify (Merlin want_verify)", async () => {
+  test("a run that changed nothing ends done with one 'no changes, nothing to verify' note (REQ-agent-003)", async () => {
     let called = 0;
+    const c = collect();
     const verify: VerifyRunner = async () => {
       called += 1;
       return { success: true, output: "ok" };
     };
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: true,
       verifyRunner: verify,
+      onEvent: c.onEvent,
       execute: async () => ({
         summary: "no edits",
         filesChanged: [],
@@ -206,6 +202,8 @@ describe("runTask prove-before-done", () => {
     expect(called).toBe(0);
     expect(result.verifySkipped).toBe(true);
     expect(result.state).toBe("done");
+    const texts = c.events.filter((e) => e.type === "Text").map((e) => (e as { text: string }).text);
+    expect(texts.filter((t) => t === "Verify gate: no changes, nothing to verify.")).toHaveLength(1);
   });
 
   test("failed verify then a retry that changes no files is never done (AGENT-4, REQ-agent-242)", async () => {
@@ -217,7 +215,6 @@ describe("runTask prove-before-done", () => {
     };
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: true,
       maxRetries: 2,
       verifyRunner: verify,
       onEvent: c.onEvent,
@@ -246,7 +243,6 @@ describe("runTask prove-before-done", () => {
     };
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: true,
       maxRetries: 3,
       verifyRunner: verify,
       execute: async ({ attempt }) => ({
@@ -264,7 +260,6 @@ describe("runTask prove-before-done", () => {
     let verifyN = 0;
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: true,
       maxRetries: 3,
       verifyRunner: async () => {
         verifyN += 1;
@@ -292,7 +287,6 @@ describe("runTask prove-before-done", () => {
     let verifyN = 0;
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: true,
       maxRetries: 3,
       verifyRunner: async () => {
         verifyN += 1;
@@ -319,7 +313,6 @@ describe("runTask prove-before-done", () => {
     const c = collect();
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: true,
       maxRetries: 3,
       verifyRunner: async () => ({ success: false, output: "app.ts:3 syntax error" }),
       onEvent: c.onEvent,
@@ -347,10 +340,10 @@ describe("runTask prove-before-done", () => {
     ]);
   });
 
-  test("execute error with the verify gate off is still failed (REQ-agent-242)", async () => {
+  test("execute error with no files changed is still failed (REQ-agent-242)", async () => {
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: false,
+      verifyRunner: async () => ({ success: true, output: "ok" }),
       execute: async () => ({
         summary: "LLM request failed: network down",
         filesChanged: [],
@@ -366,7 +359,6 @@ describe("runTask prove-before-done", () => {
     ac.abort();
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: true,
       signal: ac.signal,
       verifyRunner: async () => ({ success: true, output: "ok" }),
       execute: async () => ({
@@ -386,7 +378,6 @@ describe("runTask prove-before-done", () => {
     let executeCalls = 0;
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: true,
       maxRetries: 0,
       signal: ac.signal,
       onEvent: c.onEvent,
@@ -426,7 +417,9 @@ describe("runTask SpecSync Planning briefing", () => {
     const result = await runTask({
       cwd: root,
       task: "Improve the agent prove-before-done loop",
-      verifyBeforeComplete: false,
+      // Never the repo's own snapshot or lane from inside its test run.
+      workspaceDiff: async () => ({ changed: async () => [] }),
+      verifyRunner: async () => ({ success: true, output: "ok" }),
       onEvent: c.onEvent,
       execute: async () => ({
         summary: "noop",
@@ -496,7 +489,6 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
     const c = collect();
     const result = await runTask({
       cwd: dir,
-      verifyBeforeComplete: true,
       maxRetries: 1,
       verifyRunner: v.runner,
       onEvent: c.onEvent,
@@ -522,7 +514,6 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
     const v = counter([true]);
     const result = await runTask({
       cwd: dir,
-      verifyBeforeComplete: true,
       maxRetries: 1,
       verifyRunner: v.runner,
       execute: async () => {
@@ -542,7 +533,6 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
     const v = counter([true]);
     const result = await runTask({
       cwd: dir,
-      verifyBeforeComplete: true,
       verifyRunner: v.runner,
       execute: async () => {
         mkdirSync(join(dir, "src"));
@@ -564,7 +554,6 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
     const v = counter([true]);
     const result = await runTask({
       cwd: dir,
-      verifyBeforeComplete: true,
       verifyRunner: v.runner,
       // Same length, same ` M` status: only the content differs.
       execute: async () => {
@@ -582,7 +571,6 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
     const v = counter([true]);
     const result = await runTask({
       cwd: dir,
-      verifyBeforeComplete: true,
       verifyRunner: v.runner,
       execute: async () => {
         writeFileSync(join(dir, "app.ts"), "export const x = ;\n");
@@ -601,7 +589,6 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
     const v = counter([true]);
     const result = await runTask({
       cwd: dir,
-      verifyBeforeComplete: true,
       verifyRunner: v.runner,
       execute: async () => {
         g(dir, "commit", "-q", "-m", "first");
@@ -618,7 +605,6 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
     const feedbacks: (string | undefined)[] = [];
     const result = await runTask({
       cwd: dir,
-      verifyBeforeComplete: true,
       maxRetries: 2,
       verifyRunner: v.runner,
       execute: async ({ attempt, verifyFeedback }) => {
@@ -644,7 +630,6 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
     const v = counter([true]);
     const result = await runTask({
       cwd: sub,
-      verifyBeforeComplete: true,
       verifyRunner: v.runner,
       execute: async () => {
         writeFileSync(join(sub, "lib.ts"), "export const y = ;\n");
@@ -664,7 +649,6 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
     const v = counter([true]);
     const result = await runTask({
       cwd: dir,
-      verifyBeforeComplete: true,
       verifyRunner: v.runner,
       execute: async () => ({ summary: "just answered", filesChanged: [] }),
     });
@@ -680,7 +664,6 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
     const v = counter([true]);
     const result = await runTask({
       cwd: dir,
-      verifyBeforeComplete: true,
       verifyRunner: v.runner,
       execute: async () => {
         mkdirSync(join(dir, "dist"));
@@ -697,7 +680,6 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
     const v = counter([true]);
     const result = await runTask({
       cwd: dir,
-      verifyBeforeComplete: true,
       verifyRunner: v.runner,
       execute: async () => {
         writeFileSync(join(dir, "app.ts"), "export const x = ;\n");
@@ -713,7 +695,6 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
     const c = collect();
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: true,
       verifyRunner: v.runner,
       onEvent: c.onEvent,
       workspaceDiff: async () => ({ changed: async () => null }),
@@ -736,22 +717,21 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
     const c = collect();
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: true,
       maxRetries: 1,
       verifyRunner: v.runner,
       onEvent: c.onEvent,
-      workspaceDiff: async () => ({ changed: async () => huge }),
+      workspaceDiff: async () => ({ changed: async () => ["package.json", ...huge] }),
       execute: async () => ({ summary: "installed", filesChanged: ["package.json"] }),
     });
     expect(v.calls.length).toBe(2);
     expect(result.state).toBe("failed");
-    expect(result.filesChanged.length).toBe(1 + WORKSPACE_DIFF_MAX_FILES);
+    expect(result.filesChanged.length).toBe(WORKSPACE_DIFF_MAX_FILES);
     expect(result.filesChanged.slice(0, 2)).toEqual(["package.json", huge[0]!]);
     const texts = c.events.filter((e) => e.type === "Text").map((e) => (e as { text: string }).text);
     expect(
       texts.some((t) =>
         t.includes(`30000 changed path(s) no tool reported`) &&
-        t.includes(`${WORKSPACE_DIFF_MAX_FILES} of them listed in filesChanged`),
+        t.includes(`${WORKSPACE_DIFF_MAX_FILES} of the 30001 changed path(s) listed in filesChanged`),
       ),
     ).toBe(true);
     // A bridge reads the child's stdout in chunks: the result line must parse.
@@ -777,12 +757,11 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
     expect(await tracker!.changed()).toEqual(["app.ts"]);
   });
 
-  test("with the gate off (--no-verify) no snapshot is taken and verify is skipped", async () => {
+  test("the snapshot is always taken and a real change always verifies (AGENT-14)", async () => {
     let starts = 0;
     const v = counter([true]);
     const result = await runTask({
       cwd: "/tmp",
-      verifyBeforeComplete: false,
       verifyRunner: v.runner,
       workspaceDiff: async () => {
         starts += 1;
@@ -790,8 +769,10 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
       },
       execute: async () => ({ summary: "wrote", filesChanged: [] }),
     });
-    expect(starts).toBe(0);
-    expect(v.calls.length).toBe(0);
-    expect(result.verifySkipped).toBe(true);
+    expect(starts).toBe(1);
+    expect(v.calls.length).toBe(1);
+    expect(result.verified).toBe(true);
+    expect(result.verifySkipped).toBe(false);
+    expect(result.filesChanged).toEqual(["app.ts"]);
   });
 });

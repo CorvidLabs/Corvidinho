@@ -333,7 +333,10 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   and restates no Choose button; after the newest ask timed out a thin reply
   restates the earlier live ask; a substantive reply after expiry runs the
   agent and clears the ask; `cancel` after expiry keeps its short ack and
-  runs nothing (no live Discord).
+  runs nothing (no live Discord). No owner is configured there, so the
+  presser is community and the pressed label reaches the run inside the
+  untrusted-data fence (`source=ask-pick`, SAFE-12.a); that assertion fails
+  on the base bridge (label unfenced).
 
 ## Discord user lookup (REQ-discord-312 / REQ-plugins-312)
 `tests/discord.user-lookup.test.ts` covers guild gate, dry-run, mocked REST.
@@ -793,6 +796,30 @@ one pending ask per subject, re-running is a no-op.
 `tests/scheduler.ask-outbox.test.ts` expect `SCHEMA_VERSION` 13 (v13, kept
 conversations, follows v12; REQ-discord-472).
 
+## Forget from GitHub and /admin people forget (REQ-discord-1016, MEMORY-ACL-6.a)
+
+- `tests/discord.admin-forget.test.ts` — `/admin people forget` is registered
+  with one required `person` string; through `startBridge` the owner's
+  `/admin people forget person:Tofu` writes `admin-people-forget` started /
+  ok, one pending ask (`admin:<owner>` → `person:tofu`), replies with the
+  request id and DMs the owner the card ("started by you with /admin people
+  forget", no content) at once; a second run reuses the ask; Approve deletes
+  Tofu's memory and session turn but never the owner's own note or turn, DMs
+  nobody else, adds no "told" line and marks the ask told; an undeclared id
+  and a Discord id are refused (`denied`), no person gives the usage, a
+  non-owner gets `not authorized` (dispatch floor; called directly, the
+  handler's re-check with a `denied` row), no DB and a keyed chain without the
+  key refuse with nothing asked; `forgetTargets` for a GitHub ask adds its
+  login and numeric id and never takes a `github:` / `admin:` asker for a
+  Discord id.
+- `tests/watch.forget-me.test.ts` (watch spec) drives the GitHub ask through
+  the same bridge card: the card names `@login (GitHub account id N) in
+  owner/repo#n`, the bridge never DMs a GitHub asker and marks the card "They
+  will be told on their GitHub thread.", and Approve deletes kept WATCH
+  threads by login and by `github-id:<n>`.
+- `tests/discord.admin-slash.test.ts`: the `people` group ends with `role`,
+  `forget`.
+
 ## Untrusted text on Discord (REQ-discord-071, SAFE-11/12/13)
 
 `tests/safe.injection.test.ts` — the acting-user block for a stranger named
@@ -832,6 +859,27 @@ form as team too (acting role team, fence header `role: team`). The first
 three and the role-id test fail on the base bridge (a run starts / the answer
 is unfenced / the form resolved the presser as community); the owner test
 passes on both (unchanged behaviour).
+› "SAFE-12.a on a Choose pick" (REQ-discord-548 / REQ-discord-071, through
+`startBridge` with a memory DB and a first run that stops on a Choose ask):
+a community user's and a declared team member's pick resumes the session
+with the label inside the untrusted-data fence after the button
+prior-question block (`role: community` / `role: team`, `source=ask-pick`),
+`humanText` and the thread turn the plain label, the option buttons cleared
+at once with "Got it — **<label>**" (DISCORD-ASK-8), the ask claimed
+(DISCORD-ASK-3) and no audit row (fenced, not scanned); a label that repeats
+a community user's injection-like words stays fenced when they pick it; a
+declared team member allowlisted only by a Discord role picks as team (role
+ids resolved at press time); the owner's pick of an injection-like label runs
+unfenced (`Human answer:\n<label>`), with no refusal and no row; a community
+user's, a team member's and the owner's press on an option id the ask does
+not have gets only the ephemeral `ASK_CHOICE_EXPIRED` (no run, nothing
+posted, the ask pending, nothing in the thread) and a real pick afterwards
+resumes with the label, no prompt ever holding the forged id; a pick press
+on a free-text ask is treated the same and the Answer form still answers it.
+All but the owner test fail on the base bridge (label unfenced / the forged
+id resumes the run raw); the owner test passes on both, and the owner's
+resumed prompt was compared byte for byte between the base and the branch
+bridge (identical).
 
 Ranked recall and the inject search (MEMORY-9, #67 / REQ-discord-067):
 `tests/memory.recall-github.test.ts` › "MEMORY-9 ranked recall" — a question
@@ -851,6 +899,53 @@ differs is nobody; the undeclared-under-`[people]` owner, by `[owner]
 github_id`, on their Discord id) and
 `projectScopeForRepo`.
 
+## Private replies by DM only (REQ-discord-710, MEMORY-7.a)
+
+`tests/memory.private-view.test.ts` — `privateRepliesFromUnknown` (strings
+only, via `boundPrivateReplies`: at most 5, the last saying how many more were
+not sent, each scrubbed then cut to 6000 with a marker — a straddling token
+redacted, no lone surrogate — and a bounded list unchanged), `deliverPrivateReplies`
+(DM parts ≤1900 even after the gateway's defang of a text full of `@everyone`,
+scrubbed, header first; "failed" with no DM path, a null or a throwing send)
+and `withPrivateNote`; through the bridge a chat reply, a button pick and an
+Answer form submit DM the text to whoever asked while the channel gets only
+the "sent privately" note (the "couldn't DM it" note when the DM fails) and
+the session thread never holds it; `/session start` and `/work` do the same
+through `SlashContext.sendDm`.
+## Update post in the persona's voice (REQ-discord-025 / REQ-discord-024 modified, PERSONA-1.a, DISCORD-ANNOUNCE-4)
+
+- `tests/discord.update-post.test.ts` › "the bridge's update post on
+  ClientReady": `startBridge` with a null gateway capturing replies, an
+  in-memory DB with the announcements channel set and `version` 0.0.34 (a
+  version with a long section in the real CHANGELOG.md). After `onReady`:
+  exactly one reply, to the announcements channel, no pinged users, equal to
+  `formatBridgeLiveAnnouncement("0.0.34")`; under 400 characters; carries
+  `**v0.0.34**`, the `<…/releases/tag/v0.0.34>` link and the persona's 🐦‍⬛;
+  no `bridge live` header, no bullet or heading line, no newline, no
+  "changelog", none of the version's CHANGELOG bullets; `scrubSecrets` leaves
+  it unchanged. With no announcements channel nothing is posted.
+- Same file › "formatBridgeLiveAnnouncement": the exact template for 0.0.34;
+  a leading `v` and spaces dropped; the default is the package version; the
+  longest plain version (six-digit parts) stays under 400 characters with the
+  full link; an empty or blank version, a pre-release, `@everyone`, `@here`,
+  a runtime-built fake key, a newline bullet, markdown link text and a 20-digit
+  part all give the fixed Releases-page note, never echoing the input;
+  `postAnnouncement` sends the note once, as is, to the announcements channel.
+- `tests/discord.announce.test.ts`: default-deny and announce-channel-only
+  posting unchanged; its CHANGELOG-bullet tests were removed with the bullets.
+- Fails on the base sources (main 5aaf7f0 `src/discord/announce.ts`): 5 of 7
+  (the bridge posted an 838-character `bridge live **v0.0.34**` + bullets
+  note); passes after.
+## One verify gate; talk worktrees start verified (REQ-discord-085)
+
+- `tests/agent.verify-gate.test.ts`: a talk worktree made by
+  `ensureTalkWorkspace` holds the verified marker (`talkWorktreeGitDir`), its
+  first run that changes nothing has nothing to verify, and after a blocked
+  run with an edit the next run there verifies it (REQ-agent-015).
+- `tests/work.pr.test.ts`: the `/work` PR path finds the base and merge-base
+  through the shared `resolveBase` (`src/worktree/base.ts`).
+- `tests/spawn.argv.test.ts`, `tests/agent.ndjson-spawn.test.ts`: Discord
+  spawn argv has no `--no-verify` (REQ-discord-014 / 073).
 ## GitHub by numeric user id only (REQ-discord-367, IDENTITY-7.a)
 
 - `tests/identity.github-numeric-id.test.ts` — `resolvePerson` /

@@ -12,11 +12,12 @@ import type { DiscordEmbedPayload, ThinkingOutbound } from "./thinking-status.ts
 import type { RateLimitConfig, RateLimitState } from "./permissions.ts";
 import type { WorkStore } from "./work-store.ts";
 import type { ScheduleStore } from "../scheduler/store.ts";
-import type { MemoryStore } from "../memory/index.ts";
+import type { ForgetRequest, MemoryStore, MemorySubject } from "../memory/index.ts";
 import type { AnnounceStore } from "./announce-store.ts";
 import type { WorkPrRunner } from "../work/pr.ts";
 import type { SpendAlertOutbox } from "../agent/spend-outbox.ts";
 import type { ChannelPost } from "./spend-post.ts";
+import type { SendPrivateDm } from "./private-reply.ts";
 import type { GithubUserLookup } from "../identity/github-user.ts";
 
 export type SlashOptionValue = string | number | boolean | null;
@@ -81,11 +82,28 @@ export type SlashContext = {
    */
   post?: ChannelPost;
   /**
+   * MEMORY-7.a (REQ-discord-710) — direct message to the invoker (the gateway
+   * `sendDm`): `/session start` and `/work` send a run's private replies
+   * here, never to the channel. Unset ⇒ they are not shown anywhere.
+   */
+  sendDm?: SendPrivateDm;
+  /**
    * SAFE-5 — append one audit row (bridge wires the shared DB). Throws when
    * the trail is unavailable; /admin mutations then fail closed, as they do
    * when this is unset (no DB).
    */
   recordAudit?: (entry: AuditEntryInput) => { seq: number };
+  /**
+   * MEMORY-ACL-6.a — record a forget request in the shared DB (one open ask
+   * per person; a pending one is returned). Unset (no DB) ⇒ `/admin people
+   * forget` refuses.
+   */
+  requestForget?: (input: {
+    subject: MemorySubject;
+    requesterUserId: string;
+  }) => { request: ForgetRequest; created: boolean };
+  /** MEMORY-ACL-6.a — one forget-card delivery pass now (DMs the owner the card). */
+  deliverForgetCards?: () => Promise<unknown>;
   allowlist: AllowlistConfig;
   agent: AgentClient;
   version: string;

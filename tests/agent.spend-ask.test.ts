@@ -250,7 +250,6 @@ describe("createTaskExecute + runTask at the cap (AUTONOMY-1/2 ask path)", () =>
           loadPlugins: false,
           projectInstructions: false,
         }),
-        verifyBeforeComplete: true,
         onEvent: (e) => events.push(e),
         verifyRunner: async () => {
           verifyRan = true;
@@ -543,9 +542,10 @@ describe("task run CLI at 80% and at the cap (localhost mock LLM)", () => {
     });
     try {
       const proc = Bun.spawn(
-        ["bun", "--no-env-file", "src/cli.ts", "task", "run", "--no-verify", "--task", "hi", "--output", output],
+        ["bun", "--no-env-file", join(root, "src/cli.ts"), "task", "run", "--task", "hi", "--output", output],
         {
-          cwd: root,
+          // A scratch non-git project: never the repo's own snapshot or lane.
+          cwd: dir,
           stdout: "pipe",
           stderr: "pipe",
           env: {

@@ -276,3 +276,21 @@ resolver / transport seams for `web-fetch`; no token, no network):
   pass on both. All 17 pass on the branch. `tests/web.fetch.test.ts`,
   `tests/github.public.community.test.ts`, `tests/github.public-docs.test.ts`
   and `tests/roles.team.test.ts` pass unchanged.
+## memory-forget-me on GitHub (REQ-plugins-1016, MEMORY-ACL-6.a)
+
+- `tests/watch.forget-me.test.ts` › "in a WATCH run the model's
+  memory-forget-me points at the comment path" — with the GitHub commenter
+  env, the tool fails naming `says just "forget me"` and MEMORY-ACL-6.a, and no
+  forget request is recorded.
+## Private reads shown only privately (REQ-plugins-710, MEMORY-7.a)
+
+`tests/memory.private-view.test.ts` — in a Discord-conversation env the
+person's own private notes and profile and the owner's `--person` recall,
+profile and private notes return their text only in `privateText`, with
+`data` `{ sentPrivately: true, what }` and the placeholder `message`; the
+person's own everyday recall still returns rows; a schedule refuses the
+owner's `--person` view and profile and a person's own profile, a GitHub
+thread refuses `memory-profile` (no content in any refusal); the local CLI
+shows the profile inline. `tests/memory.profiles.test.ts` and
+`tests/memory.recall-github.test.ts` read `privateText` where the model used
+to get the rows.

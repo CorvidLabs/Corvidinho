@@ -134,14 +134,23 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
 - Owner-only today: `/mute`, `/unmute`, `/admin …`, `/announce channel`, `/schedule create|pause|resume|delete`,
   memory forget/override (from the owner's chat once `CORVIDINHO_ALLOWLIST` names them, E.3, or
   `corvidinho plugins run` with the acting env set; see [`discord.md`](discord.md) Memory),
-  reading someone else's memory (`memory-recall` / `memory-profile --person`, MEMORY-7),
+  reading someone else's memory (`memory-recall` / `memory-profile --person`, MEMORY-7; the owner
+  gets it by direct message, never in the channel, MEMORY-7.a),
   mutating tools in a chat session (E.6),
   and the `/work` draft-PR step (E.3).
-- Forget requests (MEMORY-ACL-6): anyone may ask the bot to forget them; the bridge sends the
+- Forget requests (MEMORY-ACL-6): anyone may ask the bot to forget them — on Discord, or on GitHub
+  with a "forget me" comment to the watch user when they are a declared person matched by their
+  GitHub account id (MEMORY-ACL-6.a; the watch process must share the bridge's data dir) — and the
+  owner can start one for any declared person with `/admin people forget`; the bridge sends the
   owner a **direct message** with Approve / Deny buttons (no answer within 24 h is a no). The bot
   can DM the owner only when they share a server with it and accept DMs from its members (the
   server's Privacy Settings); until the card goes out the ask stays pending and then lapses as a
   no. No intent or portal toggle is needed. See [`discord.md`](discord.md) Memory.
+- Private reads by DM (MEMORY-7.a): private notes, profile reads (`memory-profile`) and the owner's
+  view of someone's memory are sent to whoever asked by **direct message**; the channel gets only a
+  short "sent privately" note. Same DM rule as above: the person must share a server with the bot
+  and accept DMs from its members, or the note says it could not be sent (it is never posted in
+  the channel instead).
 - When a run asks for a human, a clarify question (AUTONOMY-1/4) pings the requester (the message
   author, or the schedule creator for a scheduled run); a stuck run (AUTONOMY-2) and a spend-cap
   stop (SAFE-8) ping the owner. With no owner a stuck or spend-cap question still posts and the
@@ -373,7 +382,7 @@ Community sessions (every non-owner who is not team, plus all WATCH and schedule
   surface allows) and `CORVIDINHO_ACTING_WORK_TASK` (`1` for `/work`); both are internal and
   always overwritten, and the tool layer never trusts them to raise a role.
 
-### E.6.a Untrusted text and injection attempts (SAFE-11/12/13)
+### E.6.a Untrusted text and injection attempts (SAFE-11/12/13, SAFE-12.a)
 
 Nothing to configure; it is always on (details in [`discord.md`](discord.md) "Untrusted
 text and injection attempts").
@@ -381,9 +390,10 @@ text and injection attempts").
 - Discord names (the speaker's, and `discord-user-lookup` results) are cleaned before the model
   sees them, and a name that imitates the owner's or a declared person's is flagged as someone
   else. Identity and role come only from declared ids.
-- A non-owner's message, `/session start` topic, `/work` description and answer typed in an
-  ask's private Answer form, WATCH titles and bodies, and GitHub / guild-member tool results
-  reach the model fenced as untrusted data.
+- A non-owner's message, `/session start` topic, `/work` description, answer typed in an
+  ask's private Answer form and picked Choose label (SAFE-12.a), WATCH titles and bodies, and
+  GitHub / guild-member tool results reach the model fenced as untrusted data. A Choose press
+  whose option the ask doesn't have gets "that choice expired" and runs nothing.
 - A non-owner message (an Answer form answer included: private refusal, question kept open,
   owner pinged in the channel) or WATCH event that looks like an injection attempt gets one short reply
   (Discord) or comment (GitHub) and no run; the owner is pinged on Discord, or @mentioned on
@@ -427,7 +437,9 @@ schedules, WATCH, `task run`, delegate and council workers), so the next turn af
 uses the new text; no restart and no setting. It goes into the system prompt first, and
 Corvidinho's rules follow it and win (one message per turn, no spam, no unchecked claims).
 Fixed-text bot posts (the bridge-live note, `/status`, error and spend lines) do not go through
-the model and keep their text.
+the model and keep their text. The bridge-live note in the `/announce` channel is written in the
+persona's voice: one short line with the version and a link to its GitHub Release notes, never a
+changelog bullet list (PERSONA-1.a); editing `persona.md` does not change it.
 
 - Only the copy committed at `HEAD` is loaded. `scripts/corvidinho-update.sh` checks out the
   merged ref, so change the voice with a PR like any other file; a hand edit on the VM is not

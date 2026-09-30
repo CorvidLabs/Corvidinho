@@ -2,8 +2,10 @@
  * Prove-before-done task loop (Merlin agent-loop Verifying steal).
  * Planning: SpecSync list/read via spec_loader (SPECSYNC-1/5).
  * Verifying: fledge lanes run verify (includes spec-check when wired).
- * The gate sees tool-reported files plus the real git working-tree diff
- * (REQ-agent-085).
+ * The gate has no off switch (AGENT-14, REQ-agent-003). In a git work tree
+ * the real diff alone decides what changed (AGENT-15, REQ-agent-085), from
+ * the talk branch's merge-base when the last run in that talk worktree did
+ * not end verified (AGENT-15.a, REQ-agent-015).
  */
 
 import { relative, resolve } from "node:path";
@@ -30,6 +32,15 @@ import type {
 
 /** Changed paths named in the gate's Text note before "…". */
 const UNREPORTED_PREVIEW = 5;
+
+/** The one note of a run that changed nothing (AGENT-14, REQ-agent-003). */
+export const NOTHING_TO_VERIFY_NOTE = "Verify gate: no changes, nothing to verify.";
+
+/** `a, b, c, …` for a gate note. */
+function preview(paths: string[]): string {
+  const shown = paths.slice(0, UNREPORTED_PREVIEW).join(", ");
+  return paths.length > UNREPORTED_PREVIEW ? `${shown}, …` : shown;
+}
 
 /** Start of the feedback a retry gets after a failed verify (AGENT-4.a). */
 const VERIFY_FEEDBACK_HEAD =
@@ -70,15 +81,31 @@ function cancelledResult(
 }
 
 /**
- * Run one task through planning → executing → (optional) verifying → done|failed.
+ * Run one task through planning → executing → verifying → done|failed.
+ * Verifying is skipped only when the run changed nothing (AGENT-14).
  * Does not invent Trust/attest. Injectable execute + verifyRunner for tests.
  */
 export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
+  let workspace: WorkspaceDiffTracker | null = null;
+  const result = await gate(opts, (w) => {
+    workspace = w;
+  });
+  // AGENT-15.a (REQ-agent-015): only a `done` run (verified, or nothing to
+  // verify) lets the next run in this talk worktree start from its own
+  // snapshot; blocked, failed and cancelled runs carry the baseline.
+  (workspace as WorkspaceDiffTracker | null)?.settle?.(
+    result.state === "done" && !result.cancelled,
+  );
+  return result;
+}
+
+async function gate(
+  opts: RunTaskOptions,
+  started: (w: WorkspaceDiffTracker | null) => void,
+): Promise<TaskResult> {
   const onEvent = opts.onEvent;
   const signal = opts.signal ?? new AbortController().signal;
   const fileConfig = opts.config ?? loadAgentConfig(opts.cwd);
-  const verifyBeforeComplete =
-    opts.verifyBeforeComplete ?? fileConfig.verifyBeforeComplete;
   const maxRetries = opts.maxRetries ?? fileConfig.maxRetries;
   const verifyRunner = opts.verifyRunner ?? defaultVerifyRunner;
 
@@ -92,6 +119,8 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
   let retries = 0;
   // Real-diff paths added to filesChanged so far (capped per run).
   let realDiffAdded = 0;
+  // AGENT-15 (REQ-agent-085): tool-claimed paths git has not shown, so far.
+  const ghostClaims = new Set<string>();
   // AGENT-4 (REQ-agent-502): tools run so far whose edits no result reports.
   const unreportedEditTools = new Set<string>();
 
@@ -131,16 +160,21 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
     });
   }
 
-  // AGENT-4 (REQ-agent-085): snapshot the git working tree before the first
-  // attempt so the gate also sees edits no tool reports. No git work tree
+  // AGENT-15 (REQ-agent-085): snapshot the git working tree before the first
+  // attempt, always; the real diff decides what changed. No git work tree
   // (or an unreadable one) ⇒ null: tool-reported files only, as before.
   let workspace: WorkspaceDiffTracker | null = null;
-  if (verifyBeforeComplete) {
-    try {
-      workspace = await (opts.workspaceDiff ?? startWorkspaceDiff)(opts.cwd);
-    } catch {
-      workspace = null;
-    }
+  try {
+    workspace = await (opts.workspaceDiff ?? startWorkspaceDiff)(opts.cwd);
+  } catch {
+    workspace = null;
+  }
+  started(workspace);
+  if (workspace?.carried) {
+    emit(onEvent, {
+      type: "Text",
+      text: "Verify gate: the last run in this talk did not end verified, so every edit since the talk started is checked (from the talk branch's merge-base).",
+    });
   }
 
   for (;;) {
@@ -159,8 +193,11 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
     summary = exec.summary;
     // AGENT-4: union across attempts. Files from an attempt whose verify
     // failed stay in the gate, so a retry that changes nothing is verified
-    // again and can never be reported done.
-    filesChanged = [...new Set([...filesChanged, ...exec.filesChanged])];
+    // again and can never be reported done. With a git snapshot only the
+    // real diff joins (below); tool claims are checked against it.
+    if (!workspace) {
+      filesChanged = [...new Set([...filesChanged, ...exec.filesChanged])];
+    }
     for (const name of exec.unreportedEditTools ?? []) unreportedEditTools.add(name);
 
     if (isAborted(signal)) {
@@ -193,10 +230,13 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
       };
     }
 
-    // AGENT-4 (REQ-agent-085): add the run's real git diff to the gate, so an
-    // edit made outside the file tools (code-tier shell-exec, a delegate
-    // worker, a commit through a shell) is verified too. A diff git cannot
-    // read after a good snapshot fails closed: verify runs.
+    // AGENT-15 (REQ-agent-085): the run's real git diff decides what
+    // changed, so an edit made outside the file tools (code-tier shell-exec,
+    // a delegate worker, a commit through a shell) is verified too, and a
+    // path a tool claims but git does not show (gitignored, a nested repo, a
+    // write that changed nothing) is not listed yet still runs the lane
+    // (fail closed). A diff git cannot read after a good snapshot fails
+    // closed: verify runs.
     let diffUnreadable = false;
     if (workspace) {
       let real: string[] | null;
@@ -208,6 +248,10 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
       if (isAborted(signal)) {
         return cancelledResult(summary, filesChanged, attempts);
       }
+      const root = resolve(opts.cwd);
+      const claimed = [
+        ...new Set(exec.filesChanged.map((f) => relative(root, resolve(root, f)))),
+      ];
       if (real === null) {
         diffUnreadable = true;
         emit(onEvent, {
@@ -215,29 +259,39 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
           text: "Verify gate: could not read the git working-tree diff, so verifying anyway.",
         });
       } else {
-        const root = resolve(opts.cwd);
-        const reported = new Set(filesChanged.map((f) => relative(root, resolve(root, f))));
-        const unreported = real.filter((p) => !reported.has(p));
+        const inDiff = new Set(real);
+        const claimedSet = new Set(claimed);
+        const listed = new Set(filesChanged);
+        const fresh = real.filter((p) => !listed.has(p));
+        const unreported = fresh.filter((p) => !claimedSet.has(p));
+        // Bounded so a huge diff (an install, a branch switch) cannot push
+        // the NDJSON result line past the parser cap and lose the reply.
+        // The gate is unaffected: filesChanged is non-empty either way.
+        const added = fresh.slice(0, Math.max(0, WORKSPACE_DIFF_MAX_FILES - realDiffAdded));
+        const capped =
+          added.length < fresh.length
+            ? `; ${added.length} of the ${fresh.length} changed path(s) listed in filesChanged`
+            : "";
         if (unreported.length > 0) {
-          const shown = unreported.slice(0, UNREPORTED_PREVIEW).join(", ");
-          const more = unreported.length > UNREPORTED_PREVIEW ? ", …" : "";
-          // Bounded so a huge diff (an install, a branch switch) cannot push
-          // the NDJSON result line past the parser cap and lose the reply.
-          // The gate is unaffected: filesChanged is non-empty either way.
-          const added = unreported.slice(
-            0,
-            Math.max(0, WORKSPACE_DIFF_MAX_FILES - realDiffAdded),
-          );
-          const capped =
-            added.length < unreported.length
-              ? `; ${added.length} of them listed in filesChanged`
-              : "";
           emit(onEvent, {
             type: "Text",
-            text: `Verify gate: the git working tree has ${unreported.length} changed path(s) no tool reported (${shown}${more})${capped}.`,
+            text: `Verify gate: the git working tree has ${unreported.length} changed path(s) no tool reported (${preview(unreported)})${capped}.`,
           });
-          filesChanged = [...filesChanged, ...added];
-          realDiffAdded += added.length;
+        } else if (capped) {
+          emit(onEvent, {
+            type: "Text",
+            text: `Verify gate: the git working tree has ${fresh.length} changed path(s)${capped}.`,
+          });
+        }
+        filesChanged = [...filesChanged, ...added];
+        realDiffAdded += added.length;
+        const ghosts = claimed.filter((p) => !inDiff.has(p) && !ghostClaims.has(p));
+        if (ghosts.length > 0) {
+          for (const p of ghosts) ghostClaims.add(p);
+          emit(onEvent, {
+            type: "Text",
+            text: `Verify gate: ${ghosts.length} path(s) a tool reported changing are not in the git diff (${preview(ghosts)}), so they are not listed as changed, but verifying anyway.`,
+          });
         }
       }
     }
@@ -246,12 +300,7 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
     // can change files without reporting them (a Fledge command, or a
     // delegate worker that may have run one): fail closed, verify runs.
     let noDiffForUnreported = false;
-    if (
-      verifyBeforeComplete &&
-      !workspace &&
-      filesChanged.length === 0 &&
-      unreportedEditTools.size > 0
-    ) {
+    if (!workspace && filesChanged.length === 0 && unreportedEditTools.size > 0) {
       noDiffForUnreported = true;
       emit(onEvent, {
         type: "Text",
@@ -259,11 +308,17 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
       });
     }
 
+    // AGENT-14: no switch turns this off. Once a verify failed, every later
+    // attempt is verified again (REQ-agent-242).
     const wantVerify =
-      verifyBeforeComplete &&
-      (filesChanged.length > 0 || diffUnreadable || noDiffForUnreported);
+      filesChanged.length > 0 ||
+      ghostClaims.size > 0 ||
+      diffUnreadable ||
+      noDiffForUnreported ||
+      lastVerifyFailure !== undefined;
 
     if (!wantVerify) {
+      emit(onEvent, { type: "Text", text: NOTHING_TO_VERIFY_NOTE });
       setState(onEvent, "done");
       return {
         summary,
