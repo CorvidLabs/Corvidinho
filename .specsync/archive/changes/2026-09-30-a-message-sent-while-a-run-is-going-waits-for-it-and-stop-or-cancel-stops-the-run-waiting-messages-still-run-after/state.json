@@ -7,11 +7,11 @@
   "title": "A message sent while a run is going waits for it, and stop or cancel stops the run; waiting messages still run after (AGENT-3.a, AGENT-3.b)",
   "description": "A message sent while a run is going waits for it, and stop or cancel stops the run; waiting messages still run after (AGENT-3.a, AGENT-3.b)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "41ec90df25d36a9cb4b09c1938860b6cfc70e9fa",
   "created_at": 1790795512,
-  "updated_at": 1790798453,
+  "updated_at": 1790799075,
   "affected_specs": [
     "discord"
   ],

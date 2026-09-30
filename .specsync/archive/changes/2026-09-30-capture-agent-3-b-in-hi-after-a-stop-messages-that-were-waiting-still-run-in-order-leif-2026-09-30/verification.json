@@ -1,0 +1,42 @@
+{
+  "timestamp": 1790798463,
+  "commit": "b4dae7633c63babbcf6f8cbef7fb079a51f6a06c",
+  "contract_digest": "be30514699d5215c02990f00073a50b56af89c898c788e5ffdacde337179e71c",
+  "execution_digest": "b0f8180c1abba641cf8d8f8f09cc0054ca7227255f9520d9f4659850bf63d29b",
+  "workspace_digest": "4c4a3040646f1aa1562aa6440c6c9d97e553a1ff8a867559e4dc0b4421497d5a",
+  "acceptance_input_digest": "449eb3eb61b19108724c0e02ba6ad3de76387ce9fb15da198a9d1b3917e6fc2d",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "INTENT.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "87e28738b7ce456d5b5ecfa8e552515fa0736887e5997fee693f36e4ec4820f3",
+        "entry_digest": "9c147f659ff5ec98966993b372c3bcc2760fd8941d080c09697bbf602a2094ab",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "hi/agent.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "076aaf049a46590b4e3130d8fc17f3b2132f31b8d95c57e173e2c5c5f3dad6c6",
+        "entry_digest": "21833bf7416bd43a1b37f71ff47b536fe8d073284e5b8f0b980d13e3516ec55c",
+        "owners": [
+          "@exact:delivery"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check (no spec in scope)",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": []
+}
