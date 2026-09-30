@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "one-approve-deny-dm-card-engine-for-everything-that-needs-the-owner-s-ok-exact-action-target-and-amount-one-line-each",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "3b11248c214c94bcbdaab4786256e0e14945f360",
+  "contract_digest": "7ada9c58481a44eae9f75b3b707306467e2ffc2dfcd8250729c35836f02f2a6e",
+  "execution_digest": "8225393bd719fac448ecb0d08b0a5b9ec1eb044af4789fc8a93fb8c3b013c07f",
+  "workspace_digest": "08c97451993cd18ef292bd14133bec7f0a465b2fdcc8ca7b45dbd3c151d47b4a",
+  "timestamp": 1790770714
+}
