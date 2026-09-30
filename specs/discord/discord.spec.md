@@ -933,8 +933,6 @@ a constant kind, integers and its cap `scope` (`total` / `provider:<id>`,
 SAFE-14; added by an idempotent ALTER, scrubbed on write and in
 `SCRUB_TARGETS`), and a re-scrub skips a listed column an older module-owned
 table does not have yet.
-scrubbed on write and listed in `SCRUB_TARGETS` (SAFE-6); `spend_alerts` has
-no free-text column (a constant kind and integers).
 `openCorvidinhoDb` sets busy_timeout 5000 and foreign_keys on, then runs the
 migration and `ensureScrubbed` in one transaction that takes the write lock
 up front (REQ-discord-287): only its BEGIN IMMEDIATE goes through
