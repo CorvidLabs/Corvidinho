@@ -8,7 +8,7 @@ import { resolveDiscordActingRole } from "../permissions.ts";
 import { enrichPromptWithIdentity } from "../identity-inject.ts";
 import { enrichPromptWithProjectMemory, MEMORY_INJECT_LIMIT, memoryInjectOptsFor } from "../memory-inject.ts";
 import { fenceSpeakerText, inboundInjection, refuseInjectedSlash } from "../injection-guard.ts";
-import { loadDeclaredPeople, type PersonRole } from "../../identity/people.ts";
+import { loadDeclaredPeople, type PeopleDirectory, type PersonRole } from "../../identity/people.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import { answerModelFor, answerSpendFor } from "../rich-reply.ts";
 import { deliverPrivateReplies, withPrivateNote } from "../private-reply.ts";
@@ -31,6 +31,11 @@ import {
   slashOwnerNotice,
 } from "../spend-post.ts";
 import { spendStopFor } from "../spend-dm.ts";
+import { RUN_STOPPED_TEXT, type SessionRunTurn } from "../run-control.ts";
+import type { SessionStub } from "../types.ts";
+
+/** AGENT-3.a: the `/work` PR line of a stopped run (nothing verified to ship). */
+export const WORK_STOPPED_PR_REASON = "the run was stopped.";
 
 /**
  * IDENTITY-11.a — who may start /work: the owner (IDENTITY-9) and a declared
@@ -114,6 +119,43 @@ export async function handleWorkCommand(
     return;
   }
 
+  // AGENT-3.a (REQ-discord-301/302): the run takes its new session's turn
+  // (nothing is queued on a new session), so 'stop' / 'cancel' reaches it.
+  const turn = ctx.runControl?.enqueue({
+    sessionId: session.id,
+    requesterId: interaction.userId,
+    channelId: interaction.channelId,
+  });
+  try {
+    // The bridge is stopping: nothing starts.
+    if (turn && !(await turn.ready)) return;
+    await runWork(ctx, interaction, {
+      session,
+      description,
+      people,
+      actingRole,
+      actingIsAdmin,
+      turn,
+    });
+  } finally {
+    turn?.done();
+  }
+}
+
+/** The `/work` run, its PR step and answer, holding the session's turn (AGENT-3.a). */
+async function runWork(
+  ctx: SlashContext,
+  interaction: SlashInteraction,
+  input: {
+    session: SessionStub;
+    description: string;
+    people: PeopleDirectory;
+    actingRole: PersonRole;
+    actingIsAdmin: boolean;
+    turn: SessionRunTurn | undefined;
+  },
+): Promise<void> {
+  const { session, description, people, actingRole, actingIsAdmin, turn } = input;
   const task = ctx.workStore.create({
     description,
     userId: interaction.userId,
@@ -142,6 +184,8 @@ export async function handleWorkCommand(
     await thinking.start({
       description: `Work: ${description.slice(0, 80)}`,
     });
+    // AGENT-3.a: a reply 'stop' / 'cancel' to this progress message stops the run.
+    turn?.setProgressMessage(thinking.progressMessageId);
   }
 
   // SAFE-12: a non-owner's task goes to the model fenced as untrusted data.
@@ -189,6 +233,8 @@ export async function handleWorkCommand(
         // own worktree in the run).
         surface: "work",
         cwd: workCwd,
+        // AGENT-3.a: a stop (or the bridge stopping) kills its process tree.
+        ...(turn ? { signal: turn.signal } : {}),
         // DISCORD-17: files attach in the channel the command ran in.
         replyChannelId: interaction.channelId,
         onStatus: (u) => {
@@ -218,6 +264,22 @@ export async function handleWorkCommand(
       post: ctx.post,
     });
     return;
+  }
+
+  // AGENT-3: the bridge is stopping and the run was killed: nothing is
+  // posted; the task stays `running` and the next start marks it failed
+  // (SESSION-WORKTREE-3).
+  if (turn?.stopReason === "closed") {
+    thinking?.dispose();
+    return;
+  }
+  // AGENT-3.a (REQ-discord-302): a stopped run is `failed` ("stopped"), opens
+  // no PR, and its answer is "⏹ Stopped" with the DISCORD-15/15.a footer;
+  // any question it raised is dropped.
+  const stopped = turn?.stopReason === "stopped";
+  if (stopped) {
+    const { ask: _dropped, ...rest } = result;
+    result = { ...rest, ok: false };
   }
 
   const plumbing = result.task
@@ -281,6 +343,8 @@ export async function handleWorkCommand(
     if (askNeedsOwner(result.ask) && !askOwner?.owner && !askOwner?.deduped) {
       console.warn(ASK_NO_OWNER_WARNING);
     }
+  } else if (stopped) {
+    ctx.workStore.setStatus(task, "failed", "stopped");
   } else if (result.ok) {
     ctx.workStore.setStatus(task, "completed", result.summary.slice(0, 500));
   } else {
@@ -301,7 +365,9 @@ export async function handleWorkCommand(
   // DISCORD-16: the whole answer; it is split into messages when long.
   // ROLES-CHAT-3: splits keep a closing role note instead of clipping it.
   const summary = withPrivateNote(
-    ask
+    stopped
+      ? RUN_STOPPED_TEXT
+      : ask
       ? ask.content
       : result.ok
         ? result.summary
@@ -344,7 +410,9 @@ export async function handleWorkCommand(
       })
     : "community";
   // SAFE-14.a: the public line says only that work is paused for budget.
-  const prLine = result.ask?.reason === "spend-cap"
+  const prLine = stopped
+    ? `PR: not opened — ${WORK_STOPPED_PR_REASON}`
+    : result.ask?.reason === "spend-cap"
     ? `PR: not opened — ${SPEND_PAUSED_TEXT}`
     : shipRole !== "owner" && shipRole !== "team"
     ? "PR: not opened — only the owner (ADMIN) can ship /work as a PR, or a declared team member (IDENTITY-10); community runs cannot (ROLES-CHAT-3). The changes stay on the work branch."
@@ -388,7 +456,7 @@ export async function handleWorkCommand(
       trackBotMessage: ctx.trackBotMessage,
       thinkExtras,
       ok: result.ok,
-      failStatus: `❌ exit ${result.exitCode}`,
+      failStatus: stopped ? RUN_STOPPED_TEXT : `❌ exit ${result.exitCode}`,
       ...(ask ? { askStatus: { status: ask.status, failed: ask.failed }, mentionUserIds: ask.mentionUserIds } : {}),
       ...(choice
         ? {

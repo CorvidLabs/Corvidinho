@@ -7,6 +7,7 @@ import type { AllowlistConfig } from "../allowlist/types.ts";
 import type { AuditEntryInput } from "../audit/index.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import type { AgentClient } from "./agent-client.ts";
+import type { SessionRunControl } from "./run-control.ts";
 import type { SessionStore } from "./session-store.ts";
 import type { DiscordEmbedPayload, ThinkingOutbound } from "./thinking-status.ts";
 import type { RateLimitConfig, RateLimitState } from "./permissions.ts";
@@ -134,6 +135,13 @@ export type SlashContext = {
   rateLimitConfig?: RateLimitConfig;
   /** Optional numeric permission level for rateLimitByLevel. */
   permLevelFor?: (userId: string) => number | undefined;
+  /**
+   * AGENT-3.a (REQ-discord-301/302) — the bridge's per-session run queue and
+   * stop. `/session start` and `/work` take their new session's turn, map
+   * their progress message to it and pass its signal to the run, so 'stop'
+   * reaches them. Unset (tests) ⇒ they run without it.
+   */
+  runControl?: SessionRunControl;
   /** Legacy admin lists — ignored for ADMIN (owner-only, IDENTITY-2). */
   adminUserIds?: string[];
   adminRoleIds?: string[];

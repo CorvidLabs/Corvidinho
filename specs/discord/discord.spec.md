@@ -156,6 +156,9 @@ files:
   - tests/discord.ask-scrub-first.test.ts
   - src/discord/inflight-replies.ts
   - tests/discord.inflight-replies.test.ts
+  - src/discord/run-control.ts
+  - tests/discord.run-queue.test.ts
+  - tests/discord.stop-run.test.ts
   - src/discord/allowed-mentions.ts
   - tests/discord.allowed-mentions.test.ts
   - plugins/discord/send-file.ts
@@ -583,7 +586,29 @@ latest when the progress message is edited into the answer / Choose stub
 (DISCORD-ASK-6/7) or the fallback reply is posted; a button pick's row points
 at the Choose stub it reuses as progress; at start, after the gateway is up, it
 marks each leftover reply interrupted where its channel (or thread parent) is
-still allowlisted.
+still allowlisted. A chat message that waits for its session's run
+(REQ-discord-301) has its row from when it starts waiting (no progress
+message until its turn starts), and a reply the bridge's own stop cut short
+keeps its row (the tracker's `keep()`), so the next start marks it interrupted.
+
+One run at a time, and stop (AGENT-3.a / AGENT-3.b, REQ-discord-301 /
+REQ-discord-302): `src/discord/run-control.ts` exports `SessionRunControl`
+(`enqueue(input)` → `SessionRunTurn`, `current(sessionId)`,
+`byProgressMessage(messageId)`, `busy(sessionId)`, `stop(runId, byUserId)` →
+`RunStopOutcome` (`stopped` | `already` | `none`), `noteForgotten(userIds)`,
+`close()`, `settle(ms)`; option `onStopped`), the `SessionRunTurn` handle
+(`runId`, `sessionId`, `requesterId`, `channelId`, `waited`, `ready`,
+`signal`, `stopReason` (`RunStopReason`: `stopped` | `closed`),
+`stoppedBy`, `requesterForgotten`, `setProgressMessage`, `done`),
+`RunTurnInput`, `SessionRunControlOptions`, `isStopRunText`,
+`RUN_STOPPED_TEXT` (`⏹ Stopped`) and `RUN_STOP_ACK` (`⏹ Stopping the run.`).
+The bridge keeps one control: the chat path, an ask pick or Answer submit,
+and `/session start` / `/work` (through `SlashContext.runControl`) each take
+their session's turn, pass `turn.signal` as `AgentRunChatOpts.signal` and map
+their progress message; `RouterDeps.runs` gives `routeMessage` the
+`stop_run` route (`RouteAction` kind `stop_run` with `runId` and
+`sessionId`); `stop()` closes it first and settles it last. `/work` exports
+`WORK_STOPPED_PR_REASON` (the stopped run's PR line).
 
 Outbound mention safety (REQ-discord-205, DISCORD-8):
 `src/discord/allowed-mentions.ts` exports `outboundAllowedMentions({ users,
@@ -842,6 +867,12 @@ slash reply/editReply, component reply/update, discord-post-message) parses
 no mentions from its content (`parse: []`,
 `@everyone` / `@here` defanged); only the replied-to author and the users an
 ask names (`mentionUserIds`) may be pinged (REQ-discord-205);
+a Discord session runs one turn at a time (chat, ask pick / Answer submit,
+`/session start`, `/work`): a message sent meanwhile waits, first in first
+out, and a stop never drops it; sessions run in parallel; only the
+requester (in their session or by a reply to the progress message) or the
+owner (by that reply) stops a run, and the stop kills its process tree
+(REQ-discord-301 / REQ-discord-302);
 a run summary's closing `(not allowed for your role)` note survives every cap
 between the agent and the post: schedule run rows and posts, `/work` and
 `/session start` answers (fitted under 1900), and an appended SAFE-13 line or
@@ -1039,6 +1070,12 @@ failed lookup writes nothing.
 - **When** the owner runs `/schedule create … project:vendor/linux` (or a schedule stored earlier with that project comes due)
 - **Then** the create replies `not authorized` and stores nothing (the tick fails with `project resolve failed: … not authorized`, no agent run, no worktree); `/work project:vendor/linux` and a schedule on `vendor/fledge` (origin `CorvidLabs/fledge`) are unchanged
 
+### Scenario: Stop a run; the message sent meanwhile still runs (AGENT-3.a / AGENT-3.b)
+
+- **Given** a user's thread session whose run is going, and a second message they sent in the thread meanwhile
+- **When** they send `stop` in the thread
+- **Then** the second message is still waiting (no second run, no second progress message); the run's process tree is killed, the stop gets `⏹ Stopping the run.`, the first progress message becomes `⏹ Stopped` with the model and time in its footer (tokens and cost too if they are the owner); then the second message runs in the same session with its own progress message, and `⏹ Stopped` is in the thread it replays
+
 ### Scenario: Spawn with seeded identity
 
 - **Given** a MemoryStore row `person/identity` for Discord user U
@@ -1205,6 +1242,11 @@ failed lookup writes nothing.
 | Leftover in-flight reply in a channel no longer allowlisted, or whose thread or parent is deny-listed | Nothing edited or posted; logged as skipped; row deleted |
 | Message, ask button press or slash command in a thread on `deny_channels` under an allowlisted parent (or a message, or an ask press for a session a message started, in a thread under a deny-listed parent) | MessageCreate: silent refuse; interaction: ephemeral zero-width ack (allowlist tip for an admin); no session, run or post (REQ-discord-212) |
 | In-flight row write fails (DB busy) | Warning logged; the reply itself still runs |
+| 'stop' / 'cancel' with no run of the session in flight | Unchanged: 'cancel' clears the open asks with the short ack; 'stop' is an ordinary message (REQ-discord-302) |
+| 'stop' reply to a running progress message from anyone but its requester or the owner, or in another channel | Not a stop: routed as before (no mention ⇒ ignored) and the run goes on (REQ-discord-302) |
+| A second 'stop' while the run winds down | Same short ack; nothing aborted again; one `⏹ Stopped` (REQ-discord-302) |
+| A waiting message's session ended, idled out or its requester was forgotten before its turn | Nothing runs or is posted; its in-flight row is cleared (REQ-discord-301) |
+| Bridge stop with a run going and messages waiting | The run's tree is killed and nothing is posted; nothing waiting starts; their in-flight rows stay for the next start's interrupted notice; a `/work` stays `running` until restart recovery fails it (REQ-discord-301) |
 | Collapsed-answer ping post fails or throws | Nothing retried; the collapsed answer stays and the turn (or slash run) finishes normally; claims already taken are kept |
 | `discord-post-message` in a bridge-started run: `--requesting-user-id` names another user, or the acting user's requester check cannot run (Guild Members login refused / timeout / throw) | Refused, exit 3, nothing posted; the check failure is one scrubbed line naming Server Members Intent, no token value (REQ-discord-012) |
 | `discord-send-file`: `--channel` given, no conversation channel or acting user, channel not allowlisted (neither the thread nor its parent listed, or a deny on the thread or on the parent the bridge set), SAFE-2 / secret path (by name, link target, or a file or folder swapped for a link after the checks), path outside the project, type not allowed or bytes not matching, over 8 MB (at the size check or in the bytes read; at most 8 MB + 1 byte is read), requester cannot view / send / attach or the check cannot run, empty or secret-touching `--git-diff` | Refused, nothing uploaded (REQ-discord-476) |
