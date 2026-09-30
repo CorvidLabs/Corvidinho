@@ -74,6 +74,43 @@
         "REQ-watch-073",
         "REQ-watch-085"
       ]
+    },
+    {
+      "timestamp": 1790731582,
+      "commit": "57864eba4f02713b815f5a4cbb01cfae8d54c8e6",
+      "contract_digest": "0734cf4ed993685becf38d94f1758da8a1c7787fefb6c31e3bc00564d34a49f6",
+      "execution_digest": "faad4768a41fcf8dc77426b2bf92a90dd319fb125243874195ba7e634e08a96d",
+      "workspace_digest": "0ee54f534d759dc861bad97a16eefd87a4e992cf79681233919d7f502d7148e2",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec discord --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-002",
+        "REQ-agent-003",
+        "REQ-agent-015",
+        "REQ-agent-085",
+        "REQ-agent-242",
+        "REQ-agent-502",
+        "REQ-cli-006",
+        "REQ-cli-007",
+        "REQ-cli-009",
+        "REQ-cli-073",
+        "REQ-cli-085",
+        "REQ-cli-143",
+        "REQ-cli-505",
+        "REQ-discord-001",
+        "REQ-discord-014",
+        "REQ-discord-073",
+        "REQ-discord-085",
+        "REQ-watch-006",
+        "REQ-watch-073",
+        "REQ-watch-085"
+      ]
     }
   ]
 }
