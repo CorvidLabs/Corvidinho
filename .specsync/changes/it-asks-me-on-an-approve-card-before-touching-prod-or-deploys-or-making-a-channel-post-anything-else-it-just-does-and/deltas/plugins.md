@@ -46,8 +46,10 @@ card. For an `ask` verdict:
 - only an approval it consumes (`approved` → `used`) SHALL run the call; a
   deny, no answer by the expiry or a stopped run (exit 130) SHALL run nothing
   and return a refusal naming the rule, the request id and why (with no
-  bridge the lapse says the bridge DMs the card); every gate refusal SHALL
-  append a SAFE-5 `denied` row.
+  bridge the lapse says the bridge DMs the card); a run stopped just as the
+  owner approves SHALL run nothing (the approval is left unused); every gate
+  refusal SHALL append a SAFE-5 `denied` row, and the gate's notes and
+  refusals SHALL be secret-scrubbed (SAFE-6).
 
 Classes: `discord-post-message` is public for every post (the card's text is
 the defanged text that would be posted; a dry run posts nothing and asks
@@ -57,22 +59,31 @@ over the SAFE-3 clamp's walker and every command an exec wrapper runs: the
 `PROD_COMMANDS` table (ssh family; root; the box's services, packages,
 containers, firewall and cron; secrets tools; cloud, hosting, cluster and
 infrastructure CLIs; DNS tools), remote `rsync`, `gh` on secrets,
-variables, workflows, releases (and `gh api` on those paths), `git push`,
-`npx`-style runs of one, package scripts (with pre/post) from package.json,
-`make` / `just` recipes with prerequisites and variables, inline
-interpreter code and in-root or `#!` scripts an interpreter or path runs;
-an unreadable script or recipe, a make / just file or dir option and a
-command named by an expansion ask; a command SAFE-21 or the clamp refuses is
-left to the handler. Exactly `CORVIDINHO_REF=v<X.Y.Z>` plus the installed
-checkout's `scripts/corvidinho-update.sh` (or `bash` it), nothing else, for
+variables, workflows, releases (and `gh api` on those paths), `git push`
+(git and gh subcommands read past global options and their values; a git
+alias read from the repo's config like what it stands for, one set with
+`-c alias.…` asks), `npx`-style runs of one (`bun x` included, `-c` shell
+text read), package scripts (with pre/post) from package.json (`bun
+<script>` included; `bun <file>` and `bun exec` text read; an install reads
+the install lifecycle scripts), `make` / `just` recipes with prerequisites
+and variables, inline interpreter code and in-root or `#!` scripts an
+interpreter or path runs; an unreadable script or recipe, a make / just file
+or dir option, a package-manager option that picks another package.json,
+workspace, preload or shell, and a command named by an expansion ask; a
+command SAFE-21 or the clamp refuses is left to the handler. Free text
+(runner code, recipe and task text) also names SSH, cloud and secrets client
+libraries (`paramiko`, `ssh2`, `awscli`, `hvac` …). Exactly
+`CORVIDINHO_REF=v<X.Y.Z>` plus the installed checkout's
+`scripts/corvidinho-update.sh` (or `bash` it), nothing else, for
 a tag that checkout has, SHALL NOT ask (`isSelfUpdateToTag`); the updater in
 any other form asks. The language runners ask on table words in argv and an
 in-root script they run; `fledge-run` / `fledge-lanes-run` read the task and
 lane commands from `fledge.toml` / `.fledge/lanes/*.toml` and ask for any
 that do or can't be read (no fledge.toml: no ask, fledge refuses); a
 discovered `fledge-<command>` asks on table words in its name or argv;
-`git-push` asks for the remote's recorded default branch, or a usual default
-name when none is recorded. Every other builtin SHALL have no class and run
+`git-push` asks for the remote's recorded default branch and for a usual
+default or deploy name (`main`, `master`, `production`, `gh-pages` …)
+whatever default is recorded. Every other builtin SHALL have no class and run
 with no ask. No env var, config key or schema change.
 
 Acceptance Criteria
@@ -82,4 +93,6 @@ Acceptance Criteria
 - A delegate worker and a run with no owner are refused with no card; an aborted wait is exit 130; a throwing classifier asks as prod; each refusal is a SAFE-5 `denied` row.
 - `discord-post-message` text claiming it needs no OK still raises the card; a dry run and a refused post raise none.
 - The shell, runner, Fledge and git-push classifiers ask for the table commands and forms above, read-only looks included, and not for everyday commands; the tagged self-update runs with no ask and every near-miss form asks.
+- `git -C . push`, `gh workflow -R o/r run`, a git alias for a push, `bun <script>` / `bun x` / `bun exec` / `bun <file>` of a prod command, `npx -c`, a prod install script and a package-manager option that picks another package.json ask; `main` pushed while `develop` is the recorded default asks.
+- A run stopped just as the owner approves runs nothing; the wait line and refusals carry no secret.
 - Only the must-ask builtins carry a class; every other builtin passes the gate with no card.

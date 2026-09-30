@@ -392,13 +392,19 @@ clamp's walker and each command an exec wrapper runs: a `PROD_COMMANDS` name
 (ssh family, root, the box's services, packages, containers, firewall and
 cron, secrets tools, cloud, hosting, cluster and infrastructure CLIs, DNS
 tools), remote `rsync`, `gh` on secrets / variables / workflows / releases
-(and `gh api` on those paths), `git push`, `npx` / `bunx` / `pnpm dlx` /
-`yarn dlx` / `npm exec` of one, a package script (with its pre/post) from the
-project's package.json, a `make` / `just` recipe with its prerequisites and
+(and `gh api` on those paths), `git push` (the git and gh subcommand read
+past global options and their values, `git -C . push`; a git alias read from
+the repo's config like the command it stands for, one set with `-c alias.…`
+asks), `npx` / `bunx` / `bun x` / `pnpm dlx` / `yarn dlx` / `npm exec` of
+one (`-c` shell text read as a command), a package script (with its
+pre/post) from the project's package.json (`bun <script>` included; `bun
+<file>` and `bun exec` text read too; an install reads the project's install
+lifecycle scripts), a `make` / `just` recipe with its prerequisites and
 variables, inline interpreter code and an in-root or `#!` script an
 interpreter or a path runs; an unreadable script or recipe, a make / just
-file or dir option and a command named by an expansion ask; the box updater
-by any other path or form asks. A command SAFE-21 or the clamp refuses is not
+file or dir option, a package-manager option that picks another package.json,
+workspace, preload or shell, and a command named by an expansion ask; the
+box updater by any other path or form asks. A command SAFE-21 or the clamp refuses is not
 classified. `isSelfUpdateToTag`: exactly `CORVIDINHO_REF=v<X.Y.Z>` and the
 installed checkout's `scripts/corvidinho-update.sh` (or `bash` it), nothing
 else typed, and a tag that checkout has, is not a deploy (AUTONOMY-9). The
@@ -409,8 +415,11 @@ steps as task names, `{ run }`, `{ task }` and `{ parallel }`) like shell comman
 ask for anything they can't read (no fledge.toml: fledge refuses, no ask);
 a discovered `fledge-<command>` asks on table words in its name or argv.
 `git-push` asks when the current branch is the remote's recorded default
-(`refs/remotes/<remote>/HEAD`), or, with none recorded, a usual default name
-(`main`, `master`, `trunk`, `production` …); feature branches never ask.
+(`refs/remotes/<remote>/HEAD`) or a usual default or deploy name (`main`,
+`master`, `trunk`, `production`, `gh-pages` …) whatever default is recorded;
+feature branches never ask. The gate's notes and refusals are secret-scrubbed
+(SAFE-6), and a run stopped just as the owner approves runs nothing (the
+approval is left unused).
 
 `delegate` (REQ-plugins-117) is `dangerous: false`, `mutating: true`, minTier
 2, `autonomous: true`: hidden from the tool catalog unless the session is

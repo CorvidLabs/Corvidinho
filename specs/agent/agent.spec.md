@@ -117,7 +117,10 @@ NDJSON event stream (REQ-agent-073, issue #73): `src/agent/events-ndjson.ts`
 owns `CORVIDINHO_PROTOCOL_VERSION` (2) and exports `frameFromEvent`,
 `usageFrame`, `resultFrame`, `serializeFrame`, `createNdjsonWriter`,
 `summarizeToolArgs`, `parseNdjsonLine`, `createNdjsonParser`,
-`readNdjsonStream`, `progressFromFrame`, `collectTaskRunStream`. Frames:
+`readNdjsonStream`, `progressFromFrame`, `collectTaskRunStream`,
+`MUST_ASK_WAIT_TEXT_RE` and `MUST_ASK_WAIT_STATUS` (`progressFromFrame` shows
+only one `Text` frame: the must-ask gate's wait line, as "waiting for the
+owner's OK on an Approve card" — REQ-agent-097). Frames:
 `{protocol, type}` with AgentEvent types `StateChanged` / `Text` / `ToolCall`
 (`name`, `argsSummary`) / `ToolResult` / `VerifyResult`, plus `usage`
 (running prompt / completion / total tokens) and a final `result`

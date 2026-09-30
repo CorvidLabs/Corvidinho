@@ -154,7 +154,8 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   code**. Same DM rule as above; nothing to configure. With no bridge running no card goes out, and
   an unanswered card is a no. See [`discord.md`](discord.md) "Approve / Deny cards".
 - Must-ask (AUTONOMY-9/10): prod and deploy contact (the VPS, secrets, env, DNS, deploy tools, a
-  push to a remote's default branch — read-only looks included) and every `discord-post-message`
+  push to a remote's default branch or a usual default or deploy branch such as `main` — read-only
+  looks included) and every `discord-post-message`
   post wait for your OK on one of those cards before they run (prod cards need the one-time code);
   a deny or no answer in 5 minutes runs nothing. Updating to a tagged release with
   `CORVIDINHO_REF=v<X.Y.Z> scripts/corvidinho-update.sh` in the installed checkout is not a deploy.

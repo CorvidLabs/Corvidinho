@@ -80,7 +80,8 @@ export const MUST_ASK_POLICY: Readonly<Record<"spend" | MustAskClass, MustAskPol
     criterion: "AUTONOMY-9",
     what:
       "any contact with prod or deploys — the VPS, secrets, env, DNS, deploy tools and a push to a " +
-      "remote's default branch — read-only looks included (AUTONOMY-9.a); updating itself to a tagged " +
+      "remote's default branch or a usual default or deploy branch name — read-only looks included " +
+      "(AUTONOMY-9.a); updating itself to a tagged " +
       "release is not a deploy",
     gate: "runPlugin's must-ask gate",
     card: { kind: "mustask", class: "destructive" },
@@ -172,7 +173,8 @@ export const PROD_COMMANDS: ReadonlyMap<string, string> = new Map([
  * Table words found in free text (a runner's code or argv, a task's or
  * recipe's command text). The same tools as {@link PROD_COMMANDS} minus the
  * names that are everyday words in code and prose (`host`, `op`, `service`,
- * `render`, `dig`, `shutdown` …), plus SDK names that reach a cloud account.
+ * `render`, `dig`, `shutdown` …), plus SDK and client-library names that
+ * reach a cloud account, another host or a secrets store.
  */
 const TEXT_WORDS: ReadonlyMap<string, string> = (() => {
   const everyday = new Set([
@@ -185,16 +187,33 @@ const TEXT_WORDS: ReadonlyMap<string, string> = (() => {
   out.set("aws-sdk", CLOUD);
   out.set("boto3", CLOUD);
   out.set("botocore", CLOUD);
+  out.set("awscli", CLOUD);
+  // SSH client libraries reach another host like `ssh` does.
+  for (const lib of ["paramiko", "asyncssh", "pysftp", "ssh2", "node-ssh"]) out.set(lib, VPS_REMOTE);
+  // The Vault client library reads secrets like `vault` does.
+  out.set("hvac", SECRETS);
   return out;
 })();
 
+/**
+ * Options (each with an optional value word) between a tool and its
+ * subcommand in free text, so `git -C . push` and `gh workflow -R o/r run`
+ * read like `git push` and `gh workflow run`.
+ */
+const OPTS = String.raw`(?:\s+-\S+(?:\s+[^\s-]\S*)?)*`;
+
+function phrase(head: string, ...words: string[]): RegExp {
+  return new RegExp(String.raw`\b${head}\b${words.map((w) => `${OPTS}\\s+${w}\\b`).join("")}`);
+}
+
 /** Two-word table entries read in free text. */
 const TEXT_PHRASES: readonly [RegExp, string][] = [
-  [/\bgh\s+(secret|variable)\b/, "reads or writes GitHub secrets or variables"],
-  [/\bgh\s+workflow\s+(run|enable|disable)\b/, "starts or changes a GitHub workflow (deploy)"],
-  [/\bgh\s+run\s+rerun\b/, "re-runs a GitHub workflow (deploy)"],
-  [/\bgh\s+release\s+(create|upload|edit|delete)\b/, "creates or changes a GitHub release (deploy)"],
-  [/\bgit\s+push\b/, "pushes a branch (it can reach a deploy remote or the default branch)"],
+  [phrase("gh", "(secret|variable)"), "reads or writes GitHub secrets or variables"],
+  [phrase("gh", "workflow", "(run|enable|disable)"), "starts or changes a GitHub workflow (deploy)"],
+  [phrase("gh", "run", "rerun"), "re-runs a GitHub workflow (deploy)"],
+  [phrase("gh", "release", "(create|upload|edit|delete)"), "creates or changes a GitHub release (deploy)"],
+  [phrase("git", "push"), "pushes a branch (it can reach a deploy remote or the default branch)"],
+  [/\balias\.[A-Za-z0-9_-]+=\s*['"]?!?\s*(?:git\s+)?push\b/, "sets a git alias that pushes (it can reach a deploy remote or the default branch)"],
   [/\b(fly|flyctl)\s+(deploy|secrets)\b/, HOSTING],
 ];
 
@@ -211,9 +230,62 @@ export function prodTextWhy(text: string): string | null {
   return null;
 }
 
+/**
+ * The positional words of a command's args, skipping each option in
+ * `valueOpts` and the word it takes as its value (`-C dir`, `-R o/r`), so an
+ * option's value is never read as the subcommand (`git -C . push`).
+ */
+function positionalWords(args: readonly string[], valueOpts: ReadonlySet<string>): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (a === "--") {
+      out.push(...args.slice(i + 1));
+      break;
+    }
+    if (valueOpts.has(a)) {
+      i++;
+      continue;
+    }
+    if (a.startsWith("-")) continue;
+    out.push(a);
+  }
+  return out;
+}
+
+/** gh options that take the next word as their value. */
+const GH_VALUE_OPTS: ReadonlySet<string> = new Set(["-R", "--repo"]);
+
+/** git's global options that take the next word as their value. */
+const GIT_VALUE_OPTS: ReadonlySet<string> = new Set([
+  "-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env", "--super-prefix",
+]);
+
+/** git's subcommand (after its global options and their values), if any. */
+export function gitSubcommand(args: readonly string[]): string | undefined {
+  return positionalWords(args, GIT_VALUE_OPTS)[0];
+}
+
+/** The name of a git alias set on the command line (`-c alias.x=…`, `--config-env alias.x=…`), else null. */
+function gitCommandLineAlias(args: readonly string[]): string | null {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    const v =
+      a === "-c" || a === "--config-env"
+        ? args[i + 1]
+        : a.startsWith("-c") && a.length > 2
+          ? a.slice(2)
+          : a.startsWith("--config-env=")
+            ? a.slice("--config-env=".length)
+            : undefined;
+    if (v !== undefined && /^\s*alias\./i.test(v)) return v.split("=")[0]!.trim();
+  }
+  return null;
+}
+
 /** `gh` subcommands that touch secrets, env or deploys. */
 function ghWhy(args: readonly string[]): string | null {
-  const pos = args.filter((a) => !a.startsWith("-"));
+  const pos = positionalWords(args, GH_VALUE_OPTS);
   const [sub, action] = pos;
   if (sub === "secret" || sub === "variable") return "reads or writes GitHub secrets or variables";
   if (sub === "workflow" && (action === "run" || action === "enable" || action === "disable")) {
@@ -250,9 +322,15 @@ export function prodCommandWhy(name: string, args: readonly string[]): string | 
   }
   if (name === "git") {
     // A push from the shell can reach a deploy remote or the default branch;
-    // the checked git-push tool tells them apart.
-    const sub = args.find((a) => !a.startsWith("-"));
-    if (sub === "push") return "`git push` pushes a branch from the shell (it can reach a deploy remote or the default branch; use git-push)";
+    // the checked git-push tool tells them apart. The subcommand is read past
+    // the global options and their values (`git -C . push`); an alias set on
+    // the command line can't be checked, so it asks (an alias in git config
+    // is read by the shell classifier).
+    const alias = gitCommandLineAlias(args);
+    if (alias) return `\`git -c ${alias}=…\` sets a git alias on the command line, which can't be checked, so it asks`;
+    if (gitSubcommand(args) === "push") {
+      return "`git push` pushes a branch from the shell (it can reach a deploy remote or the default branch; use git-push)";
+    }
     return null;
   }
   return null;
@@ -294,8 +372,10 @@ export function setMustAskNotifier(fn: MustAskNotifier | null): MustAskNotifier 
 
 function note(line: string): void {
   try {
-    if (notifier) notifier(line);
-    else console.error(line);
+    // The why can quote a script, recipe or lane step: scrubbed (SAFE-6).
+    const scrubbed = scrubSecrets(line);
+    if (notifier) notifier(scrubbed);
+    else console.error(scrubbed);
   } catch {
     /* a note never changes the gate's outcome */
   }
@@ -314,14 +394,15 @@ function refusal(
   const rule = MUST_ASK_POLICY[ask.class].criterion;
   return {
     ok: false,
-    error,
+    // The why can quote a script, recipe or lane step: scrubbed (SAFE-6).
+    error: scrubSecrets(error),
     exitCode: outcome === "aborted" ? 130 : 2,
     data: {
       refused: true,
       rule,
       class: ask.class,
       outcome,
-      why: ask.why,
+      why: scrubSecrets(ask.why),
       ...(requestId ? { request: requestId } : {}),
     },
   };
@@ -514,7 +595,9 @@ export async function mustAskGate(input: MustAskGateInput): Promise<PluginHandle
       pollMs: testHooks.pollMs ?? MUST_ASK_POLL_MS,
       ...(input.signal ? { signal: input.signal } : {}),
     });
-    if (decided?.status === "approved" && store.consume(req.id)) {
+    // A run stopped while the owner approved runs nothing: the approval is
+    // left unused and the stop wins.
+    if (decided?.status === "approved" && !input.signal?.aborted && store.consume(req.id)) {
       note(`[operator] ${rule}: the owner approved request ${req.id}; running ${input.cmd.name}.`);
       return null;
     }

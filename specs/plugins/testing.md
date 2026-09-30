@@ -306,6 +306,8 @@ a deny runs nothing, the same call again is refused with no new card, a
 changed call asks again; no answer lapses (`expired`, the refusal says the
 bridge DMs the card) and does not block asking again; a delegate worker and
 a run with no owner are refused with no card; an aborted wait is exit 130;
+a run stopped just as the owner approves runs nothing; the wait line and a
+refusal are secret-scrubbed and the wait line is what the live status shows;
 a throwing classifier asks as prod; a refusal is a SAFE-5 `denied` row;
 `discord-post-message` text claiming no OK is needed still raises the card
 with the defanged text; the policy table; and the real card engine
@@ -316,7 +318,12 @@ classifiers over temp projects and repos (table commands, wrappers, npx,
 package scripts, make / just recipes with variables, inline code, scripts,
 unreadable forms, everyday commands that don't ask, SAFE-21 / clamp refusals
 left to the handler, the tagged self-update and every near-miss form, the
-recorded and unrecorded default branch).
+recorded and unrecorded default branch; options and their values before a
+git or gh subcommand, git aliases on the command line and in the repo's
+config, `bun <script>` / `bun x` / `bun exec` / `bun <file>`, `npx -c`,
+install lifecycle scripts, package-manager options that pick another
+package.json or workspace, client-library names in free text, and a usual
+default or deploy branch pushed while another default is recorded).
 `tests/must-ask.boundary.test.ts` — only the must-ask builtins carry a class
 and every other builtin passes the gate with no card; real non-must-ask calls
 raise none; each must-ask builtin's everyday call raises none; the tool loop

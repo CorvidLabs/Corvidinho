@@ -17,6 +17,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { prodTextWhy } from "../../src/plugins/must-ask.ts";
+import { scrubSecrets } from "../../src/store/scrub.ts";
 import type { MustAskClassifier, MustAskVerdict } from "../../src/plugins/types.ts";
 import { taskCommandProdWhy } from "../shell/must-ask.ts";
 
@@ -116,7 +117,7 @@ function stepWhy(step: unknown, lane: string, w: Walk, depth: number): string | 
   const s = table(step);
   if (typeof s.run === "string" && Object.keys(s).length === 1) {
     const why = commandWhy(s.run, w);
-    return why ? `lane \`${lane}\` step \`${s.run.slice(0, 60)}\` ${why}` : null;
+    return why ? `lane \`${lane}\` step \`${scrubSecrets(s.run).slice(0, 60)}\` ${why}` : null;
   }
   if (typeof s.task === "string" && Object.keys(s).length === 1) {
     return w.src.tasks[s.task] !== undefined

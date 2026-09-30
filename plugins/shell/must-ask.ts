@@ -36,7 +36,7 @@
 
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, isAbsolute, join, relative, resolve } from "node:path";
-import { prodCommandWhy, prodTextWhy } from "../../src/plugins/must-ask.ts";
+import { gitSubcommand, prodCommandWhy, prodTextWhy } from "../../src/plugins/must-ask.ts";
 import {
   commandChain,
   firstDisallowedCd,
@@ -44,6 +44,7 @@ import {
   type SimpleCommand,
   type Word,
 } from "./clamp.ts";
+import { scrubSecrets } from "../../src/store/scrub.ts";
 import { firstFootgun } from "./footguns.ts";
 
 /** Most bytes of a script, package.json, Makefile or justfile read. */
@@ -153,26 +154,80 @@ function packageScriptWhy(name: string, ctx: Ctx, how: string): string | null {
   return null;
 }
 
-/** The first positional argument after the options of a package-manager or make/just call. */
+/** The first positional argument after the options of a make/just call. */
 function positionals(args: readonly string[]): string[] {
   return args.filter((a) => !a.startsWith("-"));
 }
 
+/**
+ * Package-manager options that pick another package.json or workspace, or
+ * run other code or another shell, so the script that runs can't be read
+ * here: a call with one asks.
+ */
+const PM_OPAQUE_OPTS = new Set([
+  "--cwd", "--prefix", "-C", "--dir", "--filter", "-F", "--workspace", "-w", "--workspaces", "-ws",
+  "--recursive", "-r", "--preload", "--require", "--import", "--script-shell", "--shell", "--node-options",
+]);
+
+/** Package-manager options that take the next word as their value (not the subcommand). */
+const PM_VALUE_OPTS = new Set([
+  "--loglevel", "--registry", "--userconfig", "--cache", "--tag", "--otp", "--env-file", "--config", "-c",
+  "--elide-lines", "--network-concurrency", "--reporter",
+]);
+
+/** A package-manager call's positional words (option values skipped) and an opaque option, if any. */
+function pmWords(args: readonly string[]): { pos: { word: string; at: number }[]; opaque: string | null } {
+  const pos: { word: string; at: number }[] = [];
+  let opaque: string | null = null;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (a === "--") break;
+    if (a.startsWith("-")) {
+      const opt = a.split("=")[0]!;
+      if (PM_OPAQUE_OPTS.has(opt)) opaque ??= opt;
+      else if (PM_VALUE_OPTS.has(opt) && !a.includes("=")) i++;
+      continue;
+    }
+    pos.push({ word: a, at: i });
+  }
+  return { pos, opaque };
+}
+
+/** Install verbs: they run the project's own install lifecycle scripts. */
+const PM_INSTALL = new Set(["install", "i", "ci", "add", "a"]);
+const INSTALL_LIFECYCLE = ["preinstall", "install", "postinstall", "preprepare", "prepare", "postprepare"];
+
+/** bun's own subcommands; any other first word runs a package.json script or a file. */
+const BUN_BUILTINS = new Set([
+  "run", "test", "x", "repl", "exec", "install", "i", "add", "a", "remove", "rm", "update", "audit",
+  "dedupe", "prune", "outdated", "link", "unlink", "publish", "patch", "patch-commit", "pm", "info",
+  "why", "build", "init", "create", "c", "upgrade", "help", "completions", "discord",
+]);
+
 function packageManagerWhy(name: string, args: readonly string[], ctx: Ctx): string | null {
-  const pos = positionals(args);
-  const sub = pos[0];
-  if (sub === undefined) return null;
+  const { pos, opaque } = pmWords(args);
+  if (opaque) return `can't read which package.json or code \`${name} ${opaque}\` runs, so it asks`;
+  const sub = pos[0]?.word;
+  const after = (i: number) => args.slice(pos[i]!.at + 1);
+  if (sub === undefined) {
+    // A bare `yarn` installs.
+    return name === "yarn" ? installScriptsWhy(name, ctx) : null;
+  }
   // `npx`-style runs of a package command.
-  if ((name === "pnpm" || name === "yarn") && sub === "dlx") {
-    const rest = args.slice(args.indexOf("dlx") + 1);
-    return packageCommandWhy(rest, ctx);
+  if ((name === "pnpm" || name === "yarn") && (sub === "dlx" || sub === "exec")) {
+    return packageCommandWhy(after(0), ctx);
   }
-  if (name === "npm" && (sub === "exec" || sub === "x")) {
-    const rest = args.slice(args.indexOf(sub) + 1).filter((a) => a !== "--");
-    return packageCommandWhy(rest, ctx);
+  if ((name === "npm" && (sub === "exec" || sub === "x")) || (name === "bun" && sub === "x")) {
+    return packageCommandWhy(after(0).filter((a) => a !== "--"), ctx);
   }
+  if (name === "bun" && sub === "exec") {
+    // `bun exec "<script>"` runs shell text.
+    const text = pos[1]?.word;
+    return text === undefined ? null : shellTextWhy(text, { ...ctx, depth: ctx.depth + 1 });
+  }
+  if (PM_INSTALL.has(sub)) return installScriptsWhy(name, ctx);
   if (sub === "run" || sub === "run-script") {
-    const script = pos[1];
+    const script = pos[1]?.word;
     if (script === undefined) return null;
     if (name === "bun" && !(packageScripts(ctx.root) ?? {})[script]) {
       // `bun run <file>`: the file, read like an interpreter's script.
@@ -184,11 +239,38 @@ function packageManagerWhy(name: string, args: readonly string[], ctx: Ctx): str
   if ((name === "yarn" || name === "pnpm") && (packageScripts(ctx.root) ?? {})[sub] !== undefined) {
     return packageScriptWhy(sub, ctx, `${name} ${sub}`);
   }
+  if (name === "bun" && !BUN_BUILTINS.has(sub)) {
+    // `bun <script>` runs a package.json script, else `bun <file>` runs the file.
+    if ((packageScripts(ctx.root) ?? {})[sub] !== undefined) return packageScriptWhy(sub, ctx, `bun ${sub}`);
+    return scriptFileWhy(sub, ctx);
+  }
   return null;
 }
 
-/** `npx vercel deploy` → the command `vercel deploy`. */
+/** An install runs the project's install lifecycle scripts: read them. */
+function installScriptsWhy(name: string, ctx: Ctx): string | null {
+  const scripts = packageScripts(ctx.root) ?? {};
+  for (const s of INSTALL_LIFECYCLE) {
+    const text = scripts[s];
+    if (text === undefined) continue;
+    const why = shellTextWhy(text, { ...ctx, depth: ctx.depth + 1 });
+    if (why) return `\`${name} install\` runs the \`${s}\` script, which ${why}`;
+  }
+  return null;
+}
+
+/** `npx vercel deploy` → the command `vercel deploy`; `npx -c '<shell>'` → that shell text. */
 function packageCommandWhy(args: readonly string[], ctx: Ctx): string | null {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    const call =
+      a === "-c" || a === "--call" || a === "--shell-mode"
+        ? args[i + 1]
+        : a.startsWith("--call=")
+          ? a.slice("--call=".length)
+          : undefined;
+    if (call !== undefined) return shellTextWhy(call, { ...ctx, depth: ctx.depth + 1 });
+  }
   const at = args.findIndex((a) => !a.startsWith("-"));
   if (at < 0) return null;
   const pkg = args[at]!.replace(/@[^/@]*$/, "");
@@ -404,12 +486,60 @@ function pathScriptWhy(path: string, ctx: Ctx): string | null {
   return why ? `runs \`${path}\`, which ${why}` : null;
 }
 
+/**
+ * git's own commands: git never runs an alias with one of these names, so
+ * only another word is looked up as an alias.
+ */
+const GIT_BUILTINS = new Set([
+  "add", "am", "apply", "archive", "bisect", "blame", "branch", "bundle", "cat-file", "check-ignore",
+  "checkout", "cherry", "cherry-pick", "clean", "clone", "commit", "config", "count-objects", "describe",
+  "diff", "diff-files", "diff-index", "diff-tree", "fetch", "for-each-ref", "format-patch", "fsck", "gc",
+  "grep", "hash-object", "help", "init", "log", "ls-files", "ls-remote", "ls-tree", "merge", "merge-base",
+  "mv", "notes", "pull", "push", "range-diff", "rebase", "reflog", "remote", "reset", "restore", "rev-list",
+  "rev-parse", "revert", "rm", "shortlog", "show", "show-ref", "sparse-checkout", "stash", "status",
+  "submodule", "switch", "symbolic-ref", "tag", "update-index", "update-ref", "var", "version", "worktree",
+]);
+
+/**
+ * A git alias the run's git would expand (the repo's own config: shell-exec
+ * runs git with no global or system config, SAFE-21.a): its text is read
+ * like the command it stands for (`!…` as shell text).
+ */
+function gitAliasWhy(args: readonly string[], ctx: Ctx): string | null {
+  const sub = gitSubcommand(args);
+  if (sub === undefined || GIT_BUILTINS.has(sub) || !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(sub)) return null;
+  let value: string;
+  try {
+    const r = Bun.spawnSync(["git", "-C", ctx.root, "config", "--get", `alias.${sub}`], {
+      stdout: "pipe",
+      stderr: "ignore",
+      env: {
+        PATH: ctx.env.PATH ?? process.env.PATH ?? "/usr/bin:/bin",
+        HOME: ctx.env.HOME ?? process.env.HOME ?? "/",
+        GIT_CONFIG_GLOBAL: "/dev/null",
+        GIT_CONFIG_NOSYSTEM: "1",
+      },
+    });
+    if (r.exitCode !== 0) return null;
+    value = r.stdout.toString().trim();
+  } catch {
+    return null;
+  }
+  if (!value) return null;
+  const deeper = { ...ctx, depth: ctx.depth + 1 };
+  const why = value.startsWith("!")
+    ? shellTextWhy(value.slice(1), deeper)
+    : commandWhy("git", [...value.split(/\s+/).filter(Boolean), ...args.slice(args.indexOf(sub) + 1)], deeper);
+  return why ? `\`git ${sub}\` is a git alias for \`${scrubSecrets(value).slice(0, 60)}\`, which ${why}` : null;
+}
+
 function commandWhy(name: string, args: readonly string[], ctx: Ctx, path?: string): string | null {
   const byPath = path !== undefined ? pathScriptWhy(path, ctx) : null;
   if (byPath) return byPath;
   const table = prodCommandWhy(name, args);
   if (table) return table;
   if (ctx.depth >= MAX_DEPTH) return null;
+  if (name === "git") return gitAliasWhy(args, ctx);
   if (name === "npx" || name === "bunx" || name === "pnpx") return packageCommandWhy(args, ctx);
   if (PACKAGE_MANAGERS.has(name)) {
     const why = packageManagerWhy(name, args, ctx);

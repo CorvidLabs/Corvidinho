@@ -22,7 +22,10 @@ artifact: design
   sent first as quoted data; the title names where it was asked from.
 - **Waiting.** In-process, polling the shared DB with the run's abort signal,
   up to `MUST_ASK_CARD_TTL_MS` (5 min, a code constant). One note line goes to
-  `setMustAskNotifier` (a Text event in `task run`, stderr otherwise).
+  `setMustAskNotifier` (a Text event in `task run`, stderr otherwise); the
+  Discord live status shows it (`progressFromFrame` maps that one Text line to
+  "waiting for the owner's OK on an Approve card"). Notes and refusals are
+  secret-scrubbed; a run stopped just as the owner approves runs nothing.
 - **No is no (SAFE-20).** Deny, lapse and abort run nothing and return a
   refusal that says why. A re-sent denied call (same kind + action hash +
   requester) is refused with no new card. Delegate / council workers: no-card
@@ -34,7 +37,13 @@ artifact: design
   unreadable forms ask; SAFE-21 / clamp refusals are left to the handler.
   Runners and discovered Fledge commands: table words. `fledge-run` /
   `fledge-lanes-run`: the task / lane commands from the TOML, read like shell
-  commands. `git-push`: the remote's recorded default branch. Self-update
+  commands. `git-push`: the remote's recorded default branch, and a usual
+  default or deploy branch name whatever default is recorded. Review fixes:
+  git / gh subcommands are read past global options and their values, git
+  aliases (repo config; `-c alias.…` asks), `bun <script>` / `bun x` / `bun
+  exec` / `bun <file>`, `npx -c`, install lifecycle scripts, and
+  package-manager options that pick another package.json or workspace (ask).
+  Self-update
   exemption: exactly `CORVIDINHO_REF=v<X.Y.Z>` + the installed checkout's
   updater, for an existing tag.
 - **AUTONOMY-11.** One sentence in `ASK_AGENT_SYSTEM_INSTRUCTIONS`; a builtin
@@ -63,11 +72,12 @@ artifact: design
    `make -C` / `-f`, a command named by an expansion, a Fledge task or lane
    step it can't read: all ask. With no `fledge.toml` Fledge runs nothing, so
    nothing asks.
-6. **Default branch not recorded.** When `refs/remotes/<remote>/HEAD` is not
-   recorded, a push of a usual default name (`main`, `master`, `trunk`,
-   `production`, `prod`, `live`, `release`, `stable`, `deploy`, `gh-pages`,
-   `default`) asks; other branches don't (the m34 default says feature
-   pushes never ask).
+6. **Usual default and deploy branch names always ask.** A push of `main`,
+   `master`, `trunk`, `production`, `prod`, `live`, `release`, `stable`,
+   `deploy`, `gh-pages` or `default` asks whatever `refs/remotes/<remote>/HEAD`
+   records (a git-flow repo's default is `develop` while `main` deploys, and
+   the recorded HEAD is local metadata); the recorded default asks too; other
+   branches don't (the m34 default says feature pushes never ask).
 7. **`discord-send-file` is not gated here.** It attaches a file in the
    conversation's own channel, which reads as part of its reply; replies are
    the must-ask-public change. A dry-run post asks nothing (nothing is

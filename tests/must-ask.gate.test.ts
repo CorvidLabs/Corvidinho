@@ -19,6 +19,11 @@ import { join } from "node:path";
 import { ApprovalStore, type ApprovalRequest } from "../src/approvals/store.ts";
 import { createApprovalCards, mustAskApprovalKinds } from "../src/discord/approval-cards.ts";
 import { parseApproveCardCustomId } from "../src/discord/approve-card.ts";
+import {
+  CORVIDINHO_PROTOCOL_VERSION,
+  MUST_ASK_WAIT_STATUS,
+  progressFromFrame,
+} from "../src/agent/events-ndjson.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import {
   MUST_ASK_POLICY,
@@ -210,6 +215,42 @@ describe("AUTONOMY-9/10: a must-ask call waits for the owner's Approve card", ()
     expect(r.exitCode).toBe(130);
     expect(runs).toEqual([]);
     expect(rows()[0]!.status).toBe("expired");
+  });
+
+  test("a run stopped just as the owner approves still runs nothing (the stop wins, the approval is left unused)", async () => {
+    const abort = new AbortController();
+    const h = answerMustAsk(() => {
+      abort.abort();
+      return "approved";
+    });
+    restoreHooks = h.restore;
+    const r = await runPlugin({ name: PROD_CMD.name, args: [], signal: abort.signal });
+    expect(r.ok).toBe(false);
+    expect(r.exitCode).toBe(130);
+    expect(runs).toEqual([]);
+    expect(rows()[0]!.status).toBe("approved");
+  });
+
+  test("the wait line and a refusal are secret-scrubbed (SAFE-6); the wait line is what the live status shows", async () => {
+    const secret = "ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8";
+    const LEAKY = testCommand("test-mustask-leaky", () => ({
+      ask: { class: "prod", why: `runs a step with ${secret}`, target: "t" },
+    }));
+    register(LEAKY);
+    try {
+      answer("denied");
+      const r = await runPlugin({ name: LEAKY.name, args: [] });
+      expect(r.ok).toBe(false);
+      expect(r.error).not.toContain(secret);
+      expect(JSON.stringify(r.data)).not.toContain(secret);
+      expect(notes.join("\n")).not.toContain(secret);
+      const wait = notes.find((n) => n.includes("waiting for the owner's OK"))!;
+      expect(progressFromFrame({ protocol: CORVIDINHO_PROTOCOL_VERSION, type: "Text", text: wait })).toEqual({
+        message: MUST_ASK_WAIT_STATUS,
+      });
+    } finally {
+      unregister(LEAKY.name, LEAKY);
+    }
   });
 
   test("a classifier that throws asks as prod (fail closed); a command with no class runs with no ask", async () => {

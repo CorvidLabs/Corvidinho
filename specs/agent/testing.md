@@ -318,4 +318,7 @@ the "Must-ask (AUTONOMY-9..11)" sentence and the tool loop's system message
 holds it; in one round a files-write runs with no card while a
 `discord-post-message` waits for the owner's card, and the owner's no reaches
 the model as the tool's refusal (`refused (AUTONOMY-10) … the owner denied
-it`), which it reports in its answer.
+it`), which it reports in its answer. `tests/agent.events-ndjson.test.ts`:
+`progressFromFrame` shows the gate's wait line as "waiting for the owner's OK
+on an Approve card" and every other `Text` frame (model text included, even
+one that says it is waiting) as nothing.

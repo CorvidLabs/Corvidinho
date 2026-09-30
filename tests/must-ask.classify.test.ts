@@ -136,6 +136,24 @@ describe("shell-exec: prod and deploy contact asks, read-only looks included (AU
     ["npm run nosuch", /can't read/],
     ["make nosuch", /can't read/],
     ["make -C other deploy", /can't read/],
+    // Options and their values before the subcommand (review fixes).
+    ["git -C . push origin main", /git push/],
+    ["git --git-dir .git push origin main", /git push/],
+    ["git -c alias.p=push p origin main", /git alias/],
+    ["gh workflow -R o/r run deploy.yml", /GitHub workflow/],
+    ["gh release -R o/r create v1.0.0", /GitHub release/],
+    ["npm --loglevel warn run deploy", /flyctl/],
+    ["npx -c 'flyctl deploy'", /hosting platform/],
+    // bun's own forms: `bun <script>`, `bun x`, `bun exec`, `bun <file>`.
+    ["bun release", /wrangler/],
+    ["bun x vercel deploy", /hosting platform/],
+    ["bun exec 'kubectl get pods'", /cluster/],
+    ["bun deploy.js", /ssh/],
+    // Another package.json, workspace or preload can't be read.
+    ["bun --cwd sub run test", /can't read/],
+    ["npm run test --workspace api", /can't read/],
+    ["pnpm -C sub deploy", /can't read/],
+    ["bun --preload ./setup.ts test", /can't read/],
   ];
   for (const [cmd, why] of cases) {
     test(`asks: ${cmd}`, () => {
@@ -158,12 +176,39 @@ describe("shell-exec: prod and deploy contact asks, read-only looks included (AU
     "node -e 'console.log(1)'",
     "grep -rn systemctl src || true",
     "rsync -a src/ build/",
+    "npm install",
+    "bun install",
+    "npm ci",
+    "bun run lint",
+    "git -C . status",
+    "gh pr list -R o/r",
+    "gh workflow -R o/r list",
   ];
   for (const cmd of benign) {
     test(`runs with no ask: ${cmd}`, () => {
       expect(shellProdWhy(cmd, root)).toBeNull();
     });
   }
+
+  test("an install reads the project's install lifecycle scripts", () => {
+    const dir = tmp("must-ask-install-");
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ scripts: { postinstall: "doppler secrets download" } }));
+    for (const cmd of ["npm install", "npm ci", "bun install", "pnpm i", "yarn"]) {
+      expect(shellProdWhy(cmd, dir)).toMatch(/postinstall.*doppler/);
+    }
+  });
+
+  test("a git alias in the repo's config is read like the command it stands for", () => {
+    const dir = tmp("must-ask-alias-");
+    git(dir, "init", "-q", "-b", "work");
+    git(dir, "config", "alias.ship", "push origin main");
+    git(dir, "config", "alias.dep", "!flyctl deploy");
+    git(dir, "config", "alias.st", "status");
+    expect(shellProdWhy("git ship", dir)).toMatch(/git alias.*git push/);
+    expect(shellProdWhy("git dep", dir)).toMatch(/git alias.*hosting platform/);
+    expect(shellProdWhy("git st", dir)).toBeNull();
+    expect(shellProdWhy("git status", dir)).toBeNull();
+  });
 
   test("a command SAFE-21 or the SAFE-3 clamp refuses is not carded (the handler refuses it first)", () => {
     expect(shellProdWhy("ssh box uptime", root)).toBeNull();
@@ -337,6 +382,17 @@ describe("git-push: a push to the remote's default branch is a deploy (AUTONOMY-
     expect(await mustAskVerdict(cmd, ["--remote", "origin"], dir)).toBeNull();
   });
 
+  test("a usual default or deploy name asks even when another default is recorded (git-flow: develop is the default, main deploys)", async () => {
+    const dir = repo(true);
+    const cmd = get("git-push")!;
+    git(dir, "checkout", "-q", "-b", "main");
+    expect(asks(await mustAskVerdict(cmd, [], dir))?.why).toContain("usual default or deploy branch name");
+    git(dir, "checkout", "-q", "-b", "gh-pages");
+    expect(asks(await mustAskVerdict(cmd, [], dir))).not.toBeNull();
+    git(dir, "checkout", "-q", "-b", "talk/feature");
+    expect(await mustAskVerdict(cmd, [], dir)).toBeNull();
+  });
+
   test("no recorded default: a usual default name asks, a feature branch does not", async () => {
     const dir = repo(false);
     const cmd = get("git-push")!;
@@ -354,5 +410,13 @@ describe("free-text table words", () => {
     expect(prodTextWhy("git push origin main")).toMatch(/git push/);
     expect(prodTextWhy("the host service will render and shutdown")).toBeNull();
     expect(prodTextWhy("docker-compose.yml")).toMatch(/docker-compose/);
+    // Client libraries that reach another host, a cloud account or a secrets store.
+    expect(prodTextWhy("import paramiko")).toMatch(/remote host/);
+    expect(prodTextWhy('const { Client } = require("ssh2")')).toMatch(/remote host/);
+    expect(prodTextWhy("python -m awscli s3 ls")).toMatch(/cloud account/);
+    expect(prodTextWhy("import hvac")).toMatch(/secrets/);
+    // Options between the tool and its subcommand.
+    expect(prodTextWhy('execSync("git -C . push origin main")')).toMatch(/pushes a branch/);
+    expect(prodTextWhy("gh workflow -R o/r run deploy.yml")).toMatch(/GitHub workflow/);
   });
 });
