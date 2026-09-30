@@ -12,7 +12,7 @@ Acceptance Criteria
 
 ### REQ-agent-002
 
-When the run changed files (in the run's real git working-tree diff per REQ-agent-085, or, with no git snapshot, reported by a tool) or a tool claimed a change git does not show, completion SHALL run `fledge lanes run verify --non-interactive`; there is no switch that skips it (AGENT-14, REQ-agent-003). Pass → `verified=true` only when the lane's output also shows that tests ran and no test was deleted or turned off since the baseline (AGENT-15, REQ-agent-185); a passing lane without that evidence is a failed verify like any other, whose note leads the retry's feedback. Fail with retries remaining → re-enter executing with verifier output. Exhausted retries → terminal failure with `verified=false` (AGENT-4 / AGENT-4.a / FLEDGE-2). The default runner SHALL spawn fledge with the parent's env minus the delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY` and every `CORVIDINHO_ACTING_*` key) and the LLM API keys (`CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`), keeping every other inherited key, so tests the agent wrote never see operator secrets (SAFE-6). The verifier output a retry gets SHALL be the failing step's, not the start of the lane log (AGENT-4.a): output within `VERIFY_FEEDBACK_MAX_CHARS` (4000) is passed whole; over it, `verifyFeedbackExcerpt` SHALL drop colour escapes, name the failing step (from fledge's `Lane '<lane>' failed at step N (<name>)` line; a parallel step is `parallel(<tasks>)`) and keep that step's output from its `Running task: <name>` marker (a parallel step's from its `Running parallel:` line) when it fits, else its error / fail lines (lines that report a failure, such as `error:`, `Expected:`, `(fail)` or `file(1,2): error TS…`, before lines that only mention one; first ones first; passing-test lines left out; printed in log order) and the end of the log, in at most 4000 chars and never cut inside a surrogate pair. `runTask` SHALL keep the feedback it passes as `ExecuteContext.verifyFeedback` (its "Verification failed" head included) within that cap, and the LLM execute (tool loop and read-tier chat) SHALL cap verify feedback with the same excerpt, never by keeping its first 4000 chars. No flag, environment variable or config key is added.
+When the run changed files (in the run's real git working-tree diff per REQ-agent-085, or, with no git snapshot, reported by a tool) or a tool claimed a change git does not show, completion SHALL run `fledge lanes run verify --non-interactive`; there is no switch that skips it (AGENT-14, REQ-agent-003). Pass → `verified=true` only when the lane's output also shows that tests ran and no test was deleted or turned off since the baseline (AGENT-15, REQ-agent-185); a passing lane without that evidence is a failed verify like any other, whose note leads the retry's feedback. Fail with retries remaining → re-enter executing with verifier output. Exhausted retries → terminal failure with `verified=false` (AGENT-4 / AGENT-4.a / FLEDGE-2). The default runner SHALL spawn fledge with the parent's env minus the delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY`, `BRAVE_SEARCH_API_KEY` and every `CORVIDINHO_ACTING_*` key) and the LLM API keys (`CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`), keeping every other inherited key, so tests the agent wrote never see operator secrets (SAFE-6). The verifier output a retry gets SHALL be the failing step's, not the start of the lane log (AGENT-4.a): output within `VERIFY_FEEDBACK_MAX_CHARS` (4000) is passed whole; over it, `verifyFeedbackExcerpt` SHALL drop colour escapes, name the failing step (from fledge's `Lane '<lane>' failed at step N (<name>)` line; a parallel step is `parallel(<tasks>)`) and keep that step's output from its `Running task: <name>` marker (a parallel step's from its `Running parallel:` line) when it fits, else its error / fail lines (lines that report a failure, such as `error:`, `Expected:`, `(fail)` or `file(1,2): error TS…`, before lines that only mention one; first ones first; passing-test lines left out; printed in log order) and the end of the log, in at most 4000 chars and never cut inside a surrogate pair. `runTask` SHALL keep the feedback it passes as `ExecuteContext.verifyFeedback` (its "Verification failed" head included) within that cap, and the LLM execute (tool loop and read-tier chat) SHALL cap verify feedback with the same excerpt, never by keeping its first 4000 chars. No flag, environment variable or config key is added.
 
 In a repo whose SpecSync workflow requires a change for meaningful files,
 the REQ-agent-518 coverage check SHALL come first: an uncovered path makes the
@@ -26,7 +26,7 @@ Acceptance Criteria
 - Exhausted retries yield `verified=false` and failed state.
 - Default runner invokes fledge with `lanes run verify --non-interactive`.
 - An attempt whose execute result reports no files but that changed the git working tree (REQ-agent-085) runs verify: done with `verified=true` only on a pass, otherwise retried and then failed.
-- A process with `DISCORD_TOKEN`, `DISCORD_BOT_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `CORVIDINHO_LLM_API_KEY`, `CORVIDINHO_AUDIT_HMAC_KEY` and `CORVIDINHO_ACTING_*` set runs the default runner: the fledge child's env has none of those keys or values and keeps the rest (PATH, HOME, `CORVIDINHO_DATA_DIR`, other keys).
+- A process with `DISCORD_TOKEN`, `DISCORD_BOT_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `CORVIDINHO_LLM_API_KEY`, `CORVIDINHO_AUDIT_HMAC_KEY` and `CORVIDINHO_ACTING_*` set runs the default runner (and `BRAVE_SEARCH_API_KEY` is dropped by `isVerifyEnvDropped` / `buildVerifyEnv`, `tests/web.search.test.ts`): the fledge child's env has none of those keys or values and keeps the rest (PATH, HOME, `CORVIDINHO_DATA_DIR`, other keys).
 - A failing lane log whose passing steps (lint, a `--help` smoke over 4000 chars) come before a failing `test` step gives the retry's `verifyFeedback` and the tool loop's next request at most 4000 chars that name `Failing step: test (step 3 of lane 'verify')` and carry the failing test's error lines and fledge's failure line, not the `--help` text (AGENT-4.a).
 - A failing step whose own output is over the cap keeps its first error lines and the end of the log (the last failure, the test summary, fledge's failure line); passing-test lines are not kept as error lines.
 - A raw verify feedback over the cap passed to the read-tier chat is cut to the failing step and the end of the log, not its first 4000 chars.
@@ -233,6 +233,28 @@ the provider-reported token usage cost; it SHALL stay at the estimate when
 usage is missing or the request failed at the network, and SHALL count zero
 when the provider returned an HTTP error.
 
+Tool calls with a flat price per call SHALL count toward the same total
+cap (Leif, #318: a Brave `web-search` is about $0.005): `reserveFlatSpend({
+env, provider, model, costMicroUsd, db?, now? })` SHALL be `off` (DB never
+opened) when neither this cap nor `CORVIDINHO_PROVIDER_SPEND_CAPS_USD` is
+set, and otherwise reserve the price in the same IMMEDIATE ledger
+transaction before the call, so the call is recorded while any cap is set,
+like a provider call, and counted against the total cap only (a provider
+cap is keyed on a configured model provider, REQ-agent-114) — `stopped` with
+the same `spend-cap` ask as below when spend plus the price would exceed the
+total cap, a spend-cap setting is not valid (named, never echoed) or the
+ledger is unavailable (the call SHALL NOT be sent), else
+`held`, whose `settle` records `billed` as the call's actual cost,
+`not-billed` (refused before connecting, or an HTTP error reply) as 0, and
+`unknown` (network error, timeout, abort, unreadable reply) at the estimate.
+A plugin stopped this way SHALL return the ask in
+`PluginHandlerResult.spendAsk` (never in `data` or `message`), and the tool
+loop SHALL end the attempt on an offered tool's `spend-cap` ask exactly as
+for a model call stopped at the cap: a `ToolResult` with success false and
+`SPEND_CAP_SUMMARY`, then the summary `SPEND_CAP_SUMMARY` and the ask, with
+no further model call. The 80% warning for such a row is noted by the next
+model call's settle.
+
 At 100%, a call whose estimate would exceed the cap SHALL NOT be sent as
 is. With an owner configured and the guard given `approval` (as
 `createTaskExecute` does), the call SHALL first wait for the owner's spend
@@ -300,6 +322,8 @@ Acceptance Criteria
 - Under the cap: the call is sent, the caller can still read the reply, and the ledger row settles to the usage cost in integer micro-USD.
 - Spend plus estimate over the cap (including a zero cap): no fetch; the attempt returns a `spend-cap` ask naming spend, estimate, cap and `CORVIDINHO_DAILY_SPEND_CAP_USD`, ending with the operator action and no question mark; the summary is `SPEND_CAP_SUMMARY` (no `$`, no `CORVIDINHO_`); `runTask` returns `blocked` with verify skipped; `task run --json` exits 0 with `result.ask.reason` `spend-cap`.
 - Spend older than 24 hours no longer counts.
+- A flat-priced `web-search` (`tests/web.search.test.ts`): no cap opens no database; under the cap a `reserved` row of 5000 micro-USD exists when the request goes out and settles `actual` at 5000; an HTTP error or a refusal before connecting settles `failed` at 0, and a network failure, a body that fails mid-read, a timeout, a non-JSON or malformed 2xx body and an abort after the request went out stay `estimated` at 5000; a run already stopped reserves nothing and sends nothing; at the cap (or with an invalid cap value, or an unavailable ledger such as a closed database, whose ask says the spend ledger is unavailable) nothing is sent, the error names no amount and the result carries the `spend-cap` ask; in the tool loop that search ends the attempt with `SPEND_CAP_SUMMARY` and the ask after one model call.
+- With only `CORVIDINHO_PROVIDER_SPEND_CAPS_USD` set (its provider already at its cap) a `web-search` is sent and its row settles `actual` at 5000; with an entry keyed on `api.search.brave.com` (no configured model provider) the setting is not valid, nothing is sent and the ask names `CORVIDINHO_PROVIDER_SPEND_CAPS_USD`, never the value.
 - Unpriced model, invalid cap value or unavailable ledger: no fetch and a `spend-cap` ask; the invalid value and secret-shaped model ids are not echoed.
 - HTTP error reply counts 0; missing usage and network errors keep the estimate.
 - Two connections on one DB file see each other's reservations and record the 80% warning once between them.
@@ -341,7 +365,8 @@ else this checkout's `src/cli.ts`, never the cwd's. The worker tier SHALL be
 the requested tier clamped to the lead's; an omitted tier SHALL mean the
 lead's tier and an unknown tier SHALL be refused. The worker env SHALL be
 the lead's env without `DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`,
-`CORVIDINHO_AUDIT_HMAC_KEY` and every `CORVIDINHO_ACTING_*` key (SAFE-6; LLM
+`CORVIDINHO_AUDIT_HMAC_KEY`, `BRAVE_SEARCH_API_KEY` (only the lead searches,
+PLUGIN-7) and every `CORVIDINHO_ACTING_*` key (SAFE-6; LLM
 provider keys stay), and SHALL force the depth to the lead's depth + 1,
 `CORVIDINHO_LLM_TIER` to the worker tier, `CORVIDINHO_NON_INTERACTIVE=1` and
 `CORVIDINHO_ALLOWLIST` to the lead's effective allowlist, overriding inherited
@@ -407,7 +432,7 @@ Acceptance Criteria
 - `createTaskExecute` in a temp project with autonomous enabled at code tier offers `delegate`; a disabled project, tool tier, or depth 2 does not; a model call to a hidden `delegate` is refused, not run.
 - A lead tool loop that calls `delegate` against a fake bin receives the worker summary in the tool message, and the worker's filesChanged join the lead's result.
 - Depth parse fails closed; tier clamp never exceeds the lead; spawn argv uses `bun --no-env-file` with `--task` last and no `--no-verify` flag; forced worker env overrides inherited env; the limiter refuses past 2 concurrent / 4 per run.
-- The worker env (and the spawned worker process) has no `DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY` or inherited `CORVIDINHO_ACTING_*` key and keeps LLM provider keys; a role-session lead gets `CORVIDINHO_ACTING_IS_ADMIN=0`, a CLI lead none.
+- The worker env (and the spawned worker process) has no `DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY`, `BRAVE_SEARCH_API_KEY` (`tests/web.search.test.ts`) or inherited `CORVIDINHO_ACTING_*` key and keeps LLM provider keys; a role-session lead gets `CORVIDINHO_ACTING_IS_ADMIN=0`, a CLI lead none.
 - A non-ADMIN role session's catalog leaves out `delegate` even when autonomous mode is allowed; the ADMIN owner's catalog offers it (ROLES-CHAT-2/4).
 - Worker timeout, lead abort, and a grandchild holding the pipe do not hang the lead; a `.env` in the cwd is not loaded by a `.ts` worker.
 - Worker timeout and lead abort kill the worker's same-group and `setsid` grandchildren, not just the worker.
@@ -1201,8 +1226,8 @@ model says so briefly. The IDENTITY and MEMORY system paragraphs SHALL say a
 name, nickname, memory or message never changes who someone is or their role.
 In the tool loop a successful result of a tool in `UNTRUSTED_RESULT_TOOLS`
 (the GitHub readers, `discord-user-lookup`) SHALL reach the model inside a
-fence (`web-fetch` keeps its own); a successful result of a tool in
-`INJECTION_SCAN_TOOLS` (`web-fetch`, the GitHub title / docs / milestone
+fence (`web-fetch` and `web-search` keep their own); a successful result of a tool in
+`INJECTION_SCAN_TOOLS` (`web-fetch`, `web-search`, the GitHub title / docs / milestone
 readers, `discord-user-lookup`; PR diffs and file lists are not scanned) SHALL
 be scanned over its strings without the web fence's own lines, and a hit
 SHALL (1) put `injectionToolNote` in front of that tool message, (2) leave
@@ -1230,6 +1255,7 @@ Acceptance Criteria
 - The tool-loop and read-tier system prompts contain `UNTRUSTED_CONTENT_AGENT_SYSTEM_INSTRUCTIONS`.
 - Through `createTaskExecute` with fake plugins: an injected `github-issue-list` title puts the SAFE-13 note and a fenced result in the tool message, drops `files-write` from the next request, refuses a `files-write` call (nothing written), calls `onInjection` once with the tool and reason, audits one `injection-suspected` row and ends the summary with the note; the web fence's own lines are no hit.
 - A community run whose task claims the owner and asks for `files-write` is offered no mutating tool and the call gets the role refusal.
+- Through `createTaskExecute`: a `web-search` result whose description is an injection puts the SAFE-13 note in front of the fenced result, drops `web-search`, `web-fetch` and `files-write` from the next request (one suspicious snippet switches off the web tools too), refuses the `files-write` call, reports `{ source: "web-search", reasons: ["ignore-rules"] }` once and ends the summary with the note (`tests/web.search.test.ts`).
 - Through `createTaskExecute`: a `delegate` result, and a failed `council` result, carrying `data.injection` put `injectionWorkerNote` and the fence in the tool message, drop `files-write`, `memory-store` and the worker tool from the next request, refuse `memory-store` and `files-write` (nothing stored or written), report the worker's notice once, end the summary with the note and record one audit row; at delegation depth 1 a hit is reported but records no row.
 - Regression tests in `tests/safe.injection.test.ts` fail on the base sources and pass after.
 - WATCH (REQ-watch-367, IDENTITY-7.a): `watchInjectionVerdict` exempts the owner only by the owner's GitHub numeric id; an injected body from the owner's login with no or another numeric id is flagged (`tests/safe.injection.test.ts`).
@@ -1400,7 +1426,7 @@ change opened, answered, approved or archived (`specsync-change-new`,
 `-answer`, `-approve`, `-finalize`, AGENT-18), `delegate`, the shell, the
 language runners and `fledge-run`) or a Fledge plugin command
 (`origin` `fledge:`) succeeds; never for `NO_STATE_CHANGE_TOOLS`
-(`web-fetch`, `danger-ping`, `fledge-lanes-run`, `council`) or a read.
+(`web-fetch`, `web-search`, `danger-ping`, `fledge-lanes-run`, `council`) or a read.
 Every dangerous or mutating builtin SHALL be in exactly one of the two sets.
 A change SHALL reset every count; a call's own success SHALL reset its own.
 
@@ -1434,7 +1460,7 @@ unknown tool names, and a prefer-plugin steer.
 
 Acceptance Criteria
 - `callSignature` is equal for argv spellings of one call and differs for other args or tools.
-- Every registered dangerous or mutating builtin is in exactly one of `STATE_CHANGING_TOOLS` / `NO_STATE_CHANGE_TOOLS`; a successful write, a failed `delegate` that reports `filesChanged` and a Fledge plugin command's success are changes; a failed write, reads, `web-fetch`, `council`, `danger-ping` and `fledge-lanes-run` are not.
+- Every registered dangerous or mutating builtin is in exactly one of `STATE_CHANGING_TOOLS` / `NO_STATE_CHANGE_TOOLS`; a successful write, a failed `delegate` that reports `filesChanged` and a Fledge plugin command's success are changes; a failed write, reads, `web-fetch`, `web-search`, `council`, `danger-ping` and `fledge-lanes-run` are not.
 - A tool that always fails, called three rounds in a row with the same argv: the 1st tool message has no steer, the 2nd ends with the steer (scrubbed error, after the whole result), the 3rd call never runs and the attempt ends with `repeatedFailureAsk("flaky-read")`, a `ToolResult` with `REPEAT_FAILURE_BLOCK_DETAIL` and an `[operator] AGENT-16` line whose error excerpt is scrubbed.
 - Three identical failing calls in one batch all run (2nd and 3rd steered); the next round's identical call asks.
 - After the steer, a call with different arguments runs and the model's final reply stands (no ask).
@@ -2339,4 +2365,40 @@ Acceptance Criteria
 - A `delegate` result whose `data.models` names the worker's model makes that model an author: the reviewer is the next configured model.
 - Run 1, whose head model fails over to the next one, which writes a file; run 2 (a new `createTaskExecute`), whose head model answers and opens the PR from the same checkout: the reviewer is the third configured model, never the one that wrote the change. `recordChangeAuthors` keeps each model once per checkout and branch, scrubbed, and records nothing below a git top level.
 - Two `github-pr-create` calls in one batch: the first gets round 1's findings, the second is not run, one review call is made and the cycle stays open (not declined).
+
+### REQ-agent-318
+
+A task run's reply SHALL end with the short visible attribution line a
+tool's provider asks for when that run used the tool (PLUGIN-7; Leif's go on
+#318, to meet Brave's terms): `src/agent/task-summary.ts`
+`REPLY_ATTRIBUTION_BY_TOOL` maps `web-search` to "Search by Brave" and no
+other tool. Once an offered tool in that map returns `ok` in the tool loop
+(a `web-search` that Brave answered, "(no results)" included), every summary
+`createTaskExecute` returns for the rest of that run SHALL end with its
+line once, as a closing paragraph after a blank line
+(`withReplyAttribution`: after the AGENT-11 model fallback note, before the
+ROLES-CHAT-3 role note; a summary that already ends with it is left as is).
+A call that failed, was refused or was stopped (no or a malformed key, a
+usage error, a secret-carrying query, an HTTP error, a SAFE-13 refusal, the
+spend cap) SHALL add no line, and a run without such a call SHALL get none.
+The line SHALL NOT be part of any tool message, the untrusted web fence or
+any other request the model gets, and it SHALL carry nothing else (no
+amount, cap or setting, SAFE-14.a): a `spend-cap` ask's question, and so the
+owner's spend DM built from it, never carries it. `closingNotesTail`
+SHALL recognise the line (the known lines only, as the whole last
+paragraph), so `clipKeepingRoleNote`, `resultFrame` (NDJSON, 4000),
+`chatBodyFromTaskResult` (schedule posts, WATCH, 1800), the post clips and
+Discord's split (`splitDiscordMessage` / `planAnswerParts`) keep it whole at
+the end of every reply: the owner's and team members' Discord replies,
+`/session start`, `/work`, the owner's schedule posts and the CLI's `task
+run` output. No tool schema, env var, table or setting is added.
+
+Acceptance Criteria
+- `REPLY_ATTRIBUTION_BY_TOOL` maps exactly `web-search` to "Search by Brave".
+- Two answered searches then the answer "Bun is a fast JavaScript runtime." give "Bun is a fast JavaScript runtime.", a blank line and "Search by Brave", once; no model request (fenced results, tool messages, prompts) contains the line; a later attempt of the same run still ends with it once; an answer that already ends with it is not doubled.
+- No line with no search, a search with no key, a 429 from Brave, or a query refused for carrying the key.
+- A declared team member's run (role session) that searched ends with the line too.
+- A run whose second search is stopped at the spend cap ends `SPEND_CAP_SUMMARY`, a blank line and the line; the `spend-cap` ask's question and `formatSpendStopDm` never carry it.
+- `closingNotesTail` returns the fallback note, the line and the role note in that order and ignores a mere mention; `chatBodyFromTaskResult` (1800) and `resultFrame` (4000, `truncated`) keep the line at the end; `planAnswerParts` of a long answer ends its last part with it, once; `withReplyAttribution` adds it once and ignores unknown lines.
+- The new tests in `tests/web.search.test.ts` fail on the base sources and pass after.
 

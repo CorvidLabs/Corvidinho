@@ -1,6 +1,6 @@
 ---
 id: web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered
-state: approved
+state: implementing
 type: feature
 base_commit: 73b41ca920971e22d73db0a6ddff0a308b013aa9
 ---

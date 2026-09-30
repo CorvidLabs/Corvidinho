@@ -1965,7 +1965,9 @@ login SHALL end the bridge start cleanly (CLI-4, SAFE-6).
   `SyntaxError` keeps its class name; other names are dropped), with the
   literal value of each set secret env var from `.env.example`
   (`DISCORD_TOKEN`, `DISCORD_BOT_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`,
-  `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `CORVIDINHO_AUDIT_HMAC_KEY`;
+  `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `CORVIDINHO_AUDIT_HMAC_KEY`,
+  `BRAVE_SEARCH_API_KEY` (PLUGIN-7; it has no vendor shape, so it is
+  redacted by name);
   values of 8+ characters) replaced by `[redacted:env-secret]`, then passed
   through `scrubSecrets`, cut to its first line and capped at
   `ERROR_LINE_MAX` (300) characters. It SHALL NOT throw; an unprintable value
@@ -1997,7 +1999,7 @@ Acceptance Criteria
 - `startBridge` whose gateway `start()` throws discord.js `TokenInvalid` returns `{ ok: false, exitCode: 1 }` with `discord login failed (401): check DISCORD_TOKEN (An invalid token was provided.)` and calls the gateway's `stop()` once.
 - A `DiscordAPIError` with status 403 gives `discord login failed (403): check DISCORD_TOKEN …` on one line with no `rawError`.
 - `corvidinho discord bridge` with a token Discord rejects exits 1 with that line and no stack, crash footer or token value.
-- `formatErrorLine` returns only the first line, redacts vendor-key shapes (including a multi-line private-key block) and the value of a set secret env var of 8+ characters, keeps shorter values, keeps the `TypeError:` prefix, drops `DiscordAPIError[0]`, handles strings, `{message}` objects, numbers, empty messages and null-prototype objects, and caps at `ERROR_LINE_MAX`.
+- `formatErrorLine` returns only the first line, redacts vendor-key shapes (including a multi-line private-key block) and the value of a set secret env var of 8+ characters (`BRAVE_SEARCH_API_KEY` included, `tests/web.search.test.ts`), keeps shorter values, keeps the `TypeError:` prefix, drops `DiscordAPIError[0]`, handles strings, `{message}` objects, numbers, empty messages and null-prototype objects, and caps at `ERROR_LINE_MAX`.
 - A token that is only in the `startBridge` env and appears in the login error text is redacted in the returned message.
 - `formatRegisterCommandsFailure` on a `DiscordAPIError` 403 `Missing Access` with the bridge options gives `[discord] slash command registration failed (403): Missing Access — check DISCORD_TOKEN / DISCORD_BOT_TOKEN and DISCORD_GUILD_ID` with no `requestBody` and no newline; with defaults a 401 names `--guild-id`, a status-less error gets no hint, and a secret env value is redacted.
 
