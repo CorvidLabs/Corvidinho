@@ -38,3 +38,12 @@ artifact: design
   scheduler, backup, forget, `rescrubDatabase` called on its own) keep
   SQLite's handler; they are not on the SAFE-5 open-and-append path and fail
   visibly. They can adopt `retryWhileBusy` later.
+
+**Follow-up (same PR):** change `shared-db-open-takes-the-write-lock-up-front-so-processes-that-open-a-new-file-or-one-with-a-re-scrub-due-at-once-take` makes the open take the write
+lock up front (BEGIN IMMEDIATE through `retryWhileBusy`) instead of
+retrying a whole deferred transaction: in a deferred transaction a write
+after a read gets SQLITE_BUSY at once, which the migration's
+multi-statement execs and ignored ALTER errors went on past, so concurrent
+opens of a new file or with a re-scrub due failed. The requirement deltas
+above carry the final REQ-discord-287 / REQ-plugins-287 text of both
+changes, so checking either one keeps the same canonical text.

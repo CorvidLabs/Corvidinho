@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "24f70ecdca39ffa74e1645185baf7cc9882982ca",
   "created_at": 1790786556,
-  "updated_at": 1790787011,
+  "updated_at": 1790787129,
   "affected_specs": [
     "discord",
     "plugins"
@@ -35,7 +35,9 @@
     "research",
     "plan"
   ],
-  "dependencies": [],
+  "dependencies": [
+    "shared-db-open-and-safe-5-audit-append-retry-a-busy-sqlite-lock-every-millisecond-so-other-processes-committing-back-to"
+  ],
   "answers": {
     "architecture_risk": "yes",
     "public_contract": "no"

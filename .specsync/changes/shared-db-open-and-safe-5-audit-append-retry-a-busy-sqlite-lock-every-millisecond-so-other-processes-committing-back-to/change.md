@@ -1,6 +1,6 @@
 ---
 id: shared-db-open-and-safe-5-audit-append-retry-a-busy-sqlite-lock-every-millisecond-so-other-processes-committing-back-to
-state: implementing
+state: verifying
 type: bug_fix
 base_commit: 507d97b75b08ebe86c5e0c5ab19322ea82d683cb
 ---
