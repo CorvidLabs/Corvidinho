@@ -1,9 +1,9 @@
 /**
  * `task run` offers allowlisted dangerous tools to the model (REQ-agent-501,
  * CLI-3 / SAFE-1, GITHUB-1/3, ROLES-CHAT-4, PLUGIN-3): a dangerous plugin is
- * in the catalog only when the run's allowlist names it, never the
- * SAFE-3-pending shell, runners and Fledge core runs, and never for a
- * non-ADMIN role session.
+ * in the catalog only when the run's allowlist names it (the shell, runners
+ * and Fledge core runs only with the SAFE-3.a grant, never in a local run),
+ * and never for a non-ADMIN role session.
  * A non-git run whose Fledge command may have changed files verifies anyway
  * (REQ-agent-502, AGENT-4). Fake provider, fake `fledge`, GitHub dry-run: no
  * network, no tokens.
@@ -33,8 +33,8 @@ const GITHUB_WRITES = [
 const MEMORY_DESTRUCTIVE = ["memory-forget", "memory-override"];
 /** Fledge core runs (PLUGIN-1): a lane or task runs the project's own commands. */
 const FLEDGE_CORE_RUNS = ["fledge-lanes-run", "fledge-run"];
-/** Shell + language runners + Fledge core runs: not offered from the allowlist until SAFE-3 is decided. */
-const SAFE3_PENDING = ["shell-exec", "node-exec", "python-exec", "cargo-exec", ...FLEDGE_CORE_RUNS];
+/** Shell + language runners + Fledge core runs: offered from the allowlist only with the SAFE-3.a grant. */
+const SAFE3A = ["shell-exec", "node-exec", "python-exec", "cargo-exec", ...FLEDGE_CORE_RUNS];
 
 const OWNER = "181969874455756800";
 
@@ -168,11 +168,11 @@ describe("task-run catalog offers allowlisted dangerous tools (REQ-agent-501, CL
     expect(names({ tier: "tool", allowlist: allow }).has("files-delete")).toBe(false);
   });
 
-  test("shell-exec, the node/python/cargo runners and the Fledge core runs are never offered from the allowlist (SAFE-3 pending)", () => {
-    expect([...(tools.SAFE3_PENDING_TOOLS ?? [])].sort()).toEqual([...SAFE3_PENDING].sort());
-    const allow = new Set([...SAFE3_PENDING, "files-delete"]);
+  test("shell-exec, the node/python/cargo runners and the Fledge core runs are not offered from the allowlist without the SAFE-3.a grant", () => {
+    expect([...(tools.SAFE3A_TOOLS ?? [])].sort()).toEqual([...SAFE3A].sort());
+    const allow = new Set([...SAFE3A, "files-delete"]);
     const offered = names({ tier: "code", allowlist: allow });
-    for (const n of SAFE3_PENDING) expect(offered.has(n)).toBe(false);
+    for (const n of SAFE3A) expect(offered.has(n)).toBe(false);
     expect(offered.has("files-delete")).toBe(true);
     // The Fledge core runs are always registered, dangerous and code tier: only the hold-out keeps them out.
     const seam = names({ tier: "code", includeDangerous: true });
@@ -367,7 +367,7 @@ describe("Fledge commands through the allowlist (PLUGIN-3 / FLEDGE-4, REQ-agent-
     expect(existsSync(join(fake.bin, "runs.log"))).toBe(false);
   });
 
-  test("allowlisted Fledge core builtins: the runs stay out until SAFE-3 and no core name starts discovery (REQ-agent-501)", async () => {
+  test("allowlisted Fledge core builtins: a local run gets no SAFE-3.a grant, so the runs stay out, and no core name starts discovery (REQ-agent-501)", async () => {
     const fake = makeFledge();
     const { fetchImpl, seen } = fakeProvider([{ name: "fledge-run", argv: ["test"] }]);
     const events: AgentEvent[] = [];

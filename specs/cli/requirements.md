@@ -1101,4 +1101,12 @@ Acceptance Criteria
 - `task run` (text) with a 410 head: exit 0, the operator line on stderr, the answer followed by the note on stdout.
 - A daemon started without an injected agent, `CORVIDINHO_BIN` a fake bin whose result frame reports a failover: after a due schedule runs, one `llm.fallback` warn event with the schedule's session id, the hops and `llm.fallback: gpt-5 failed (HTTP 404), fell back to gpt-4.1`.
 - `tests/docs.operator-facts.test.ts` still passes with the new Logs row.
+### REQ-cli-427
+
+The project SHALL ship package version `0.0.36` (approval cards and codes, must-ask gate, owner-only spend, no default model, tests-ran verify, schedule asks). CLI `version` and Discord presence (DISCORD-12) report `0.0.36` after a restart. CHANGELOG SHALL include verbose 0.0.36 notes.
+
+Acceptance Criteria
+- `package.json` version is `0.0.36`.
+- CLI `version` prints `0.0.36`.
+- CHANGELOG has a 0.0.36 section that the updater's changelog helper extracts exactly.
 

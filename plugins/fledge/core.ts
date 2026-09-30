@@ -41,9 +41,12 @@
  * binary a read-only command starts). argv arrays only (no shell), cwd pinned
  * to the plugin cwd, the verify lane's scrubbed env (no Discord config,
  * GitHub tokens, audit key, acting identity or LLM keys) without CDPATH /
- * OLDPWD, stdin closed, a timeout, per-stream output caps, and the process
- * group killed on timeout or the calling run's abort (spawn.ts). Output is
- * secret-scrubbed (SAFE-6).
+ * OLDPWD and, like `shell-exec` and the runners, without the owner's GitHub
+ * or git credentials (`withoutGitCredentials`, SAFE-21.a: the model may be
+ * offered the runs under SAFE-3.a, and a lane or task it runs must not push,
+ * open PRs or merge outside the checked GitHub tools), stdin closed, a
+ * timeout, per-stream output caps, and the process group killed on timeout or
+ * the calling run's abort (spawn.ts). Output is secret-scrubbed (SAFE-6).
  */
 
 import { lstatSync, readdirSync, realpathSync, statSync } from "node:fs";
@@ -54,6 +57,7 @@ import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types
 import { scrubSecrets } from "../../src/store/scrub.ts";
 import { isSecretPath } from "../files/protectedPaths.ts";
 import { isInsideRoot, realRoot } from "../files/resolvePath.ts";
+import { withoutGitCredentials } from "../runners/commands.ts";
 import { cleanText } from "./discover.ts";
 import { fledgeLanesRunMustAsk, fledgeRunMustAsk } from "./must-ask.ts";
 import { spawnCapped, type SpawnCappedResult } from "./spawn.ts";
@@ -90,12 +94,16 @@ export function resolveFledgeBin(env: NodeJS.ProcessEnv): string | null {
   return found && isAbsolute(found) ? found : null;
 }
 
-/** Child env: the verify lane's scrub, no CDPATH / OLDPWD, non-interactive, project root hint. */
+/**
+ * Child env: the verify lane's scrub, no CDPATH / OLDPWD, no GitHub or git
+ * credentials (SAFE-21.a, the env `shell-exec` and the runners get),
+ * non-interactive, project root hint.
+ */
 export function fledgeCoreChildEnv(
   base: NodeJS.ProcessEnv,
   projectRoot: string,
 ): Record<string, string> {
-  const env = buildVerifyEnv(base);
+  const env = withoutGitCredentials(buildVerifyEnv(base));
   delete env.CDPATH;
   delete env.OLDPWD;
   env.FLEDGE_NON_INTERACTIVE = "1";

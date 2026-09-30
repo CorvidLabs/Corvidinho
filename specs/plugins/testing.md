@@ -113,7 +113,12 @@ skipped and the builtin keeps the name; lanes list / validate argv and typed
 data (control chars cleaned, fledge's path not passed on), `--strict`,
 invalid lanes ok=false, args / a path refused before spawning; SAFE-1 deny for
 the runs without an allowlist entry and fledge not started, allowlisted
-`lanes run verify` in the project root with the scrubbed env; `run <task> --
+`lanes run verify` in the project root with the scrubbed env; `fledge-run` and
+`fledge-lanes-run` start fledge without the owner's GitHub or git credentials
+(no `GH_TOKEN`, `GIT_ASKPASS`, `SSH_AUTH_SOCK` or inherited `GH_CONFIG_DIR`,
+`GIT_CONFIG_GLOBAL=/dev/null`, an empty `credential.helper`, a key-less
+`GIT_SSH_COMMAND`, gh's `hosts.yml` and the `~/.gitconfig` helper unseen;
+SAFE-21.a, fails on the base's `plugins/fledge/core.ts`); `run <task> --
 <args>` verbatim, no `--` without args; option-like or non-plain lane / task
 names refused before spawning; exit code, secret scrub, timeout 124 and abort
 130; fledge only on an absolute PATH entry, else exit 127; lane sources

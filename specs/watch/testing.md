@@ -165,3 +165,14 @@ llm.fallback warn line …") — a fake bin whose result frame reports a failove
 the WATCH client's summary keeps the closing `(model fallback: …)` note and
 one `[watch] llm.fallback: gpt-5 failed (HTTP 404), fell back to gpt-4.1
 (session w1)` warn line is logged. Fails on the base sources (no line).
+
+## WATCH runs stamp the watch surface (REQ-watch-735; SAFE-3.a)
+
+`tests/discord.safe3a-surface.test.ts` ("Discord: the caller's surface, else
+empty; WATCH: always watch") — the WATCH spawn client sets
+`CORVIDINHO_ACTING_SURFACE=watch` even when its own env carries another
+value; `tests/agent.safe3a-gate.test.ts` and
+`tests/agent.safe3a-owner-shell.test.ts` show `watch` (and a
+`CORVIDINHO_WATCH_SESSION_ID` marker) never gets the shell.
+- Fail on base: with the base's `src/watch/agent-client.ts` the stamp is
+  unset and the test fails.
