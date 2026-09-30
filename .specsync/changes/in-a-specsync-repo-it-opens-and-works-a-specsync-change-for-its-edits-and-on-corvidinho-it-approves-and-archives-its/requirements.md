@@ -30,6 +30,9 @@ artifact: requirements
   runs again after the own-change steps), REQ-agent-065 (team `/work`
   catalog gains new / answer; `agentTool: false` never offered),
   REQ-agent-086 (the change tools are state-changing), REQ-plugins-065
-  (`TEAM_WORK_TOOLS`), REQ-plugins-114 (tool-surface budget ~9000).
+  (`TEAM_WORK_TOOLS`), REQ-plugins-114 (tool-surface budget ~9000),
+  REQ-plugins-083 (SAFE-2: the file tools refuse SpecSync's own `*.json`
+  records in a change folder, so a run can't widen its change, add criteria
+  or write an approval by hand).
 - No new env var, config key, flag, slash command, table, schema version or
   NDJSON field.

@@ -55,3 +55,8 @@ artifact: design
 - **Catalog**: `PluginCommand.agentTool?: boolean` (`buildOpenAiTools` skips
   `false`); `TEAM_WORK_TOOLS` gains the four tools; `STATE_CHANGING_TOOLS`
   (AGENT-16) gains them; the tool-surface budget moves to ~9000 tokens.
+- **Records** (`plugins/files`): `isSddRecordPath` (the `*.json` directly in
+  `.specsync/changes/<id>/`) is refused by files-write / -edit / -delete, so
+  the coverage gate, the hi check and the human approval can't be got round
+  by editing `state.json` or `approvals.json`; it is kept out of
+  `isProtectedPath` so git-commit still stages their deletion on archive.

@@ -21,6 +21,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { isSddRecordPath } from "../plugins/files/protectedPaths.ts";
 import { createTaskExecute } from "../src/agent/execute.ts";
 import { runTask } from "../src/agent/loop.ts";
 import {
@@ -492,6 +493,45 @@ describe("SpecSync change tools (AGENT-18, REQ-plugins-518)", () => {
     const noHi = sddRepo();
     openChange(noHi, "c2", ["src/app.ts"]);
     expect((await tool("specsync-change-answer", ["c2", "acceptance_criteria", "it works"], noHi)).ok).toBe(true);
+  });
+
+  test("file tools leave SpecSync's own records in a change folder to the specsync change commands (REQ-plugins-083)", async () => {
+    expect(isSddRecordPath(".specsync/changes/c1/state.json")).toBe(true);
+    expect(isSddRecordPath("./.specsync/changes/c1/approvals.json")).toBe(true);
+    expect(isSddRecordPath(".SpecSync/Changes/c1/Review.JSON")).toBe(true);
+    expect(isSddRecordPath("/abs/proj/.specsync/changes/c1/verification.json")).toBe(true);
+    expect(isSddRecordPath(".specsync/changes/c1/change.md")).toBe(false);
+    expect(isSddRecordPath(".specsync/changes/c1/deltas/plugins.md")).toBe(false);
+    expect(isSddRecordPath(".specsync/changes/c1/deltas/x.json")).toBe(false);
+    expect(isSddRecordPath("src/state.json")).toBe(false);
+
+    const repo = sddRepo();
+    openChange(repo, "c1", ["src/app.ts"]);
+    const statePath = join(repo, ".specsync", "changes", "c1", "state.json");
+    const before = readFileSync(statePath, "utf8");
+    const widen = JSON.stringify({ id: "c1", state: "approved", affected_paths: ["src/"] });
+    const refused = [
+      await tool("files-write", [".specsync/changes/c1/state.json", widen], repo),
+      await tool("files-edit", [".specsync/changes/c1/state.json", "--old", "src/app.ts", "--new", "src/"], repo),
+      await tool("files-write", [".specsync/changes/c1/approvals.json", "[]"], repo),
+      await tool("files-write", [".specsync/changes/planted/state.json", widen], repo),
+      await tool("files-delete", [".specsync/changes/c1/state.json"], repo, { allowlist: ["files-delete"] }),
+    ];
+    for (const r of refused) {
+      expect(r.ok).toBe(false);
+      expect(r.exitCode).toBe(2);
+      expect(r.error).toContain("SpecSync lifecycle record");
+    }
+    expect(readFileSync(statePath, "utf8")).toBe(before);
+    expect(existsSync(join(repo, ".specsync", "changes", "c1", "approvals.json"))).toBe(false);
+    expect(existsSync(join(repo, ".specsync", "changes", "planted"))).toBe(false);
+    // So a planted or widened change can't cover an edit past the gate.
+    expect(sddUncovered(repo, ["src/other.ts"], parseSddPolicy(JSON.stringify(SDD_ON)))).toEqual(["src/other.ts"]);
+    // The change's artifacts stay writable (SPECSYNC-4).
+    const tasks = await tool("files-write", [".specsync/changes/c1/tasks.md", "- [x] a\n"], repo);
+    expect(tasks.ok).toBe(true);
+    const delta = await tool("files-write", [".specsync/changes/c1/deltas/agent.md", "# Delta\n"], repo);
+    expect(delta.ok).toBe(true);
   });
 
   test("hi ids are read by family; other upper-case tokens are not citations", () => {
