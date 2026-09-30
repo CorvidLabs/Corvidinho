@@ -1,6 +1,6 @@
 ---
 id: rolling-24-hour-spend-caps-per-provider-plus-the-total-cap-each-warning-the-owner-at-80-and-stopping-to-ask-at-100-safe
-state: implementing
+state: archived
 type: feature
 base_commit: 7090656ae33784df24c49857987e7b878e356ad9
 ---
