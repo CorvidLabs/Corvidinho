@@ -33,7 +33,9 @@
  * not built here: voices use the lead's provider and there is no score.
  */
 
+import { mergeModelFallbacks } from "../agent/providers.ts";
 import { TIER_RANK, type CapabilityTier } from "../agent/tier.ts";
+import type { ModelFallback } from "../agent/types.ts";
 import type { InjectionNotice } from "../agent/untrusted.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import {
@@ -340,6 +342,11 @@ export type CouncilOutcome = {
    * looking like a prompt-injection attempt (tool + reason ids).
    */
   injection?: InjectionNotice;
+  /**
+   * AGENT-11: the model failovers its voice and chair runs reported, each
+   * once (validated by the delegate core).
+   */
+  modelFallback?: ModelFallback[];
 };
 
 /** Run `fn` over `items`, at most `limit` at a time, keeping input order. */
@@ -405,6 +412,7 @@ export async function runCouncil(opts: {
   const files = new Set<string>();
   let tokens: number | undefined;
   let injection: InjectionNotice | undefined;
+  let modelFallback: ModelFallback[] = [];
 
   const stopReason = () =>
     timedOut ? "council time cap reached" : "lead run was interrupted";
@@ -456,6 +464,7 @@ export async function runCouncil(opts: {
     for (const f of out.filesChanged ?? []) files.add(f);
     if (typeof out.totalTokens === "number") tokens = (tokens ?? 0) + out.totalTokens;
     if (out.injection && !injection) injection = out.injection;
+    if (out.modelFallback) modelFallback = mergeModelFallbacks(modelFallback, out.modelFallback);
     const finished = out.exitCode === 0 && out.state === "done";
     // A finished voice is quoted by its own result summary (up to
     // DELEGATE_SUMMARY_MAX, not the 1800-char chat body); a failed one keeps
@@ -504,6 +513,7 @@ export async function runCouncil(opts: {
       aborted,
       ...(fields.error ? { error: fields.error } : {}),
       ...(injection ? { injection } : {}),
+      ...(modelFallback.length > 0 ? { modelFallback } : {}),
     };
   };
 

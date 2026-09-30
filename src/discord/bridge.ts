@@ -104,6 +104,7 @@ import { clearBridgeRunning, markBridgeRunning } from "../watch/owner-ask.ts";
 import { deliverPrivateReplies, withPrivateNote } from "./private-reply.ts";
 import {
   DISCORD_ANSWER_MAX,
+  answerModelFor,
   answerSpendFor,
   postAnswerParts,
 } from "./rich-reply.ts";
@@ -1013,10 +1014,12 @@ export async function startBridge(
             })
           : undefined;
         // DISCORD-15/15.a: the answer footer adds tokens and cost on owner runs.
+        // AGENT-11: the model that answered ("b (fell back from a)"), each
+        // model priced at its own price.
         const thinkExtras = {
           plumbing,
-          model: llmModel,
-          ...(ownerRun ? { spend: answerSpendFor(result.usage, llmModel) } : {}),
+          model: answerModelFor(result, llmModel),
+          ...(ownerRun ? { spend: answerSpendFor(result.usage, llmModel, result.usageByModel) } : {}),
         };
         // AUTONOMY-1/2/4 / DISCORD-ASK: needs a human → buttons when options, else free-text.
         // SAFE-8: a spend-cap stop is always free text (no choice can lift the
@@ -1692,10 +1695,12 @@ export async function startBridge(
             })
           : undefined;
         // DISCORD-15/15.a: the answer footer adds tokens and cost on owner runs.
+        // AGENT-11: the model that answered ("b (fell back from a)"), each
+        // model priced at its own price.
         const thinkExtras = {
           plumbing,
-          model: llmModel,
-          ...(ownerRun ? { spend: answerSpendFor(result.usage, llmModel) } : {}),
+          model: answerModelFor(result, llmModel),
+          ...(ownerRun ? { spend: answerSpendFor(result.usage, llmModel, result.usageByModel) } : {}),
         };
 
         // SAFE-8: as on a chat reply — a spend-cap stop is free text, pings the

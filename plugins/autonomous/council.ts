@@ -163,6 +163,8 @@ export function createCouncilCommand(deps: CouncilCommandDeps = {}): PluginComma
           ...(outcome.aborted ? { aborted: true } : {}),
           // SAFE-13: a voice's or the chair's own hit, for the lead's tool loop.
           ...(outcome.injection ? { injection: outcome.injection } : {}),
+          // AGENT-11: its voices' model failovers, for the lead's result.
+          ...(outcome.modelFallback ? { modelFallback: outcome.modelFallback } : {}),
         };
         const head = `council (${outcome.voices} voices, tier ${tier.tier}, depth ${childDepth}; ${phases})`;
         return outcome.ok

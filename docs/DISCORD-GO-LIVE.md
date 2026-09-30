@@ -537,11 +537,39 @@ and goes through the same SAFE-8 spend cap:
 | `anthropic` | `anthropic:<model>` | `https://api.anthropic.com/v1` (Anthropic's OpenAI-compatible API) | `ANTHROPIC_API_KEY` |
 
 A prefix that is not one of these kinds is part of the model name (`qwen3:30b` is an
-OpenAI-compatible model). A comma list is accepted, but only its first entry is called for now;
-falling back to the next one (AGENT-11) comes later. A headless agent CLI as a model is not
-built yet.
+OpenAI-compatible model). A headless agent CLI as a model is not built yet.
 
-With no usable model for a tier (nothing set, or the kind's key is missing) it says so:
+A comma list is a fallback chain (AGENT-11), e.g.
+`CORVIDINHO_LLM_MODEL=openai:gpt-4.1,anthropic:claude-sonnet-5,ollama:qwen3:30b`. A run calls the
+first entry; when that model fails — an HTTP error (404 or 410 for a retired or missing model
+included), a network error, a timeout (the 10-minute request cap) or a malformed reply — it goes
+on at once with the next entry, with no retry or backoff, and keeps that model for the rest of
+the run (later rounds, verify retries). A next entry whose key is not set is skipped the same
+way. Nothing is remembered between runs: each `task run` process tries the first entry once
+again. A stop at the spend cap is not a model failure: the run stops and asks (SAFE-8) and never
+routes around the cap to another model; a Deny or a lapsed card on a tool is the tool's answer,
+and your own stop is a stop. It tells you on every surface:
+
+- the run's answer ends with a note that clips and message splits keep, e.g.
+  `(model fallback: gpt-4.1 failed (HTTP 404), fell back to anthropic:claude-sonnet-5)`
+  (chat, button answers, `/session start`, `/work`, schedule posts, WATCH comments, `task run`);
+- `task run` prints `[operator] gpt-4.1 failed (HTTP 404); falling back to anthropic:claude-sonnet-5`
+  as it happens (a `Text` frame in `--output ndjson`); its result (`--json`, the NDJSON `result`
+  frame) carries `model` (the one that answered), `usageByModel` and `modelFallback`, and each
+  NDJSON `usage` frame names its `model` and the running `byModel` totals;
+- the Discord answer footer names the model that answered, `anthropic:claude-sonnet-5 (fell back
+  from gpt-4.1)`; on your own runs the cost prices each model's tokens at its own price (a model
+  with no known price makes it `cost unknown`); everyone else sees model and time only;
+- every run that fell back (yours too) also logs one warn line, which is how you hear of one in a
+  run that is not yours (someone else's chat, WATCH, a schedule): the
+  bridge `[discord] llm.fallback: …`, `github watch` `[watch] llm.fallback: …`, the daemon an
+  `llm.fallback` event. There is no DM for it.
+
+A `delegate` or `council` worker that fell back is reported by its lead the same way, marked
+`delegate worker:` / `council worker:`. The fallback order is yours: there is no ranking by
+price or benchmark and no setting beyond the list itself.
+
+With no usable model for a tier (nothing set, or its first entry's key is missing) it says so:
 
 - at startup: a `[discord] No model provider is configured …` line from the bridge, a
   `[watch] …` line from `github watch` (not in a dry run), an `llm.no_provider` warn line and

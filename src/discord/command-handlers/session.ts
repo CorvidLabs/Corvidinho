@@ -8,7 +8,7 @@ import { enrichPromptWithIdentity } from "../identity-inject.ts";
 import { fenceSpeakerText, inboundInjection, refuseInjectedSlash } from "../injection-guard.ts";
 import { loadDeclaredPeople } from "../../identity/people.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
-import { answerSpendFor } from "../rich-reply.ts";
+import { answerModelFor, answerSpendFor } from "../rich-reply.ts";
 import { deliverPrivateReplies, withPrivateNote } from "../private-reply.ts";
 import { isOwnerDiscord } from "../../identity/owner.ts";
 import { actorIsAdmin, projectLabel } from "../list-scope.ts";
@@ -230,10 +230,12 @@ export async function handleSessionStart(
       })
     : undefined;
   // DISCORD-15/15.a: the answer footer adds tokens and cost on owner runs.
+  // AGENT-11: the model that answered ("b (fell back from a)"), each model
+  // priced at its own price.
   const thinkExtras = {
     plumbing,
-    model: llmModel,
-    ...(ownerRun ? { spend: answerSpendFor(result.usage, llmModel) } : {}),
+    model: answerModelFor(result, llmModel),
+    ...(ownerRun ? { spend: answerSpendFor(result.usage, llmModel, result.usageByModel) } : {}),
   };
   // AUTONOMY-1/2 + SAFE-8: a run that stopped to ask (e.g. at the spend cap)
   // is not "Done"; the owner is pinged (once per cap episode).

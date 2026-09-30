@@ -11,7 +11,14 @@
 
 import { askFromUnknown } from "../agent/ask.ts";
 import { collectTaskRunStream } from "../agent/events-ndjson.ts";
+import {
+  formatModelFallbackLog,
+  modelFallbackFromUnknown,
+  modelLabelFromUnknown,
+  modelUsageFromUnknown,
+} from "../agent/providers.ts";
 import { ACTING_SURFACE_ENV, type ActingSurface } from "../agent/shell-gate.ts";
+import type { ModelFallback } from "../agent/types.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
 import { spendWarningFromUnknown } from "../agent/spend-notice.ts";
 import { injectionNoticeFromUnknown } from "../agent/untrusted.ts";
@@ -104,7 +111,19 @@ export type SpawnAgentClientOpts = {
   cwd: string;
   /** Extra env (never log secrets). */
   env?: NodeJS.ProcessEnv;
+  /**
+   * AGENT-11: called when a run's result reports failovers — how the owner
+   * hears of one in a run that is not theirs, besides the reply's note.
+   * Default: one `[discord] llm.fallback: …` warn line on stderr (the
+   * daemon passes its structured logger).
+   */
+  onModelFallback?: (hops: ModelFallback[], sessionId: string) => void;
 };
+
+/** The default `llm.fallback` warn line of a bridge-spawned run (AGENT-11). */
+export function warnModelFallback(hops: ModelFallback[], sessionId: string): void {
+  console.warn(`[discord] ${formatModelFallbackLog(hops)} (session ${sessionId})`);
+}
 
 /**
  * Spawns: `<bin> task run --task <prompt> --output ndjson` (no --no-verify;
@@ -208,7 +227,14 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         killProcessTree(proc.pid, { known: atExit });
       };
       signal?.addEventListener("abort", onAbort, { once: true });
-      const { exitCode, summary, totalTokens, usage, result } = await collectTaskRunStream({
+      const {
+        exitCode,
+        summary,
+        totalTokens,
+        usage,
+        usageByModel: streamedByModel,
+        result,
+      } = await collectTaskRunStream({
         stdout: proc.stdout,
         stderr: proc.stderr,
         exited: proc.exited,
@@ -247,6 +273,12 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       const injection = injectionNoticeFromUnknown(result?.injection);
       // MEMORY-7.a: text for the asker's eyes only, sent by DM (validated).
       const privateReplies = privateRepliesFromUnknown(result?.privateReplies);
+      // AGENT-11: the model that answered, its failovers and usage per model
+      // (validated); a failover is also logged for the owner (llm.fallback).
+      const model = modelLabelFromUnknown(result?.model);
+      const modelFallback = modelFallbackFromUnknown(result?.modelFallback);
+      const usageByModel = modelUsageFromUnknown(result?.usageByModel) ?? streamedByModel;
+      if (modelFallback) (opts.onModelFallback ?? warnModelFallback)(modelFallback, sessionId);
       return {
         ok: exitCode === 0,
         sessionId,
@@ -258,6 +290,9 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         ...(privateReplies ? { privateReplies } : {}),
         // DISCORD-15: provider-reported usage for the answer footer.
         ...(usage ? { usage } : {}),
+        ...(usageByModel ? { usageByModel } : {}),
+        ...(model ? { model } : {}),
+        ...(modelFallback ? { modelFallback } : {}),
         // Verify facts for the /work PR gate (REQ-discord-088).
         ...(result
           ? {

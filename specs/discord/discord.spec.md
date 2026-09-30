@@ -719,7 +719,9 @@ carries none unless `keepFooter` (a free-text ask's Answer button,
 REQ-discord-548), and a later re-edit keeps the first footer (time frozen by
 `elapsedMs` / `answerFooter`) and outcome (REQ-discord-457). The bridge chat
 and button-pick paths and `finishSlashWithThinking` pass the run's
-`thinkExtras` (with `spend: answerSpendFor(result.usage, model)` when
+`thinkExtras` (`model: answerModelFor(result, model)` — the configured model
+that answered, `b (fell back from a)` after a failover, AGENT-11 — with
+`spend: answerSpendFor(result.usage, model, result.usageByModel)` when
 `isOwnerDiscord(owner, actor)`) and the same failed/done outcome as their
 fallback status; their fallback replies carry `answerFooter` on the last part.
 `DiscordEmbedPayload.description` is optional (omitted on that embed).
@@ -727,7 +729,8 @@ fallback status; their fallback replies carry `answerFooter` on the last part.
 Rich replies (REQ-discord-075, DISCORD-16): `src/discord/rich-reply.ts`
 exports `DISCORD_MESSAGE_MAX` (2000), `DISCORD_EMBED_DESCRIPTION_MAX` (4096),
 `DISCORD_ANSWER_MAX` (6000), `splitDiscordMessage` (fence-safe line split,
-role note kept whole in the last part), `readsBetterAsEmbed` /
+the closing notes — the AGENT-11 `(model fallback: …)` note and the role note —
+kept whole in the last part), `readsBetterAsEmbed` /
 `planAnswerParts` (scrub first, SAFE-6, then cut to `DISCORD_ANSWER_MAX`
 keeping a role note; one plain message within 2000, one
 embed for long plain prose with no fence or mention, else split parts with the
@@ -735,15 +738,21 @@ footer on the last), `postAnswerParts` (fresh-reply paths: first part replies
 with the answer's mentions, later parts reply to nothing and allow only users
 first mentioned in them, so a mention past the first part still pings once;
 `keepFooter` keeps the footer beside an Answer button, DISCORD-ASK-4.a)
-and `answerSpendFor` (tokens and cost from the run's
-`usage` and `priceForModel`). `finalizeContent` edits the first part into the
+`answerSpendFor` (tokens and cost from the run's
+`usage` and `priceForModel`; with `usageByModel` each model's tokens at its own
+price, one unpriced model making the cost unknown, REQ-discord-080) and
+`answerModelFor` (the footer's model, REQ-discord-080). `finalizeContent` edits the first part into the
 progress message, posts later parts with the optional
 `ThinkingOutbound.sendMessage` (no pings; wired to the gateway reply) and
 returns `FinalizedAnswer { messageId, messageIds, complete }`; a re-edit edits
 only changed parts. `finishSlashWithThinking` takes optional `post` for the
 parts after the deferred reply; `finishSlashWithOwnerNotice` appends the
 notice without cutting a split answer. The Discord spawn client passes
-`bodyMax: DISCORD_ANSWER_MAX` and returns `AgentSpawnResult.usage`; the
+`bodyMax: DISCORD_ANSWER_MAX` and returns `AgentSpawnResult.usage`, and from
+the result frame `model`, `modelFallback` and `usageByModel` (validated); a run
+that failed over calls `onModelFallback(hops, sessionId)` — by default one
+`[discord] llm.fallback: …` warn line (`warnModelFallback`), the daemon passes
+its structured logger (REQ-discord-080, AGENT-11); the
 gateway `reply` takes an optional `embed`, and gateway / slash adapters cap
 content at 2000.
 
@@ -933,6 +942,11 @@ notice, `/work` PR line, schedule post or pending-ask post — and no one else's
 "Work is paused for budget." (`SPEND_PAUSED_TEXT`), and `/status` shows them
 that only while runs stop at the cap. The owner's answer footers keep tokens
 and cost (DISCORD-15.a).
+The answer footer names the configured model that answered, for everyone
+(DISCORD-15.a), with `(fell back from …)` when the run's own chain failed over
+(AGENT-11); a run that failed over is told to its requester by the answer's
+closing note and to the owner by the `llm.fallback` log line, never by a DM
+(REQ-discord-080).
 Recording a SAFE-8 warning and delivering it are separate: whichever process
 crossed 80% records it, and the bridge DMs it to the configured owner only
 (`src/discord/spend-dm.ts`, after each run and on every scheduler tick),
@@ -1337,4 +1351,5 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-30 | verified-requires-that-tests-actually-ran-and-none-were-deleted-agent-15-a-passing-verify-lane-counts-only-when-its: 'Verified' requires that tests actually ran and none were deleted (AGENT-15): a passing verify lane counts only when its output has a recognised test summary (bun test, jest, vitest, cargo test, pytest, go test) with at least one executed test and no test active at the baseline was deleted, retitled or turned off (skip, todo, silenced by only), by name across the repo root; non-git projects walk their test files at run start; /work checks the tree against the merge-base before commit and push |
 | 2026-09-30 | it-asks-me-on-an-approve-card-before-touching-prod-or-deploys-or-making-a-channel-post-anything-else-it-just-does-and: It asks me on an Approve card before touching prod or deploys or making a channel post; anything else it just does and tells me (AUTONOMY-9/9.a, AUTONOMY-10/10.a channel posts, AUTONOMY-11, #97) |
 | 2026-09-30 | i-configure-the-models-openai-compatible-ollama-anthropic-with-no-built-in-default-and-it-says-so-when-none-is-set: I configure the models (OpenAI-compatible, Ollama, Anthropic) with no built-in default, and it says so when none is set (AGENT-13, AGENT-10) |
+| 2026-09-30 | if-a-model-fails-or-is-retired-it-falls-back-to-my-next-configured-model-and-tells-me-agent-11: If a model fails or is retired it falls back to my next configured model and tells me (AGENT-11) |
 | 2026-09-30 | owner-chat-session-start-and-work-may-use-the-allowlisted-shell-runners-and-fledge-runs-only-in-that-talk-s-own: Owner chat, /session start and /work may use the allowlisted shell, runners and Fledge runs only in that talk's own worktree; non-owners, WATCH, schedules, workers and the local CLI never get them (SAFE-3.a) |

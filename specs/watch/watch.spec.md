@@ -140,6 +140,12 @@ first use, no schema version bump), `WatchOwnerAsk`, `threadUrl(repo, n)`,
 `noteWatchRunAsk(opts)` → `WatchRunAskOutcome` (`none` / `queued` /
 `no-bridge` / `not-sent`). `AgentSpawnResult` gains `ask?: HumanAsk` (the
 spawn client validates the result frame's `ask` with `askFromUnknown`).
+A run whose result frame reports model failovers (AGENT-11,
+`modelFallbackFromUnknown`) makes the spawn client call its
+`onModelFallback(hops, sessionId)` option, by default one
+`[watch] llm.fallback: …` warn line (`warnWatchModelFallback`); the summary
+comment keeps the run's closing `(model fallback: …)` note when it clips
+(REQ-watch-080).
 
 ## Invariants
 
@@ -314,4 +320,5 @@ WATCH poll-first thin (#19, 2026-09-26, corvid-agent): mention/review_request/is
 | 2026-09-30 | when-it-repeats-a-failing-call-it-is-steered-to-change-approach-then-asks-a-stuck-github-run-pings-the-owner-on-discord: When it repeats a failing call it is steered to change approach, then asks; a stuck GitHub run pings the owner on Discord (AGENT-16, AGENT-16.a) |
 | 2026-09-30 | one-approve-deny-dm-card-engine-for-everything-that-needs-the-owner-s-ok-exact-action-target-and-amount-one-line-each: One Approve/Deny DM card engine for everything that needs the owner's OK: exact action, target and amount one line each with a diff or text sent first as verbatim quoted-data parts and buttons last, never cut; destructive and money cards also need a one-time code DMed apart and typed into a form, valid once, only for that card and action, for 2 minutes; no answer, a late answer or a gone waiter is a no; the engine's own poll delivers with the scheduler off; the forget card becomes its destructive 'forget' kind; schema v14 approval_requests / approval_codes (SAFE-18/19/20, #96) |
 | 2026-09-30 | i-configure-the-models-openai-compatible-ollama-anthropic-with-no-built-in-default-and-it-says-so-when-none-is-set: I configure the models (OpenAI-compatible, Ollama, Anthropic) with no built-in default, and it says so when none is set (AGENT-13, AGENT-10) |
+| 2026-09-30 | if-a-model-fails-or-is-retired-it-falls-back-to-my-next-configured-model-and-tells-me-agent-11: If a model fails or is retired it falls back to my next configured model and tells me (AGENT-11) |
 | 2026-09-30 | owner-chat-session-start-and-work-may-use-the-allowlisted-shell-runners-and-fledge-runs-only-in-that-talk-s-own: Owner chat, /session start and /work may use the allowlisted shell, runners and Fledge runs only in that talk's own worktree; non-owners, WATCH, schedules, workers and the local CLI never get them (SAFE-3.a) |

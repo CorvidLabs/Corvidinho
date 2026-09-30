@@ -150,7 +150,10 @@ Autonomous extras are plugins left off until the project opts in (PLUGIN-5):
 `council` convenes worker voices that propose, critique and decide
 (AUTONOMOUS-6 / REQ-plugins-118). Both pass a worker's own SAFE-13 hit
 (`result.injection`, validated) back as `data.injection`, which the lead's
-tool loop takes as its own hit (REQ-plugins-071).
+tool loop takes as its own hit (REQ-plugins-071), and a worker's model
+failovers (`result.modelFallback`, validated; a council's voices' each once)
+back as `data.modelFallback`, which the lead reports as its own run's
+(AGENT-11, REQ-plugins-080).
 Every call goes through the must-ask gate in `runPlugin`: a call its command
 classes as prod or deploy contact or as a channel post waits for the owner's
 Approve card, and anything else runs with no ask (AUTONOMY-9/10/11,
@@ -1124,4 +1127,5 @@ and current rows for plugins host evolution.
 | 2026-09-30 | shell-exec-refuses-foot-guns-and-says-why-sed-i-or-edits-downloads-piped-into-a-shell-deletes-outside-the-worktree: Shell-exec refuses foot-guns and says why (sed -i or > edits, downloads piped into a shell, deletes outside the worktree, secret reads), env -C and symlinked cd can't leave the root, and the shell and language runners start without GitHub or git credentials (SAFE-21, SAFE-21.a, SAFE-3) |
 | 2026-09-30 | scheduled-runs-read-and-act-only-on-repos-the-owner-allowlists-even-public-ones-discord-schedule-3-a-in-a-schedule-run: Scheduled runs read and act only on repos the owner allowlists, even public ones (DISCORD-SCHEDULE-3.a): in a schedule run and its delegate/council workers (CORVIDINHO_DISCORD_SESSION_ID schedule_*, SCHEDULE_SESSION_PREFIX / isScheduleRunEnv) the GitHub tools, review readers and docs/milestone readers refuse a repo off the GITHUB-6 allowlist with no visibility lookup (deny still wins, role rules still apply on top); web-fetch refuses GitHub-host URLs that do not name an allowlisted OWNER/REPO at every hop, redirects included; a schedule project that lies in a git checkout nested inside the bridge root needs an allowlisted origin at /schedule create and every tick |
 | 2026-09-30 | it-asks-me-on-an-approve-card-before-touching-prod-or-deploys-or-making-a-channel-post-anything-else-it-just-does-and: It asks me on an Approve card before touching prod or deploys or making a channel post; anything else it just does and tells me (AUTONOMY-9/9.a, AUTONOMY-10/10.a channel posts, AUTONOMY-11, #97) |
+| 2026-09-30 | if-a-model-fails-or-is-retired-it-falls-back-to-my-next-configured-model-and-tells-me-agent-11: If a model fails or is retired it falls back to my next configured model and tells me (AGENT-11) |
 | 2026-09-30 | fledge-lane-and-task-runs-start-without-my-github-or-git-credentials-like-the-shell-and-the-runners-now-that-my-talks: Fledge lane and task runs start without my GitHub or git credentials, like the shell and the runners, now that my talks may be offered them (SAFE-21.a, SAFE-3.a) |

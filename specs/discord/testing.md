@@ -1252,6 +1252,22 @@ closed) and `tests/discord.spend.test.ts` (the non-owner body still has no
 no model.
 - Fail on base: the startup and `/status` cases fail (no line; "demo stub").
 
+## Model fallback on Discord (REQ-discord-080, REQ-discord-457; AGENT-11)
+
+`tests/agent.fallback.test.ts` ("Discord: …"): `answerSpendFor` with
+`usageByModel` prices each model at its own price (a kind prefix stripped;
+one unpriced model with tokens makes the cost unknown); the Discord spawn
+client returns `model`, `modelFallback` and `usageByModel` from a fake bin's
+result frame, calls `onModelFallback(hops, sessionId)` and by default logs
+`[discord] llm.fallback: gpt-5 failed (HTTP 404), fell back to gpt-4.1
+(session s2)`; a dry-run bridge answering the owner collapses the answer with
+the note kept and the footer `gpt-4.1 (fell back from gpt-5) | 3k tokens |
+$<sum of each model's cost> | <time>`, and anyone else's footer is
+`gpt-4.1 (fell back from gpt-5) | <time>` with no tokens or `$`. The split
+keeps the note whole in the last part ("the closing note survives every
+clip").
+- Fail on base: all of these fail with the base's sources (the footer names
+  the configured model, prices the total at one model, and no log line).
 
 ## Surface stamp for the shell gate (REQ-discord-735; SAFE-3.a)
 
