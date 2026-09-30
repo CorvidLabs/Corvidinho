@@ -80,6 +80,26 @@
         "REQ-discord-086",
         "REQ-watch-086"
       ]
+    },
+    {
+      "timestamp": 1790746002,
+      "commit": "2021d85241211f5efd53b7bc1456fbd316bedf3b",
+      "contract_digest": "6d550df63d209d91907ee8a44185d72edaa35ee1236dae79c677ca6ea7bee040",
+      "execution_digest": "4ef50e285e5e4284419981ba371b32d8614138ce6c5bed8624a95e5a369393e5",
+      "workspace_digest": "7cb5129f68ab7407dc36dd57d94d294df56dae58256f72d4ba30fcac3a97701b",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-086",
+        "REQ-discord-086",
+        "REQ-watch-086"
+      ]
     }
   ]
 }

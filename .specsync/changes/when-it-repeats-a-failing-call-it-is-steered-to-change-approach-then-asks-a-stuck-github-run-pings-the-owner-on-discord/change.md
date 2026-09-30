@@ -1,6 +1,6 @@
 ---
 id: when-it-repeats-a-failing-call-it-is-steered-to-change-approach-then-asks-a-stuck-github-run-pings-the-owner-on-discord
-state: implementing
+state: verifying
 type: feature
 base_commit: 9abc768f5b1a2122ae55025efea32b4a9113e249
 ---

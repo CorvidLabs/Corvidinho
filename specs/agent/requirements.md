@@ -1240,9 +1240,12 @@ The 2nd failure of the same call with nothing changed in between
 its whole tool message (after any SAFE-12 fence or SAFE-13 note, the result
 and any SAFE-21 "why" text left intact): harness text quoting a scrubbed,
 one-line error excerpt of at most `STEER_ERROR_EXCERPT_MAX` (200) chars as a
-JSON string and telling the model to change approach (a different tool or
-different arguments) or call `ask-human`, and that the same call again stops
-the run and asks the owner. Each later failure of that call gets it too. An
+JSON string (or, when the result was fenced as untrusted data because a
+`delegate` / `council` worker reported an injection, `STEER_FENCED_ERROR_NOTE`
+and no piece of the error, SAFE-12) and telling the model to change approach
+(a different tool or different arguments) or call `ask-human`, and that the
+same call again stops the run and asks the owner. Each later failure of that
+call gets it too. An
 identical call made in a later round of the same conversation after its steer
 went out SHALL NOT run: one `ToolResult` (success false,
 `REPEAT_FAILURE_BLOCK_DETAIL`) and one `[operator] AGENT-16` Text line
@@ -1267,6 +1270,7 @@ Acceptance Criteria
 - Three identical failing calls in one batch all run (2nd and 3rd steered); the next round's identical call asks.
 - After the steer, a call with different arguments runs and the model's final reply stands (no ask).
 - A real change between failures resets the count: two more identical failures are needed for the steer, then the ask.
+- A `council` worker that fails twice with an injection hit: its error stays inside the fence and the steer after it says `STEER_FENCED_ERROR_NOTE`, quoting none of the worker's text.
 - A tool outside the catalog repeated after the steer asks with `(unknown tool)`; the summary names neither the tool nor the refusal.
 - A verify retry (new conversation) whose first call repeats a call that failed twice in attempt 1 runs it and steers; its next identical call asks.
 - `runTask` with that execute ends `blocked`, `ask` = the stuck ask, verified false, verify never called.
