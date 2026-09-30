@@ -851,6 +851,16 @@ differs is nobody; the undeclared-under-`[people]` owner, by `[owner]
 github_id`, on their Discord id) and
 `projectScopeForRepo`.
 
+## One verify gate; talk worktrees start verified (REQ-discord-085)
+
+- `tests/agent.verify-gate.test.ts`: a talk worktree made by
+  `ensureTalkWorkspace` holds the verified marker (`talkWorktreeGitDir`), its
+  first run that changes nothing has nothing to verify, and after a blocked
+  run with an edit the next run there verifies it (REQ-agent-015).
+- `tests/work.pr.test.ts`: the `/work` PR path finds the base and merge-base
+  through the shared `resolveBase` (`src/worktree/base.ts`).
+- `tests/spawn.argv.test.ts`, `tests/agent.ndjson-spawn.test.ts`: Discord
+  spawn argv has no `--no-verify` (REQ-discord-014 / 073).
 ## GitHub by numeric user id only (REQ-discord-367, IDENTITY-7.a)
 
 - `tests/identity.github-numeric-id.test.ts` — `resolvePerson` /

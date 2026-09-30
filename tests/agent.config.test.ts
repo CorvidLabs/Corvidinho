@@ -1,35 +1,36 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   agentConfigDefaults,
   loadAgentConfig,
   parseCorvidinhoSection,
+  removedVerifyKeys,
 } from "../src/agent/config.ts";
 
 describe("parseCorvidinhoSection", () => {
-  test("reads verify_before_complete and max_retries", () => {
+  test("reads max_retries", () => {
     const partial = parseCorvidinhoSection(`
 [tasks.test]
 cmd = "bun test"
 
 [corvidinho]
-verify_before_complete = true
 max_retries = 5
 
 [lanes.verify]
 steps = ["lint"]
 `);
-    expect(partial.verifyBeforeComplete).toBe(true);
-    expect(partial.maxRetries).toBe(5);
+    expect(partial).toEqual({ maxRetries: 5 });
   });
 
-  test("false disables gate", () => {
+  test("verify_before_complete = false is ignored: there is no switch (AGENT-14)", () => {
     const partial = parseCorvidinhoSection(`
 [corvidinho]
 verify_before_complete = false
 max_retries = 0
 `);
-    expect(partial.verifyBeforeComplete).toBe(false);
-    expect(partial.maxRetries).toBe(0);
+    expect(partial).toEqual({ maxRetries: 0 });
   });
 
   test("ignores other sections", () => {
@@ -38,7 +39,6 @@ max_retries = 0
 verify_before_complete = false
 max_retries = 99
 `);
-    expect(partial.verifyBeforeComplete).toBeUndefined();
     expect(partial.maxRetries).toBeUndefined();
   });
 });
@@ -46,12 +46,33 @@ max_retries = 99
 describe("loadAgentConfig", () => {
   test("loads from project fledge.toml", () => {
     const cfg = loadAgentConfig(import.meta.dir + "/..");
-    expect(cfg.verifyBeforeComplete).toBe(true);
-    expect(cfg.maxRetries).toBe(3);
+    expect(cfg).toEqual({ maxRetries: 3 });
   });
 
   test("defaults when missing file", () => {
     const cfg = loadAgentConfig("/tmp/corvidinho-no-such-project-xyz");
     expect(cfg).toEqual(agentConfigDefaults);
+  });
+});
+
+describe("removedVerifyKeys (doctor [warn], AGENT-14)", () => {
+  test("names verify_before_complete only when [corvidinho] still sets it", () => {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-removed-key-"));
+    try {
+      expect(removedVerifyKeys(dir)).toEqual([]);
+      writeFileSync(join(dir, "fledge.toml"), "[merlin]\nverify_before_complete = false\n");
+      expect(removedVerifyKeys(dir)).toEqual([]);
+      writeFileSync(
+        join(dir, "fledge.toml"),
+        "[corvidinho]\nverify_before_complete = false\nmax_retries = 1\n",
+      );
+      expect(removedVerifyKeys(dir)).toEqual(["verify_before_complete"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("this repo's fledge.toml no longer sets it", () => {
+    expect(removedVerifyKeys(import.meta.dir + "/..")).toEqual([]);
   });
 });

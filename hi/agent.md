@@ -31,6 +31,7 @@ Corvidinho is the agent I actually run on a Linux box: it reads the project’s 
 - **AGENT-12**  An idle timeout and a turn cap that I set stop stalled or endless runs, and it says so.
 - **AGENT-14**  Verification can't be skipped, and chat, WATCH, scheduled and work runs share one gate.
 - **AGENT-15**  The real git diff decides what changed, and 'verified' requires that tests ran and none were deleted.
+  - **AGENT-15.a**  After a restart or retry, 'verified' still covers every edit made since the talk started, including ones an earlier attempt left.
 - **AGENT-16**  When it repeats a failing call, it changes approach or asks me.
 - **AGENT-17**  If it only plans, or says 'Done.' without changing anything, it gets one nudge, then moves to a stronger model I've configured.
 - **AGENT-18**  It works each repo's own way: a SpecSync change where the repo uses SpecSync; where it uses hi, it drafts criteria and asks before capturing, never inventing them; and Trust where the repo uses Trust.

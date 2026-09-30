@@ -20,6 +20,8 @@ export {
   agentConfigDefaults,
   loadAgentConfig,
   parseCorvidinhoSection,
+  REMOVED_VERIFY_KEYS,
+  removedVerifyKeys,
 } from "./config.ts";
 export { defaultVerifyRunner, VERIFY_ARGS } from "./verify.ts";
 export { runTask } from "./loop.ts";

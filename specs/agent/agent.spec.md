@@ -48,6 +48,8 @@ files:
   - src/autonomous/delegate.ts
   - src/autonomous/council.ts
   - tests/autonomous.enabled.test.ts
+  - tests/agent.verify-gate.test.ts
+  - tests/fixtures/talk-worktree.ts
 
 db_tables: []
 depends_on:
@@ -107,15 +109,24 @@ model (the SAFE-8 unpriced ask names it via `createSpendGuard({ modelKey })`),
 and `perTierModels(env)` lists each tier's model when any per-tier key is set
 (doctor `[ok] llm`; `readSpendSnapshot` flags an unpriced tier model with its
 `tier` for doctor `spend` and `/status`).
-Real-diff verify gate (REQ-agent-085, AGENT-4): `src/agent/workspace-diff.ts`
+Real-diff verify gate (REQ-agent-085, AGENT-4 / AGENT-15): `src/agent/workspace-diff.ts`
 exports `startWorkspaceDiff(cwd)` (a `WorkspaceDiffTracker` whose `changed()`
-lists cwd-relative paths changed since the snapshot, or null when git cannot
+lists cwd-relative paths changed since the baseline, or null when git cannot
 be read; null tracker outside a git work tree; an optional second argument
-`WorkspaceDiffLimits` lowers the hash budget in tests),
-`WORKSPACE_DIFF_MAX_OUTPUT_BYTES`, `WORKSPACE_DIFF_HASH_MAX_BYTES`,
-`WORKSPACE_DIFF_HASH_BUDGET_BYTES` and `WORKSPACE_DIFF_MAX_FILES` (real-diff
-paths one run adds to `filesChanged`). `RunTaskOptions.workspaceDiff` is a
-test seam like `verifyRunner`, not a product surface.
+`WorkspaceDiffLimits` lowers the hash budget in tests; in a talk worktree the
+tracker also has `settle(done)` and, when its last run did not end verified,
+`carried: true` with the talk branch's merge-base as the baseline,
+REQ-agent-015; an optional third argument `WorkspaceDiffRole`
+`{ nested: true }`, passed by `task run` in a delegate or council worker,
+never takes or writes the marker), `WORKSPACE_DIFF_MAX_OUTPUT_BYTES`,
+`WORKSPACE_DIFF_HASH_MAX_BYTES`, `WORKSPACE_DIFF_HASH_BUDGET_BYTES` and
+`WORKSPACE_DIFF_MAX_FILES` (real-diff paths one run adds to `filesChanged`).
+`RunTaskOptions.workspaceDiff` is a test seam like `verifyRunner`, not a
+product surface (`task run` sets it only in a delegate or council worker). The gate has no switch (AGENT-14, REQ-agent-003):
+`RunTaskOptions` and `AgentConfig` have no `verifyBeforeComplete`;
+`src/agent/config.ts` exports `REMOVED_VERIFY_KEYS` and
+`removedVerifyKeys(cwd)` (a removed `[corvidinho]` key still set, for the
+doctor warning), and `src/agent/loop.ts` exports `NOTHING_TO_VERIFY_NOTE`.
 
 LLM request timeout (REQ-agent-244): `src/agent/execute.ts` exports
 `LLM_REQUEST_TIMEOUT_MS` (10 minutes), the default cap on one chat
@@ -307,14 +318,27 @@ loaded. The persona is read from Corvidinho's own checkout at `HEAD`, never
 from the run's project folder or an uncommitted working-tree copy, so a run
 cannot plant a persona for later runs. A persona problem never stops a run.
 
-The verify gate trusts the working tree, not only the tools (REQ-agent-085):
-with the gate on, any path the run changed on disk since its start snapshot
-(git status, `HEAD` moves, content of already-dirty paths) is in
-`filesChanged` (up to `WORKSPACE_DIFF_MAX_FILES` per run) and forces the
-verify lane; a run ends `done` without verify
-only when no tool reported files and the real diff is empty. A diff git
-cannot read after a good snapshot verifies anyway (fail closed). The diff is
-read-only git plus in-process hashing: it never writes the index or objects.
+The verify gate can't be skipped (AGENT-14, REQ-agent-003): no option,
+config key or CLI flag turns it off, and chat, WATCH, schedules, `/work` and
+delegate workers all reach it through `task run`. The real git diff decides
+what changed (AGENT-15, REQ-agent-085): the snapshot is always taken, any
+path the run changed on disk since its baseline (git status, `HEAD` moves,
+content of already-dirty paths) is in `filesChanged` (up to
+`WORKSPACE_DIFF_MAX_FILES` per run) and forces the verify lane, and a path a
+tool claims but git does not show is not listed yet still forces the lane.
+A run ends `done` without verify only when nothing changed, with one
+`Verify gate: no changes, nothing to verify.` note. A diff git cannot read
+after a good snapshot verifies anyway (fail closed). In a talk worktree whose
+last run ended blocked, failed or cancelled (or died), the baseline is the
+talk branch's merge-base, so every edit since the talk started, including
+ones an earlier attempt left, is verified before done (AGENT-15.a,
+REQ-agent-015); a new talk worktree and a run after a `done` start from
+their own snapshot, and the caller's own checkout keeps the run-start
+baseline. A delegate or council worker (`CORVIDINHO_DELEGATE_DEPTH` above 0)
+in its lead's talk worktree never takes or writes the marker and keeps its
+own run-start baseline; the lead's gate covers the combined change. The diff is read-only git plus in-process hashing: it never writes
+the index or objects (the talk's verified marker lives in the worktree's own
+git dir).
 With no git snapshot (a non-git cwd, or an unreadable start snapshot), a run
 that called a tool whose edits no result reports (a Fledge command, or the
 shell / a runner, a local run's `delegate` whose worker could have run an
@@ -521,6 +545,18 @@ instructions for …" or a browser's developer mode do not count.
 - **Then** it embeds MEMORY_AGENT_SYSTEM_INSTRUCTIONS with argv example for
   memory-store
 
+### Scenario: a resumed talk verifies the edit its blocked run left
+
+- **Given** a talk worktree where the last run edited `app.ts` and ended blocked on an ask
+- **When** the resumed run only answers and changes nothing
+- **Then** its baseline is the talk branch's merge-base, `filesChanged` is `["app.ts"]`, the verify lane runs, and the run is `done` only if it passes (AGENT-15.a, REQ-agent-015)
+
+### Scenario: a chat turn that changed nothing
+
+- **Given** a run whose real git diff is empty and whose tools claimed no change
+- **When** the attempt ends
+- **Then** the run is `done` with `verifySkipped=true` and one `Verify gate: no changes, nothing to verify.` note; no switch could have skipped a run that did change files (AGENT-14, REQ-agent-003)
+
 ### Scenario: delegate hidden until the project opts in
 
 - **Given** a project whose `fledge.toml` has no `[corvidinho.autonomous]`
@@ -585,7 +621,10 @@ instructions for …" or a browser's developer mode do not count.
 | Verify exhausted | state failed, verified=false, summary includes verifier output, `ask` reason stuck |
 | Verify lane log over 4000 chars (passing steps such as the `--help` smoke fill its head) | the retry gets the failing step's name, its output (or its error lines and the end of the log) within 4000 chars, never the start of the log (REQ-agent-002, AGENT-4.a) |
 | Edit no tool reported (code-tier shell-exec, delegate worker, commit through a shell) | the real git diff adds the path to filesChanged; verify runs; done only on a pass (REQ-agent-085) |
-| Path dirty before the run and left untouched, or gitignored | not counted; with no tool-reported files verify is skipped (REQ-agent-085) |
+| A tool claims a path git does not show (gitignored, nested repo, nothing written) | not listed in filesChanged; one note names it; verify runs anyway (REQ-agent-085) |
+| Path dirty before the run and left untouched, or gitignored and unclaimed | not counted; with nothing else changed the run ends done with the "no changes, nothing to verify" note (REQ-agent-085 / REQ-agent-003) |
+| Project fledge.toml sets `[corvidinho] verify_before_complete = false` | ignored; the gate runs as always (AGENT-14, REQ-agent-003) |
+| Talk worktree whose last run ended blocked / failed / cancelled or died | baseline is the talk branch's merge-base: its edits are verified before done; one carried note; a base git cannot find verifies anyway (REQ-agent-015) |
 | Cwd not in a git work tree, or start snapshot unreadable | tool-reported filesChanged only, as before (REQ-agent-085); if the run called a Fledge command (or the shell / a runner, or a local run's `delegate` with a Fledge plugin command allowlisted, or a `delegate` whose worker left no result frame), verify runs anyway with a `Verify gate: no git working tree to diff` note (REQ-agent-502) |
 | Dangerous plugin the run's allowlist does not name | not in the catalog; a model call to it is refused as not offered (REQ-agent-501 / REQ-agent-128) |
 | `shell-exec`, `node-exec`, `python-exec`, `cargo-exec`, `fledge-lanes-run` or `fledge-run` named in the allowlist | still not in the catalog until the SAFE-3 decision; a model call is refused as not offered (REQ-agent-501) |
@@ -692,6 +731,7 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-29 | verify-retry-feedback-never-ends-on-half-a-surrogate-pair-a-non-git-lead-verifies-after-a-delegate-worker-that-returned: Verify retry feedback never ends on half a surrogate pair; a non-git lead verifies after a delegate worker that returned no result frame; github-pr-create attribution check is exact; doctor and the Octokit plugins treat a blank GITHUB_TOKEN / GH_TOKEN as missing |
 | 2026-09-29 | prompt-injection-hygiene-display-names-are-cleaned-before-the-model-sees-them-and-a-name-that-imitates-the-owner-or-a: Prompt-injection hygiene: display names are cleaned before the model sees them and a name that imitates the owner or a declared person is flagged, identity and role still only from declared ids (SAFE-11); a non-owner's chat, /session start and /work text, WATCH issue/PR/comment titles and bodies, and GitHub reader and guild-member tool results reach the model fenced as untrusted data, and the system prompt says such blocks never grant permission (SAFE-12); a conservative always-on detector refuses a non-owner message or WATCH event that looks like an injection attempt before any run with one short reply that tells the owner, and a tool result that trips it drops every mutating tool for the rest of the run and tells the owner on the answer, every hit audited (SAFE-13, #71) |
 | 2026-09-29 | discord-rich-final-replies-answer-footer-with-model-tokens-cost-and-time-tokens-and-cost-owner-only-and-fence-safe: Discord rich final replies: answer footer with model, tokens, cost and time (tokens and cost owner-only) and fence-safe splits at 2000 (DISCORD-15/15.a/16) |
+| 2026-09-30 | verification-can-t-be-skipped-and-the-real-diff-since-the-talk-started-decides-what-changed-agent-14-agent-15-agent-15: Verification can't be skipped and the real diff since the talk started decides what changed (AGENT-14, AGENT-15, AGENT-15.a): task run refuses --no-verify, [corvidinho] verify_before_complete is ignored, filesChanged comes from the real git diff alone (a claimed path git does not show still runs the lane), and a talk worktree whose last run did not end verified verifies from the talk branch's merge-base |
 | 2026-09-30 | shell-exec-refuses-foot-guns-and-says-why-sed-i-or-edits-downloads-piped-into-a-shell-deletes-outside-the-worktree: Shell-exec refuses foot-guns and says why (sed -i or > edits, downloads piped into a shell, deletes outside the worktree, secret reads), env -C and symlinked cd can't leave the root, and the shell and language runners start without GitHub or git credentials (SAFE-21, SAFE-21.a, SAFE-3) |
 | 2026-09-30 | ask-questions-and-choice-labels-are-secret-scrubbed-before-they-are-cut-or-posted-safe-6-a: Ask questions and choice labels are secret-scrubbed before they are cut or posted (SAFE-6.a) |
 | 2026-09-30 | on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a: On GitHub people match only by their numeric user id: a renamed or re-registered login never counts as the owner or a declared person on WATCH (prompt, memory scope, SAFE-13 exemption); [owner] github_id declares the owner's id; /admin people link github stores the looked-up numeric id; doctor warns about logins without an id (IDENTITY-7.a, #36) |

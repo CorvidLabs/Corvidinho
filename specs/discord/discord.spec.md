@@ -40,6 +40,7 @@ files:
   - src/worktree/index.ts
   - src/worktree/manager.ts
   - src/worktree/cleanup.ts
+  - src/worktree/base.ts
   - tests/worktree.test.ts
   - tests/discord.session-worktree.test.ts
   - tests/worktree.project-scope.test.ts
@@ -524,6 +525,13 @@ throws) with `WORK_PR_PLUGINS`, `OpenWorkPrInput`, `OpenWorkPrDeps` and
 `AgentSpawnResult.task` carries the run's verify facts from its result frame.
 `WorkPrSkipReason` includes `needs-input`: a `blocked` /work run (it asked a
 human) never ships a PR (REQ-discord-044).
+`src/worktree/base.ts` exports `resolveBase` (the talk base: the remote's
+default branch, else `main`, and HEAD's merge-base with it; shared by
+`openWorkPr` and the verify gate), `talkWorktreeGitDir` (the own git dir of a
+linked `talk-*` worktree), `takeTalkVerified` / `settleTalkVerified` and
+`TALK_VERIFIED_MARKER` (the verified marker a new talk worktree gets from
+`ensureTalkWorkspace` and a `done` run writes back; AGENT-15.a,
+REQ-agent-015 / REQ-discord-085).
 
 `image-attachments.ts` exports `attachmentCacheDir(workDir)` and
 `WORKSPACE_ATTACHMENTS_SUBDIR` (`.corvidinho/attachments`); the bridge binds the
@@ -1104,5 +1112,6 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-30 | on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a: On GitHub people match only by their numeric user id: a renamed or re-registered login never counts as the owner or a declared person on WATCH (prompt, memory scope, SAFE-13 exemption); [owner] github_id declares the owner's id; /admin people link github stores the looked-up numeric id; doctor warns about logins without an id (IDENTITY-7.a, #36) |
 | 2026-09-30 | safe-2-a-the-file-tools-refuse-fledge-like-fledge-toml-and-specs-so-a-run-cannot-weaken-the-verify-lane-it-is-judged-by: SAFE-2.a: the file tools refuse .fledge/ like fledge.toml and specs/, so a run cannot weaken the verify lane it is judged by |
 | 2026-09-29 | an-answer-typed-in-the-private-answer-form-is-fenced-and-scanned-like-a-chat-reply-a-non-owner-s-submit-that-looks-like: An answer typed in the private Answer form is fenced and scanned like a chat reply: a non-owner's submit that looks like an injection starts no run, keeps the ask open, pings only the owner once and appends an injection-suspected audit row; an ordinary non-owner answer reaches the model inside the untrusted-data fence; the owner's answer is unchanged (SAFE-12/13, DISCORD-ASK-4.a) |
+| 2026-09-30 | verification-can-t-be-skipped-and-the-real-diff-since-the-talk-started-decides-what-changed-agent-14-agent-15-agent-15: Verification can't be skipped and the real diff since the talk started decides what changed (AGENT-14, AGENT-15, AGENT-15.a): task run refuses --no-verify, [corvidinho] verify_before_complete is ignored, filesChanged comes from the real git diff alone (a claimed path git does not show still runs the lane), and a talk worktree whose last run did not end verified verifies from the talk branch's merge-base |
 | 2026-09-30 | ask-questions-and-choice-labels-are-secret-scrubbed-before-they-are-cut-or-posted-safe-6-a: Ask questions and choice labels are secret-scrubbed before they are cut or posted (SAFE-6.a) |
 | 2026-09-30 | a-non-owner-s-schedule-text-is-scanned-at-schedule-create-and-fenced-at-every-tick-a-non-owner-s-create-whose-name-or: A non-owner's schedule text is scanned at /schedule create and fenced at every tick: a non-owner's create whose name or prompt looks like an injection stores nothing, gets a private refusal, pings only the owner and appends an injection-suspected audit row; each tick re-resolves the creator's role, fences a non-owner's stored name and prompt as untrusted data, and stored text that trips the detector runs nothing, pauses the schedule and tells the owner once; the owner's own schedules are unchanged (SAFE-12/13) |
