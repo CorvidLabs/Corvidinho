@@ -7,11 +7,11 @@
   "title": "If it only plans or says 'Done.' without changing anything, it gets one nudge to the same model; a second stall stands with an operator note (AGENT-17, nudge half)",
   "description": "If it only plans or says 'Done.' without changing anything, it gets one nudge to the same model; a second stall stands with an operator note (AGENT-17, nudge half)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "81ceb4a1423189b50ce25df34363b26b50426d1d",
   "created_at": 1790800962,
-  "updated_at": 1790806372,
+  "updated_at": 1790806848,
   "affected_specs": [
     "agent"
   ],

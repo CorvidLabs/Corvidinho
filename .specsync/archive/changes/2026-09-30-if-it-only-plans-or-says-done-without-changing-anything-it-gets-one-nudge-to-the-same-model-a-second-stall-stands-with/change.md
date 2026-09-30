@@ -1,6 +1,6 @@
 ---
 id: if-it-only-plans-or-says-done-without-changing-anything-it-gets-one-nudge-to-the-same-model-a-second-stall-stands-with
-state: verifying
+state: archived
 type: feature
 base_commit: 81ceb4a1423189b50ce25df34363b26b50426d1d
 ---
