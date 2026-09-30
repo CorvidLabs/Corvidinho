@@ -166,6 +166,19 @@ only the searches not yet run, refusals or nothing ⇒ null).
   take the first unused position number; a dropped empty option holds no id;
   already-unique options normalize byte-identically (again and again); an
   ask-human call with one id twice gives buttons with distinct `custom_id`s.
+- Scrub before cut (REQ-agent-045 modified, SAFE-6.a):
+  `tests/agent.ask.test.ts` › "SAFE-6.a: ask questions and choice labels are
+  scrubbed before they are cut": a question whose fake key straddles the 1500
+  cut comes out `…[redacted:github-token]…` from `askFromToolArguments` and
+  `askFromUnknown` (and in `formatAskSummary`), and for every cut position
+  across the key no raw `ghp_` piece survives; a label straddling the 80 cut
+  does the same from string options, `{id,label}` options and numbered
+  question lines, a secret-looking id still becomes its position; a numbered
+  choice the question cap cuts is parsed from the scrubbed question. Fails on
+  the base sources. "a cut that ends a key shape is scrubbed too…": `AKIA`
+  plus 20 capitals placed so the cut keeps 16 comes out
+  `…[redacted:aws-key]…` for a label and a question, and normalizing the
+  result again changes nothing.
 
 
 ## Persona file (REQ-agent-069, PERSONA-1..3)

@@ -601,6 +601,22 @@ both.
   `normalizeAskOptions` stores the id redacted; an older row's secret-looking
   option id is redacted on the next open with askId, expiresAt and
   stubMessageId byte-identical.
+- Scrub before cut (REQ-discord-066 modified, SAFE-6.a):
+  `tests/discord.ask-scrub-first.test.ts` (bridge on temp SQLite, the ask as
+  the spawn client parses it): a choice label whose fake key straddles the
+  80-char cut is `…[redacted:github-token]…` on the Choose-pick buttons, in
+  the stored `pending_ask` row and in the pick's human text; a free-text
+  question straddling the 1500 cut is stored that way and nothing the Answer
+  stub, its form or a restated ask posts carries a raw `ghp_` piece; after a
+  restart the reloaded ask posts the same labels, and a stored label past the
+  cut loads scrubbed before it is cut (ids unchanged).
+  `tests/discord.ask-buttons.test.ts` › "SAFE-6.a: choice labels are scrubbed
+  before they are cut or posted": `buildChoiceComponents` posts a whole or
+  straddling key as `[redacted:<kind>]` (≤80, custom_ids unchanged).
+  `tests/scheduler.ask-outbox.test.ts` › "SAFE-6.a: a question whose secret
+  straddles the ASK_QUESTION_MAX cut…": `schedule_runs.ask_question` holds
+  the marker for a daemon-claimed and a bridge-claimed run, and neither the
+  run summary nor the posts carry a raw piece. All fail on the base sources.
 - `tests/discord.send-file.test.ts` (REQ-discord-476, DISCORD-17): stubbed
   fetch (records the multipart `payload_json` and `files[0]`) and an injected
   requester checker, no live Discord. `discord-send-file` is dangerous,
