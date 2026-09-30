@@ -29,6 +29,7 @@ import type { AgentClient } from "../src/discord/agent-client.ts";
 import { ASK_REPLY_HINT, askPingKey, SPEND_CAP_HEADLINE } from "../src/discord/ask-ping.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway } from "../src/discord/gateway.ts";
+import { createSpendDm } from "../src/discord/spend-dm.ts";
 import {
   autoPauseAsk,
   FAILURE_AUTO_PAUSE,
@@ -329,6 +330,47 @@ describe("daemon-claimed schedule asks reach Discord through the bridge tick (RE
     expect(h.posts[1]!.content).toContain(SPEND_CAP_HEADLINE);
     expect(silent(h.posts[1]!)).toBe(true);
     expect(handed.filter((o) => o.stop)).toHaveLength(1);
+  });
+
+  test("spend cap: a daemon ask whose channel post keeps failing is retried every tick, but the owner gets its details by DM once, not every tick (SAFE-14.a)", async () => {
+    const db = openCorvidinhoDb({ memory: true });
+    const outbox = createSpendAlertOutbox({ db, env: { [SPEND_CAP_ENV]: "5" } });
+    const dms: Array<{ userId: string; content: string }> = [];
+    const spendDm = createSpendDm({
+      outbox,
+      owner: () => OWNER,
+      sendDm: () => async ({ userId, content }) => {
+        dms.push({ userId, content });
+        return { channelId: "dm", messageId: `dm_${dms.length}` };
+      },
+      log: () => {},
+    });
+    let failing = true;
+    const posts: Post[] = [];
+    const h = pair({
+      db,
+      spendAlerts: outbox,
+      spendDm,
+      post: async (p) => {
+        if (failing) return false;
+        posts.push(p);
+      },
+    });
+    await h.daemonRun(CAP_ASK);
+    // The channel post fails on three ticks: each hands the ask and the cap
+    // ping back for the next tick, but the details reach the owner once.
+    for (let i = 0; i < 3; i++) await h.bridgeTick();
+    expect(posts).toHaveLength(0);
+    expect(h.lastRun().ask_posted_at).toBeNull();
+    const stopDms = () => dms.filter((d) => d.content.includes("Daily spend cap reached"));
+    expect(stopDms()).toHaveLength(1);
+    expect(stopDms()[0]!.userId).toBe(OWNER_ID);
+    // The channel works again: the ask posts with the ping; no second DM.
+    failing = false;
+    await h.bridgeTick();
+    expect(posts).toHaveLength(1);
+    expect(pinged(posts[0]!, OWNER_ID)).toBe(true);
+    expect(stopDms()).toHaveLength(1);
   });
 
   test("spend cap: an episode another surface already pinged posts without a ping", async () => {

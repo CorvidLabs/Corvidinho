@@ -334,6 +334,12 @@ export class SchedulerService {
   private readonly owner: OwnerRecord | null;
   private readonly spendAlerts?: SpendAlertOutbox;
   private readonly spendDm?: Pick<SpendDm, "deliver">;
+  /**
+   * SAFE-14.a: per schedule, the run whose spend-cap details were last handed
+   * to the owner's DM, so an ask retried every tick (its post failed and
+   * handed the cap ping back) is DMed once, not on every tick.
+   */
+  private readonly spendStopDmRun = new Map<string, string>();
   private readonly onRunFinished?: (event: ScheduleRunFinished) => void;
   private readonly onTick?: () => void;
   private readonly backup?: Pick<BackupTicker, "tick">;
@@ -506,7 +512,8 @@ export class SchedulerService {
    * newest finished run stopped with an ask nobody posted — a run the
    * daemon claimed — post it to the schedule's channel like an in-process
    * run would (owner / creator ping, once-per-question and once-per-episode
-   * rules, pending 80% warning). A schedule whose creator or channel the
+   * rules; a spend-cap ask only "Work is paused for budget.", its details
+   * to the owner by DM once per run, SAFE-14.a). A schedule whose creator or channel the
    * live allowlist refuses (DISCORD-SCHEDULE-3) is skipped and its ask stays
    * pending; the ask is claimed atomically first and handed back when its
    * post does not go out, so the next tick retries it. The claim re-checks that the
@@ -526,7 +533,14 @@ export class SchedulerService {
         if (!this.store.claimRunAsk(pending.runId, this.nowFn())) continue;
         let posted = false;
         try {
-          posted = await this.postRunAsk(schedule, schedule.channelId, pending.ask, pending.summary);
+          posted = await this.postRunAsk(
+            schedule,
+            schedule.channelId,
+            pending.ask,
+            pending.summary,
+            undefined,
+            pending.runId,
+          );
         } catch (err) {
           logSchedulerError("ask", err);
         } finally {
@@ -932,6 +946,7 @@ export class SchedulerService {
         ask,
         opts.context,
         opts.injection,
+        run.id,
       );
     } finally {
       if (!posted && recorded && opts.handBack) this.store.releaseRunAsk(run.id);
@@ -945,10 +960,11 @@ export class SchedulerService {
    * question per schedule (`askPingKey`) and a spend-cap ask once per cap
    * episode; a repeat still posts, without a ping. A spend-cap post says
    * only that work is paused for budget (SAFE-14.a); when it claims the
-   * episode's ping, the stop's details go to the owner by DM. Resolves true
-   * when the post went out (a poster returning void counts as sent); when it
-   * did not, the cap ping is handed back and no ping key is kept. The caller
-   * has already checked the channel against the allowlist.
+   * episode's ping, the stop's details go to the owner by DM, once per run
+   * (`runId`: a post retried every tick after it failed DMs them once).
+   * Resolves true when the post went out (a poster returning void counts as
+   * sent); when it did not, the cap ping is handed back and no ping key is
+   * kept. The caller has already checked the channel against the allowlist.
    */
   private async postRunAsk(
     schedule: Schedule,
@@ -956,6 +972,7 @@ export class SchedulerService {
     ask: HumanAsk,
     context: string | undefined,
     injection?: InjectionNotice,
+    runId?: string,
   ): Promise<boolean> {
     const outbound = this.outbound;
     if (!outbound?.post) return false;
@@ -1005,9 +1022,17 @@ export class SchedulerService {
       // Not posted: the next post carries the cap ping.
       if (posted === false) askOwner.release();
       // SAFE-14.a: the stop's details (amounts, cap, setting) to the owner by
-      // DM when this post claimed the episode's ping. Never throws.
+      // DM when this post claimed the episode's ping — once per run, so an
+      // ask whose post keeps failing (retried every tick with its ping
+      // handed back) does not DM the owner every tick. Never throws.
       const stop = spendStopFor(ask, askOwner, channelId);
-      if (stop) await this.spendDm?.deliver({ stop });
+      if (stop && this.spendDm) {
+        const handed = runId !== undefined && this.spendStopDmRun.get(schedule.id) === runId;
+        if (!handed) {
+          if (runId !== undefined) this.spendStopDmRun.set(schedule.id, runId);
+          await this.spendDm.deliver({ stop });
+        }
+      }
     }
     return posted !== false;
   }

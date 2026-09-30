@@ -69,8 +69,9 @@ model, an invalid cap value, an unreadable ledger), and
 `formatSpendPublicStatusLine(snapshot)` is "Spend: Work is paused for budget."
 then and undefined otherwise, naming no amount, cap, model, path or setting.
 The bridge delivers the claimed warning to the owner by DM only
-(REQ-discord-098). The Approve card (#96, draft SAFE-18..20)
-and draft SAFE-14..16 are not part of this requirement.
+(REQ-discord-098). The Approve card (#96, SAFE-18..20) and
+per-provider caps (SAFE-14, and SAFE-15 for each cap) are not part of this
+requirement; of SAFE-14 it covers only SAFE-14.a's public text.
 
 Acceptance Criteria
 - No cap: the capped fetch is the same fetch and no database file is created.

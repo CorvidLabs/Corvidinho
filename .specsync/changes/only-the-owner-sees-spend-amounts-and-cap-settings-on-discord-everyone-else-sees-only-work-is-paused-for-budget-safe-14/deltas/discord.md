@@ -83,7 +83,10 @@ only see that work is paused for budget (SAFE-14.a):
   scrubbed (SAFE-6) and mention-defanged, naming the channel — by DM through
   the gateway `sendDm` (`src/discord/spend-dm.ts`), once per cap episode:
   when the stop's post claimed the episode's owner ping (`claimCapPing`), also
-  when that post then failed. A stop DM that does not go out SHALL be held in
+  when that post then failed; a schedule run's ask that the bridge retries
+  every tick because its post keeps failing (its cap ping handed back each
+  time) SHALL hand its details to the DM once per run, not on every tick.
+  A stop DM that does not go out SHALL be held in
   memory (a newer stop replacing it) and retried with the warning on the next
   pass; one pass SHALL run at a time. A failed DM SHALL be logged once per
   failure streak, with no amounts. With no owner configured nothing is
@@ -218,7 +221,7 @@ DM (SAFE-14.a, REQ-discord-098).
 Acceptance Criteria
 - A daemon-wired scheduler's stuck run stores `ask_reason` `stuck` and the question with `ask_posted_at` null and posts nothing; a bridge-wired scheduler on the same DB posts it on its next tick once, to the schedule channel, with the prefix, the stuck headline, the question and the owner mention (`mentionUserIds` [owner]); later ticks post nothing more.
 - A daemon clarify ask posts with only the schedule creator mentioned.
-- A daemon spend-cap ask posts the schedule line and "💸 Work is paused for budget." with the owner pinged, no question, no warning and no reply hint, and hands the stored question to the owner's DM pass once; a second one in the same episode posts without a ping or DM; an episode another surface already pinged posts without a ping.
+- A daemon spend-cap ask posts the schedule line and "💸 Work is paused for budget." with the owner pinged, no question, no warning and no reply hint, and hands the stored question to the owner's DM pass once; a second one in the same episode posts without a ping or DM; an episode another surface already pinged posts without a ping; one whose channel post fails on three ticks (retried each tick, its cap ping handed back) DMs the owner its details once, and posts with the ping once the channel works.
 - The same question from two daemon runs pings once; of two pending asks of one schedule only the newest posts.
 - A later finished run, or deleting the schedule, leaves nothing to post.
 - A later run that finishes while a delivery pass is posting another schedule's ask makes that schedule's pending ask moot: it is not posted.

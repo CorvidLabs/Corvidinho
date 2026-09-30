@@ -391,7 +391,9 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   the schedule creator; spend-cap pings the owner once per episode, posts only
   the schedule line and "💸 Work is paused for budget." (no question, no
   warning, no reply hint) and hands the stored question to the owner's DM pass
-  once per episode (SAFE-14.a); the same question pings once and
+  once per episode (SAFE-14.a), and once per run when its post keeps failing
+  and is retried every tick (three failing ticks, one DM; the post then goes
+  out with the ping); the same question pings once and
   only the newest of two pending asks posts; a later finished run or a
   deleted schedule leaves nothing; a refused channel posts nothing; a creator
   the live allowlist no longer lists (or deny-lists) gets no post until the

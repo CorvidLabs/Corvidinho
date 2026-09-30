@@ -1,6 +1,6 @@
 ---
 id: only-the-owner-sees-spend-amounts-and-cap-settings-on-discord-everyone-else-sees-only-work-is-paused-for-budget-safe-14
-state: implementing
+state: verifying
 type: feature
 base_commit: f687a5a87d0371d41f8412b96a93dbc917dbbdb4
 ---
