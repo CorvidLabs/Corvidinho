@@ -214,6 +214,56 @@ describe("runners register when the toolchain is on PATH (REQ-plugins-313)", () 
   });
 });
 
+describe("SAFE-21.a: the runners start without GitHub / git credentials (REQ-plugins-495)", () => {
+  test("tokens, askpass, the ssh agent and inherited git / gh config pointers are dropped; git and gh read none", async () => {
+    const fake = makeFake(["node"], { "node": "#!/bin/sh\nenv\n" });
+    chmodSync(join(fake.bin, "node"), 0o755);
+    const r = await runRunner({
+      spec: spec("node-exec"),
+      bin: join(fake.bin, "node"),
+      args: ["x.js"],
+      cwd: fake.project,
+      env: {
+        PATH: "/usr/bin:/bin",
+        HOME: "/home/owner",
+        GH_TOKEN: "ghp_000000000000000000000000000000000000",
+        GH_ENTERPRISE_TOKEN: "enterprise-token-value",
+        GIT_ASKPASS: "/usr/bin/askpass",
+        SSH_AUTH_SOCK: "/tmp/ssh-agent.sock",
+        GIT_SSH_COMMAND: "ssh -i /home/owner/.ssh/id_ed25519",
+        GIT_CONFIG_GLOBAL: "/home/owner/.gitconfig",
+        GIT_CONFIG_COUNT: "2",
+        GIT_CONFIG_KEY_1: "credential.helper",
+        GIT_CONFIG_VALUE_1: "store",
+        GIT_CONFIG_PARAMETERS: "'credential.helper'='store'",
+        GH_CONFIG_DIR: "/home/owner/.config/gh",
+      },
+    });
+    expect(r.ok).toBe(true);
+    const out = String(r.message);
+    for (const k of [
+      "GH_TOKEN", "GH_ENTERPRISE_TOKEN", "GIT_ASKPASS", "SSH_AUTH_SOCK", "GIT_CONFIG_PARAMETERS",
+    ]) {
+      expect(out).not.toMatch(new RegExp(`^${k}=`, "m"));
+    }
+    // The inherited `credential.helper=store` pair is gone; slots 0..2 are the resets.
+    expect(out).not.toMatch(/^GIT_CONFIG_VALUE_\d+=store$/m);
+    expect(out).toMatch(/^GIT_CONFIG_GLOBAL=\/dev\/null$/m);
+    expect(out).toMatch(/^GIT_CONFIG_NOSYSTEM=1$/m);
+    expect(out).toMatch(/^GIT_CONFIG_COUNT=3$/m);
+    expect(out).toMatch(/^GIT_CONFIG_KEY_0=credential\.helper$/m);
+    expect(out).toMatch(/^GIT_CONFIG_KEY_1=http\.extraHeader$/m);
+    expect(out).toMatch(/^GIT_CONFIG_KEY_2=http\.https:\/\/github\.com\/\.extraHeader$/m);
+    for (const n of [0, 1, 2]) expect(out).toMatch(new RegExp(`^GIT_CONFIG_VALUE_${n}=$`, "m"));
+    expect(out).toMatch(/^GIT_TERMINAL_PROMPT=0$/m);
+    expect(out).toMatch(/^GIT_SSH_COMMAND=ssh -F \/dev\/null .*IdentityAgent=none/m);
+    expect(out).toMatch(/^CARGO_NET_GIT_FETCH_WITH_CLI=true$/m);
+    const gh = out.match(/^GH_CONFIG_DIR=(.+)$/m)?.[1] ?? "";
+    expect(gh).not.toBe("/home/owner/.config/gh");
+    expect(existsSync(join(gh, "hosts.yml"))).toBe(false);
+  });
+});
+
 describe("SAFE-1 / tier gates apply to the runners (REQ-plugins-313)", () => {
   test("non-interactive without an allowlist entry is denied (exit 2) and never spawns", async () => {
     const fake = makeFake();

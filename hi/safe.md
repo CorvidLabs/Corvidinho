@@ -35,6 +35,7 @@ Safety has to fire even when the model is having a bad day. Guards live in the t
 - **SAFE-19**  Destructive actions and money actions also need a one-time code I type back; the code is valid once, only for that action, and expires quickly.
 - **SAFE-20**  No answer, or an answer after the card expires, means no.
 - **SAFE-21**  The shell refuses foot-guns (sed -i or > edits, piping downloads into a shell, deleting outside the worktree, reading secrets) and says why.
+  - **SAFE-21.a**  The shell and language runners start without my GitHub or git credentials, so pushes, PRs and merges only happen through the checked GitHub tools.
 
 ## Notes (not numbered AC)
 
