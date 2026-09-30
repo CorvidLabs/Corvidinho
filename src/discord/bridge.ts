@@ -85,6 +85,7 @@ import {
   fenceSpeakerText,
   formatInjectionRefusal,
   inboundInjection,
+  refuseInjectedAnswer,
   withInjectionNotice,
 } from "./injection-guard.ts";
 import { loadDeclaredPeople } from "../identity/people.ts";
@@ -1319,9 +1320,27 @@ export async function startBridge(
       }
 
       const prior = pending.question;
+      const people = declaredPeople();
+      // IDENTITY-8..12: the presser's role, as on the chat path (their
+      // Discord role ids included, so a team member allowlisted by role is
+      // team here as in chat). Resolved before the run: SAFE-12/13 need to
+      // know whose words a typed answer is.
+      const actingRole = resolveDiscordActingRole({
+        userId: interaction.userId,
+        roleIds: interaction.roleIds,
+        allowlist: config.allowlist,
+        adminUserIds: config.adminUserIds,
+        adminRoleIds: config.adminRoleIds,
+        owner: config.owner ?? null,
+        mutedUsers,
+        people,
+      });
+      const actingIsAdmin = actingRole === "owner";
       // The human's answer (a chosen label or the privately typed text) and
-      // the prior-question block the resumed run gets ahead of it.
+      // the prior-question block the resumed run gets ahead of it. `spoken`
+      // is the answer as the model gets it (SAFE-12).
       let answer: string;
+      let spoken: string;
       let priorBlock: string;
       if (parsed.kind === "answer") {
         // DISCORD-ASK-4.a — the private Answer form's submit. It passed the
@@ -1357,11 +1376,40 @@ export async function startBridge(
           });
           return;
         }
+        // SAFE-13: typed text is scanned exactly as the same words in a chat
+        // reply in this session are (never the owner's own). A hit runs
+        // nothing and leaves the ask open; the submit is refused privately,
+        // the owner is pinged once in a fresh post in the session's channel
+        // (an interaction reply notifies no mention) and one
+        // `injection-suspected` row is audited. As in chat, the session is
+        // kept and the refusal post is tracked on it.
+        const suspected = inboundInjection(answer, actingRole);
+        if (suspected) {
+          const sentRefusal = await refuseInjectedAnswer(
+            {
+              owner: config.owner ?? null,
+              ...(replyRef.fn ? { post: replyRef.fn } : {}),
+              recordAudit,
+            },
+            interaction,
+            suspected,
+            {
+              sessionId: session.id,
+              channelId: session.threadId ?? session.channelId,
+              stubMessageId: pending.stubMessageId ?? interaction.messageId,
+            },
+          );
+          store.trackBotMessage(sentRefusal?.messageId ?? `bot_reply_for_${interaction.id}`, session);
+          return;
+        }
         // Claim immediately so a reply or a second submit cannot resume twice.
         store.clearPendingAsk(session, pending.askId);
         await interaction.reply({ content: ASK_ANSWER_ACK, ephemeral: true });
         // Exactly the block a reply that answers a free-text ask gets.
         priorBlock = `[Prior clarifying question you asked (the human is answering it now):\n${prior}]`;
+        // SAFE-12: a non-owner's typed answer reaches the model fenced as
+        // untrusted data, as their chat reply would; the owner's is unchanged.
+        spoken = fenceSpeakerText(answer, actingRole, "ask-answer");
       } else {
         // pick — claim immediately so a concurrent re-press cannot double-resume.
         answer = findOptionLabel(pending.options, parsed.optionId) ?? parsed.optionId;
@@ -1375,6 +1423,9 @@ export async function startBridge(
           components: [],
         });
         priorBlock = `[Prior clarifying question you asked (the human answered via Discord button):\n${prior}]`;
+        // A pick carries the label of an option the model wrote (or the
+        // bot's own option id), not text the presser typed.
+        spoken = answer;
       }
 
       const channelId = session.threadId ?? session.channelId;
@@ -1384,7 +1435,7 @@ export async function startBridge(
       // starts. SESSION-5/6: condensed at about 80% of the window, as in chat.
       const agentPrompt = store.threadPrompt(
         session,
-        `${priorBlock}\n\nHuman answer:\n${answer}`,
+        `${priorBlock}\n\nHuman answer:\n${spoken}`,
       );
       store.recordTurn(session, "human", answer);
 
@@ -1438,7 +1489,6 @@ export async function startBridge(
         let result;
         try {
           let enrichedPrompt = agentPrompt;
-          const people = declaredPeople();
           // IDENTITY-4 / REQ-discord-446 — the presser's Discord names, as on
           // the chat path (the presser is the session's user, checked above).
           const idInject = enrichPromptWithIdentity(enrichedPrompt, {
@@ -1450,18 +1500,7 @@ export async function startBridge(
           });
           if (idInject.injected) enrichedPrompt = idInject.prompt;
 
-          // IDENTITY-8..12: the presser's role, as on the chat path.
-          const actingRole = resolveDiscordActingRole({
-            userId: interaction.userId,
-            allowlist: config.allowlist,
-            adminUserIds: config.adminUserIds,
-            adminRoleIds: config.adminRoleIds,
-            owner: config.owner ?? null,
-            mutedUsers,
-            people,
-          });
-          const actingIsAdmin = actingRole === "owner";
-          // MEMORY-5..7: as on the chat path.
+          // MEMORY-5..7: as on the chat path (role resolved above).
           const memInject = enrichPromptWithMemories(
             enrichedPrompt,
             memoryStore,

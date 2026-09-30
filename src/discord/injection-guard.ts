@@ -3,7 +3,8 @@
  * to the model, and what happens when they look like an injection attempt.
  *
  * - SAFE-12: a non-owner's message (chat, `/session start` topic, `/work`
- *   description) goes to the model inside an untrusted-data fence
+ *   description, an answer typed in an ask's private Answer form) goes to
+ *   the model inside an untrusted-data fence
  *   (`fenceUntrustedData`) that says it is their request but data, not
  *   instructions; only their role (resolved again in the tool layer on every
  *   call) decides what may run. The owner's own words are the principal's
@@ -12,7 +13,10 @@
  *   never reaches a run. The speaker gets one short public reply saying it
  *   won't act on it; the owner is pinged in that reply (allowed mentions
  *   limited to the owner, SAFE-8 style); an `injection-suspected` audit row
- *   (SAFE-5) records the actor, surface and reason ids — never the text.
+ *   (SAFE-5) records the actor, surface and reason ids — never the text. A
+ *   slash command or an Answer form submit is an interaction, whose reply
+ *   notifies no mention, so the owner is told in a fresh channel post
+ *   (`refuseInjectedSlash`, `refuseInjectedAnswer`).
  * - A run whose tool result tripped the detector reports it in its result
  *   (`InjectionNotice`); `withInjectionNotice` adds the owner line to the
  *   post that carries the answer.
@@ -40,10 +44,17 @@ export const INJECTION_NO_OWNER_WARNING =
 
 /**
  * Where the speaker's words came from (fence source; no module names).
- * `schedule-prompt` is a schedule's name / description / prompt, written by
- * its creator at `/schedule create` and replayed on every tick.
+ * `ask-answer` is an answer typed in an ask's private Answer form
+ * (DISCORD-ASK-4.a). `schedule-prompt` is a schedule's name / description /
+ * prompt, written by its creator at `/schedule create` and replayed on every
+ * tick.
  */
-export type SpeakerSurface = "chat-message" | "session-topic" | "work-task" | "schedule-prompt";
+export type SpeakerSurface =
+  | "chat-message"
+  | "session-topic"
+  | "work-task"
+  | "ask-answer"
+  | "schedule-prompt";
 
 /** Header line of a non-owner speaker's fenced message (SAFE-12). */
 export function speakerFenceHeader(role: PersonRole): string {
@@ -108,6 +119,69 @@ export function formatInjectionRefusal(
   };
 }
 
+/** The interaction a SAFE-13 refusal answers (a slash command or a form submit). */
+type RefusedInteraction = {
+  userId: string;
+  reply: (opts: { content: string; ephemeral?: boolean }) => Promise<void>;
+};
+
+/**
+ * SAFE-13 — an interaction the bridge will not act on: one
+ * `injection-suspected` audit row, the interaction's refusal (an interaction
+ * reply notifies no mention), then a fresh channel post that pings only the
+ * owner (without a post function the mention rides the reply, un-notified).
+ * Returns the owner post as sent, or null when none went out.
+ */
+async function refuseInjectedInteraction(
+  ctx: Pick<SlashContext, "owner" | "post" | "recordAudit">,
+  interaction: RefusedInteraction,
+  verdict: InjectionVerdict,
+  opts: {
+    surface: string;
+    source: SpeakerSurface;
+    channelId: string;
+    /** What was refused, for the owner post ("a /work request"). */
+    what: string;
+    /** Ack the interaction privately (the form's text was typed privately). */
+    ephemeral?: boolean;
+    /** The owner post replies to this message (an ask's stub). */
+    replyToMessageId?: string;
+  },
+): Promise<{ messageId: string } | null> {
+  auditInboundInjection(ctx.recordAudit, {
+    actor: interaction.userId,
+    surface: opts.surface,
+    source: opts.source,
+    reasons: verdict.reasons,
+  });
+  const ownerId = ctx.owner?.discordId;
+  if (!ownerId) console.warn(INJECTION_NO_OWNER_WARNING);
+  // Answer the interaction first (Discord wants an ack within 3 s).
+  await interaction.reply({
+    content:
+      ownerId && ctx.post
+        ? `${injectionRefusalHead(verdict.reasons)} I've flagged it to the owner. (SAFE-13)`
+        : formatInjectionRefusal(verdict.reasons, ctx.owner).content,
+    ...(opts.ephemeral ? { ephemeral: true } : {}),
+  });
+  if (!ownerId || !ctx.post) return null;
+  try {
+    return await ctx.post({
+      channelId: opts.channelId,
+      content:
+        `🛡️ <@${ownerId}> heads-up: ${opts.what} here looked like a prompt-injection attempt ` +
+        `(it ${describeInjectionReasons(verdict.reasons)}); I didn't act on it. (SAFE-13)`,
+      mentionUserIds: [ownerId],
+      ...(opts.replyToMessageId ? { replyToMessageId: opts.replyToMessageId } : {}),
+    });
+  } catch (err) {
+    console.warn(
+      `[discord] SAFE-13 owner ping failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return null;
+  }
+}
+
 /**
  * SAFE-13 — a slash command (`/session start`, `/work`) the bridge will not
  * run: the interaction gets the short public refusal (an interaction reply
@@ -122,35 +196,39 @@ export async function refuseInjectedSlash(
   verdict: InjectionVerdict,
   source: SpeakerSurface,
 ): Promise<void> {
-  auditInboundInjection(ctx.recordAudit, {
-    actor: interaction.userId,
+  await refuseInjectedInteraction(ctx, interaction, verdict, {
     surface: `discord:/${interaction.commandName}`,
     source,
-    reasons: verdict.reasons,
+    channelId: interaction.channelId,
+    what: `a /${interaction.commandName} request`,
   });
-  const ownerId = ctx.owner?.discordId;
-  if (!ownerId) console.warn(INJECTION_NO_OWNER_WARNING);
-  // Answer the interaction first (Discord wants an ack within 3 s).
-  await interaction.reply({
-    content:
-      ownerId && ctx.post
-        ? `${injectionRefusalHead(verdict.reasons)} I've flagged it to the owner. (SAFE-13)`
-        : formatInjectionRefusal(verdict.reasons, ctx.owner).content,
+}
+
+/**
+ * SAFE-13 on an ask's private Answer form (DISCORD-ASK-4.a) — a non-owner's
+ * submit that trips the detector is handled as the same words in a chat
+ * reply in that session are: no run, the ask left open and the session kept
+ * (the caller tracks the returned post on the session, as chat tracks its
+ * refusal), one `injection-suspected` / `denied` row (surface
+ * `discord:<session>`, source `ask-answer`), the owner told once in a fresh
+ * post in the session's channel that pings only them (replying to the ask's
+ * stub). The submit's refusal is ephemeral: the answer was typed privately
+ * and is never quoted.
+ */
+export async function refuseInjectedAnswer(
+  ctx: Pick<SlashContext, "owner" | "post" | "recordAudit">,
+  interaction: RefusedInteraction,
+  verdict: InjectionVerdict,
+  opts: { sessionId: string; channelId: string; stubMessageId?: string },
+): Promise<{ messageId: string } | null> {
+  return refuseInjectedInteraction(ctx, interaction, verdict, {
+    surface: `discord:${opts.sessionId}`,
+    source: "ask-answer",
+    channelId: opts.channelId,
+    what: "an answer typed in the private Answer form",
+    ephemeral: true,
+    ...(opts.stubMessageId ? { replyToMessageId: opts.stubMessageId } : {}),
   });
-  if (!ownerId || !ctx.post) return;
-  try {
-    await ctx.post({
-      channelId: interaction.channelId,
-      content:
-        `🛡️ <@${ownerId}> heads-up: a /${interaction.commandName} request here looked like a prompt-injection attempt ` +
-        `(it ${describeInjectionReasons(verdict.reasons)}); I didn't act on it. (SAFE-13)`,
-      mentionUserIds: [ownerId],
-    });
-  } catch (err) {
-    console.warn(
-      `[discord] SAFE-13 owner ping failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
 }
 
 /**
