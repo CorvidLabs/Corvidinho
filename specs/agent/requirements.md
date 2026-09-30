@@ -233,20 +233,28 @@ the provider-reported token usage cost; it SHALL stay at the estimate when
 usage is missing or the request failed at the network, and SHALL count zero
 when the provider returned an HTTP error.
 
-At 100%, a call whose estimate would exceed the cap SHALL NOT be sent.
-Instead the attempt SHALL end with `ask: {reason: "spend-cap", question}`
-whose question states the 24-hour spend, the call estimate and the cap,
-names the operator action that continues (raise or unset the cap where
-Corvidinho runs and restart, or wait for earlier spend to leave the window,
-then ask again) and says a reply cannot lift the cap, without a yes/no
-question; the attempt's summary SHALL be the generic `SPEND_CAP_SUMMARY`,
+At 100%, a call whose estimate would exceed the cap SHALL NOT be sent as
+is. With an owner configured and the guard given `approval` (as
+`createTaskExecute` does), the call SHALL first wait for the owner's spend
+Approve card (REQ-agent-198) and SHALL be sent only on an approval used
+once. Otherwise — no owner configured (nobody can approve), no `approval`
+given, or that card came to no — the attempt SHALL end with
+`ask: {reason: "spend-cap", question}` whose question states the 24-hour
+spend, the call estimate and the cap, names the operator action that
+continues (raise or unset the cap where Corvidinho runs and restart, or wait
+for earlier spend to leave the window, then ask again) and, with no card,
+says a reply cannot lift the cap, without a yes/no question (after a card it
+names the card and what it came to and adds asking again for a new card and
+code, REQ-agent-198); the attempt's summary SHALL be the generic `SPEND_CAP_SUMMARY`,
 which is `SPEND_PAUSED_TEXT` "Work is paused for budget." (SAFE-14.a), with no
 amounts, no cap and no env names (safe for a public reply such as a WATCH
 comment), and `runTask` SHALL return state `blocked` (never `done`, verify
 not run, no retry) through the AUTONOMY-1/2 ask path. A model with no known
 price, a cap value that is not a plain USD amount (never echoed), or an
 unavailable ledger SHALL end the attempt the same way (never counted as
-free, fail closed). The runner SHALL NOT send a provider call past the cap.
+free, fail closed; no card is raised for them, since there is no price to
+approve). The runner SHALL NOT send a provider call past the cap, except the
+one call an owner's spend card approved (REQ-agent-198, SAFE-8.a).
 
 At 80%, after a call settles, when 24-hour spend is at or above 80% of the
 cap and the warning for that cap value is armed, the module SHALL record one
@@ -279,8 +287,8 @@ The bridge delivers the claimed warning to the owner by DM only
 (REQ-discord-098). This cap is the total cap (scope `total`) of SAFE-14:
 the per-provider caps next to it, and SAFE-15's 80% warning and 100% stop
 for each cap, are REQ-agent-114, and a call is checked against this cap and
-its provider's cap in the same reservation. The Approve card (#96,
-SAFE-18..20) is not part of this requirement.
+its provider's cap in the same reservation. The Approve card that
+continues past a cap (#96, SAFE-18..20) is REQ-agent-198.
 
 Acceptance Criteria
 - No cap: the capped fetch is the same fetch and no database file is created.
@@ -295,6 +303,8 @@ Acceptance Criteria
 - `claimCapPing` returns a claim once per cap episode and again after spend is seen under 70% or 24 hours pass; a released claim lets the next claim in the same episode succeed.
 - An invalid total cap reads as the snapshot `{ kind: "invalid", keys: ["CORVIDINHO_DAILY_SPEND_CAP_USD"] }`; a reservation refused at the total cap names it (`trips: [{ scope: "total", spentMicroUsd, capMicroUsd }]`), and its ask question says `Stopped at cap: total.` (REQ-agent-114).
 - `SPEND_PAUSED_TEXT` is "Work is paused for budget." and `SPEND_CAP_SUMMARY` equals it; `formatSpendPublicStatusLine` is undefined with no cap and under the cap, and "Spend: Work is paused for budget." at the cap, for an unpriced model, an invalid value and an unreadable ledger; `spendPaused` flips exactly at the cap; the owner's `formatSpendStatusLine` keeps the amounts.
+- With an owner configured and `approval` given, a call over the cap is held for the owner's spend card (REQ-agent-198); with no owner, or through `withSpendCap` (no `approval`), the ask above comes at once with no card and still ends with "Replying can't lift the cap — this needs the operator."
+- After a spend card came to no, the ask keeps the amounts and the `Stopped at cap: …` marker, names the card and what it came to, adds "ask again — the next call past the cap raises a new card and code", and has no reply note and no question mark.
 
 ### REQ-agent-117
 
@@ -1794,8 +1804,11 @@ any cap is reached, so anyone but the owner sees only "Spend: Work is paused
 for budget." (SAFE-14.a). Amounts, scopes and setting names SHALL appear only
 in the ask question, the owner's DMs and `/status` lines, doctor, `task run`
 output and the daemon's logs. The Approve card that continues past a cap
-(SAFE-8, SAFE-18..20) is not part of this requirement: the stop keeps the
-operator-action ask of REQ-agent-098.
+(SAFE-8, SAFE-8.a, SAFE-18..20) is REQ-agent-198: with an owner configured, a
+call past any cap first waits on the owner's spend card, whose target names
+each tripped scope (`total`, `provider:<id>`); with no owner, and for the
+invalid-setting and unpriced stops, the stop keeps the operator-action ask of
+REQ-agent-098.
 
 Acceptance Criteria
 - `configuredProviderIds` lists the host of every chain entry of every tier key (OpenAI, Anthropic, Ollama's `127.0.0.1:11434`, a custom `CORVIDINHO_LLM_BASE_URL` host); `parseSpendCaps` is `off` with nothing set, `caps` with a total only, providers only (keys lower-cased, spaces trimmed) or both.
@@ -1814,5 +1827,92 @@ Acceptance Criteria
 - An older `spend_alerts` gets `scope` (existing rows `total`); re-scrub before that ALTER does not throw; `SCRUB_TARGETS` lists `spend_alerts.scope`, which is stored and re-scrubbed redacted.
 - The snapshot lists each provider cap; doctor prints `spend` plus `spend provider:<id>` lines (`warn` at 80% and at the cap, all `ok: true`); the owner's `/status` has one line per cap; the public line is "Spend: Work is paused for budget." while any cap is reached; with provider caps only the `spend` line shows no amount and an unpriced model warns only when a cap covers it; an invalid provider setting is named (never its value) on doctor and `/status`.
 - `corvidinho doctor` with an Anthropic model and `CORVIDINHO_PROVIDER_SPEND_CAPS_USD=api.anthropic.com=2` prints `[info] spend: no total daily cap set` and `[ok] spend provider:api.anthropic.com: $0.00 of $2.00 daily cap …`.
+- These tests fail on main's sources.
+- A spend card for a call past a provider cap has target `provider:<id>`; for a call past both caps, `total, provider:<id>`, and its text names each cap's spend when it paused (REQ-agent-198).
+
+### REQ-agent-198
+
+At 100% of a spend cap the agent SHALL ask the owner on a DM Approve card
+instead of refusing (SAFE-8, AUTONOMY-8), for each cap (SAFE-15). When
+`createSpendGuard` is given `approval` (`SpendApprovalOptions`: the run's
+task text, a `project` label read only when a card is raised, and `onNote`
+for the run's one-line notes; `createTaskExecute` passes all three, the
+project as `projectLabel(projectKeyFor(cwd))`, never a host path) and an
+owner is configured (`getOwner`, the allowlist file of the guard's env or,
+when that env names none, of this process), a priced provider call whose
+reservation is refused at the total cap or its provider's cap SHALL be held,
+not sent, and SHALL wait for the owner's decision on a spend card:
+
+- The guard SHALL record one request on the shared approvals store
+  (`ApprovalStore.request`, `approval_requests`) per paused call: kind
+  `SPEND_CARD_KIND` (`spend`), class `SPEND_CARD_CLASS` (`money`, so Approve
+  also needs the SAFE-19 one-time code), title `Spend past a cap — asks first
+  (SAFE-8) · from <surface>`, action `send one model call to <model> via
+  <provider>`, target the tripped scope(s) (`total`, `provider:<id>`, or both
+  in that order), amount that call's estimate (`~$X (this one call's
+  estimate)`), and as text (quoted data before the card) who asked on which
+  surface, the project label, each tripped cap's 24-hour spend when it paused
+  and the task text (at most `SPEND_CARD_TASK_MAX` characters, a longer task
+  marked as cut) — `spendCardFields`; requester the acting user
+  (`auditContextFromEnv`), waiter this process (`<pid>:<proc start>`), and a
+  lifetime of `SPEND_CARD_TTL_MS` (4 minutes, below `COUNCIL_VOICE_TIMEOUT_MS`
+  and `LLM_REQUEST_TIMEOUT_MS`). Before recording it SHALL check the call
+  against the caps again (re-fit) and send it without a card when it now
+  fits.
+- It SHALL emit one note `[operator] AUTONOMY-8: waiting for the owner's OK
+  on an Approve card with the one-time code (…; request <id>; no answer by
+  <time> means no, and nothing is spent — …)` (secret-scrubbed, no amounts;
+  a Text event in `createTaskExecute`, which the live status shows as the
+  must-ask wait line), then poll the store (`waitForDecision`,
+  `SPEND_CARD_POLL_MS`) until the card is decided or lapses, or the call's own
+  abort signal (the run's stop, or its per-request timeout) ends the wait.
+- Only an approval the guard uses once (`consume`, approved → used) while
+  the call's signal is not aborted SHALL let the call through, and then only
+  that call: `SpendLedger.reserveApproved` records exactly one row at the
+  estimate the card showed (the fit check runs again in the same IMMEDIATE
+  transaction and names the caps the call still passes; an estimate over the
+  approved amount records nothing and is a no), after which the call is sent
+  and settled like any other and a second note says the owner approved it.
+  The next call past a cap SHALL be checked again and raise a new card and
+  code (SAFE-8.a); no approval covers more than one call.
+- A deny, no answer before the card lapses (a late code or answer counts for
+  nothing, SAFE-20), an aborted wait, or a card that could not be raised or
+  read SHALL be a no: nothing is sent or recorded, and the call throws
+  `SpendCapRefusal` with `spendCapReachedAsk({ estimateMicroUsd, trips, card:
+  { requestId, outcome } })` — outcome `denied`, `expired`, `aborted` or
+  `unavailable` — so the attempt ends `blocked` with the generic summary
+  (SAFE-14.a) and a question that names the card, what it came to, the
+  `Stopped at cap: …` marker, and both ways on (ask again for a new card and
+  code, or the operator action), without the reply note. A stop that lands as
+  the owner approves wins: the approval is left unused.
+- A run SHALL have at most one spend card open at a time: a later paused
+  call of the same guard waits for the earlier card to be decided, then is
+  re-fit and gets its own card. No call SHALL be refused because another
+  run's card is open: several runs paused at once each get their own card.
+- The execute hook SHALL treat a `SpendCapRefusal` as no model failure even
+  when the request's timeout fired during the card wait, so no AGENT-11
+  fallback routes around a cap.
+- With no owner configured, without `approval` (`withSpendCap`), and for the
+  unpriced-model, invalid-setting and ledger stops (no price to approve), no
+  card SHALL be raised and the stop SHALL keep the operator-action ask of
+  REQ-agent-098 / REQ-agent-114.
+- A CLI-only or daemon-only install (no bridge to DM the card) SHALL record
+  the card all the same and wait out its lifetime; the lapse is a no and
+  nothing is spent. The bridge's card engine closes a card whose waiting
+  process is gone as a no (REQ-discord-198).
+
+Acceptance Criteria
+- Owner configured, $0.9990 of a $1.00 cap spent: a `gpt-4o` call raises one `spend` / `money` card with action `send one model call to gpt-4o via llm.test`, target `total`, amount `~$… (this one call's estimate)`, title `Spend past a cap — asks first (SAFE-8) · from cli`, requester `local`, this process as waiter and a text naming the surface, the project label, `total $0.9990 of $1.00` and the task.
+- Approved (and used): the call is sent once, the request ends `used`, the ledger gains one row at exactly that estimate (then settled), and the notes are the wait line (which `progressFromFrame` maps to the must-ask wait status, no `$`) and the approval line; `finish` leaves the result alone.
+- After one approved call, the next call past the cap raises a second card; denied, it sends nothing more (SAFE-8.a).
+- Denied: no call, no ledger row, request `denied`; the ask (`spendScopes` `["total"]`) says the owner denied Approve card `<id>`, keeps `Stopped at cap: total.`, offers asking again and the operator action, and has no reply note and no `?`; `finish` gives `SPEND_CAP_SUMMARY` and keeps `filesChanged`.
+- No answer before the card lapses: request `expired`, nothing sent or recorded; an approval recorded after that does not take.
+- The call's abort signal ends the wait at once: request `expired`, nothing sent; a stop that lands as the owner approves sends nothing and leaves the approval unused.
+- No owner configured (even with a long card lifetime): the plain ask at once, no card; `withSpendCap` with an owner: no card; an unpriced model under a cap: no card.
+- A provider cap's card targets `provider:llm.test`; a call past both caps targets `total, provider:llm.test`.
+- Two paused calls of one run: the second card is recorded only after the first is decided; two runs paused at once each have a pending card.
+- `reserveApproved` records the approved amount past the cap with the tripped caps named, refuses a larger estimate with no row, and records a call that fits with `trips` empty.
+- `SPEND_CARD_TTL_MS` is below `COUNCIL_VOICE_TIMEOUT_MS` and `LLM_REQUEST_TIMEOUT_MS`.
+- `createTaskExecute` at a $0 cap: approved, the run's one call goes out and its Text events include the wait and approval lines; the card's text holds the task, never the run's directory; denied, `runTask` returns `blocked` with the generic summary and verify not run; a card wait cut short by a 50 ms request timeout with a two-model chain calls no provider and never falls back.
 - These tests fail on main's sources.
 
