@@ -7,10 +7,11 @@
   "title": "Shared DB open and SAFE-5 audit append retry a busy SQLite lock every millisecond, so other processes committing back to back cannot pass them over for the whole busy_timeout and lose audit rows",
   "description": "Shared DB open and SAFE-5 audit append retry a busy SQLite lock every millisecond, so other processes committing back to back cannot pass them over for the whole busy_timeout and lose audit rows",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "507d97b75b08ebe86c5e0c5ab19322ea82d683cb",
   "created_at": 1790783655,
-  "updated_at": 1790784124,
+  "updated_at": 1790784149,
   "affected_specs": [
     "plugins",
     "discord"
