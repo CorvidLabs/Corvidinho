@@ -93,8 +93,9 @@ module: watch
   match) runs no model, records one pending ask (`github:<id>:<login>`,
   `github:<repo>#<n>`) with `memory-forget-request` started / ok as
   `github:<login>`, posts one reply with the request id and deletes nothing;
-  the bridge's card names the GitHub asker and thread; after Approve the next
-  poll posts "was approved" on the thread once (no count) and marks it told.
+  the bridge's card names the GitHub asker and thread; after Approve and the
+  owner's one-time code (SAFE-19, REQ-discord-096) the next poll posts "was
+  approved" on the thread once (no count) and marks it told.
   A stranger gets "not on the owner's people list" and no ask; a login-only
   declared person with another id gets "can't confirm"; "don't forget me …",
   a quoted "forget me" and an assignment event are normal runs; a forget ask

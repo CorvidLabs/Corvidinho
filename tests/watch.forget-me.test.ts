@@ -36,6 +36,7 @@ import { createEchoAckClient, type AckCommentResult } from "../src/watch/ack.ts"
 import type { AgentRunChatOpts } from "../src/watch/agent-client.ts";
 import { startWatchPoller } from "../src/watch/poller.ts";
 import type { DetectedEvent } from "../src/watch/types.ts";
+import { approveWithCode } from "./fixtures/approval-code.ts";
 
 const OWNER_ID = "181969874455756800";
 const TOFU_DC = "200000000000000002";
@@ -243,7 +244,7 @@ async function bridge() {
     const row = (c.components as Array<{ components: Array<{ custom_id: string }> }>)[0]!;
     return { text: c.content, approve: row.components[0]!.custom_id, deny: row.components[1]!.custom_id };
   };
-  return { result, dms, edits, press, card };
+  return { result, dms, edits, press, card, handlers: box.handlers! };
 }
 
 /** Tofu's memory, Kyn's, a project row, and kept WATCH conversations. */
@@ -320,7 +321,8 @@ describe("MEMORY-ACL-6.a: someone known only on GitHub asks there to be forgotte
       await w.poll();
       expect(w.posts).toHaveLength(1);
 
-      const r = await b.press(OWNER_ID, card.approve);
+      // SAFE-19: the forget card is destructive — Approve, then the code.
+      const r = (await approveWithCode(b.handlers, b.dms, OWNER_ID, card.approve)).submit;
       expect(r[0]!.content).toContain("Approved by you — forgot 2 memories");
       expect(r[0]!.content).toContain("2 kept conversations");
       // Only the owner was ever DMed: a GitHub asker is told on GitHub.

@@ -39,6 +39,7 @@ import { WorkStore } from "../src/discord/work-store.ts";
 import { buildPeopleDirectory, parsePeopleToml } from "../src/identity/people.ts";
 import { forgetTargets, MemoryStore } from "../src/memory/index.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
+import { approveWithCode } from "./fixtures/approval-code.ts";
 
 const OWNER_ID = "181969874455756800";
 const TOFU = "200000000000000002";
@@ -199,7 +200,7 @@ async function bridge(env: Record<string, string> = {}) {
     const row = (c.components as Array<{ components: Array<{ custom_id: string }> }>)[0]!;
     return { text: c.content, approve: row.components[0]!.custom_id, deny: row.components[1]!.custom_id };
   };
-  return { result, dms, edits, admin, press, card };
+  return { result, dms, edits, admin, press, card, handlers };
 }
 
 describe("/admin people forget (MEMORY-ACL-6.a): the owner starts it for any declared person", () => {
@@ -242,7 +243,8 @@ describe("/admin people forget (MEMORY-ACL-6.a): the owner starts it for any dec
       expect(again[0]!.content).toContain(`already has an open forget request (${reqId})`);
       expect(query<{ n: number }>("SELECT COUNT(*) AS n FROM forget_requests")[0]!.n).toBe(1);
 
-      const pressed = await b.press(OWNER_ID, card.approve);
+      // SAFE-19: the forget card is destructive — Approve, then the code.
+      const pressed = (await approveWithCode(b.handlers, b.dms, OWNER_ID, card.approve)).submit;
       expect(pressed[0]!.content).toContain("Approved by you — forgot 3 memories and 1 conversation turns.");
       const left = query<{ content: string }>("SELECT content FROM memories").map((m) => m.content);
       for (const gone of ["TOFU-TZ", "TOFU-PRIVATE", "TOFU-LEGACY"]) expect(left).not.toContain(gone);

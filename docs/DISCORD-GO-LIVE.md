@@ -146,6 +146,13 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   can DM the owner only when they share a server with it and accept DMs from its members (the
   server's Privacy Settings); until the card goes out the ask stays pending and then lapses as a
   no. No intent or portal toggle is needed. See [`discord.md`](discord.md) Memory.
+- Approve / Deny cards and one-time codes (SAFE-18..20): every card (today: forget requests) comes
+  from the running bridge by **direct message**, checked about every 5 seconds even with the
+  scheduler off; a diff or text comes first, then the card with the exact action, target and
+  amount. Destructive and money cards also need a **one-time code**: after **Approve** the bot DMs
+  an 8-character code (valid once, for that card only, for 2 minutes) that you type with **Enter
+  code**. Same DM rule as above; nothing to configure. With no bridge running no card goes out, and
+  an unanswered card is a no. See [`discord.md`](discord.md) "Approve / Deny cards".
 - Private reads by DM (MEMORY-7.a): private notes, profile reads (`memory-profile`) and the owner's
   view of someone's memory are sent to whoever asked by **direct message**; the channel gets only a
   short "sent privately" note. Same DM rule as above: the person must share a server with the bot

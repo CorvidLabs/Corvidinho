@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "one-approve-deny-dm-card-engine-for-everything-that-needs-the-owner-s-ok-exact-action-target-and-amount-one-line-each",
+  "slug": "one-approve-deny-dm-card-engine-for-everything-that-needs-the-owner-s-ok-exact-action-target-and-amount-one-line-each",
+  "title": "One Approve/Deny DM card engine for everything that needs the owner's OK: exact action, target and amount one line each with a diff or text sent first as verbatim quoted-data parts and buttons last, never cut; destructive and money cards also need a one-time code DMed apart and typed into a form, valid once, only for that card and action, for 2 minutes; no answer, a late answer or a gone waiter is a no; the engine's own poll delivers with the scheduler off; the forget card becomes its destructive 'forget' kind; schema v14 approval_requests / approval_codes (SAFE-18/19/20, #96)",
+  "description": "One Approve/Deny DM card engine for everything that needs the owner's OK: exact action, target and amount one line each with a diff or text sent first as verbatim quoted-data parts and buttons last, never cut; destructive and money cards also need a one-time code DMed apart and typed into a form, valid once, only for that card and action, for 2 minutes; no answer, a late answer or a gone waiter is a no; the engine's own poll delivers with the scheduler off; the forget card becomes its destructive 'forget' kind; schema v14 approval_requests / approval_codes (SAFE-18/19/20, #96)",
+  "kind": "feature",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "13a76f07b272c819e734d1384a46c10471d42f1f",
+  "created_at": 1790749105,
+  "updated_at": 1790771048,
+  "affected_specs": [
+    "discord",
+    "watch"
+  ],
+  "affected_paths": [
+    "src/discord/approval-cards.ts",
+    "src/approvals/store.ts",
+    "src/approvals/code.ts",
+    "src/discord/approve-card.ts",
+    "src/discord/forget-card.ts",
+    "src/discord/bridge.ts",
+    "src/discord/gateway.ts",
+    "src/discord/rich-reply.ts",
+    "src/discord/private-reply.ts",
+    "src/discord/ask-buttons.ts",
+    "src/memory/forget.ts",
+    "src/memory/index.ts",
+    "src/store/db.ts",
+    "src/store/scrub.ts",
+    "tests/discord.approval-cards.test.ts",
+    "tests/approvals.code.test.ts",
+    "tests/discord.gateway-no-cut.test.ts",
+    "tests/fixtures/approval-code.ts",
+    "tests/discord.forget-card.test.ts",
+    "tests/discord.admin-forget.test.ts",
+    "tests/watch.forget-me.test.ts",
+    "tests/store.conversation.test.ts",
+    "tests/scheduler.ask-outbox.test.ts",
+    "tests/watch.session-store.durable.test.ts",
+    "docs/discord.md",
+    "docs/DISCORD-GO-LIVE.md",
+    "docs/BOX-UPDATE.md",
+    "specs/discord/discord.spec.md",
+    "specs/discord/testing.md",
+    "specs/watch/testing.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "Everything that needs the owner's OK goes through one card engine (src/discord/approval-cards.ts) with a kind registry (class plain | destructive | money; a kind with no class is destructive). SAFE-18: the owner is DMed a card with the exact Action, Target and Amount one line each (line breaks shown, nothing cut; a card that would not fit is not sent), the request id and action hash and its expiry; a diff or text goes out first as verbatim, SAFE-6-scrubbed, fence-safe DM parts quoted as data under the 1900 DM cap (splitDiscordMessage), buttons last; the gateway refuses (never cuts) a DM over 1900 and a component reply/update, form-submit reply or message edit over 2000. SAFE-19: destructive and money cards need a one-time code DMed apart from the card after Approve (never in the card's message; only a salted hash stored in approval_codes; never logged) and typed only into the Enter code form; it works once, only for that card and action hash, for min(2 min, card expiry); a wrong, late or other card's code does nothing and voids the open code; order is code used (committed) -> SAFE-5 started (fail closed) -> one IMMEDIATE transaction compare-and-set approved + kind.onApprove -> ok/error, and a failed action needs a new code; Approve re-checks the action hash, a changed action runs nothing and a fresh card follows. SAFE-20: no answer, an answer after expiry, or a request whose waiting process is gone is a no (card marked, asker told). The owner check (resolvePermissionLevel >= ADMIN, owner-only) runs on every press and on the form submit; typed text only from the submit. The engine's own ~5 s poll, started and stopped with the bridge, delivers with the scheduler off, and after restart. ApprovalStore (approval_requests) lets any process raise a card and read the decision. The forget card is the destructive 'forget' kind with a code and an action hash over its targets and exact counts (rolled-back preview), keeping every Discord, GitHub and /admin forget behaviour. Schema v14 (forward-only, idempotent): approval_requests, approval_codes, forget_requests.action_hash. tests/discord.approval-cards.test.ts, tests/approvals.code.test.ts and tests/discord.gateway-no-cut.test.ts fail on main and pass here; the forget tests pass through the code step (REQ-discord-096, REQ-discord-101)."
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

@@ -54,7 +54,8 @@ function tableCount(db: SqliteDatabase): number {
 
 describe("schema v13 conversation_threads (forward-only migration)", () => {
   test("a v12 DB (forget requests) migrates to v13, keeps its rows, and a re-run changes nothing", () => {
-    expect(SCHEMA_VERSION).toBe(13);
+    // v14 (approval cards, REQ-discord-096) follows v13.
+    expect(SCHEMA_VERSION).toBe(14);
     const db = new SqliteDatabase(":memory:");
     cleanups.push(() => db.close());
     migrateCorvidinhoDb(db);
@@ -73,7 +74,7 @@ describe("schema v13 conversation_threads (forward-only migration)", () => {
     migrateCorvidinhoDb(db);
     const version = () =>
       (db.query("SELECT value FROM schema_meta WHERE key = 'version'").get() as { value: string }).value;
-    expect(version()).toBe("13");
+    expect(version()).toBe(String(SCHEMA_VERSION));
     const cols = (db.query("PRAGMA table_info(conversation_threads)").all() as Array<{ name: string }>).map(
       (c) => c.name,
     );
@@ -100,7 +101,7 @@ describe("schema v13 conversation_threads (forward-only migration)", () => {
       turns: turns(2),
     });
     migrateCorvidinhoDb(db);
-    expect(version()).toBe("13");
+    expect(version()).toBe(String(SCHEMA_VERSION));
     expect(tableCount(db)).toBe(1);
   });
 
@@ -113,7 +114,7 @@ describe("schema v13 conversation_threads (forward-only migration)", () => {
     db.run("UPDATE schema_meta SET value = '11' WHERE key = 'version'");
     migrateCorvidinhoDb(db);
     expect((db.query("SELECT value FROM schema_meta WHERE key = 'version'").get() as { value: string }).value).toBe(
-      "13",
+      String(SCHEMA_VERSION),
     );
     const tables = (
       db

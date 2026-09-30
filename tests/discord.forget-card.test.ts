@@ -5,11 +5,13 @@
  * - `memory-forget-me` records the ask (the acting person, in a conversation
  *   with them; audited SAFE-5); nothing is deleted there.
  * - The bridge DMs the owner an Approve/Deny card (counts, no content), on a
- *   delivery pass (scheduler tick / after a chat message).
- * - Only the owner's press counts; Approve deletes all of that person's
- *   memories (profile scope, Discord-id scopes, soft-deleted history, private
- *   notes) and their session turns, audited `started` first (fail closed),
- *   and tells both; Deny, no answer or a late press is a no.
+ *   delivery pass (the card engine's poll / after a chat message).
+ * - Only the owner's press counts; the card is destructive, so Approve sends
+ *   a one-time code the owner types back (SAFE-19); the right code deletes
+ *   all of that person's memories (profile scope, Discord-id scopes,
+ *   soft-deleted history, private notes) and their session turns, audited
+ *   `started` first (fail closed), and tells both; Deny, no answer or a late
+ *   press is a no.
  * - Schema v12 adds `forget_requests` (forward-only migration).
  *
  * Temp allowlist file and data dir, the bridge with a fake gateway; no
@@ -40,6 +42,7 @@ import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { clearRegistry } from "../src/plugins/registry.ts";
 import { runPlugin } from "../src/plugins/run.ts";
 import { migrateCorvidinhoDb, openCorvidinhoDb, SCHEMA_VERSION } from "../src/store/db.ts";
+import { approveWithCode, cardInteraction, codeDms, lastCode } from "./fixtures/approval-code.ts";
 
 const OWNER_ID = "181969874455756800";
 const TOFU = "200000000000000002"; // declared team
@@ -342,8 +345,12 @@ describe("the owner approves on a DM card; only then is the person forgotten", (
       expect(card.text).toContain("Forget request");
       expect(card.text).toContain("Tofu (tofu), team");
       expect(card.text).toContain(`<@${TOFU}>`);
-      // Five kept now (the superseded decision is history, deleted on approve too).
-      expect(card.text).toContain("(5 stored)");
+      // SAFE-18: the exact action, target and amount, one line each. Five kept
+      // now (the superseded decision is history, deleted on approve too).
+      expect(card.text).toContain("\nAction: Delete, for good, their memory:");
+      expect(card.text).toContain("\nTarget: Tofu (tofu), team — asked by");
+      expect(card.text).toContain("\nAmount: 6 memories (5 stored, 1 earlier versions), 1 session turns and 0 kept conversations\n");
+      expect(card.text).toContain("one-time code");
       expect(card.text).toContain(reqId);
       expect(card.text).toContain("means no");
       expect(card.text).not.toMatch(/TOFU-|KYN-|PROJECT-FACT/);
@@ -363,11 +370,29 @@ describe("the owner approves on a DM card; only then is the person forgotten", (
       const kynSession = b.result.store.get("sess-kyn")!;
       expect(b.result.store.threadFor(tofuSession).map((t) => t.content)).toEqual(["TOFU-TURN"]);
 
-      const r = await b.press(OWNER_ID, card.approve);
+      // SAFE-19: Approve answers the press first (Discord's ~3 s window) with
+      // Enter code / Deny, and the code goes out as its own DM, never in the
+      // card's message. Nothing is deleted yet.
+      const approve = await b.press(OWNER_ID, card.approve);
+      expect(approve).toHaveLength(1);
+      expect(approve[0]!.update).toBe(true);
+      expect(approve[0]!.content).toContain("Enter the one-time code");
+      const step = (approve[0]!.components as Array<{ components: Array<{ custom_id: string; label: string }> }>)[0]!;
+      expect(step.components.map((c) => c.label)).toEqual(["Enter code", "Deny"]);
+      const codes = codeDms(b.dms);
+      expect(codes).toHaveLength(1);
+      expect(codes[0]!.userId).toBe(OWNER_ID);
+      expect(codes[0]!.components).toBeUndefined();
+      const code = lastCode(b.dms, OWNER_ID, reqId);
+      expect(approve[0]!.content).not.toContain(code);
+      expect(allContents()).toContain("TOFU-TZ");
+      const open = await cardInteraction(b.handlers, OWNER_ID, step.components[0]!.custom_id);
+      expect(open.replies).toEqual([]);
+      expect(open.modals.map((m) => m.custom_id)).toEqual([`cvok:forget:submit:${reqId}`]);
+      const r = (await cardInteraction(b.handlers, OWNER_ID, open.modals[0]!.custom_id, { code: code.toLowerCase() })).replies;
       expect(r).toHaveLength(1);
-      // The press is answered first (Discord's ~3 s window), before any DM.
-      expect(r[0]!.update).toBe(true);
-      expect(r[0]!.components).toEqual([]);
+      // The submit is answered first, privately; the card is edited apart.
+      expect(r[0]!.ephemeral).toBe(true);
       expect(r[0]!.content).toContain("Approved by you — forgot 6 memories and 1 conversation turns.");
       expect(r[0]!.content).not.toContain("told");
       // Then the card says whether the asker was told.
@@ -459,7 +484,7 @@ describe("the owner approves on a DM card; only then is the person forgotten", (
       } finally {
         d.close();
       }
-      const r = await b.press(OWNER_ID, card.approve);
+      const r = (await approveWithCode(b.handlers, b.dms, OWNER_ID, card.approve)).submit;
       expect(r[0]!.ephemeral).toBe(true);
       expect(r[0]!.content).toContain("Audit log unavailable");
       expect(allContents()).toContain("KYN-TZ");
@@ -538,8 +563,9 @@ describe("no answer, or a late answer, is no", () => {
 
 describe("schema v12: forget_requests (forward-only migration)", () => {
   test("a v11 DB migrates to v12 keeping its memories; one pending ask per subject", () => {
-    // v13 (retained conversations, REQ-discord-472) follows v12.
-    expect(SCHEMA_VERSION).toBe(13);
+    // v13 (retained conversations, REQ-discord-472) and v14 (approval cards,
+    // REQ-discord-096) follow v12.
+    expect(SCHEMA_VERSION).toBe(14);
     const d = new SqliteDatabase(":memory:");
     try {
       migrateCorvidinhoDb(d);

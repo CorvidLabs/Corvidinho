@@ -25,6 +25,7 @@ import { costMicroUsd, priceForModel } from "../agent/spend.ts";
 import { ROLE_REFUSED_SUMMARY_NOTE, clipKeepingRoleNote } from "../agent/task-summary.ts";
 import type { AgentTokenUsage } from "../agent/types.ts";
 import { scrubSecrets } from "../store/scrub.ts";
+import { defangMassMentions } from "./allowed-mentions.ts";
 import {
   THINKING_COLORS,
   type AnswerSpend,
@@ -33,6 +34,12 @@ import {
 
 /** Discord's message content limit (characters). */
 export const DISCORD_MESSAGE_MAX = 2000;
+/**
+ * Longest direct message the gateway sends (`sendDm`): a little under
+ * Discord's 2000 so a caller's own header fits. Longer content is refused,
+ * never cut; callers split under it.
+ */
+export const DISCORD_DM_MAX = 1900;
 /** Discord's embed description limit (characters). */
 export const DISCORD_EMBED_DESCRIPTION_MAX = 4096;
 /**
@@ -201,7 +208,9 @@ export type AnswerPart = {
 
 /**
  * DISCORD-15/16 — the messages an answer goes out as. The text is scrubbed
- * first (SAFE-6). Within 2000 characters: one plain message with the footer
+ * first (SAFE-6) and its mass mentions defanged before it is split, so the
+ * gateway's own defang never pushes a part past the limit it refuses
+ * (REQ-discord-096). Within 2000 characters: one plain message with the footer
  * embed (as before). Longer plain prose (`allowEmbed`, see
  * `readsBetterAsEmbed`): one embed holding the text and the footer. Anything
  * else: `splitDiscordMessage` parts, the footer embed on the last one. A text
@@ -213,7 +222,7 @@ export function planAnswerParts(
   opts: { footer: DiscordEmbedPayload | null; allowEmbed?: boolean },
 ): AnswerPart[] {
   const clean = clipKeepingRoleNote(
-    scrubSecrets(text),
+    defangMassMentions(scrubSecrets(text)),
     DISCORD_ANSWER_MAX,
     (head, n) => `${head.slice(0, Math.max(0, n - 1))}…`,
   );
