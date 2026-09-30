@@ -1,6 +1,6 @@
 ---
 id: an-answer-typed-in-the-private-answer-form-is-fenced-and-scanned-like-a-chat-reply-a-non-owner-s-submit-that-looks-like
-state: verifying
+state: implementing
 type: bug_fix
 base_commit: 20a0f5841256109511825c70604b552b3ca4b062
 ---
