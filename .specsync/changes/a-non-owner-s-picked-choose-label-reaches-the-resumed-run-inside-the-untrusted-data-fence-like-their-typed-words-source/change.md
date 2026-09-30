@@ -1,6 +1,6 @@
 ---
 id: a-non-owner-s-picked-choose-label-reaches-the-resumed-run-inside-the-untrusted-data-fence-like-their-typed-words-source
-state: approved
+state: implementing
 type: bug_fix
 base_commit: dea6565c9e1a9cffdc65f061f81fa6e7581e07c0
 ---

@@ -7,10 +7,11 @@
   "title": "A non-owner's picked Choose label reaches the resumed run inside the untrusted-data fence like their typed words (source=ask-pick, the presser's role resolved at press time with their Discord role ids); the owner's pick prompt is byte-identical; a pressed option id that matches none of the ask's options is refused as expired and never reaches the run raw (SAFE-12.a, DISCORD-ASK-3/5/8)",
   "description": "A non-owner's picked Choose label reaches the resumed run inside the untrusted-data fence like their typed words (source=ask-pick, the presser's role resolved at press time with their Discord role ids); the owner's pick prompt is byte-identical; a pressed option id that matches none of the ask's options is refused as expired and never reaches the run raw (SAFE-12.a, DISCORD-ASK-3/5/8)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "dea6565c9e1a9cffdc65f061f81fa6e7581e07c0",
   "created_at": 1790732192,
-  "updated_at": 1790732209,
+  "updated_at": 1790732216,
   "affected_specs": [
     "discord"
   ],
