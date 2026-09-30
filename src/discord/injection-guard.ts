@@ -45,9 +45,16 @@ export const INJECTION_NO_OWNER_WARNING =
 /**
  * Where the speaker's words came from (fence source; no module names).
  * `ask-answer` is an answer typed in an ask's private Answer form
- * (DISCORD-ASK-4.a).
+ * (DISCORD-ASK-4.a). `schedule-prompt` is a schedule's name / description /
+ * prompt, written by its creator at `/schedule create` and replayed on every
+ * tick.
  */
-export type SpeakerSurface = "chat-message" | "session-topic" | "work-task" | "ask-answer";
+export type SpeakerSurface =
+  | "chat-message"
+  | "session-topic"
+  | "work-task"
+  | "ask-answer"
+  | "schedule-prompt";
 
 /** Header line of a non-owner speaker's fenced message (SAFE-12). */
 export function speakerFenceHeader(role: PersonRole): string {

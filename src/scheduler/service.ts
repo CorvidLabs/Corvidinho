@@ -21,14 +21,20 @@
  * OPS-1/2 (#68): the nightly backup and weekly restore test (src/store/
  * backup.ts) ride the same tick in the bridge and the daemon; the backup
  * claims its night in SQLite, so two tickers on one data dir back up once.
+ * SAFE-12 / SAFE-13 (#71): a schedule's text is its creator's words. On every
+ * tick the creator's role is resolved again; for anyone but the owner the
+ * stored name / description / prompt are scanned (a hit runs nothing, pauses
+ * the schedule and tells the owner once) and the prompt reaches the model
+ * inside the untrusted-data fence. The owner's own schedules are unchanged.
  */
 
 import { basename } from "node:path";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import { checkChannel } from "../allowlist/discord.ts";
+import type { AuditEntryInput } from "../audit/index.ts";
 import type { AgentClient } from "../discord/agent-client.ts";
 import { projectLabel } from "../discord/list-scope.ts";
-import { gateActor } from "../discord/permissions.ts";
+import { gateActor, resolveDiscordActingRole } from "../discord/permissions.ts";
 import {
   ASK_NO_OWNER_WARNING,
   askPingKey,
@@ -37,11 +43,23 @@ import {
   withSpendWarningPost,
 } from "../discord/ask-ping.ts";
 import { askPingOwner, takeSpendWarning } from "../discord/spend-post.ts";
-import { withInjectionNotice } from "../discord/injection-guard.ts";
-import type { InjectionNotice } from "../agent/untrusted.ts";
+import {
+  auditInboundInjection,
+  fenceSpeakerText,
+  inboundInjection,
+  withInjectionNotice,
+} from "../discord/injection-guard.ts";
+import {
+  describeInjectionReasons,
+  INJECTION_REASONS,
+  type InjectionNotice,
+  type InjectionReason,
+  type InjectionVerdict,
+} from "../agent/untrusted.ts";
 import type { SpendAlertOutbox } from "../agent/spend-outbox.ts";
 import type { HumanAsk, HumanAskReason, SpendWarning } from "../agent/types.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
+import { loadDeclaredPeople, type PersonRole } from "../identity/people.ts";
 import type { BackupTicker } from "../store/backup.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import {
@@ -89,6 +107,37 @@ export function autoPauseAsk(last?: HumanAsk): HumanAsk {
   };
 }
 
+/**
+ * SAFE-13 (#71) — the detector's verdict on a schedule's own text (its name,
+ * description and prompt: what its creator wrote), or null when the creator
+ * is the owner (their words are the principal's) or nothing tripped. Used at
+ * `/schedule create` and again on every tick.
+ */
+export function scheduleInjection(
+  text: { name?: string; description?: string; prompt?: string },
+  role: PersonRole,
+): InjectionVerdict | null {
+  const hit = new Set<InjectionReason>();
+  for (const part of [text.name, text.description, text.prompt]) {
+    if (!part) continue;
+    for (const reason of inboundInjection(part, role)?.reasons ?? []) hit.add(reason);
+  }
+  if (hit.size === 0) return null;
+  return { suspected: true, reasons: INJECTION_REASONS.filter((r) => hit.has(r)) };
+}
+
+/**
+ * SAFE-13 (#71) — the stuck question a tick records when a schedule's stored
+ * text trips the detector: what happened and why in plain words, never the
+ * text. Fixed wording, so `askPingKey` pings the owner once for it.
+ */
+export function injectedScheduleQuestion(reasons: readonly InjectionReason[]): string {
+  return (
+    `🛡️ I didn't run this schedule: its text looks like a prompt-injection attempt (it ${describeInjectionReasons(reasons)}). ` +
+    "I paused it; /schedule delete removes it. (SAFE-13)"
+  );
+}
+
 /** Worktree dir of a schedule run: `talk-schedule_<schedule id>_<run id>`. */
 const RUN_WORKTREE_RE = /^talk-(schedule_[A-Za-z0-9_-]+_(srun_[A-Za-z0-9]+))$/;
 
@@ -102,11 +151,16 @@ function runWorktreeKey(scheduleId: string, runId: string): string {
  * channel reads it, so the project is shown by name (`projectLabel`: the last
  * segment of an absolute path, a relative name as given), never as an
  * absolute host path (REQ-discord-353, REQ-discord-418, SAFE-6). The model's
- * prompt keeps the stored project.
+ * prompt keeps the stored project. `withName: false` leaves the name out (an
+ * ask about a non-owner's schedule whose name tripped SAFE-13).
  */
-function scheduleTitle(schedule: Schedule): string {
+function scheduleTitle(schedule: Schedule, opts: { withName?: boolean } = {}): string {
   const project = projectLabel(schedule.project) ?? "";
-  return `Schedule **${schedule.name}** (\`${schedule.id.slice(0, 12)}\`) on \`${project}\``;
+  const id = `(\`${schedule.id.slice(0, 12)}\`)`;
+  // SAFE-13 (#71): a non-owner's name that trips the detector is never
+  // quoted back into the channel; the id still says which schedule it is.
+  if (opts.withName === false) return `Schedule ${id} on \`${project}\``;
+  return `Schedule **${schedule.name}** ${id} on \`${project}\``;
 }
 
 /** One scrubbed line (SAFE-6), capped, never a stack. Never throws. */
@@ -231,6 +285,17 @@ export type SchedulerServiceOpts = {
    * runs are claimed (it claims its own night; never throws).
    */
   backup?: Pick<BackupTicker, "tick">;
+  /**
+   * SAFE-5 trail for a tick's SAFE-13 refusal (`injection-suspected` /
+   * `denied`; best effort). The bridge wires its trail; without it (the
+   * daemon) the refusal still happens and the run row records why.
+   */
+  recordAudit?: (entry: AuditEntryInput) => unknown;
+  /**
+   * The bridge's live mute set (DISCORD-6): a muted creator's schedule text
+   * is fenced as community, as their chat would be (SAFE-12).
+   */
+  mutedUsers?: Set<string>;
 };
 
 /** What a start-up `recoverAbandoned()` fixed (REQ-discord-346). */
@@ -264,6 +329,8 @@ export class SchedulerService {
   private readonly onRunFinished?: (event: ScheduleRunFinished) => void;
   private readonly onTick?: () => void;
   private readonly backup?: Pick<BackupTicker, "tick">;
+  private readonly recordAudit?: (entry: AuditEntryInput) => unknown;
+  private readonly mutedUsers?: Set<string>;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly running = new Map<string, InFlight>();
   /** Runs already finished/abandoned — a run is recorded once. */
@@ -291,6 +358,8 @@ export class SchedulerService {
     this.onRunFinished = opts.onRunFinished;
     this.onTick = opts.onTick;
     this.backup = opts.backup;
+    this.recordAudit = opts.recordAudit;
+    this.mutedUsers = opts.mutedUsers;
     if (!opts.manual) {
       this.start();
     }
@@ -608,6 +677,17 @@ export class SchedulerService {
         return;
       }
 
+      // SAFE-12 / SAFE-13 (#71): the creator's role, resolved now (a schedule
+      // stored before this check, or by someone who is no longer the owner,
+      // is judged by who they are today). Text by anyone but the owner that
+      // trips the detector runs nothing — before any worktree is made.
+      const creatorRole = this.creatorRole(schedule);
+      const suspected = scheduleInjection(schedule, creatorRole);
+      if (suspected) {
+        await this.refuseInjectedRun(schedule, run, suspected);
+        return;
+      }
+
       // SESSION-WORKTREE: resolve schedule.project → isolated cwd.
       if (this.useWorktrees) {
         // REQ-discord-202: same project scope as /work (DISCORD-SCHEDULE-3).
@@ -656,11 +736,23 @@ export class SchedulerService {
         branchName = ensured.workspace.branchName;
       }
 
+      // SAFE-12: the owner's schedule reads as before; anyone else's name and
+      // prompt reach the model only inside the untrusted-data fence (header
+      // naming the creator's role), like their chat would.
+      const byOwner = creatorRole === "owner";
       const prompt = [
-        `Scheduled work "${schedule.name}" on project: ${schedule.project}`,
+        byOwner
+          ? `Scheduled work "${schedule.name}" on project: ${schedule.project}`
+          : `Scheduled work on project: ${schedule.project}`,
         workDir ? `Worktree: ${workDir}` : "",
         "",
-        schedule.prompt,
+        byOwner
+          ? schedule.prompt
+          : fenceSpeakerText(
+              `Schedule "${schedule.name}":\n${schedule.prompt}`,
+              creatorRole,
+              "schedule-prompt",
+            ),
         "",
         "Stay within existing allowlists and SAFE gates. Linux host only.",
       ]
@@ -880,7 +972,11 @@ export class SchedulerService {
       owner: askOwner.owner,
       requesterDiscordId: alreadyPinged ? undefined : schedule.createdByUserId,
       context,
-      prefix: `${scheduleTitle(schedule)}:`,
+      // SAFE-13: an ask about a non-owner's schedule whose name trips the
+      // detector (the tick refused it) does not quote that name.
+      prefix: `${scheduleTitle(schedule, {
+        withName: !scheduleInjection({ name: schedule.name }, this.creatorRole(schedule)),
+      })}:`,
     });
     // SAFE-8: a pending 80% spend warning (this run's or one recorded by
     // any other run on the data dir) rides the post and pings the owner.
@@ -919,6 +1015,64 @@ export class SchedulerService {
       }
     }
     return posted !== false;
+  }
+
+  /**
+   * SAFE-12 (#71): the schedule creator's role, resolved at this tick the way
+   * a Discord speaker's is (`resolveDiscordActingRole`: owner only for the
+   * configured owner, not muted or deny-listed; team when the live people
+   * list declares them team; else community). A tick has no Discord role
+   * ids, so someone who is team only through a Discord role reads as
+   * community here. Never throws: any failure reads as community.
+   */
+  private creatorRole(schedule: Schedule): PersonRole {
+    try {
+      return resolveDiscordActingRole({
+        userId: schedule.createdByUserId,
+        allowlist: this.allowlist,
+        owner: this.owner,
+        mutedUsers: this.mutedUsers,
+        people: loadDeclaredPeople({ allowlist: this.allowlist, owner: this.owner }),
+      });
+    } catch {
+      return "community";
+    }
+  }
+
+  /**
+   * SAFE-13 (#71): a tick whose schedule text (by anyone but the owner)
+   * looks like an injection attempt. Nothing runs: one
+   * `[scheduler] SAFE-13` log line, one `injection-suspected` / `denied`
+   * SAFE-5 row (actor the creator, surface `scheduler:<id>`, never the
+   * text), the run recorded failed with a stuck ask
+   * (`injectedScheduleQuestion`), the schedule paused so no later tick runs
+   * it or posts again, and that ask posted through the usual ask path — the
+   * owner pinged once, handed back for the next delivery pass when the post
+   * does not go out (a daemon's run leaves it pending for a bridge).
+   */
+  private async refuseInjectedRun(
+    schedule: Schedule,
+    run: ScheduleRun,
+    verdict: InjectionVerdict,
+  ): Promise<void> {
+    // Operator log too: a schedule without a channel has no post to carry it.
+    console.warn(
+      `[scheduler] SAFE-13: schedule ${schedule.id} not run: its text looks like a prompt-injection attempt (${verdict.reasons.join(", ")}); pausing it`,
+    );
+    auditInboundInjection(this.recordAudit, {
+      actor: schedule.createdByUserId,
+      surface: `scheduler:${schedule.id}`,
+      source: "schedule-prompt",
+      reasons: verdict.reasons,
+    });
+    const done = this.finish(schedule, run, {
+      ok: false,
+      error: `not run: the schedule's text looks like a prompt-injection attempt (${verdict.reasons.join(", ")}) (SAFE-13)`,
+      ask: { reason: "stuck", question: injectedScheduleQuestion(verdict.reasons) },
+    });
+    if (!done) return;
+    if (!done.autoPaused) this.store.setStatus(schedule.id, "paused", this.nowFn());
+    if (done.ask) await this.postOwnRunAsk(schedule, run, done.ask, { handBack: true });
   }
 
   /**

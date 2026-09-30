@@ -382,6 +382,11 @@ text and injection attempts").
   tools and `memory-store` off for the rest of that run and pings the owner on the answer. Each hit is an `injection-suspected` audit row (E.7).
 - Without an owner the refusal still goes out (it says nobody could be told) and the bridge
   logs `[discord] SAFE-13 refusal but no owner is configured`.
+- Schedules: a non-owner's `/schedule create` whose name or prompt looks like an injection
+  attempt stores nothing (private refusal, the owner pinged in the channel). Each tick fences a
+  non-owner's stored name and prompt with the creator's current role, and stored text that
+  looks like an injection is not run: the schedule is paused and the owner pinged once in its
+  channel. The owner's own schedules are unchanged.
 
 ### E.7 Where the logs and the audit trail live
 
