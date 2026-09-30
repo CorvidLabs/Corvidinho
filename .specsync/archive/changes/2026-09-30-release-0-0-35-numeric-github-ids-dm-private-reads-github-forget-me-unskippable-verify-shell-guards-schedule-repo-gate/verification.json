@@ -1,0 +1,124 @@
+{
+  "timestamp": 1790746427,
+  "commit": "06979bc519af8d46f860c97dfb28777b456cd508",
+  "contract_digest": "08ca2838d527c1953ef59e229b3a0fe016b3a8768fc2d693bf5803f0d6eab883",
+  "execution_digest": "f12ac3b3f21aaf120ffce58b3786b90a2ec3b73def39dcab8557ecdec3a2ac7a",
+  "workspace_digest": "a3f4e77b60c1941ef3f45401dd384985056b96b4c2ad4986d59065342fede4bd",
+  "acceptance_input_digest": "d9d2dfa5fa4f85805115329559e1422598c41e339f271ec2dc322f10957394e2",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "CHANGELOG.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "a324e2f91c1e4e10261c1585f80da46c8917e198bc8220fb52cebdb94b8a7b2b",
+        "entry_digest": "921eec4376263a47817e5044d8679ca7af96a8d2a80d5b29f5e26936677fa4e1",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "STATUS.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "c370fbc9377381652da49948a5ae8323770251587ae29fbd8a93caaaec59b737",
+        "entry_digest": "9a2f506944c09daf2efb7bb82afa1d515e980b66bc58c35b88d172074b26bd53",
+        "owners": [
+          "cli"
+        ]
+      },
+      {
+        "path": "package.json",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "12ddef1d04b767e61b303fc7e247589a3570042224131b26d702be3167e509d4",
+        "entry_digest": "b909fb53e7cd7921e7a2218a3b485fb24cca30287105b2ac224f6ea5873275d1",
+        "owners": [
+          "@exact:delivery"
+        ]
+      },
+      {
+        "path": "specs/cli/cli.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "e489db4e933329bfc63d10ade280913bcc26f3e77e5f0b5d7fb36c2e31965c35",
+        "entry_digest": "e8263cabbe3da1cda80d5e7c53337718a088a8242211adaf9f8cb70a4569dd77",
+        "owners": [
+          "cli"
+        ]
+      },
+      {
+        "path": "specs/cli/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "30c4bb67bae0b0c55b7e4814964472d129473160f738d37282ac0e4f35e44215",
+        "entry_digest": "c7ed9b7e95da5de92400b51ea7fd88d43c84ff2074f32f4af404731fc28f1262",
+        "owners": [
+          "cli"
+        ]
+      },
+      {
+        "path": "specs/cli/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "2accd2c4c0576cc0fa44f903b66ff0c01c311044814b7fa28b87cfc82dea484a",
+        "entry_digest": "8c45a8e8ed93c3c4710848561e78cd496ce631e23a97dcce3aa9dbabc0610a3f",
+        "owners": [
+          "cli"
+        ]
+      },
+      {
+        "path": "specs/cli/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "d885ef8812ae1d26402a1ad5c21afd2b0a6e23613adf12bd8c90099fc0ca2be9",
+        "entry_digest": "53296b4ad13365ae83bfd03b5aa5a28e2e0d02e885d6a6dc4481484d558bb26c",
+        "owners": [
+          "cli"
+        ]
+      },
+      {
+        "path": "specs/cli/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "a18db3921125f704ff7ea7c5f8f5e549b1d9af6ceb2031d7f99c6627021963b1",
+        "entry_digest": "6fd5e0a139f8bdab38aad9cecd529d28c8a33c2d5747890eff0ff187c6a1829f",
+        "owners": [
+          "cli"
+        ]
+      },
+      {
+        "path": "tests/update-helpers.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "fe08c6579ced38e5d7fc7f47134e64dfc49dfbde911c48f21b7d5de744a24be0",
+        "entry_digest": "ec88c819b3e24f16090c86ab1298094b13df10f45f5052d4fad14b4bbeebdff0",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/version.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "d96ef778978021f0d0482448b656255173da8274e4be16fcd78168427c95371e",
+        "entry_digest": "d4626660cdd9f2d469fb8d9ceee7013c77f4a56d369d0f94c9b52de2bd28a8b2",
+        "owners": [
+          "@exact:test"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec cli",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": [
+    "REQ-cli-426"
+  ]
+}
