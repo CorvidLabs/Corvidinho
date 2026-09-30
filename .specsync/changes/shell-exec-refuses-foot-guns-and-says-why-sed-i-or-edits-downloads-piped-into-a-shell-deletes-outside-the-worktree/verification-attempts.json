@@ -154,6 +154,28 @@
         "REQ-plugins-494",
         "REQ-plugins-495"
       ]
+    },
+    {
+      "timestamp": 1790732944,
+      "commit": "221fab94153f7274bd95f4838c1d9112c2466ae3",
+      "contract_digest": "20bff2b900bd83960b7c69725b6feb69a736e9b2f0414e4cc7296a33354ac858",
+      "execution_digest": "4397eb02b7e21c0fd51aedf298e88567d1bf91083bf270ad75de8899735f9920",
+      "workspace_digest": "607bff032b7383ee5881b2d10328436d0b3c09fa88ed6cb4c859e2aa3aa9e603",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-085",
+        "REQ-plugins-087",
+        "REQ-plugins-313",
+        "REQ-plugins-494",
+        "REQ-plugins-495"
+      ]
     }
   ]
 }
