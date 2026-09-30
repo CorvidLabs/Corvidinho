@@ -1852,8 +1852,10 @@ not sent, and SHALL wait for the owner's decision on a spend card:
   in that order), amount that call's estimate (`~$X (this one call's
   estimate)`), and as text (quoted data before the card) who asked on which
   surface, the project label, each tripped cap's 24-hour spend when it paused
-  and the task text (at most `SPEND_CARD_TASK_MAX` characters, a longer task
-  marked as cut) — `spendCardFields`; requester the acting user
+  and the task text (SAFE-6 scrubbed first, then cut to at most
+  `SPEND_CARD_TASK_MAX` characters, a longer task marked as cut, so a secret
+  the cut splits never shows in part) — `spendCardFields`; requester the
+  acting user
   (`auditContextFromEnv`), waiter this process (`<pid>:<proc start>`), and a
   lifetime of `SPEND_CARD_TTL_MS` (4 minutes, below `COUNCIL_VOICE_TIMEOUT_MS`
   and `LLM_REQUEST_TIMEOUT_MS`). Before recording it SHALL check the call
@@ -1871,16 +1873,21 @@ not sent, and SHALL wait for the owner's decision on a spend card:
   that call: `SpendLedger.reserveApproved` records exactly one row at the
   estimate the card showed (the fit check runs again in the same IMMEDIATE
   transaction and names the caps the call still passes; an estimate over the
-  approved amount records nothing and is a no), after which the call is sent
+  approved amount, or a call that would by then pass a cap outside the target
+  the card showed — e.g. other runs took the total past its cap while a
+  provider cap's card was open — records nothing and is a no, since an
+  approval counts only for what its card showed), after which the call is sent
   and settled like any other and a second note says the owner approved it.
   The next call past a cap SHALL be checked again and raise a new card and
   code (SAFE-8.a); no approval covers more than one call.
 - A deny, no answer before the card lapses (a late code or answer counts for
-  nothing, SAFE-20), an aborted wait, or a card that could not be raised or
-  read SHALL be a no: nothing is sent or recorded, and the call throws
+  nothing, SAFE-20), an aborted wait, an approval that no longer matches the
+  call (above), or a card that could not be raised or read SHALL be a no:
+  nothing is sent or recorded, and the call throws
   `SpendCapRefusal` with `spendCapReachedAsk({ estimateMicroUsd, trips, card:
-  { requestId, outcome } })` — outcome `denied`, `expired`, `aborted` or
-  `unavailable` — so the attempt ends `blocked` with the generic summary
+  { requestId, outcome } })` — outcome `denied`, `expired`, `aborted`,
+  `changed` or `unavailable`, the trips being every cap the call then passes
+  — so the attempt ends `blocked` with the generic summary
   (SAFE-14.a) and a question that names the card, what it came to, the
   `Stopped at cap: …` marker, and both ways on (ask again for a new card and
   code, or the operator action), without the reply note. A stop that lands as
@@ -1911,7 +1918,9 @@ Acceptance Criteria
 - No owner configured (even with a long card lifetime): the plain ask at once, no card; `withSpendCap` with an owner: no card; an unpriced model under a cap: no card.
 - A provider cap's card targets `provider:llm.test`; a call past both caps targets `total, provider:llm.test`.
 - Two paused calls of one run: the second card is recorded only after the first is decided; two runs paused at once each have a pending card.
-- `reserveApproved` records the approved amount past the cap with the tripped caps named, refuses a larger estimate with no row, and records a call that fits with `trips` empty.
+- `reserveApproved` records the approved amount past the cap with the tripped caps named, refuses a larger estimate with no row, and records a call that fits with `trips` empty; a call that would now also pass a cap outside the approved scopes is refused (`reason: "target"`) with no row.
+- A provider cap's card approved after other spend took the total past its cap too: nothing is sent or recorded, the request ends `used`, and the ask (`spendScopes` both caps) says the approval did not stretch to a cap the card did not show, with no reply note.
+- A task whose secret straddles the `SPEND_CARD_TASK_MAX` cut shows no part of the secret on the card.
 - `SPEND_CARD_TTL_MS` is below `COUNCIL_VOICE_TIMEOUT_MS` and `LLM_REQUEST_TIMEOUT_MS`.
 - `createTaskExecute` at a $0 cap: approved, the run's one call goes out and its Text events include the wait and approval lines; the card's text holds the task, never the run's directory; denied, `runTask` returns `blocked` with the generic summary and verify not run; a card wait cut short by a 50 ms request timeout with a two-model chain calls no provider and never falls back.
 - These tests fail on main's sources.
