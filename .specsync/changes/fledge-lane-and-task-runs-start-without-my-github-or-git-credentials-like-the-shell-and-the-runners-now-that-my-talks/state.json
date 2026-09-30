@@ -7,10 +7,11 @@
   "title": "Fledge lane and task runs start without my GitHub or git credentials, like the shell and the runners, now that my talks may be offered them (SAFE-21.a, SAFE-3.a)",
   "description": "Fledge lane and task runs start without my GitHub or git credentials, like the shell and the runners, now that my talks may be offered them (SAFE-21.a, SAFE-3.a)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "749cb55d58c8c3c119d4368359c398cab8677d9f",
   "created_at": 1790786058,
-  "updated_at": 1790786158,
+  "updated_at": 1790786264,
   "affected_specs": [
     "plugins"
   ],
