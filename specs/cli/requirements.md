@@ -1075,3 +1075,12 @@ Acceptance Criteria
 - The daemon with no model logs `daemon.started` with `llm: "none"` and a `warn` `llm.no_provider` line whose `notice` is the notice; with `CORVIDINHO_LLM_MODEL=ollama:qwen3` it logs `llm: "ollama:qwen3 @ 127.0.0.1:11434"` and no `llm.no_provider`.
 - `docs/DAEMON.md`'s Logs table has a row for `llm.no_provider` (the docs test checks every logged event).
 
+### REQ-cli-427
+
+The project SHALL ship package version `0.0.36` (approval cards and codes, must-ask gate, owner-only spend, no default model, tests-ran verify, schedule asks). CLI `version` and Discord presence (DISCORD-12) report `0.0.36` after a restart. CHANGELOG SHALL include verbose 0.0.36 notes.
+
+Acceptance Criteria
+- `package.json` version is `0.0.36`.
+- CLI `version` prints `0.0.36`.
+- CHANGELOG has a 0.0.36 section that the updater's changelog helper extracts exactly.
+

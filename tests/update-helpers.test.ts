@@ -180,6 +180,15 @@ describe("update-helpers.sh", () => {
     }
   });
 
+  test("extract_changelog_section finds 0.0.36", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.36`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("SAFE-18");
+    expect(r.stdout).toContain("AUTONOMY-6.a");
+  });
+
   test("extract_changelog_section finds 0.0.35", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.35`,
@@ -929,10 +938,10 @@ describe("release tagging helpers", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.35", () => {
+  test("package.json is 0.0.36", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.35");
+    expect(pkg.version).toBe("0.0.36");
   });
 });
