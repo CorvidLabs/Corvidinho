@@ -127,6 +127,12 @@ describe("failureReasonFor / plainFailureLine (DISCORD-3.b, AGENT-9, SAFE-6)", (
     expect(cut.length).toBeLessThanOrEqual(FAILURE_REASON_MAX);
     expect(cut).not.toContain("sk-proj");
     expect(cut).not.toContain("abcdefghij");
+    // A URL's credentials match no vendor-key pattern: dropped, the host kept.
+    const creds = "fatal: unable to access 'https://leif:hunter2-not-real@git.example.com/r.git/': 403";
+    expect(plainFailureLine(creds)).toBe("fatal: unable to access 'https://git.example.com/r.git/': 403");
+    expect(failureReasonFor({ exitCode: 1, stderrTail: "boot\nerror: GET http://tok3n@10.0.0.2:8080/v1 refused\n" }, PROVIDED)).toBe(
+      "error: GET http://10.0.0.2:8080/v1 refused",
+    );
   });
 
   test("a long, multi-line stderr (stack, source excerpt, host paths, banner) becomes one short line", () => {

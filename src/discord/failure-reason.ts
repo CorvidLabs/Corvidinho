@@ -14,12 +14,14 @@
  *    the run tier's no-provider notice (AGENT-10), else the last meaningful
  *    line of the child's stderr, else the exit code. Never the run's summary
  *    (model text) or a tool's output.
- *  - It is secret-scrubbed first (SAFE-6), then ANSI codes, stack frames,
- *    source excerpts and runtime banners are dropped, host paths are cut to
- *    their last segment, mass mentions are defanged, and it is cut to one
- *    line of at most {@link FAILURE_REASON_MAX} characters.
+ *  - It is secret-scrubbed first (SAFE-6, and a URL's `user:pass@` dropped),
+ *    then ANSI codes, stack frames, source excerpts and runtime banners are
+ *    dropped, host paths are cut to their last segment, mass mentions are
+ *    defanged, and it is cut to one line of at most
+ *    {@link FAILURE_REASON_MAX} characters.
  *  - Every failure logs one line: `[discord] run failed (<surface>, exit N):
- *    <reason>` (the scheduler logs with its own prefix).
+ *    <reason>` (no `, exit N` for a run that threw; the scheduler logs with
+ *    its own prefix).
  *  - The owner's own run (the DISCORD-15.a owner check): the reply body is
  *    the reason. Anyone else: {@link FAILED_TOLD_OWNER_TEXT}, and it is true —
  *    the owner is DMed the reason with the surface and channel through the
@@ -68,12 +70,24 @@ export type FailedRunFacts = {
   task?: { cancelled?: boolean };
 };
 
+/**
+ * The credentials of a URL (`https://user:pass@host/…`): no vendor-key
+ * pattern matches them, so they are dropped with the scrub (SAFE-6); the
+ * scheme and host stay.
+ */
+const URL_USERINFO_RE = /\b([a-z][a-z0-9+.-]*:\/\/)[^\s/?#@'"`<>]+@/gi;
+
+/** SAFE-6 for a reason: the secret scrub, plus a URL's credentials dropped. */
+function scrubReason(text: string): string {
+  return scrubSecrets(text).replace(URL_USERINFO_RE, "$1");
+}
+
 /** A result frame's `error`, when it is a non-empty string (scrubbed, capped). */
 export function failureReasonFromUnknown(v: unknown): string | undefined {
   if (typeof v !== "string" || !v.trim()) return undefined;
   // Scrub before the cap, so the cap never cuts a secret into a shape the
   // scrub misses (SAFE-6).
-  return scrubSecrets(v.trim()).slice(0, FAILURE_REASON_IN_MAX);
+  return scrubReason(v.trim()).slice(0, FAILURE_REASON_IN_MAX);
 }
 
 const ANSI_RE = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
@@ -134,14 +148,15 @@ function cutLine(line: string, max: number): string {
 
 /**
  * Raw failure text (a result frame's `error`, a thrown message, a stderr end)
- * as one plain line: secret-scrubbed first (SAFE-6), ANSI codes, stack
- * frames, source excerpts and runtime banners dropped, the last line that
- * reads like an error kept (else the last meaningful line), host paths cut
- * to their last segment, whitespace collapsed, mass mentions defanged, then
- * cut to `max`. "" when nothing meaningful is left.
+ * as one plain line: secret-scrubbed first (SAFE-6, URL credentials
+ * included), ANSI codes, stack frames, source excerpts and runtime banners
+ * dropped, the last line that reads like an error kept (else the last
+ * meaningful line), host paths cut to their last segment, whitespace
+ * collapsed, mass mentions defanged, then cut to `max`. "" when nothing
+ * meaningful is left.
  */
 export function plainFailureLine(raw: string, max: number = FAILURE_REASON_MAX): string {
-  const scrubbed = scrubSecrets(raw).replace(ANSI_RE, "");
+  const scrubbed = scrubReason(raw).replace(ANSI_RE, "");
   const lines = scrubbed.split(/\r?\n/).filter(meaningful);
   if (lines.length === 0) return "";
   const picked = [...lines].reverse().find((l) => ERRORISH_RE.test(l)) ?? lines.at(-1)!;

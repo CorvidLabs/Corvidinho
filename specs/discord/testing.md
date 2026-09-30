@@ -416,8 +416,8 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   stuck `autoPauseAsk` (earlier failures store none); the bridge's next tick
   posts it once with the owner ping; a stuck 5th run posts the pause line
   plus `Last failure: <question>`; a bridge-claimed 5th failure posts the
-  pause ask with the ping and the `failed (exit 1)` context (not the run's
-  output) instead of the `❌` line; a pause ask whose in-process post
+  pause ask with the ping and the run's DISCORD-3.b failed line as context
+  (`That didn't work.`, not the run's output) instead of the `❌` line; a pause ask whose in-process post
   resolves `false` or throws stays pending with no ping key and the next
   tick posts it once with the ping; a bridge run that throws and makes the
   5th failure posts the pause ask at once without the error text;
@@ -1249,7 +1249,9 @@ configured." with no setting name; configured and partly configured lines.
 closed) and `tests/discord.spend.test.ts` (the non-owner body still has no
 `CORVIDINHO_`). Bridge footer tests configure a model for the file
 (`useConfiguredModel`, `tests/fixtures/fake-llm.ts`); the stub agent calls
-no model.
+no model. `tests/discord.failed-reply.test.ts` ("no provider configured: the
+owner sees the AGENT-10 notice") — the owner's own failed run answers the
+notice as its one line (DISCORD-3.b, REQ-discord-032).
 - Fail on base: the startup and `/status` cases fail (no line; "demo stub").
 
 ## Model fallback on Discord (REQ-discord-080, REQ-discord-457; AGENT-11)
