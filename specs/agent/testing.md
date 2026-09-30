@@ -683,3 +683,21 @@ Unchanged suites that cover the touched files pass: `tests/agent.spend.test.ts`,
   ends `used`. The target and scrub-before-cut tests fail on the branch's
   first cut (`6ac2d8c`) sources, which recorded and sent the call past a cap
   the card did not show and cut the task before scrubbing it.
+
+## A failed run's result names why in plain harness text (REQ-agent-032, DISCORD-3.b)
+
+`tests/discord.failed-reply.test.ts`:
+
+- `modelCallFailedLine`: HTTP 401 → `The model call failed (401 Unauthorized
+  from api.openai.com)`; an unnamed status keeps its number; timeout, network,
+  malformed reply and a missing key each name their kind and the host; an
+  empty chain is `NO_PROVIDER_NOTICE`. `verifyGaveUpReason(2)` and
+  `VERIFY_RERUN_FAILED_REASON` name the verify failure.
+- The real `task run --output ndjson` against a localhost provider that
+  answers 401 with a body quoting a key: exit 1, `failed` result with `error`
+  `The model call failed (401 Unauthorized from 127.0.0.1:<port>)` and no body
+  text; with no model configured the `error` is the AGENT-10 notice.
+- `collectTaskRunStream` (through the spawn client): a crash's stderr end is
+  `stderrTail` (at most 4000 characters).
+- Fail on base: those cases fail with the base's `src/agent/*` sources (no
+  `error` field, no `modelCallFailedLine`, no `stderrTail`).

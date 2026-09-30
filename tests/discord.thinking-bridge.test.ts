@@ -10,6 +10,7 @@ import {
   type AgentClient,
 } from "../src/discord/agent-client.ts";
 import { pickCustomId } from "../src/discord/ask-buttons.ts";
+import { FAILED_TEXT } from "../src/discord/failure-reason.ts";
 import {
   createNullGateway,
   type GatewayHandlers,
@@ -163,11 +164,8 @@ describe("bridge thinking status wiring (DISCORD-3)", () => {
     });
 
     // ASK-7 collapse: failure body edited into the progress message.
-    const failEdit = outbound.contentEdits.find(
-      (e) =>
-        typeof e.content === "string" &&
-        (e.content.includes("failed") || e.content.includes("exit")),
-    );
+    // DISCORD-3.b: not the owner's run and no owner to tell — the plain line.
+    const failEdit = outbound.contentEdits.find((e) => e.content === FAILED_TEXT);
     expect(failEdit).toBeDefined();
     // DISCORD-3.a — the failure line keeps an error-colored footer-only embed.
     expect(failEdit!.embed).toStrictEqual({
@@ -308,7 +306,8 @@ describe("collapsed answer keeps a footer-only embed (DISCORD-3.a)", () => {
     expect(n).toBe(2);
     const answer = outbound.contentEdits.at(-1)!;
     expect(answer.messageId).toBe(stub!.messageId);
-    expect(String(answer.content)).toContain("failed (exit 1)");
+    // DISCORD-3.b: not the owner's run and no owner to tell.
+    expect(String(answer.content)).toBe(FAILED_TEXT);
     expect(String(answer.content)).not.toContain("state=");
     expect(answer.components).toBeNull();
     expect(answer.embed).toStrictEqual({

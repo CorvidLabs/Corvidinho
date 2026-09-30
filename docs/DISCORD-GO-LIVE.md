@@ -613,9 +613,15 @@ With no usable model for a tier (nothing set, or its first entry's key is missin
   only `No model provider is configured.` (no setting names, like the spend line, SAFE-14.a);
 - in `doctor` and `init`: `[warn] llm: No model provider is configured …` (never fails them);
 - in the runs themselves: a run on that tier calls nothing and ends failed with the notice as its
-  result. `task run` prints it, and a WATCH run's summary comment carries it; Discord chat,
-  button answers, `/session start`, `/work` and schedules post their usual `… failed (exit 1)`
-  reply, like any failed run, so check `/status` or the start-up line.
+  result (and as the result's `error`). `task run` prints it, and a WATCH run's summary comment
+  carries it; on Discord (chat, button answers, `/session start`, `/work` and schedules) the
+  owner's own run answers with the notice as its one line, and anyone else's with `That didn't
+  work — the owner has been told.` while the owner gets the notice by DM (DISCORD-3.b, below).
+
+A failed run on Discord says why in one plain line to the owner and only `That didn't work — the
+owner has been told.` to anyone else, whose failure DMs the owner the line (once per reason per
+hour; `That didn't work.` when no DM could go out). Every failure logs `[discord] run failed
+(<surface>, exit N): <reason>`, scrubbed and cut to one line (DISCORD-3.b).
 
 Keys stay in the environment and are never printed; `ANTHROPIC_API_KEY` is scrubbed from
 error lines like the other LLM keys and never reaches the verify lane or a shell (SAFE-6).

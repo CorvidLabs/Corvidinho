@@ -28,6 +28,7 @@
  * Keys are read from env only and never printed (SAFE-6).
  */
 
+import { STATUS_CODES } from "node:http";
 import { scrubSecrets } from "../store/scrub.ts";
 import { loadTierFromEnv, TIER_MODEL_ENV, type CapabilityTier } from "./tier.ts";
 import type { AgentTokenUsage, ModelFallback, ModelUsage } from "./types.ts";
@@ -292,6 +293,37 @@ export function modelFailureReason(f: ModelFailure): string {
       return "malformed reply";
     case "no-key":
       return `${f.keyEnv} is not set`;
+  }
+}
+
+/**
+ * DISCORD-3.b / AGENT-9: a failed model call as one plain line for a failed
+ * run's `error` (what the owner's failed-run reply says), e.g. `The model
+ * call failed (401 Unauthorized from api.openai.com)`. Built from the failure
+ * kind, the status code's standard name and the provider's host only — never
+ * the provider's reply body or a key (SAFE-6 / SAFE-12). `provider` is the
+ * entry that failed last (null for an empty chain: the no-provider notice).
+ */
+export function modelCallFailedLine(
+  failure: ModelFailure | null,
+  provider: Pick<ResolvedProvider, "baseUrl" | "entry"> | null,
+): string {
+  if (!provider) return NO_PROVIDER_NOTICE;
+  const host = providerId(provider);
+  if (!failure) return `The model call failed (${host})`;
+  switch (failure.kind) {
+    case "http": {
+      const name = STATUS_CODES[failure.status];
+      return `The model call failed (${failure.status}${name ? ` ${name}` : ""} from ${host})`;
+    }
+    case "timeout":
+      return `The model call timed out (${host})`;
+    case "network":
+      return `The model call failed (network error reaching ${host})`;
+    case "malformed":
+      return `The model call failed (malformed reply from ${host})`;
+    case "no-key":
+      return `The model call failed (${entryLabel(provider.entry)} needs ${failure.keyEnv}, which is not set)`;
   }
 }
 

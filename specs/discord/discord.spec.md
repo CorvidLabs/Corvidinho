@@ -142,6 +142,8 @@ files:
   - src/discord/ask-ping.ts
   - src/discord/spend-post.ts
   - src/discord/spend-dm.ts
+  - src/discord/failure-reason.ts
+  - tests/discord.failed-reply.test.ts
   - tests/discord.spend.test.ts
   - tests/discord.spend-dm.test.ts
   - tests/discord.status-audit.test.ts
@@ -871,6 +873,20 @@ mention, led by `GitHub <repo>#<n> — answer on the thread: <link>`),
 `WatchAskDelivery` (`deliver()` → `{ sent, failed, expired }`, `stop()`,
 `settle(timeoutMs)`) and `WATCH_ASK_RETRY_MS` (10 min).
 
+Failed-run replies (DISCORD-3.b, REQ-discord-032):
+`src/discord/failure-reason.ts` exports `FAILED_TOLD_OWNER_TEXT` ("That
+didn't work — the owner has been told."), `FAILED_TEXT` ("That didn't
+work."), `FAILURE_REASON_MAX` (200), `FAILURE_DM_DEDUP_MS` (1 hour),
+`failureReasonFromUnknown(v)`, `plainFailureLine(raw, max?)`,
+`failureReasonFor(run, env?)`, `formatFailureLog(prefix, surface, exitCode,
+reason)`, `formatFailureDm(notice)`, `createFailureOwnerDm({ owner, sendDm,
+now?, windowMs? })` → `FailureOwnerDm` (`tell(notice)` → boolean),
+`failedRunOutcome(opts)` → `{ body, reason }` and `failedRunReply(opts)` →
+the body. `AgentSpawnResult` gains `failureReason?` (the result frame's
+`error`) and `stderrTail?` (a failed run's stderr end); `SlashContext` and
+`SchedulerServiceOpts` gain `failureDm?: FailureOwnerDm` (the bridge wires one
+shared `createFailureOwnerDm` on its gateway `sendDm`; the daemon none).
+
 ## Invariants
 
 Empty channel allowlist fail-start; empty user/role = deny-all when checked;
@@ -1090,7 +1106,21 @@ still loads and matches on Discord. `/admin people link github:<login>` looks
 the numeric id up once (GitHub API, owner-only, audited) and stores it; a
 failed lookup writes nothing.
 
+A failed run's reply (DISCORD-3.b, REQ-discord-032) is never the old
+`session <id> failed (exit N)` line and never the run's summary (model text):
+the owner's own run gets one plain line saying why, anyone else gets
+`FAILED_TOLD_OWNER_TEXT` only after the owner was DMed that line (else
+`FAILED_TEXT`), and every failure logs the scrubbed line. The line is harness
+text only, SAFE-6 scrubbed before it is cut, and carries no spend amounts;
+the `state=` / `verified=` / `attempts=` plumbing stays in the footer.
+
 ## Behavioral Examples
+
+### Scenario: A stranger's run fails; the owner is told why (DISCORD-3.b)
+
+- **Given** an owner is configured and the model provider answers 401
+- **When** someone else's chat run fails, and then the owner's own run fails
+- **Then** their answer is `That didn't work — the owner has been told.` and the owner gets one DM `❌ A run failed (chat in <#channel>): The model call failed (401 Unauthorized from <host>)`; the owner's own answer is that line; the same reason within the hour sends no second DM; each failure logs `[discord] run failed (chat, exit 1): …`
 
 ### Scenario: A schedule's question makes its next runs wait until it is answered or cancelled (AUTONOMY-6.a)
 
@@ -1269,6 +1299,8 @@ failed lookup writes nothing.
 | `/work` in a repo whose SpecSync workflow requires a change: a meaningful path changed since the merge-base has no open or branch-archived change, or the diff cannot be read | `PR: not opened — N changed path(s) this repo's SpecSync workflow needs a change for are not covered by a SpecSync change (…)` (or "could not read what changed …"); nothing committed or pushed; reason `sdd-uncovered` (REQ-discord-518) |
 | `/work` pre-push verify lane passes with no recognised test summary, or no test ran | `PR: not opened — Verify gate: not verified: …`; reason `verify-failed`; nothing committed or pushed (REQ-discord-185) |
 | Spend card: Deny, no answer before it lapses, a code typed after it lapsed, a non-owner's press or code, or its waiting run is gone | nothing is sent or spent; the card closes as a no (`Denied by you — nothing was spent.` / `Expired — …` / `Closed — nobody is waiting …`); a non-owner gets `Only the owner can answer this card.` (REQ-discord-198) |
+| A run fails (non-zero exit without an ask, or the spawn throws) on chat, an ask pick / Answer resume, `/session start`, `/work` or a schedule post | Owner's own run: one plain scrubbed line why; anyone else: `That didn't work — the owner has been told.` after the owner DM went out, else `That didn't work.`; one `[discord] run failed (<surface>, exit N): <reason>` line (`[scheduler] …` for schedules) (REQ-discord-032) |
+| The owner DM about a failed run fails, or no owner / no DM path | The reply says only `That didn't work.`; the DM is not remembered, so the next failure with that reason tries again (REQ-discord-032) |
 | Stuck WATCH ask with no owner Discord id or no live gateway DM | left pending, not sent; given up with a log line after a day (REQ-discord-086) |
 | Owner DM for a stuck WATCH ask fails (DMs closed) | ask handed back; retried after 10 minutes; one log line per try (REQ-discord-086) |
 | Channel autocomplete by a non-ADMIN, a muted or deny-role owner, outside an allowlisted channel, or with no owner | Empty choice list; no channel names or ids (REQ-discord-431) |

@@ -126,6 +126,7 @@ import {
   mergeModelFallbacks,
   modelChain,
   modelFallbackEventText,
+  modelCallFailedLine,
   modelFallbackFromUnknown,
   providerForTier,
   providerNotice,
@@ -719,7 +720,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
     // AGENT-10 / AGENT-13: no configured model (or its key is missing) —
     // say so and call nothing; there is no built-in default to fall back to.
     if (llm.notice) {
-      return { summary: llm.notice, filesChanged: [], error: true };
+      return { summary: llm.notice, filesChanged: [], error: true, failureReason: llm.notice };
     }
 
     if (tier === "read" || maxToolRounds <= 0) {
@@ -1059,6 +1060,8 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         summary: completion.error,
         filesChanged: [...filesChanged],
         error: true,
+        // DISCORD-3.b: which model call failed and how, never its reply body.
+        ...(completion.reason ? { failureReason: completion.reason } : {}),
       };
     }
 
@@ -1473,7 +1476,12 @@ async function singleChatCompletion(opts: {
     }),
   );
   if (!completion.ok) {
-    return { summary: completion.error, filesChanged: [], error: true };
+    return {
+      summary: completion.error,
+      filesChanged: [],
+      error: true,
+      ...(completion.reason ? { failureReason: completion.reason } : {}),
+    };
   }
   const content = (completion.message.content ?? "").trim();
   return {
@@ -1489,7 +1497,14 @@ async function singleChatCompletion(opts: {
  */
 type Completion =
   | { ok: true; message: AssistantMessage }
-  | { ok: false; error: string; status?: number; failure: ModelFailure | null };
+  | {
+      ok: false;
+      error: string;
+      status?: number;
+      failure: ModelFailure | null;
+      /** DISCORD-3.b: the chain's last failure as one plain line (`modelCallFailedLine`). */
+      reason?: string;
+    };
 
 /**
  * AGENT-11: `request` against the run's model chain (`callChain`): the
@@ -1509,7 +1524,14 @@ async function callModels(
     },
     models.onFallback,
   );
-  if (!r.ok) return { ok: false, error: r.error, failure: r.failure };
+  if (!r.ok) {
+    return {
+      ok: false,
+      error: r.error,
+      failure: r.failure,
+      reason: modelCallFailedLine(r.failure, r.provider),
+    };
+  }
   if (r.provider) models.onModel?.(entryLabel(r.provider.entry));
   return { ok: true, message: r.value };
 }

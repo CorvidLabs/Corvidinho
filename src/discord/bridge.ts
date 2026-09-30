@@ -110,6 +110,7 @@ import {
   postAnswerParts,
 } from "./rich-reply.ts";
 import { isOwnerDiscord, loadOwnerConfig } from "../identity/owner.ts";
+import { createFailureOwnerDm, failedRunReply } from "./failure-reason.ts";
 import { formatTaskPlumbing } from "../agent/task-summary.ts";
 import { loadLlmEnv } from "../agent/execute.ts";
 import { providerNotice } from "../agent/providers.ts";
@@ -547,6 +548,12 @@ export async function startBridge(
   };
   const sendDm = async (o: Parameters<NonNullable<GatewayHandlers["sendDm"]>>[0]) =>
     sendDmRef.fn ? sendDmRef.fn(o) : null;
+  // DISCORD-3.b: someone else's failed run DMs the owner its reason (one DM
+  // per reason per hour), so their "the owner has been told" is true.
+  const failureDm = createFailureOwnerDm({
+    owner: () => config.owner ?? null,
+    sendDm: () => sendDmRef.fn,
+  });
   const editCardMessage = async (o: Parameters<NonNullable<GatewayHandlers["editMessage"]>>[0]) =>
     embedRef.editMessage ? embedRef.editMessage(o) : false;
   const approvals = db
@@ -692,6 +699,7 @@ export async function startBridge(
       spendLine,
       spendAlerts,
       spendDm,
+      failureDm,
       ...(replyRef.fn ? { post: replyRef.fn } : {}),
       // MEMORY-7.a: /session start and /work send private replies by DM.
       ...(sendDmRef.fn ? { sendDm: sendDmRef.fn } : {}),
@@ -1127,7 +1135,15 @@ export async function startBridge(
             }),
           );
         } catch (err) {
-          const failed = `❌ ${err instanceof Error ? err.message : "agent error"}`;
+          // DISCORD-3.b: the owner sees why in one plain line; anyone else
+          // that it didn't work (and whether the owner was told).
+          const failed = `❌ ${await failedRunReply({
+            run: { failureReason: err instanceof Error ? err.message : undefined },
+            ownerRun,
+            surface: "chat",
+            channelId,
+            ownerDm: failureDm,
+          })}`;
           store.recordTurn(session, "agent", failed);
           await thinking.fail(failed);
           throw err;
@@ -1271,7 +1287,8 @@ export async function startBridge(
             : result.ok
               ? // DISCORD-16: the whole answer; it is split into messages when long.
                 result.summary
-              : `session ${session.id} failed (exit ${result.exitCode})`,
+              : // DISCORD-3.b: why (the owner's run), else "the owner has been told".
+                await failedRunReply({ run: result, ownerRun, surface: "chat", channelId, ownerDm: failureDm }),
           privateOutcome,
         );
         // AGENT-6: the answer as posted joins the thread (a spend-cap stop
@@ -1862,7 +1879,14 @@ export async function startBridge(
             }),
           );
         } catch (err) {
-          const failed = `❌ ${err instanceof Error ? err.message : "agent error"}`;
+          // DISCORD-3.b: as on a chat run.
+          const failed = `❌ ${await failedRunReply({
+            run: { failureReason: err instanceof Error ? err.message : undefined },
+            ownerRun,
+            surface: "ask",
+            channelId,
+            ownerDm: failureDm,
+          })}`;
           store.recordTurn(session, "agent", failed);
           await thinking.fail(failed);
           try {
@@ -1991,7 +2015,8 @@ export async function startBridge(
             : result.ok
               ? // DISCORD-16: the whole answer; it is split into messages when long.
                 result.summary
-              : `session ${session.id} failed (exit ${result.exitCode})`,
+              : // DISCORD-3.b: as on a chat run.
+                await failedRunReply({ run: result, ownerRun, surface: "ask", channelId, ownerDm: failureDm }),
           privateOutcome,
         );
         // AGENT-6: the answer to the pick joins the session's thread.
@@ -2225,6 +2250,8 @@ export async function startBridge(
       // SAFE-14.a: every tick retries the owner's spend DMs; a schedule run's
       // warning and cap stop go there, never into the schedule's post.
       spendDm,
+      // DISCORD-3.b: a failed run of someone else's schedule DMs the owner why.
+      failureDm,
       outbound: {
         post: async ({ channelId, content, mentionUserIds, components }) => {
           if (!replyRef.fn) return false;

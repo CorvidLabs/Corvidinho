@@ -1417,3 +1417,52 @@ code step. The SAFE-14.a surface tests (`tests/discord.spend.test.ts`,
 - Fail on base: the file cannot load on main's (0aeb345) sources
   (`src/discord/spend-card.ts` does not exist), and main's bridge has no
   `spend` kind, so such a card is never DMed.
+
+## A failed run says why to the owner, and that the owner was told to anyone else (REQ-discord-032, DISCORD-3.b)
+
+`tests/discord.failed-reply.test.ts` (22 tests; stub agents, a dry-run
+`startBridge` whose gateway stub records replies and `sendDm`, in-memory
+SQLite, a `SchedulerService` with a recording poster, a localhost provider
+that answers 401; no live Discord, no network):
+
+- `failureReasonFor` / `plainFailureLine`: the result frame's `error` wins; a
+  key in stderr is `[redacted:openai-key]`, also when the cut would split it;
+  a stderr with a source excerpt, stack frames, host paths and the Bun banner
+  becomes the one `error: …` line with `…/corvidinho`; a long line is cut to
+  200 with `…`; URLs keep their host; `@everyone` is defanged; with no reason
+  the AGENT-10 notice (unset model, missing key), else the stderr end, else
+  the exit code (130 = interrupted); never the summary.
+- `createFailureOwnerDm`: one DM per reason per hour (a later hour or another
+  reason sends again); a DM that fails (null or a throw) is false and not
+  remembered; no owner or no DM path is false.
+- `failedRunReply`: owner → the reason; others → told (DM out) or the plain
+  line (DM failed, none wired); one `[discord] run failed (<surface>, exit N)`
+  log line each.
+- Spawn client: a result frame's `error` becomes `failureReason`; a crash
+  with no frame hands over `stderrTail`; a successful run carries neither.
+- Surfaces through `startBridge`: chat (owner body = the reason, footer keeps
+  `state=failed verified=false attempts=1`, no DM; a team member's run is
+  told and DMs the owner once per reason; a failed DM or no owner → `That
+  didn't work.`; no provider → the AGENT-10 notice to the owner; a secret and a
+  stack in stderr reach the owner as one scrubbed line; a run that throws →
+  `❌ <scrubbed line>` for the owner, `❌ That didn't work — the owner has been
+  told.` for anyone else), an ask pick (owner and team), `/session start` and
+  `/work` (owner and team, `failed (exit` never shown), and schedule posts
+  (the owner's schedule posts the reason and keeps it as the row's error;
+  someone else's is told with the DM naming `schedule <id>`; the daemon or a
+  failed DM → `That didn't work.`; `[scheduler] run failed (schedule <id>,
+  exit 1): …` logged).
+- End to end: the bridge spawning the real `task run` against the 401
+  provider answers the owner `The model call failed (401 Unauthorized from
+  127.0.0.1:<port>)` and a team member `That didn't work — the owner has been
+  told.` with the owner DMed that line; the provider's body never appears.
+- Updated for the new line: `tests/discord.thinking-bridge.test.ts`,
+  `tests/discord.inflight-replies.test.ts` (non-owner, no owner → `That didn't
+  work.`) and `tests/scheduler.ask-outbox.test.ts` (someone else's schedule
+  without a DM path → `That didn't work.` in the row summary and the pause
+  ask; the failed run's own output never shown).
+- Fail on base: with the base's (9ea4005) twelve modified source files swapped
+  in (`src/discord/failure-reason.ts` kept so imports resolve), the file gave
+  7 pass, 15 fail; restored, 22 pass. The 7 that pass on the base are the pure
+  units of the new module; every surface, spawn-client, `task run` and
+  `modelCallFailedLine` case fails on the base.

@@ -26,6 +26,7 @@ import {
   slashOwnerNotice,
 } from "../spend-post.ts";
 import { spendStopFor } from "../spend-dm.ts";
+import { failedRunReply } from "../failure-reason.ts";
 import { RUN_STOPPED_TEXT, type SessionRunTurn } from "../run-control.ts";
 import type { SessionStub } from "../types.ts";
 
@@ -245,8 +246,16 @@ async function runSessionStart(
       }),
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "agent error";
-    const body = `Session \`${session.id}\` failed: ${msg}`;
+    // DISCORD-3.b: the owner sees why in one plain line; anyone else only
+    // that it didn't work (and whether the owner was told).
+    const line = await failedRunReply({
+      run: { failureReason: err instanceof Error ? err.message : undefined },
+      ownerRun,
+      surface: "session",
+      channelId: interaction.channelId,
+      ownerDm: ctx.failureDm,
+    });
+    const body = `Session \`${session.id}\` failed: ${line}`;
     ctx.store.recordTurn(session, "agent", body);
     // DISCORD-ASK-7 — one message when practical (no Done/fail embed + reply).
     await finishSlashWithThinking({
@@ -257,7 +266,7 @@ async function runSessionStart(
       trackBotMessage: ctx.trackBotMessage,
       thinkExtras: { model: llmModel, ...(ownerRun ? { spend: {} } : {}) },
       ok: false,
-      failStatus: `❌ ${msg}`,
+      failStatus: `❌ ${line}`,
       post: ctx.post,
     });
     return;
@@ -352,7 +361,14 @@ async function runSessionStart(
       ? ask.content
       : result.ok
         ? result.summary
-        : `failed (exit ${result.exitCode})`,
+        : // DISCORD-3.b: why (the owner's run), else "the owner has been told".
+          await failedRunReply({
+            run: result,
+            ownerRun,
+            surface: "session",
+            channelId: interaction.channelId,
+            ownerDm: ctx.failureDm,
+          }),
     privateOutcome,
   );
   // AGENT-6 (REQ-discord-072): the answer joins the thread (a button ask as
