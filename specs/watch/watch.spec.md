@@ -1,6 +1,6 @@
 ---
 module: watch
-version: 22
+version: 23
 status: draft
 files:
   - src/watch/types.ts
@@ -19,6 +19,8 @@ files:
   - src/watch/memory-inject.ts
   - src/watch/forget-me.ts
   - tests/watch.forget-me.test.ts
+  - src/watch/owner-ask.ts
+  - tests/watch.stuck-ask.test.ts
   - tests/watch.auth-stop.test.ts
   - tests/watch.request-actor.test.ts
   - tests/watch.conversation.test.ts
@@ -56,7 +58,10 @@ REQ-watch-1016): a clear "forget me" to the watch user never starts a run —
 the poller matches the sender by GitHub numeric id, records a declared
 person's ask for the owner's Discord Approve/Deny card, replies once on the
 thread, and posts the outcome there once the owner decides
-(`src/watch/forget-me.ts`).
+(`src/watch/forget-me.ts`). Stuck runs (AGENT-16.a, REQ-watch-086): a run that
+ends with a "stuck" ask, on any event type, is handed to the Discord bridge
+through the shared DB so the owner is pinged on Discord like other stuck asks
+(`src/watch/owner-ask.ts`).
 
 ## Public API
 
@@ -120,6 +125,18 @@ store and condensing are `src/store/conversation.ts` (REQ-discord-472).
 `handleWatchForgetMe(opts)`, `watchForgetOutcomeBody(req)`,
 `deliverWatchForgetOutcomes(opts)`, `WATCH_FORGET_AUDIT_SURFACE`
 (`watch:forget-me`).
+
+`src/watch/owner-ask.ts` (AGENT-16.a, REQ-watch-086): `WatchOwnerAskStore`
+(`record({ event, ask, now })` — stuck asks only, one per thread, replaced —
+`clear(repo, number)`, `pending()`, `claim(ask)`, `release(ask)`) over the
+module-owned `watch_owner_asks` table (`ensureWatchOwnerAsks`, created on
+first use, no schema version bump), `WatchOwnerAsk`, `threadUrl(repo, n)`,
+`WATCH_OWNER_ASK_TTL_MS` (a day), `markBridgeRunning(db, runner?)` /
+`clearBridgeRunning(db, runner)` / `bridgeRunning(db, isAlive?)`
+(`schema_meta` key `BRIDGE_RUNNER_META_KEY`, `discord_bridge_runner`) and
+`noteWatchRunAsk(opts)` → `WatchRunAskOutcome` (`none` / `queued` /
+`no-bridge` / `not-sent`). `AgentSpawnResult` gains `ask?: HumanAsk` (the
+spawn client validates the result frame's `ask` with `askFromUnknown`).
 
 ## Invariants
 
@@ -200,6 +217,17 @@ Every WATCH recognition of the sender — identity block, memory inject, memory
 plugins, SAFE-13 owner exemption — uses `senderId` only, never `sender`; no id
 or an undeclared id is community, never the owner (IDENTITY-7.a,
 REQ-watch-367).
+After every run (any event type, ackable or not), `noteWatchRunAsk` hands a
+`stuck` ask to the bridge: with an owner Discord id and a DB it is recorded in
+`watch_owner_asks` (keyed by the thread, question SAFE-6 scrubbed and a
+re-scrub target, a newer ask replacing it) and one log line says it is queued,
+or — with no live bridge mark on the data dir — that the owner's Discord ping
+could not be sent and waits for a bridge; with no owner Discord id or no DB
+nothing is recorded and one line says it could not be sent. Any other outcome
+(done, failed without an ask, a clarify or spend-cap ask) drops the thread's
+pending ask. The run summary comment is unchanged (it still carries
+`Needs your input: …` where WATCH posts one); nothing new is posted on GitHub
+(REQ-watch-086).
 
 ## Behavioral Examples
 
@@ -224,6 +252,10 @@ poll posts the outcome on that thread once (REQ-watch-1016).
 A comment from the owner's login re-registered by someone else (another
 numeric id) → `declared_person: none`, no owner memory, and its injection is
 refused like anyone's; the owner's own id → `role: owner` (REQ-watch-367).
+An assignment whose run ends stuck on a repeated failing call → no GitHub
+comment, one `watch_owner_asks` row for the thread, and the bridge DMs the
+owner the question with the thread link; with no bridge running, one log line
+says the Discord ping could not be sent (REQ-watch-086).
 
 ## Error Cases
 
@@ -233,7 +265,9 @@ Missing token; missing mention username; empty repo allowlist; not authorized
 that trips the SAFE-13 detector is refused with one comment and no run
 (REQ-watch-071); a thread-conversation read, write or purge failure logs
 `[watch] conversation … failed` and the run goes on without the replay or the
-record (REQ-watch-472).
+record (REQ-watch-472); a stuck run with no owner Discord id, no DB or no live
+bridge logs that the owner's Discord ping could not be sent, and a failure to
+record it is logged (scrubbed) and never stops the cycle (REQ-watch-086).
 
 ## Dependencies
 
@@ -272,3 +306,4 @@ WATCH poll-first thin (#19, 2026-09-26, corvid-agent): mention/review_request/is
 | 2026-09-30 | forget-from-github-and-from-admin-approved-on-the-card-a-declared-person-matched-by-github-numeric-id-who-comments: Forget from GitHub and from /admin, approved on the card: a declared person (matched by GitHub numeric id) who comments 'forget me' to the watch user raises the owner's existing Approve/Deny forget card with no model run and gets a reply on the thread (an undeclared sender is told nothing is kept, no card), the outcome is posted on that thread; the owner can start a forget for any declared person with owner-only, SAFE-5 audited /admin people forget, the same card; either way nothing is forgotten until the owner approves, and Approve also deletes the person's kept WATCH conversations by the GitHub login and numeric id the ask came from, never the owner who started it (MEMORY-ACL-6.a, #101) |
 | 2026-09-30 | verification-can-t-be-skipped-and-the-real-diff-since-the-talk-started-decides-what-changed-agent-14-agent-15-agent-15: Verification can't be skipped and the real diff since the talk started decides what changed (AGENT-14, AGENT-15, AGENT-15.a): task run refuses --no-verify, [corvidinho] verify_before_complete is ignored, filesChanged comes from the real git diff alone (a claimed path git does not show still runs the lane), and a talk worktree whose last run did not end verified verifies from the talk branch's merge-base |
 | 2026-09-30 | on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a: On GitHub people match only by their numeric user id: a renamed or re-registered login never counts as the owner or a declared person on WATCH (prompt, memory scope, SAFE-13 exemption); [owner] github_id declares the owner's id; /admin people link github stores the looked-up numeric id; doctor warns about logins without an id (IDENTITY-7.a, #36) |
+| 2026-09-30 | when-it-repeats-a-failing-call-it-is-steered-to-change-approach-then-asks-a-stuck-github-run-pings-the-owner-on-discord: When it repeats a failing call it is steered to change approach, then asks; a stuck GitHub run pings the owner on Discord (AGENT-16, AGENT-16.a) |

@@ -180,6 +180,15 @@ describe("update-helpers.sh", () => {
     }
   });
 
+  test("extract_changelog_section finds 0.0.35", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.35`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("IDENTITY-7.a");
+    expect(r.stdout).toContain("DISCORD-SCHEDULE-3.a");
+  });
+
   test("extract_changelog_section finds 0.0.34", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.34`,
@@ -920,10 +929,10 @@ describe("release tagging helpers", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.34", () => {
+  test("package.json is 0.0.35", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.34");
+    expect(pkg.version).toBe("0.0.35");
   });
 });

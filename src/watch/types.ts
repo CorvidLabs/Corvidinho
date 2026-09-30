@@ -2,6 +2,7 @@
  * WATCH ingress types — GitHub mention/review/assignment → session stub (#19/#48).
  */
 
+import type { HumanAsk } from "../agent/types.ts";
 import type { InjectionNotice } from "../agent/untrusted.ts";
 
 export const NOT_AUTHORIZED = "not authorized";
@@ -62,6 +63,12 @@ export type AgentSpawnResult = {
    * (validated tool name + reason ids); the summary comment tells the owner.
    */
   injection?: InjectionNotice;
+  /**
+   * AUTONOMY-1/2 / AGENT-16: the question the run stopped on (from the result
+   * frame, re-normalized); a "stuck" one pings the owner on Discord
+   * (AGENT-16.a, src/watch/owner-ask.ts).
+   */
+  ask?: HumanAsk;
 };
 
 export type WatchConfig = {

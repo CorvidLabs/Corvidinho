@@ -275,3 +275,26 @@ model gets the "sent privately" placeholder; the prompt names the rule.
 github_id only, IDENTITY-7.a)" — `watchInjectionVerdict` exempts the owner's
 numeric id and flags the same injected body from the owner's login with no
 id or another id; fails on the base sources (the login alone was exempt).
+
+## Repeated failing calls are steered, then ask (REQ-agent-086, AGENT-16)
+
+`tests/agent.loop-guards.test.ts`: `callSignature` (argv spellings of one call
+match); `changedState` (every registered dangerous or mutating builtin is in
+exactly one of `STATE_CHANGING_TOOLS` / `NO_STATE_CHANGE_TOOLS`; writes,
+failed `delegate` with `filesChanged` and Fledge plugin commands are changes;
+reads, `web-fetch`, `council`, `danger-ping`, `fledge-lanes-run` are not); the
+guard (steer on the 2nd identical failure, ask only after the steer was seen
+in an earlier round, same-batch and new-conversation calls steered again,
+reset on change and on the call's own success); the tool loop over a scripted
+mock LLM (steer after the whole tool result with a scrubbed excerpt, the 3rd
+identical call never runs, `ToolResult` `REPEAT_FAILURE_BLOCK_DETAIL`, the
+`[operator] AGENT-16` line, the stuck ask naming only the tool or
+`(unknown tool)`, a change resets, a verify retry steers before it asks, a
+worker result fenced for an injection hit gets a steer quoting none of it);
+`runTask` ends `blocked` without verify; the real CLI `task run --output
+ndjson` against a localhost mock ends with a `blocked` result frame carrying
+the stuck ask.
+- Fail on base: with the base's (5093b81) `src/agent/execute.ts` swapped in
+  (the new module kept), the tool-loop, runTask and CLI cases fail (no steer,
+  no ask; the loop runs out its rounds); the pure units and the "changes
+  approach" guard pass on both.

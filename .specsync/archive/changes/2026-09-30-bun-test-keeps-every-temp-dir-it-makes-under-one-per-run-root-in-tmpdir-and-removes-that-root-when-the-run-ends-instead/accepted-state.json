@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "bun-test-keeps-every-temp-dir-it-makes-under-one-per-run-root-in-tmpdir-and-removes-that-root-when-the-run-ends-instead",
+  "slug": "bun-test-keeps-every-temp-dir-it-makes-under-one-per-run-root-in-tmpdir-and-removes-that-root-when-the-run-ends-instead",
+  "title": "Bun test keeps every temp dir it makes under one per-run root in TMPDIR and removes that root when the run ends, instead of leaking ~500 mkdtemp dirs into /tmp per run (verify lane filled the agent box's disk)",
+  "description": "bun test keeps every temp dir it makes under one per-run root in TMPDIR and removes that root when the run ends, instead of leaking ~500 mkdtemp dirs into /tmp per run (verify lane filled the agent box's disk)",
+  "kind": "bug_fix",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "5093b81f1d8a10582b216c6116d1cfd83db331c7",
+  "created_at": 1790743623,
+  "updated_at": 1790746477,
+  "affected_specs": [
+    "cli"
+  ],
+  "affected_paths": [
+    "tests/preload.ts",
+    "tests/preload.tmp-cleanup.test.ts",
+    "tests/fixtures/preload-tmp-probe.ts",
+    "specs/cli/cli.spec.md",
+    "specs/cli/testing.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "A full bun test run (and the fledge verify lane that runs it) leaves no new entries in the TMPDIR it started with: every temp dir the suite, its test files (including tmpdir() read at module top level) and the CLIs and shells they spawn without an explicit env make lands under one corvidinho-test-run-* root the preload creates in that TMPDIR, the preload's scratch data dir included; the root is removed when the run ends, also when a test fails (exit 1, failure still reported) and when a test calls process.exit() (exit code kept); cleanup never throws or changes a run's result; no new env var, config key or command"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

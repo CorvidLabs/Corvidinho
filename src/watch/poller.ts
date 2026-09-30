@@ -17,6 +17,9 @@
  * never starts a run — the poller records it for the owner's Approve/Deny
  * card and replies on the thread (src/watch/forget-me.ts), and each cycle
  * posts the outcome of decided GitHub asks on their threads.
+ * AGENT-16.a (REQ-watch-086): a run that ends with a "stuck" ask, on any
+ * event type, is handed to the Discord bridge through the shared DB so the
+ * owner is pinged on Discord like other stuck asks (src/watch/owner-ask.ts).
  */
 
 import type { Database } from "bun:sqlite";
@@ -77,6 +80,7 @@ import {
   fetchWatchEvents,
   type SearchClient,
 } from "./searcher.ts";
+import { noteWatchRunAsk } from "./owner-ask.ts";
 import { SessionStore } from "./session-store.ts";
 import {
   classifySpawnError,
@@ -650,6 +654,7 @@ export async function startWatchPoller(
         let spawnExit = 1;
         let spawnSummary = "";
         let spawnInjection: AgentSpawnResult["injection"];
+        let spawnAsk: AgentSpawnResult["ask"];
         let threw = false;
         try {
           const spawn = await agent.runChat({
@@ -665,6 +670,7 @@ export async function startWatchPoller(
           spawnExit = spawn.exitCode;
           spawnSummary = spawn.summary;
           spawnInjection = spawn.injection;
+          spawnAsk = spawn.ask;
           opts.onAction?.({
             kind: action.kind,
             event,
@@ -753,6 +759,21 @@ export async function startWatchPoller(
             summarized,
             log,
             onPostFailed: backoffOnCommentFailure,
+          });
+        }
+        // AGENT-16.a (REQ-watch-086): a stuck run pings the owner on Discord
+        // like other stuck asks, for every event type — handed to the bridge
+        // through the shared DB; any other finished run makes the thread's
+        // pending ask moot (a spawn that threw leaves it). Never throws.
+        if (!threw) {
+          noteWatchRunAsk({
+            db,
+            owner,
+            event,
+            ask: spawnAsk,
+            summaryPosted,
+            now: now(),
+            log,
           });
         }
       } catch (err) {

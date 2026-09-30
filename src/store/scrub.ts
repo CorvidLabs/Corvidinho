@@ -193,7 +193,8 @@ export function scrubJsonText(raw: string): { text: string; parsed: boolean } {
 /**
  * Every free-text column Corvidinho persists. Keep in sync with src/store/db.ts
  * and module-owned tables (spend_ledger: src/agent/spend.ts;
- * discord_session_turns: src/discord/session-thread.ts). `json` columns hold a
+ * discord_session_turns: src/discord/session-thread.ts; watch_owner_asks:
+ * src/watch/owner-ask.ts). `json` columns hold a
  * JSON document and are re-scrubbed value by value ({@link scrubJsonText}).
  */
 export const SCRUB_TARGETS: ReadonlyArray<{
@@ -215,6 +216,10 @@ export const SCRUB_TARGETS: ReadonlyArray<{
   // and the kept turns (JSON; each turn's text re-scrubbed value by value).
   { table: "conversation_threads", columns: ["summary"], json: ["turns"] },
   { table: "spend_ledger", columns: ["provider", "model"] },
+  // AGENT-16.a (src/watch/owner-ask.ts): a stuck WATCH run's question waiting
+  // for the bridge's owner DM (scrubbed on write; a new table, so no rules
+  // version bump: it has no rows written under older rules).
+  { table: "watch_owner_asks", columns: ["question"] },
 ];
 
 function tableExists(db: Database, table: string): boolean {

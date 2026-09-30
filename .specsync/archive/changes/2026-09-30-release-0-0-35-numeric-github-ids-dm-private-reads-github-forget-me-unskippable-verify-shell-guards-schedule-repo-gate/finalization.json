@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-35-numeric-github-ids-dm-private-reads-github-forget-me-unskippable-verify-shell-guards-schedule-repo-gate",
+  "implementation_commit": "06979bc519af8d46f860c97dfb28777b456cd508",
+  "implementation_tree": "14afde380165d41a82d22fee2427ab0f1c632d41",
+  "contract_digest": "08ca2838d527c1953ef59e229b3a0fe016b3a8768fc2d693bf5803f0d6eab883",
+  "workspace_digest": "a3f4e77b60c1941ef3f45401dd384985056b96b4c2ad4986d59065342fede4bd",
+  "closing_digest": "0492f9baf519b9fcb166a13b9e73ecac3ebbfd35e2b7f0207e9bc6eb7a12000a",
+  "review_digest": "8d24e705829c1f21c3fcab2448f2b64673c209fc9c4136946c8801c6cee0a5fb",
+  "finalization_digest": "9399b08728ccae2d370770c8b3da560a758260b870839644a8eebc92b0ff1a73",
+  "timestamp": 1790746449
+}
