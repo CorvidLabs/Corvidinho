@@ -23,15 +23,18 @@ const CHOICE_LINE_RE =
  * ask: whitespace collapsed, SAFE-6 scrubbed, then cut at
  * ASK_OPTION_LABEL_MAX. The scrub runs before the cut (SAFE-6.a), so a label
  * that held a secret shows `[redacted:<kind>]` and a secret the cut would
- * split never survives as a raw piece too short for its scrub pattern.
- * Empty ⇒ "".
+ * split never survives as a raw piece too short for its scrub pattern. A cut
+ * label is scrubbed once more: the cut can end a key shape (an AWS key id is
+ * matched only up to a word boundary), and that marker is shorter than what
+ * it replaces, so the label stays within the cap and cleaning it again
+ * changes nothing. Empty ⇒ "".
  */
 export function cleanAskLabel(raw: string): string {
   const t = scrubSecrets(raw.replace(/\s+/g, " ").trim());
   if (!t) return "";
   return t.length <= ASK_OPTION_LABEL_MAX
     ? t
-    : `${t.slice(0, ASK_OPTION_LABEL_MAX - 1)}…`;
+    : scrubSecrets(`${t.slice(0, ASK_OPTION_LABEL_MAX - 1)}…`);
 }
 
 function toOption(id: string, label: string): AskOption | null {

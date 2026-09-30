@@ -196,6 +196,24 @@ describe("SAFE-6.a: ask questions and choice labels are scrubbed before they are
     expect(ask.question).not.toContain(TOKEN_HEAD);
     expect(ask.options?.map((o) => o.label)).toEqual(["Keep the old key", `Use ${TOKEN_MARK}…`]);
   });
+
+  test("a cut that ends a key shape is scrubbed too, and normalizing again changes nothing", () => {
+    // `AKIA` + 20 capitals is no AWS key id (the pattern stops at a word
+    // boundary after 16), but a cut that keeps exactly 16 of them before `…`
+    // leaves one. Built at runtime; never a real key.
+    const longId = "AK" + "IA" + "QWERTYUIOPASDFGHJKLZ";
+    const awsMark = "[redacted:aws-key]";
+    const labelRaw = `${"x".repeat(ASK_OPTION_LABEL_MAX - 22)} ${longId} for the deploy`;
+    const once = normalizeAskOptions([labelRaw, "No"])!;
+    expect(once[0]!.label).toBe(`${"x".repeat(ASK_OPTION_LABEL_MAX - 22)} ${awsMark}…`);
+    expect(once[0]!.label.length).toBeLessThanOrEqual(ASK_OPTION_LABEL_MAX);
+    expect(normalizeAskOptions(once)).toEqual(once);
+
+    const questionRaw = `${"q".repeat(ASK_QUESTION_MAX - 22)} ${longId} — which region?`;
+    const q = askFromUnknown({ reason: "clarify", question: questionRaw })!.question;
+    expect(q).toBe(`${"q".repeat(ASK_QUESTION_MAX - 22)} ${awsMark}…`);
+    expect(askFromUnknown({ reason: "clarify", question: q })!.question).toBe(q);
+  });
 });
 
 describe("ask-human in the tool catalog", () => {

@@ -19,10 +19,17 @@ artifact: design
   `cleanAskLabel(o.label)` instead of `o.label.slice(0, 80)`, so a label
   that reached the buttons without `resolveAskOptions` is scrubbed before it
   is cut too; custom_ids keep the option id byte-identical.
-- One scrub then one cut (as the existing `clean` helpers do): a marker the
-  cut itself falls inside is cut like other text (`[redacted:gith…`); the
-  raw key never survives. No post-cut re-scrub (a Slack marker is longer
-  than its shortest key, so it could push a label past Discord's 80).
+- Scrub, cut, then scrub the cut text once more: a marker the cut itself
+  falls inside is cut like other text (`[redacted:gith…`); the raw key never
+  survives. The post-cut scrub (review fix) only matters when the cut ends a
+  key shape: the one pattern anchored after the key is the AWS key id
+  (`\b` after 16 characters), so `AKIA` plus a longer run of capitals is no
+  key until a cut keeps exactly 16 of them before `…`. Its marker (18
+  characters) is shorter than the id (20), so the text stays within its cap,
+  and without it normalizing a stored ask again changed that label
+  (REQ-agent-045) and the pick's ack showed the id while the button and the
+  stored row were redacted. Any other match in the cut text would already
+  have matched before the cut, so the second scrub never lengthens it.
 - Stored rows: `pendingAskBody` and `storedAsk` keep their scrub as a
   backstop; they now see scrubbed text. Reloaded rows pass `askFromUnknown`,
   so they are scrubbed before they are cut too. No `SCRUB_RULES_VERSION`

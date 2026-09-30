@@ -175,7 +175,10 @@ only the searches not yet run, refusals or nothing ⇒ null).
   does the same from string options, `{id,label}` options and numbered
   question lines, a secret-looking id still becomes its position; a numbered
   choice the question cap cuts is parsed from the scrubbed question. Fails on
-  the base sources.
+  the base sources. "a cut that ends a key shape is scrubbed too…": `AKIA`
+  plus 20 capitals placed so the cut keeps 16 comes out
+  `…[redacted:aws-key]…` for a label and a question, and normalizing the
+  result again changes nothing.
 
 
 ## Persona file (REQ-agent-069, PERSONA-1..3)

@@ -274,7 +274,8 @@ Thinking collapses into the Choose stub (DISCORD-ASK-6); done/pick and slash
 `/session start` / `/work` prefer editing that message into the final answer
 (DISCORD-ASK-7) via `ThinkingStatus.finalizeContent` (`finishSlashWithThinking`). The bridge wires `SlashContext.trackBotMessage`, so that answer message (the collapsed thinking message, or the deferred reply whose id `SlashInteraction.editReply` may resolve with as `{ messageId }`) maps to its session and the session's own user continues it by replying (DISCORD-2 / REQ-discord-002); the tracking write is best effort, so a DB error is logged and never keeps the slash run from resolving its deferred reply. After an ephemeral pick, buttons clear and the Got-it ephemeral is deleted when resume finishes (DISCORD-ASK-8).
 `src/agent/ask-options.ts` exports `resolveAskOptions` / `parseChoicesFromQuestion`
-and `cleanAskLabel` (whitespace collapsed, SAFE-6 scrubbed, then cut at 80), which
+and `cleanAskLabel` (whitespace collapsed, SAFE-6 scrubbed, then cut at 80, a cut
+label scrubbed once more), which
 every option label and every Choose-pick button label (`buildChoiceComponents`)
 goes through; the ask question is scrubbed before its 1500 cut
 (`normalizeQuestion`), so a question or label that held a secret shows
