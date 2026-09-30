@@ -41,7 +41,10 @@
  * including ones an earlier attempt left; a merge-base git cannot give makes
  * `changed()` unreadable (the gate then verifies anyway). `settle(done)`
  * writes the marker back only when the run ended `done`. A run in any other
- * checkout keeps the run-start snapshot.
+ * checkout keeps the run-start snapshot. A nested run (a delegate or council
+ * worker in its lead's cwd) never takes or writes the marker and keeps its
+ * own run-start snapshot: the lead holds the marker for the whole run and
+ * its own gate covers the combined change.
  */
 
 import { createHash } from "node:crypto";
@@ -87,6 +90,19 @@ export const WORKSPACE_DIFF_MAX_FILES = 1000;
 export type WorkspaceDiffLimits = {
   /** Default `WORKSPACE_DIFF_HASH_BUDGET_BYTES`. */
   hashBudgetBytes?: number;
+};
+
+/** How the run relates to its talk worktree's verified marker (REQ-agent-015). */
+export type WorkspaceDiffRole = {
+  /**
+   * A delegate or council worker inside a lead's run (REQ-agent-117), which
+   * runs in the lead's cwd while the lead holds the marker. It never takes
+   * the marker (so it is never `carried`: its baseline is its own start) and
+   * never writes it (a worker's `done` must not mark the lead's unverified
+   * edits verified, even if the lead then dies); a worker that does not end
+   * `done` still removes one (fail closed).
+   */
+  nested?: boolean;
 };
 
 type Git = (args: string[]) => Promise<GitRun>;
@@ -264,6 +280,7 @@ function tracker(
 export async function startWorkspaceDiff(
   cwd: string,
   limits: WorkspaceDiffLimits = {},
+  role: WorkspaceDiffRole = {},
 ): Promise<WorkspaceDiffTracker | null> {
   try {
     const real = realpathSync(cwd);
@@ -279,10 +296,14 @@ export async function startWorkspaceDiff(
     // AGENT-15.a: a talk worktree without the verified marker carries every
     // edit since the talk started (the marker is taken away for this run).
     const talkGitDir = talkWorktreeGitDir(root);
-    const settle = talkGitDir
-      ? (done: boolean) => settleTalkVerified(talkGitDir, done)
-      : undefined;
-    if (talkGitDir && !takeTalkVerified(talkGitDir)) {
+    const settle = !talkGitDir
+      ? undefined
+      : role.nested
+        ? (done: boolean) => {
+            if (!done) settleTalkVerified(talkGitDir, false);
+          }
+        : (done: boolean) => settleTalkVerified(talkGitDir, done);
+    if (talkGitDir && !role.nested && !takeTalkVerified(talkGitDir)) {
       const based = await resolveBase((_cwd, args) => git(args), root);
       if (!based) {
         return { carried: true, settle, changed: async () => null };

@@ -1147,9 +1147,17 @@ SHALL make the diff unreadable, so verify runs anyway (fail closed,
 REQ-agent-085). `runTask` SHALL settle the marker once per run: written when
 the run ends `done`, removed (so one written meanwhile does not count) when it
 ends any other way. A run in any other checkout (the caller's own checkout, a
-main checkout, another linked worktree) SHALL keep the run-start baseline. No
-env var, config key, flag, table or NDJSON field is added;
-`WorkspaceDiffTracker` gains the optional `carried` and `settle` members.
+main checkout, another linked worktree) SHALL keep the run-start baseline. A
+nested run (a delegate or council worker, `CORVIDINHO_DELEGATE_DEPTH` above
+0, REQ-agent-117) runs in its lead's cwd while the lead holds the marker:
+`task run` SHALL start its tracker with `{ nested: true }`, which never takes
+or writes the marker and is never `carried` (its baseline is its own start,
+so a read-only council voice does not run the lane on the lead's edits), and
+removes a marker when the worker does not end `done`. The lead's own gate
+covers the combined change, and a lead that dies after a worker ended `done`
+still leaves the next run carried. No env var, config key, flag, table or
+NDJSON field is added; `WorkspaceDiffTracker` gains the optional `carried`
+and `settle` members.
 
 Acceptance Criteria
 - A new talk worktree has the marker; its first run that changes nothing ends `done` with the "no changes" note and no carried note.
@@ -1160,4 +1168,5 @@ Acceptance Criteria
 - The caller's own checkout: an edit left by a blocked run is not carried into the next run.
 - `talkWorktreeGitDir` is null for a main checkout and for a linked worktree not named `talk-*`; `takeTalkVerified` is true once, then false, and false for a symlink in the marker's place; a `done` settle never writes through that symlink; a marker planted during a run that does not end `done` is removed.
 - The real CLI in a carried talk worktree runs the verify lane although the demo run changes nothing.
+- A worker (`{ nested: true }`) in a talk worktree whose lead took the marker and edited `app.ts`: one that changes nothing ends `done` without the lane; one that edits `lib.ts` lists only `lib.ts` and ends `done` verified; neither writes the marker, so the next top-level run (the lead died) carries `app.ts` and `lib.ts`. A worker that ends `failed` removes a marker; one that ends `done` leaves it as it was. The real CLI with `CORVIDINHO_DELEGATE_DEPTH=1` in a carried talk worktree runs no lane and writes no marker.
 

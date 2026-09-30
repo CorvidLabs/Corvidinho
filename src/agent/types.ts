@@ -188,7 +188,8 @@ export type RunTaskOptions = {
   /**
    * Test seam (like `verifyRunner`, not a product surface): starts the real
    * git working-tree diff that fills `filesChanged` (REQ-agent-085). Default
-   * `startWorkspaceDiff`.
+   * `startWorkspaceDiff`; `task run` in a delegate or council worker passes
+   * it with `{ nested: true }` (REQ-agent-015).
    */
   workspaceDiff?: WorkspaceDiffStart;
   onEvent?: (event: AgentEvent) => void;

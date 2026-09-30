@@ -23,6 +23,8 @@ import {
 } from "./agent/index.ts";
 import { loadLlmEnv } from "./agent/execute.ts";
 import type { InjectionNotice } from "./agent/untrusted.ts";
+import { startWorkspaceDiff } from "./agent/workspace-diff.ts";
+import { delegateDepthFromEnv } from "./autonomous/delegate.ts";
 import { SPAWN_BUN_CONFIG } from "./agent/spawn-argv.ts";
 import { spendDoctorCheck } from "./agent/spend.ts";
 import { attribution } from "./attribution.ts";
@@ -433,7 +435,6 @@ function spawnsInheritProcessEnv(): void {
   bun.spawnSync = withCurrentEnv(bun.spawnSync);
 }
 
-/** A `--project` path that cannot be used (CLI-5); carries its own hint (REQ-cli-419). */
 /** The verify skip flag that no longer exists (AGENT-14, REQ-cli-085). */
 export const REMOVED_NO_VERIFY_FLAG = "--no-verify";
 
@@ -449,6 +450,7 @@ export class RemovedFlagError extends Error {
   }
 }
 
+/** A `--project` path that cannot be used (CLI-5); carries its own hint (REQ-cli-419). */
 export class ProjectDirError extends Error {
   constructor(
     message: string,
@@ -860,6 +862,11 @@ async function taskRun(opts: {
       task: opts.taskText,
       config,
       maxRetries: opts.maxRetries,
+      // REQ-agent-015: a delegate or council worker runs in its lead's talk
+      // worktree and leaves the verified marker to the lead's gate.
+      ...(delegateDepthFromEnv() > 0
+        ? { workspaceDiff: (dir: string) => startWorkspaceDiff(dir, {}, { nested: true }) }
+        : {}),
       signal: abort.signal,
       onEvent: handleEvent,
       execute: async (ctx) => {

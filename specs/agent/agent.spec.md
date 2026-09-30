@@ -116,11 +116,13 @@ be read; null tracker outside a git work tree; an optional second argument
 `WorkspaceDiffLimits` lowers the hash budget in tests; in a talk worktree the
 tracker also has `settle(done)` and, when its last run did not end verified,
 `carried: true` with the talk branch's merge-base as the baseline,
-REQ-agent-015), `WORKSPACE_DIFF_MAX_OUTPUT_BYTES`,
+REQ-agent-015; an optional third argument `WorkspaceDiffRole`
+`{ nested: true }`, passed by `task run` in a delegate or council worker,
+never takes or writes the marker), `WORKSPACE_DIFF_MAX_OUTPUT_BYTES`,
 `WORKSPACE_DIFF_HASH_MAX_BYTES`, `WORKSPACE_DIFF_HASH_BUDGET_BYTES` and
 `WORKSPACE_DIFF_MAX_FILES` (real-diff paths one run adds to `filesChanged`).
 `RunTaskOptions.workspaceDiff` is a test seam like `verifyRunner`, not a
-product surface. The gate has no switch (AGENT-14, REQ-agent-003):
+product surface (`task run` sets it only in a delegate or council worker). The gate has no switch (AGENT-14, REQ-agent-003):
 `RunTaskOptions` and `AgentConfig` have no `verifyBeforeComplete`;
 `src/agent/config.ts` exports `REMOVED_VERIFY_KEYS` and
 `removedVerifyKeys(cwd)` (a removed `[corvidinho]` key still set, for the
@@ -327,7 +329,9 @@ talk branch's merge-base, so every edit since the talk started, including
 ones an earlier attempt left, is verified before done (AGENT-15.a,
 REQ-agent-015); a new talk worktree and a run after a `done` start from
 their own snapshot, and the caller's own checkout keeps the run-start
-baseline. The diff is read-only git plus in-process hashing: it never writes
+baseline. A delegate or council worker (`CORVIDINHO_DELEGATE_DEPTH` above 0)
+in its lead's talk worktree never takes or writes the marker and keeps its
+own run-start baseline; the lead's gate covers the combined change. The diff is read-only git plus in-process hashing: it never writes
 the index or objects (the talk's verified marker lives in the worktree's own
 git dir).
 With no git snapshot (a non-git cwd, or an unreadable start snapshot), a run

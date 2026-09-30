@@ -47,6 +47,7 @@ function recordingLane() {
     PATH: `${bin}:${process.env.PATH ?? ""}`,
     CORVIDINHO_LLM_API_KEY: "",
     OPENAI_API_KEY: "",
+    CORVIDINHO_DELEGATE_DEPTH: "",
   };
   return { dir, work, calls, env };
 }
@@ -216,6 +217,8 @@ describe("task run interrupted by a signal (AGENT-3, REQ-cli-244)", () => {
             PATH: `${bin}:${process.env.PATH ?? ""}`,
             CORVIDINHO_LLM_API_KEY: "",
             OPENAI_API_KEY: "",
+            // A top-level run (it takes the talk's marker), even inside a worker's lane.
+            CORVIDINHO_DELEGATE_DEPTH: "",
           },
         },
       );
@@ -291,6 +294,8 @@ describe("task run interrupted by a signal (AGENT-3, REQ-cli-244)", () => {
           PATH: `${lane.bin}:${process.env.PATH ?? ""}`,
           CORVIDINHO_LLM_API_KEY: "",
           OPENAI_API_KEY: "",
+          // A top-level run (it takes the talk's marker), even inside a worker's lane.
+          CORVIDINHO_DELEGATE_DEPTH: "",
         },
       },
     );

@@ -233,7 +233,11 @@ title is reported but records no row.
   branch is gone verifies anyway; the caller's own checkout keeps the
   run-start baseline; marker take / settle / symlink / planted-marker cases;
   a claimed path git does not show is left out of `filesChanged` yet runs the
-  lane (and its retry after a failed verify runs it again).
+  lane (and its retry after a failed verify runs it again); a delegate or
+  council worker (`{ nested: true }`, and the real CLI with
+  `CORVIDINHO_DELEGATE_DEPTH=1`) in its lead's talk worktree keeps its own
+  baseline and never writes the marker, so a lead that dies still leaves its
+  edits carried.
 - `tests/agent.loop.test.ts`: a run that changed files verifies with no
   option; a run that changed nothing ends `done` with one "no changes,
   nothing to verify" note; the snapshot is always taken; the huge-diff cap

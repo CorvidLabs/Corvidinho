@@ -138,6 +138,8 @@ describe("verification can't be switched off (AGENT-14, REQ-agent-003)", () => {
         PATH: `${bin}:${process.env.PATH ?? ""}`,
         CORVIDINHO_LLM_API_KEY: "",
         OPENAI_API_KEY: "",
+        // A top-level run, even when this suite runs inside a worker's lane.
+        CORVIDINHO_DELEGATE_DEPTH: "",
       },
     });
     const [code, out] = await Promise.all([proc.exited, new Response(proc.stdout).text()]);
@@ -309,6 +311,111 @@ describe("'verified' covers every edit since the talk started (AGENT-15.a, REQ-a
     expect(second.result.verifySkipped).toBe(true);
     expect(texts(second.events)).not.toContain(CARRIED_NOTE);
   });
+});
+
+describe("delegate and council workers leave the marker to their lead (REQ-agent-015)", () => {
+  const nested = (dir: string) => startWorkspaceDiff(dir, {}, { nested: true });
+
+  test("a worker in the lead's talk worktree keeps its own baseline, never writes the marker, and the lead's death still carries every edit", async () => {
+    const talk = await makeTalk(tempBase());
+    const marker = join(talk.gitDir, TALK_VERIFIED_MARKER);
+    // The lead's run has started (it took the marker) and edited app.ts.
+    expect(takeTalkVerified(talk.gitDir)).toBe(true);
+    writeFileSync(join(talk.work, "app.ts"), "export const x = ;\n");
+
+    // A read-only council voice changes nothing: no lane on the lead's edit.
+    const v = lane([true]);
+    const voice = await runTask({
+      cwd: talk.work,
+      maxRetries: 0,
+      verifyRunner: v.runner,
+      workspaceDiff: nested,
+      execute: answerOnly,
+    });
+    expect(v.calls).toEqual([]);
+    expect(voice.state).toBe("done");
+    expect(voice.verifySkipped).toBe(true);
+    expect(existsSync(marker)).toBe(false);
+
+    // A delegate worker verifies its own edit and ends done: still no marker.
+    const worker = await runTask({
+      cwd: talk.work,
+      maxRetries: 0,
+      verifyRunner: v.runner,
+      workspaceDiff: nested,
+      execute: async () => {
+        writeFileSync(join(talk.work, "lib.ts"), "export const y = 1;\n");
+        return { summary: "worker edit", filesChanged: ["lib.ts"] };
+      },
+    });
+    expect(v.calls).toEqual([talk.work]);
+    expect(worker.verified).toBe(true);
+    expect(worker.filesChanged).toEqual(["lib.ts"]);
+    expect(existsSync(marker)).toBe(false);
+
+    // The lead's process dies before its gate: the next run carries both edits.
+    const after = lane([true]);
+    const { result, events } = await run(talk.work, answerOnly, after.runner);
+    expect(after.calls).toEqual([talk.work]);
+    expect(result.filesChanged).toEqual(["app.ts", "lib.ts"]);
+    expect(texts(events)).toContain(CARRIED_NOTE);
+  });
+
+  test("a worker that does not end done removes a marker; one that ends done leaves it as it was", async () => {
+    const talk = await makeTalk(tempBase());
+    const marker = join(talk.gitDir, TALK_VERIFIED_MARKER);
+    const ok = await runTask({
+      cwd: talk.work,
+      maxRetries: 0,
+      verifyRunner: lane([true]).runner,
+      workspaceDiff: nested,
+      execute: answerOnly,
+    });
+    expect(ok.state).toBe("done");
+    expect(existsSync(marker)).toBe(true);
+    const bad = await runTask({
+      cwd: talk.work,
+      maxRetries: 0,
+      verifyRunner: lane([false]).runner,
+      workspaceDiff: nested,
+      execute: async () => {
+        writeFileSync(join(talk.work, "app.ts"), "export const x = ;\n");
+        return { summary: "edited", filesChanged: ["app.ts"] };
+      },
+    });
+    expect(bad.state).toBe("failed");
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  test("the real CLI as a worker (CORVIDINHO_DELEGATE_DEPTH=1) in a lead's talk worktree does not run the lane on the lead's edit or write the marker", async () => {
+    const base = tempBase();
+    const { work, gitDir } = await makeCarriedTalk(base);
+    const bin = join(base, "bin");
+    mkdirSync(bin);
+    const calls = join(base, "fledge.calls");
+    writeFileSync(join(bin, "fledge"), `#!/bin/sh\necho "$*" >> '${calls}'\nexit 0\n`);
+    chmodSync(join(bin, "fledge"), 0o755);
+    const proc = Bun.spawn(["bun", join(root, "src/cli.ts"), "task", "run", "--task", "demo", "--json"], {
+      cwd: work,
+      stdout: "pipe",
+      stderr: "pipe",
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env.PATH ?? ""}`,
+        CORVIDINHO_LLM_API_KEY: "",
+        OPENAI_API_KEY: "",
+        CORVIDINHO_DELEGATE_DEPTH: "1",
+      },
+    });
+    const [code, out] = await Promise.all([proc.exited, new Response(proc.stdout).text()]);
+    const parsed = JSON.parse(out) as { result: TaskResult };
+    expect(code).toBe(0);
+    expect(parsed.result.state).toBe("done");
+    expect(parsed.result.verifySkipped).toBe(true);
+    expect(parsed.result.filesChanged).toEqual([]);
+    expect(existsSync(calls)).toBe(false);
+    expect(existsSync(join(gitDir, TALK_VERIFIED_MARKER))).toBe(false);
+  }, 60_000);
 });
 
 describe("the talk verified marker (src/worktree/base.ts)", () => {
