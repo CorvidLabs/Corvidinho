@@ -287,3 +287,109 @@ describe("slash + schedule refuse an out-of-scope project (REQ-discord-202)", ()
     expect(bridgeTraces(sb.privateRepo)).toEqual({ branches: "", worktrees: 1 });
   });
 });
+
+/**
+ * DISCORD-SCHEDULE-3.a: a schedule reads and acts only on allowlisted repos,
+ * so a git checkout nested inside the bridge root (a clone placed under it)
+ * needs an allowlisted origin too — at /schedule create and at every tick.
+ * The bridge root's own checkout, plain folders in it, and /work are unchanged.
+ */
+describe("a schedule's project inside the bridge root (DISCORD-SCHEDULE-3.a)", () => {
+  function nested(): { linux: string; linuxSub: string; ok: string; noOrigin: string } {
+    const linux = join(sb.bridgeRoot, "vendor", "linux");
+    initGitRepo(linux, "https://github.com/torvalds/linux.git");
+    const linuxSub = join(linux, "drivers");
+    mkdirSync(linuxSub, { recursive: true });
+    const ok = join(sb.bridgeRoot, "vendor", "fledge");
+    initGitRepo(ok, "git@github.com:CorvidLabs/fledge.git");
+    const noOrigin = join(sb.bridgeRoot, "scratch-repo");
+    initGitRepo(noOrigin);
+    return { linux, linuxSub, ok, noOrigin };
+  }
+
+  test("a nested checkout off the allowlist (or inside one) is refused for a schedule; /work scope is unchanged", () => {
+    const n = nested();
+    const base = { defaultProjectRoot: sb.bridgeRoot, github: allowCfg().github };
+    const sched = { ...base, schedule: true };
+    for (const p of ["vendor/linux", n.linux, "vendor/linux/drivers", n.linuxSub, "scratch-repo"]) {
+      const r = resolveProjectDir(p, sched);
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toMatch(/not authorized/i);
+      // Chat and /work keep "a directory inside the root" (REQ-discord-202).
+      expect(resolveProjectDir(p, base).ok).toBe(true);
+    }
+    // No GitHub allowlist at all: default-deny for a nested checkout.
+    expect(resolveProjectDir("vendor/fledge", { defaultProjectRoot: sb.bridgeRoot, schedule: true }).ok).toBe(false);
+    // Deny wins over the allowlisted org.
+    const deny = allowCfg().github;
+    deny.denyRepos = ["CorvidLabs/fledge"];
+    expect(resolveProjectDir("vendor/fledge", { ...sched, github: deny }).ok).toBe(false);
+  });
+
+  test("an allowlisted nested checkout, the bridge root and plain folders in it still resolve for a schedule", () => {
+    const n = nested();
+    const sched = { defaultProjectRoot: sb.bridgeRoot, github: allowCfg().github, schedule: true };
+    expect(resolveProjectDir("vendor/fledge", sched)).toEqual({ ok: true, dir: n.ok });
+    for (const p of [undefined, "", ".", sb.bridgeRoot, "sub", "vendor"]) {
+      expect(resolveProjectDir(p, sched).ok).toBe(true);
+    }
+    // A bridge root whose own origin is off the allowlist is unchanged.
+    expect(resolveProjectDir(".", { ...sched, github: allowCfg(["someone-else"]).github }).ok).toBe(true);
+  });
+
+  test("/schedule create refuses a nested checkout off the allowlist; a stored tick refuses it too", async () => {
+    const n = nested();
+    const agent = recordingAgent();
+    const ctx = makeCtx(agent);
+    const create = interaction({
+      commandName: "schedule",
+      subcommand: "create",
+      userId: "boss",
+      options: { name: "linux digest", cadence: "every hour", project: "vendor/linux", prompt: "summarize" },
+    });
+    await handleSlashInteraction(ctx, create);
+    expect(create.out()).toMatch(/not authorized/i);
+    expect(ctx.scheduleStore!.list()).toHaveLength(0);
+
+    // An allowlisted nested checkout is still accepted.
+    const okCreate = interaction({
+      commandName: "schedule",
+      subcommand: "create",
+      userId: "boss",
+      options: { name: "fledge digest", cadence: "every hour", project: "vendor/fledge", prompt: "summarize" },
+    });
+    await handleSlashInteraction(ctx, okCreate);
+    expect(ctx.scheduleStore!.list()).toHaveLength(1);
+
+    // A row stored before this change is refused at its tick: no agent run,
+    // no worktree or talk branch in the nested repo.
+    const store = new ScheduleStore();
+    const past = Date.now() - 60_000;
+    const s = store.create({
+      name: "linux digest",
+      cronExpression: "0 * * * *",
+      project: "vendor/linux",
+      prompt: "summarize",
+      createdByUserId: "boss",
+      now: past - 3_600_000,
+    });
+    s.nextRunAt = past;
+    const errors: string[] = [];
+    const svc = new SchedulerService({
+      store,
+      agent,
+      allowlist: allowCfg(),
+      manual: true,
+      defaultProjectRoot: sb.bridgeRoot,
+      useWorktrees: true,
+      onRunFinished: (e) => errors.push(e.error ?? "ok"),
+    });
+    expect((await svc.tick()).started).toContain(s.id);
+    await svc.drain(5_000);
+    svc.stop();
+    expect(agent.calls).toHaveLength(0);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatch(/project resolve failed: .*not authorized/i);
+    expect(bridgeTraces(n.linux)).toEqual({ branches: "", worktrees: 1 });
+  });
+});

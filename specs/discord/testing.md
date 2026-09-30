@@ -840,3 +840,30 @@ github_id`, on their Discord id) and
   matches; no `[owner] github_id`; `link github:` stores no id; no lookup
   module — only "a refused request makes no lookup" holds on both) and all 9
   pass on the branch; the updated cases in the four files above fail too.
+
+## A schedule's nested checkout needs an allowlisted origin (REQ-discord-202 modified, DISCORD-SCHEDULE-3.a)
+
+`tests/worktree.project-scope.test.ts` ("a schedule's project inside the
+bridge root"), real git repos in a temp dir:
+
+- `resolveProjectDir` with `schedule: true` refuses (`not authorized`) a
+  checkout nested in the bridge root whose origin is off the allowlist, a
+  folder inside that checkout (by relative and absolute path), a nested
+  checkout with no origin, any nested checkout when no GitHub allowlist is
+  given, and a denied one; without the option (`/work`, `/session start`) the
+  same paths still resolve.
+- An allowlisted nested checkout, the empty project, `.`, the root path,
+  plain folders in the root, and a root whose own origin is off the list still
+  resolve for a schedule.
+- `/schedule create` on the off-list nested checkout replies `not
+  authorized` and stores nothing; on the allowlisted one it stores the
+  schedule; a stored schedule on the off-list checkout fails its tick with
+  `project resolve failed: … not authorized`, runs no agent and leaves no
+  worktree or `talk/*` branch in that repo.
+- `tests/scheduler.worktree.test.ts`, `tests/discord.session-worktree.test.ts`
+  and `tests/scheduler.ask-outbox.test.ts` put their schedule projects in a
+  checkout nested in a plain bridge root; those checkouts now get an
+  allowlisted origin (and the allowlist that org), as an operator's would.
+- Fail on base: with the base sources swapped in, 2 of the 3 new tests fail
+  (the refusals); the "still resolve" guard passes on both. All pass on the
+  branch.

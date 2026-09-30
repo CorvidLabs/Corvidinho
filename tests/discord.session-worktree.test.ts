@@ -209,6 +209,11 @@ describe("schedule tick uses project worktree (SESSION-WORKTREE + DISCORD-SCHEDU
     try {
       const project = join(root, "sched-proj");
       initGitRepo(project);
+      // A checkout nested in the bridge root needs an allowlisted origin for a
+      // schedule (DISCORD-SCHEDULE-3.a).
+      Bun.spawnSync(["git", "remote", "add", "origin", "https://github.com/CorvidLabs/sched-proj.git"], {
+        cwd: project,
+      });
       process.env.WORKTREE_BASE_DIR = join(root, "wts");
 
       const store = new ScheduleStore();
@@ -234,6 +239,7 @@ describe("schedule tick uses project worktree (SESSION-WORKTREE + DISCORD-SCHEDU
 
       const cfg = emptyConfig();
       cfg.discord.channels = ["chan-allowed"];
+      cfg.github.orgs = ["corvidlabs"];
       const svc = new SchedulerService({
         store,
         agent: agent as never,

@@ -271,10 +271,12 @@ async function handleCreate(
   }
 
   // REQ-discord-202 (DISCORD-SCHEDULE-3): the project must be one the ticks
-  // may run on — bridge root or an allowlisted sibling checkout.
+  // may run on — bridge root or an allowlisted sibling checkout; a checkout
+  // nested inside the root needs an allowlisted origin (DISCORD-SCHEDULE-3.a).
   const scoped = resolveProjectDir(project, {
     defaultProjectRoot: ctx.store.defaultProjectRoot ?? process.cwd(),
     github: ctx.allowlist.github,
+    schedule: true,
   });
   if (!scoped.ok) {
     await interaction.reply({

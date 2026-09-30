@@ -87,6 +87,9 @@ function stepAgent(steps: { next: Step; calls?: number; prompt?: string }): Agen
 function allow(channels: string[]) {
   const cfg = emptyConfig();
   cfg.discord.channels = channels;
+  // A schedule's project nested in the bridge root needs an allowlisted
+  // origin (DISCORD-SCHEDULE-3.a); the worktree tests give theirs one.
+  cfg.github.orgs = ["corvidlabs"];
   return cfg;
 }
 
@@ -696,6 +699,7 @@ describe("auto-pause and pre-run failures ask the owner instead of dying silentl
       expect(p.exitCode).toBe(0);
     };
     git(["init", "-q"]);
+    git(["remote", "add", "origin", "https://github.com/CorvidLabs/proj.git"]);
     git(["-c", "user.email=t@example.com", "-c", "user.name=T", "commit", "-q", "--allow-empty", "-m", "init"]);
     // A `talk` branch blocks every `talk/<run>` branch: `git worktree add` fails.
     git(["branch", "talk"]);
