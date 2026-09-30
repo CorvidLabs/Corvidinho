@@ -38,8 +38,14 @@ import * as workspaceDiff from "../src/agent/workspace-diff.ts";
 import { settleTalkVerified } from "../src/worktree/base.ts";
 import { openWorkPr, WORK_PR_PLUGINS } from "../src/work/pr.ts";
 import type { PluginHandlerResult } from "../src/plugins/types.ts";
+import { startFakeLlm } from "./fixtures/fake-llm.ts";
 import { LANE_PASS_OUTPUT } from "./fixtures/lane-output.ts";
 import { gitIn, makeTalk } from "./fixtures/talk-worktree.ts";
+
+// AGENT-13: there is no built-in default model or stub, so the spawned CLI
+// calls this localhost fake provider (a keyless ollama: model).
+const fakeLlm = startFakeLlm();
+afterAll(() => fakeLlm.stop());
 
 const root = join(import.meta.dir, "..");
 const bases: string[] = [];
@@ -692,6 +698,7 @@ describe("the real CLI (REQ-agent-185)", () => {
         PATH: `${bin}:${process.env.PATH ?? ""}`,
         CORVIDINHO_LLM_API_KEY: "",
         OPENAI_API_KEY: "",
+        ...fakeLlm.env,
         CORVIDINHO_DELEGATE_DEPTH: "",
       },
     });
