@@ -7,11 +7,11 @@
   "title": "Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap",
   "description": "Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap",
   "kind": "feature",
-  "state": "archived",
+  "state": "verifying",
   "canonical_applied": true,
   "base_commit": "73b41ca920971e22d73db0a6ddff0a308b013aa9",
   "created_at": 1790785563,
-  "updated_at": 1790803180,
+  "updated_at": 1790805366,
   "affected_specs": [
     "plugins",
     "agent",
