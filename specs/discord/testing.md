@@ -775,7 +775,9 @@ undeclared-under-`[people]` owner on their Discord id) and
 ## Private replies by DM only (REQ-discord-710, MEMORY-7.a)
 
 `tests/memory.private-view.test.ts` — `privateRepliesFromUnknown` (strings
-only, at most 5, scrubbed then cut to 6000 with a marker), `deliverPrivateReplies`
+only, via `boundPrivateReplies`: at most 5, the last saying how many more were
+not sent, each scrubbed then cut to 6000 with a marker — a straddling token
+redacted, no lone surrogate — and a bounded list unchanged), `deliverPrivateReplies`
 (DM parts ≤1900 even after the gateway's defang of a text full of `@everyone`,
 scrubbed, header first; "failed" with no DM path, a null or a throwing send)
 and `withPrivateNote`; through the bridge a chat reply, a button pick and an

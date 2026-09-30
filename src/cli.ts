@@ -9,7 +9,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-  boundPrivateReplies,
   createNdjsonWriter,
   createTaskExecute,
   loadAgentConfig,
@@ -34,6 +33,7 @@ import {
   registerSlashCommandsLive,
   startBridge,
 } from "./discord/index.ts";
+import { boundPrivateReplies } from "./discord/private-reply.ts";
 import {
   goLiveChecklist as watchGoLiveChecklist,
   startWatchPoller,

@@ -14,10 +14,9 @@
  * there, and those surfaces ignore the field).
  */
 
-import { boundPrivateReplies, NDJSON_LIMITS } from "../agent/events-ndjson.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import { defangMassMentions } from "./allowed-mentions.ts";
-import { splitDiscordMessage } from "./rich-reply.ts";
+import { DISCORD_ANSWER_MAX, splitDiscordMessage } from "./rich-reply.ts";
 
 /** A direct message to one user (gateway `sendDm`); null when it did not go out. */
 export type SendPrivateDm = (opts: {
@@ -26,9 +25,11 @@ export type SendPrivateDm = (opts: {
 }) => Promise<{ channelId: string; messageId: string } | null>;
 
 /** At most this many private replies are taken from one run. */
-export const PRIVATE_REPLIES_MAX = NDJSON_LIMITS.privateReplies;
-/** Longest private reply taken from a run (three messages' worth). */
-export const PRIVATE_REPLY_TEXT_MAX = NDJSON_LIMITS.privateReplyText;
+export const PRIVATE_REPLIES_MAX = 5;
+/** Longest private reply taken from a run, cut marker included (three messages' worth). */
+export const PRIVATE_REPLY_TEXT_MAX = DISCORD_ANSWER_MAX;
+/** Ends a private reply cut at {@link PRIVATE_REPLY_TEXT_MAX}. */
+export const PRIVATE_REPLY_CUT_MARKER = "\n… (cut here — ask for a narrower part to see the rest)";
 /** A DM part stays within the gateway's direct-message cap (1900). */
 export const PRIVATE_DM_PART_MAX = 1900;
 
@@ -46,11 +47,40 @@ export const PRIVATE_NOT_SENT_NOTE =
 export type PrivateDelivery = "sent" | "failed";
 
 /**
+ * A run's private replies, bounded for the result frame and the DM: non-blank
+ * strings only, at most {@link PRIVATE_REPLIES_MAX}, each secret-scrubbed
+ * first (so a cut never leaves a token prefix a later scrub misses, SAFE-6)
+ * and then cut to {@link PRIVATE_REPLY_TEXT_MAX} with
+ * {@link PRIVATE_REPLY_CUT_MARKER}, never inside a surrogate pair. When more
+ * came than are kept, the last one kept says how many were not sent.
+ * `task run` bounds its result with it (so large private reads cannot push
+ * the frame past the parser's line cap) and the agent client re-checks with
+ * it; a bounded list comes back unchanged.
+ */
+export function boundPrivateReplies(texts: readonly unknown[]): string[] {
+  const valid = texts.filter((t): t is string => typeof t === "string" && t.trim() !== "");
+  const kept = valid.slice(0, PRIVATE_REPLIES_MAX);
+  const dropped = valid.length - kept.length;
+  return kept.map((text, i) => {
+    const note =
+      dropped > 0 && i === kept.length - 1
+        ? `\n… (${dropped} more private ${dropped === 1 ? "result was" : "results were"} not sent — at most ${PRIVATE_REPLIES_MAX} per answer; ask again for the rest)`
+        : "";
+    return cutPrivateReply(scrubSecrets(text), PRIVATE_REPLY_TEXT_MAX - note.length) + note;
+  });
+}
+
+function cutPrivateReply(text: string, max: number): string {
+  if (text.length <= max) return text;
+  let end = Math.max(0, max - PRIVATE_REPLY_CUT_MARKER.length);
+  const last = text.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end -= 1;
+  return `${text.slice(0, end)}${PRIVATE_REPLY_CUT_MARKER}`;
+}
+
+/**
  * Validated `privateReplies` from a child's result frame, bounded as the
- * child bounds them (`boundPrivateReplies`): non-empty strings only, at most
- * {@link PRIVATE_REPLIES_MAX}, each scrubbed and then cut to
- * {@link PRIVATE_REPLY_TEXT_MAX} with a visible marker (a note on the last
- * one says how many more were left out). Anything else ⇒ undefined.
+ * child bounds them ({@link boundPrivateReplies}). Anything else ⇒ undefined.
  */
 export function privateRepliesFromUnknown(raw: unknown): string[] | undefined {
   if (!Array.isArray(raw)) return undefined;
