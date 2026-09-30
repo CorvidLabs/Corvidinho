@@ -340,7 +340,38 @@ CREATE INDEX IF NOT EXISTS idx_approval_codes_request
   ON approval_codes(kind, request_id);
 `;
 
-export const SCHEMA_VERSION = 14;
+/**
+ * v15 — blocking schedule asks (AUTONOMY-6.a, REQ-discord-606,
+ * src/scheduler/store.ts): every ask a schedule run records stays open until
+ * the schedule's creator or the owner answers or cancels it on Discord, and
+ * the schedule's due runs wait (skipped, no catch-up) with one note.
+ * `ask_options` holds the ask's listed choices (JSON, labels SAFE-6 scrubbed,
+ * a re-scrub target), `ask_blocking` marks an ask recorded under these rules,
+ * `ask_closed_at` / `ask_outcome` (`answered` | `picked` | `cancelled` |
+ * `superseded`) / `ask_closed_by` say when, how and by whom it closed,
+ * `ask_answer` is the answer handed to the next run (SAFE-6 scrubbed, a
+ * re-scrub target), `ask_skip_at` is when a due run first waited on it and
+ * `ask_note_at` when the one wait note went out. Asks recorded before v15
+ * are closed as `superseded`, so an upgrade never blocks a schedule on a
+ * question that had no Cancel.
+ */
+const SCHEMA_V15_RUN_COLUMNS = [
+  ["ask_options", "TEXT"],
+  ["ask_blocking", "INTEGER NOT NULL DEFAULT 0"],
+  ["ask_closed_at", "INTEGER"],
+  ["ask_outcome", "TEXT"],
+  ["ask_answer", "TEXT"],
+  ["ask_closed_by", "TEXT"],
+  ["ask_skip_at", "INTEGER"],
+  ["ask_note_at", "INTEGER"],
+] as const;
+const SCHEMA_V15_SQL = `
+CREATE INDEX IF NOT EXISTS idx_schedule_runs_open_ask
+  ON schedule_runs(schedule_id)
+  WHERE ask_blocking = 1 AND ask_closed_at IS NULL;
+`;
+
+export const SCHEMA_VERSION = 15;
 
 export function migrateCorvidinhoDb(db: Database): void {
   db.exec("PRAGMA foreign_keys = ON;");
@@ -468,6 +499,24 @@ export function migrateCorvidinhoDb(db: Database): void {
     db.exec(SCHEMA_V14_SQL);
     db.run("UPDATE schema_meta SET value = '14' WHERE key = 'version'");
     version = 14;
+  }
+  if (version < 15) {
+    for (const [col, type] of SCHEMA_V15_RUN_COLUMNS) {
+      try {
+        db.exec(`ALTER TABLE schedule_runs ADD COLUMN ${col} ${type}`);
+      } catch {
+        // Column already present
+      }
+    }
+    db.exec(SCHEMA_V15_SQL);
+    // Asks recorded before v15 had no Cancel: close them, so none blocks.
+    db.run(
+      `UPDATE schedule_runs SET ask_closed_at = ?, ask_outcome = 'superseded'
+       WHERE ask_reason IS NOT NULL AND ask_closed_at IS NULL AND ask_blocking = 0`,
+      [Date.now()],
+    );
+    db.run("UPDATE schema_meta SET value = '15' WHERE key = 'version'");
+    version = 15;
   }
 }
 

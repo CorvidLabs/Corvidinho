@@ -795,7 +795,8 @@ describe("the bridge: the owner on every press and submit, typed text only from 
 
 describe("schema v14: approval_requests and approval_codes (forward-only migration)", () => {
   test("a v13 DB migrates to v14 keeping its forget asks; the new tables and forget action_hash exist; a re-run changes nothing", () => {
-    expect(SCHEMA_VERSION).toBe(14);
+    // v15 (blocking schedule asks, REQ-discord-606) follows v14.
+    expect(SCHEMA_VERSION).toBe(15);
     const d = new SqliteDatabase(":memory:");
     try {
       migrateCorvidinhoDb(d);
@@ -810,7 +811,7 @@ describe("schema v14: approval_requests and approval_codes (forward-only migrati
       );
       migrateCorvidinhoDb(d);
       const version = () => (d.query("SELECT value FROM schema_meta WHERE key = 'version'").get() as { value: string }).value;
-      expect(version()).toBe("14");
+      expect(version()).toBe(String(SCHEMA_VERSION));
       const cols = (t: string) => (d.query(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>).map((c) => c.name);
       expect(cols("forget_requests")).toContain("action_hash");
       expect(cols("approval_requests")).toEqual(
@@ -825,7 +826,7 @@ describe("schema v14: approval_requests and approval_codes (forward-only migrati
         { id: "fr_old", status: "pending", action_hash: null },
       ]);
       migrateCorvidinhoDb(d);
-      expect(version()).toBe("14");
+      expect(version()).toBe(String(SCHEMA_VERSION));
       expect(d.query("SELECT COUNT(*) AS n FROM forget_requests").get()).toEqual({ n: 1 });
     } finally {
       d.close();

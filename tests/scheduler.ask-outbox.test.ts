@@ -7,6 +7,11 @@
  * claimed (owner for stuck / spend-cap, schedule creator for clarify;
  * AUTONOMY-4, SAFE-8). Fixtures only: in-memory / temp SQLite, injected
  * agents, a null gateway; no live Discord, no network, no git worktrees.
+ *
+ * AUTONOMY-6.a (REQ-discord-606): every recorded ask now blocks its schedule
+ * until the creator or the owner answers or cancels it, so a test that runs
+ * the schedule again after an ask first cancels it (`cancelAsk`, what the
+ * Cancel button does); tests/scheduler.ask-block.test.ts covers the waiting.
  */
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { Database as SqliteDatabase, type Database } from "bun:sqlite";
@@ -193,6 +198,12 @@ function pair(
     expect((await bridge.tick()).started).toEqual([]);
     await bridge.settleAskDelivery();
   }
+  /** The owner presses Cancel on the schedule's open ask (AUTONOMY-6.a). */
+  function cancelAsk(by: string = OWNER_ID): void {
+    const open = setup.openAsk(schedule.id);
+    expect(open).toBeDefined();
+    expect(setup.closeRunAsk(open!.runId, { outcome: "cancelled", closedBy: by }, clock.now)).toBe(true);
+  }
   function lastRun(): RunRow {
     return db
       .query(
@@ -229,6 +240,7 @@ function pair(
     bridgeTick,
     lastRun,
     pingKeyRow,
+    cancelAsk,
   };
 }
 
@@ -323,7 +335,9 @@ describe("daemon-claimed schedule asks reach Discord through the bridge tick (RE
     // Every bridge tick runs the owner's DM pass (the pending warning).
     expect(handed.some((o) => !o.stop)).toBe(true);
 
-    // Same episode, next daemon run at the cap: posted again, no second ping or DM.
+    // Same episode, next daemon run at the cap (after Cancel, AUTONOMY-6.a):
+    // posted again, no second ping or DM.
+    h.cancelAsk();
     await h.daemonRun(CAP_ASK);
     await h.bridgeTick();
     expect(h.posts).toHaveLength(2);
@@ -385,10 +399,11 @@ describe("daemon-claimed schedule asks reach Discord through the bridge tick (RE
     expect(silent(h.posts[0]!)).toBe(true);
   });
 
-  test("the same question in two daemon runs pings the owner once; only the newest pending ask is posted", async () => {
+  test("the same question in two daemon runs pings the owner once; only the open, newest ask is posted", async () => {
     const h = pair();
     await h.daemonRun(STUCK);
     await h.bridgeTick();
+    h.cancelAsk();
     await h.daemonRun(STUCK);
     await h.bridgeTick();
     expect(h.posts).toHaveLength(2);
@@ -396,8 +411,11 @@ describe("daemon-claimed schedule asks reach Discord through the bridge tick (RE
     expect(h.posts[1]!.content).toContain(`> ${STUCK.question}`);
     expect(silent(h.posts[1]!)).toBe(true);
 
-    // Two daemon runs before the bridge ticks: only the newer question posts.
+    // Two daemon runs before the bridge ticks (the first question cancelled
+    // before any bridge posted it): only the newer, open question posts.
+    h.cancelAsk();
     await h.daemonRun(CLARIFY);
+    h.cancelAsk();
     await h.daemonRun({ reason: "clarify", question: "Which port?" });
     await h.bridgeTick();
     await h.bridgeTick();
@@ -407,13 +425,27 @@ describe("daemon-claimed schedule asks reach Discord through the bridge tick (RE
     expect(pinged(h.posts[2]!, CREATOR_ID)).toBe(true);
   });
 
-  test("a later finished run, or deleting the schedule, makes a pending ask moot", async () => {
+  test("a cancelled ask, a later finished run, or deleting the schedule, makes a pending ask moot", async () => {
     const h = pair();
     await h.daemonRun(STUCK);
+    h.cancelAsk();
     await h.daemonRun("ok");
     await h.bridgeTick();
     expect(h.posts).toHaveLength(0);
 
+    // A later run another ticker finished (a race past the wait): the older,
+    // still-open ask is moot too.
+    await h.daemonRun(STUCK);
+    h.setup.refresh();
+    const later = h.setup.claimRun(h.setup.get(h.schedule.id)!, h.clock.now + 1);
+    expect(later).not.toBeNull();
+    // Runs record their outcome at wall-clock time: finish this one later.
+    h.setup.markRunFinished(h.setup.get(h.schedule.id)!, later!, { ok: true, summary: "done" }, Date.now() + 60_000);
+    expect(h.setup.openAsk(h.schedule.id)).toBeUndefined();
+    await h.bridgeTick();
+    expect(h.posts).toHaveLength(0);
+
+    await h.daemonRun("ok");
     await h.daemonRun(STUCK);
     h.setup.delete(h.schedule.id);
     await h.bridgeTick();
@@ -507,6 +539,7 @@ describe("daemon-claimed schedule asks reach Discord through the bridge tick (RE
       now: () => h.clock.now,
       outbound: { post: async (p) => void other.push(p) },
     });
+    h.cancelAsk();
     await h.daemonRun(CLARIFY);
     await Promise.all([h.bridge.tick(), second.tick()]);
     await Promise.all([h.bridge.settleAskDelivery(), second.settleAskDelivery()]);
@@ -514,7 +547,7 @@ describe("daemon-claimed schedule asks reach Discord through the bridge tick (RE
     expect([...h.posts.slice(1), ...other][0]!.content).toContain("> Postgres or SQLite?");
   });
 
-  test("the daemon never posts and an ask without a channel is never delivered", async () => {
+  test("the daemon never posts, and an ask without a channel is never posted to a channel (without a DM path it stays pending)", async () => {
     const db = openCorvidinhoDb({ memory: true });
     cleanups.push(() => db.close());
     const store = new ScheduleStore({ db });
@@ -751,7 +784,9 @@ describe("auto-pause and pre-run failures ask the owner instead of dying silentl
     expect(post.content).not.toContain(root);
     expect(post.mentionUserIds).toEqual([OWNER_ID]);
 
-    // The same failure again posts without a second ping (AUTONOMY-2 once).
+    // The same failure again (after Cancel, AUTONOMY-6.a) posts without a
+    // second ping (AUTONOMY-2 once).
+    h.cancelAsk();
     await h.daemonRun("ok");
     await h.bridgeTick();
     expect(h.posts).toHaveLength(2);
@@ -863,7 +898,9 @@ describe("auto-pause and pre-run failures ask the owner instead of dying silentl
     expect(h.steps.prompt).toContain(`on project: ${project}`);
     await h.bridgeRun("fail");
     await h.bridgeRun(CLARIFY);
+    h.cancelAsk();
     await h.bridgeRun(STUCK);
+    h.cancelAsk();
     // A daemon-claimed ask goes out through the bridge's delivery pass.
     await h.daemonRun({ reason: "stuck", question: "Which branch should I rebase onto?" });
     await h.bridgeTick();
@@ -962,18 +999,19 @@ describe("a delivery pass that is still posting (REQ-discord-347 staleness, stop
           .get(scheduleId) as { ask_posted_at: number | null }
       ).ask_posted_at;
     }
-    return { a, b, bridge, started, posts, daemonRun, hold, askPostedAt };
+    return { a, b, bridge, started, posts, daemonRun, hold, askPostedAt, store: setup };
   }
 
-  test("an ask a later run makes moot while the pass is posting another one is not posted", async () => {
+  test("an ask cancelled while the pass is posting another one is not posted", async () => {
     const h = twoSchedules();
     await h.daemonRun(h.a.id, STUCK);
     await h.daemonRun(h.b.id, CLARIFY);
     const open = h.hold();
     await h.bridge.tick(); // the pass lists both asks and posts Alpha's first
     expect(h.started.map((p) => p.channelId)).toEqual([CHAN_A]);
-    // Meanwhile Beta runs again and finishes clean: its question is moot.
-    await h.daemonRun(h.b.id, "ok");
+    // Meanwhile Beta's question is cancelled (AUTONOMY-6.a): it is not posted.
+    const beta = h.store.openAsk(h.b.id)!;
+    expect(h.store.closeRunAsk(beta.runId, { outcome: "cancelled", closedBy: CREATOR_ID })).toBe(true);
     open();
     await h.bridge.settleAskDelivery();
     expect(h.posts.map((p) => p.channelId)).toEqual([CHAN_A]);
@@ -1023,9 +1061,10 @@ describe("schema v11 schedule_runs ask columns (REQ-discord-347, SAFE-6)", () =>
 
   test("a v10 DB migrates to v11, keeps its runs and posts none of them", () => {
     // v12 (forget requests, REQ-discord-101), v13 (retained
-    // conversations, REQ-discord-472) and v14 (approval cards,
-    // REQ-discord-096) follow; the v11 columns stay.
-    expect(SCHEMA_VERSION).toBe(14);
+    // conversations, REQ-discord-472), v14 (approval cards,
+    // REQ-discord-096) and v15 (blocking schedule asks, REQ-discord-606)
+    // follow; the v11 columns stay.
+    expect(SCHEMA_VERSION).toBe(15);
     const db = new SqliteDatabase(":memory:");
     cleanups.push(() => db.close());
     migrateCorvidinhoDb(db);
@@ -1077,7 +1116,8 @@ describe("schema v11 schedule_runs ask columns (REQ-discord-347, SAFE-6)", () =>
 
     expect(SCRUB_TARGETS).toContainEqual({
       table: "schedule_runs",
-      columns: ["summary", "error", "ask_question"],
+      columns: ["summary", "error", "ask_question", "ask_answer"],
+      json: ["ask_options"],
     });
     // A raw secret written by an older build is re-scrubbed.
     h.db.run("UPDATE schedule_runs SET ask_question = ? WHERE schedule_id = ?", [
@@ -1107,7 +1147,9 @@ describe("schema v11 schedule_runs ask columns (REQ-discord-347, SAFE-6)", () =>
     expect(run.ask_question).toBe(shown);
     expect(`${run.summary}`).not.toContain(token.slice(0, 4));
     await h.bridgeTick();
-    // The bridge claims the next run itself and posts it in-process.
+    // The bridge claims the next run itself (after Cancel, AUTONOMY-6.a)
+    // and posts it in-process.
+    h.cancelAsk();
     await h.bridgeRun(askFromUnknown({ reason: "clarify", question })!);
     expect(h.lastRun().ask_question).toBe(shown);
     expect(h.posts).toHaveLength(2);

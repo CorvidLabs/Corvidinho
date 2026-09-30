@@ -57,6 +57,7 @@ import {
   type PendingAsk,
 } from "./ask-buttons.ts";
 import { resolveAskOptions } from "../agent/ask-options.ts";
+import { handleScheduleAskPress, isScheduleAskId } from "./schedule-ask.ts";
 import {
   ASK_CANCELLED_ACK,
   isCancelAsk,
@@ -1262,6 +1263,25 @@ export async function startBridge(
       // mix-up (a forged press or submit) is ignored.
       if ((parsed.kind === "answer") !== (interaction.modalValues !== undefined)) return;
 
+      // AUTONOMY-6.a — a schedule run's ask (its id is the run id): answered
+      // or cancelled by the schedule's creator or the owner, never lapsing
+      // while open (src/discord/schedule-ask.ts).
+      if (isScheduleAskId(parsed.askId)) {
+        await handleScheduleAskPress(interaction, parsed, {
+          store: scheduleStore,
+          allowlist: config.allowlist,
+          owner: config.owner ?? null,
+          adminUserIds: config.adminUserIds,
+          adminRoleIds: config.adminRoleIds,
+          mutedUsers,
+          rateLimit: { state: rateLimitState, config: rateLimitConfig },
+          people: () => declaredPeople(),
+          ...(replyRef.fn ? { post: replyRef.fn } : {}),
+          ...(recordAudit ? { recordAudit } : {}),
+        });
+        return;
+      }
+
       // SESSION-MULTI-3: any open ask of the session answers by its askId,
       // not only the newest one.
       const pressed = store.findPendingAsk(parsed.askId);
@@ -1332,6 +1352,16 @@ export async function startBridge(
       });
       if (!rateGate.ok) {
         await interaction.reply({ content: rateGate.reply, ephemeral: true });
+        return;
+      }
+
+      // Only a schedule ask has a Cancel button (AUTONOMY-6.a); a cancel
+      // press on a session ask is a forged or stale one.
+      if (parsed.kind === "cancel") {
+        await interaction.reply({
+          content: "This choice isn’t for you (or it was already answered).",
+          ephemeral: true,
+        });
         return;
       }
 
@@ -1964,10 +1994,21 @@ export async function startBridge(
       // warning and cap stop go there, never into the schedule's post.
       spendDm,
       outbound: {
-        post: async ({ channelId, content, mentionUserIds }) => {
+        post: async ({ channelId, content, mentionUserIds, components }) => {
           if (!replyRef.fn) return false;
-          return (await replyRef.fn({ channelId, content, mentionUserIds })) !== null;
+          return (
+            (await replyRef.fn({
+              channelId,
+              content,
+              mentionUserIds,
+              ...(components ? { components } : {}),
+            })) !== null
+          );
         },
+        // AUTONOMY-6.a: a schedule with no channel sends its ask, controls
+        // and wait note to the owner by DM (the approval engine's sendDm).
+        dm: async ({ userId, content, components }) =>
+          (await sendDm({ userId, content, ...(components ? { components } : {}) })) !== null,
       },
       // Start after gateway is up; construct with manual then start below.
       manual: true,

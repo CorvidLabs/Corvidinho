@@ -447,6 +447,10 @@ describe("scheduler pings the owner once per question (AUTONOMY-2 dedupe)", () =
       outbound: { post: async (p) => void posts.push(p) },
     });
     async function tick(step: Step): Promise<Post> {
+      // AUTONOMY-6.a: an open ask makes the schedule's next runs wait, so
+      // the previous run's question is cancelled first (the Cancel button).
+      const open = store.openAsk(schedule.id);
+      if (open) expect(store.closeRunAsk(open.runId, { outcome: "cancelled", closedBy: OWNER_ID })).toBe(true);
       steps.next = step;
       clock.now += HOUR;
       const r = await svc.tick();

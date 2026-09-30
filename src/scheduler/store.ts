@@ -12,7 +12,8 @@
 import type { Database } from "bun:sqlite";
 import { getNextCronDate } from "./cron.ts";
 import { ASK_QUESTION_MAX } from "../agent/ask.ts";
-import type { HumanAsk, HumanAskReason } from "../agent/types.ts";
+import { resolveAskOptions } from "../agent/ask-options.ts";
+import type { AskOption, HumanAsk, HumanAskReason } from "../agent/types.ts";
 import { isHolderAlive, readProcStart } from "../daemon/lock.ts";
 import { scrubOpt, scrubSecrets } from "../store/scrub.ts";
 
@@ -85,6 +86,53 @@ export type ScheduleRun = {
   ask?: HumanAsk;
   /** When a bridge took the ask to post it; unset while it is pending. */
   askPostedAt?: number;
+  /**
+   * AUTONOMY-6.a (schema v15): when the ask was answered or cancelled on
+   * Discord (or closed at the v15 upgrade); unset while it is open and the
+   * schedule's due runs wait on it.
+   */
+  askClosedAt?: number;
+  /** How the ask closed (AUTONOMY-6.a). */
+  askOutcome?: ScheduleAskOutcome;
+  /** The answer handed to the schedule's next run (SAFE-6 scrubbed). */
+  askAnswer?: string;
+  /** Discord user id of whoever answered or cancelled it. */
+  askClosedBy?: string;
+  /** When a due run first waited on this ask (AUTONOMY-6.a). */
+  askSkipAt?: number;
+  /** When the one wait note about it went out (AUTONOMY-6.a). */
+  askNoteAt?: number;
+};
+
+/**
+ * How a schedule run's ask closed (AUTONOMY-6.a): `answered` (typed in the
+ * private Answer form), `picked` (one of its listed choices), `cancelled`,
+ * or `superseded` (recorded before schema v15, closed by the upgrade).
+ */
+export type ScheduleAskOutcome = "answered" | "picked" | "cancelled" | "superseded";
+
+/** A schedule run's ask that is still open (AUTONOMY-6.a). */
+export type OpenScheduleAsk = {
+  runId: string;
+  scheduleId: string;
+  /** Reason, scrubbed question and its listed choices (if any). */
+  ask: HumanAsk;
+  /** When a bridge took it to post it; unset while it is pending. */
+  postedAt?: number;
+  /** When a due run first waited on it. */
+  skipAt?: number;
+  /** When the one wait note went out. */
+  noteAt?: number;
+};
+
+/** The answer the schedule's next run gets (AUTONOMY-6.a). */
+export type AnsweredScheduleAsk = {
+  runId: string;
+  question: string;
+  answer: string;
+  outcome: "answered" | "picked";
+  /** Discord user id of whoever answered. */
+  closedBy: string;
 };
 
 /**
@@ -105,14 +153,102 @@ const ASK_REASONS: ReadonlySet<string> = new Set<HumanAskReason>([
   "spend-cap",
 ]);
 
-/** The ask as stored on a run row: reason + scrubbed, capped question. */
+/**
+ * The ask as stored on a run row: reason + scrubbed, capped question, and
+ * (AUTONOMY-6.a) the choices its Choose button lists — ask-human's options,
+ * else a numbered list in the question (`resolveAskOptions`, labels SAFE-6
+ * scrubbed before they are cut). A spend-cap stop lists none: only Cancel
+ * answers it.
+ */
 function storedAsk(ask: HumanAsk): HumanAsk {
   const q = scrubSecrets(ask.question).trim();
+  const question = q.length <= ASK_QUESTION_MAX ? q : `${q.slice(0, ASK_QUESTION_MAX - 1)}…`;
+  const options =
+    ask.reason === "spend-cap"
+      ? undefined
+      : resolveAskOptions({ options: ask.options, question });
+  return { reason: ask.reason, question, ...(options?.length ? { options } : {}) };
+}
+
+/** Stored `ask_options` JSON → the listed choices (bad or empty ⇒ none). */
+function parseStoredOptions(raw: string | null | undefined): AskOption[] | undefined {
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return undefined;
+    const out = parsed.filter(
+      (o): o is AskOption =>
+        !!o && typeof o === "object" && typeof o.id === "string" && typeof o.label === "string",
+    );
+    return out.length ? out.map((o) => ({ id: o.id, label: o.label })) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+type OpenAskRow = {
+  id: string;
+  schedule_id: string;
+  ask_reason: string;
+  ask_question: string | null;
+  ask_options: string | null;
+  ask_posted_at: number | null;
+  ask_skip_at: number | null;
+  ask_note_at: number | null;
+};
+
+function rowToOpenAsk(r: OpenAskRow): OpenScheduleAsk | undefined {
+  if (!ASK_REASONS.has(r.ask_reason) || !r.ask_question) return undefined;
+  const options = parseStoredOptions(r.ask_options);
   return {
-    reason: ask.reason,
-    question: q.length <= ASK_QUESTION_MAX ? q : `${q.slice(0, ASK_QUESTION_MAX - 1)}…`,
+    runId: r.id,
+    scheduleId: r.schedule_id,
+    ask: {
+      reason: r.ask_reason as HumanAskReason,
+      question: r.ask_question,
+      ...(options ? { options } : {}),
+    },
+    ...(r.ask_posted_at !== null ? { postedAt: r.ask_posted_at } : {}),
+    ...(r.ask_skip_at !== null ? { skipAt: r.ask_skip_at } : {}),
+    ...(r.ask_note_at !== null ? { noteAt: r.ask_note_at } : {}),
   };
 }
+
+/** Memory store: the run recorded an ask nobody closed yet. */
+function memoryAskOpen(r: ScheduleRun): boolean {
+  return r.ask !== undefined && r.completedAt !== undefined && r.askClosedAt === undefined;
+}
+
+/** Memory store: a run's open ask. */
+function memoryOpenAsk(r: ScheduleRun): OpenScheduleAsk {
+  return {
+    runId: r.id,
+    scheduleId: r.scheduleId,
+    ask: { ...r.ask!, ...(r.ask!.options ? { options: r.ask!.options.map((o) => ({ ...o })) } : {}) },
+    ...(r.askPostedAt !== undefined ? { postedAt: r.askPostedAt } : {}),
+    ...(r.askSkipAt !== undefined ? { skipAt: r.askSkipAt } : {}),
+    ...(r.askNoteAt !== undefined ? { noteAt: r.askNoteAt } : {}),
+  };
+}
+
+const OPEN_ASK_COLUMNS =
+  "r.id, r.schedule_id, r.ask_reason, r.ask_question, r.ask_options, r.ask_posted_at, r.ask_skip_at, r.ask_note_at";
+
+/**
+ * SQL (run row alias `r`): the run's ask is open and blocks its schedule
+ * (AUTONOMY-6.a) — recorded under v15 rules, not closed, and on the
+ * schedule's newest finished run. A later finished run (another ticker's,
+ * past the wait) makes an older ask moot, as it does for delivery
+ * (REQ-discord-347), so a moot ask never blocks.
+ */
+const OPEN_ASK_WHERE = `r.ask_blocking = 1 AND r.ask_closed_at IS NULL
+  AND r.ask_reason IS NOT NULL AND r.completed_at IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM schedule_runs l
+    WHERE l.schedule_id = r.schedule_id AND l.completed_at IS NOT NULL
+      AND (l.completed_at > r.completed_at
+           OR (l.completed_at = r.completed_at AND l.rowid > r.rowid))
+  )`;
 
 export type CreateScheduleInput = {
   name: string;
@@ -434,9 +570,13 @@ export class ScheduleStore {
             .query("SELECT consecutive_failures FROM schedules WHERE id = ?")
             .get(schedule.id) as { consecutive_failures: number } | null;
           ask = askFor(row ? row.consecutive_failures : failures);
+          // AUTONOMY-6.a: every recorded ask blocks the schedule until it
+          // is answered or cancelled (schema v15).
           db.run(
             `UPDATE schedule_runs SET status = ?, summary = ?, error = ?, completed_at = ?,
-               ask_reason = ?, ask_question = ?, ask_posted_at = NULL
+               ask_reason = ?, ask_question = ?, ask_posted_at = NULL,
+               ask_options = ?, ask_blocking = ?, ask_closed_at = NULL, ask_outcome = NULL,
+               ask_answer = NULL, ask_closed_by = NULL, ask_skip_at = NULL, ask_note_at = NULL
              WHERE id = ?`,
             [
               status,
@@ -445,6 +585,8 @@ export class ScheduleStore {
               now,
               ask?.reason ?? null,
               ask?.question ?? null,
+              ask?.options ? JSON.stringify(ask.options) : null,
+              ask ? 1 : 0,
               run.id,
             ],
           );
@@ -458,6 +600,12 @@ export class ScheduleStore {
     run.completedAt = now;
     run.ask = ask;
     run.askPostedAt = undefined;
+    run.askClosedAt = undefined;
+    run.askOutcome = undefined;
+    run.askAnswer = undefined;
+    run.askClosedBy = undefined;
+    run.askSkipAt = undefined;
+    run.askNoteAt = undefined;
     schedule.consecutiveFailures = failures;
     schedule.updatedAt = now;
   }
@@ -472,7 +620,7 @@ export class ScheduleStore {
   pendingAsks(): PendingScheduleAsk[] {
     if (!this.db) {
       return [...this.newestFinishedRunsMemory().values()]
-        .filter((r) => r.ask && r.askPostedAt === undefined)
+        .filter((r) => r.ask && r.askPostedAt === undefined && r.askClosedAt === undefined)
         .sort((a, b) => a.completedAt! - b.completedAt!)
         .map((r) => ({
           runId: r.id,
@@ -483,10 +631,10 @@ export class ScheduleStore {
     }
     const rows = this.db
       .query(
-        `SELECT r.id, r.schedule_id, r.summary, r.ask_reason, r.ask_question
+        `SELECT r.id, r.schedule_id, r.summary, r.ask_reason, r.ask_question, r.ask_options
          FROM schedule_runs r
          WHERE r.ask_reason IS NOT NULL AND r.ask_posted_at IS NULL
-           AND r.completed_at IS NOT NULL
+           AND r.ask_closed_at IS NULL AND r.completed_at IS NOT NULL
            AND NOT EXISTS (
              SELECT 1 FROM schedule_runs l
              WHERE l.schedule_id = r.schedule_id AND l.completed_at IS NOT NULL
@@ -501,14 +649,20 @@ export class ScheduleStore {
       summary: string | null;
       ask_reason: string;
       ask_question: string | null;
+      ask_options: string | null;
     }>;
     const pending: PendingScheduleAsk[] = [];
     for (const r of rows) {
       if (!ASK_REASONS.has(r.ask_reason) || !r.ask_question) continue;
+      const options = parseStoredOptions(r.ask_options);
       pending.push({
         runId: r.id,
         scheduleId: r.schedule_id,
-        ask: { reason: r.ask_reason as HumanAskReason, question: r.ask_question },
+        ask: {
+          reason: r.ask_reason as HumanAskReason,
+          question: r.ask_question,
+          ...(options ? { options } : {}),
+        },
         ...(r.summary !== null ? { summary: r.summary } : {}),
       });
     }
@@ -529,7 +683,7 @@ export class ScheduleStore {
       const res = this.db.run(
         `UPDATE schedule_runs SET ask_posted_at = ?
          WHERE id = ? AND ask_reason IS NOT NULL AND ask_posted_at IS NULL
-           AND completed_at IS NOT NULL
+           AND ask_closed_at IS NULL AND completed_at IS NOT NULL
            AND NOT EXISTS (
              SELECT 1 FROM schedule_runs l
              WHERE l.schedule_id = schedule_runs.schedule_id
@@ -544,6 +698,7 @@ export class ScheduleStore {
     } else if (
       !run?.ask ||
       run.askPostedAt !== undefined ||
+      run.askClosedAt !== undefined ||
       this.newestFinishedRunsMemory().get(run.scheduleId) !== run
     ) {
       return false;
@@ -568,6 +723,236 @@ export class ScheduleStore {
     this.db?.run("UPDATE schedule_runs SET ask_posted_at = NULL WHERE id = ?", [runId]);
     const run = this.runsMemory.get(runId);
     if (run) run.askPostedAt = undefined;
+  }
+
+  /**
+   * AUTONOMY-6.a — the schedule's open ask: the ask its newest finished run
+   * recorded, while nobody has answered or cancelled it. While it is open
+   * the schedule's due runs wait.
+   */
+  openAsk(scheduleId: string): OpenScheduleAsk | undefined {
+    if (this.db) {
+      const row = this.db
+        .query(
+          `SELECT ${OPEN_ASK_COLUMNS} FROM schedule_runs r
+           WHERE r.schedule_id = ? AND ${OPEN_ASK_WHERE}
+           LIMIT 1`,
+        )
+        .get(scheduleId) as OpenAskRow | null;
+      return row ? rowToOpenAsk(row) : undefined;
+    }
+    const newest = this.newestFinishedRunsMemory().get(scheduleId);
+    return newest && memoryAskOpen(newest) ? memoryOpenAsk(newest) : undefined;
+  }
+
+  /**
+   * AUTONOMY-6.a — a run's ask by run id (the id its Discord controls carry),
+   * while it is open; undefined when the run has no ask, it closed, a later
+   * run of its schedule finished, or the run (or its schedule) is gone.
+   */
+  openRunAsk(runId: string): OpenScheduleAsk | undefined {
+    if (this.db) {
+      const row = this.db
+        .query(`SELECT ${OPEN_ASK_COLUMNS} FROM schedule_runs r WHERE r.id = ? AND ${OPEN_ASK_WHERE}`)
+        .get(runId) as OpenAskRow | null;
+      return row ? rowToOpenAsk(row) : undefined;
+    }
+    const run = this.runsMemory.get(runId);
+    if (!run || !memoryAskOpen(run)) return undefined;
+    if (this.newestFinishedRunsMemory().get(run.scheduleId) !== run) return undefined;
+    return memoryOpenAsk(run);
+  }
+
+  /**
+   * AUTONOMY-6.a — close a run's open ask: answered (typed or picked, with
+   * the answer SAFE-6 scrubbed for the next run) or cancelled, by `closedBy`.
+   * A compare-and-set on `ask_closed_at IS NULL`, so two presses (or two
+   * processes) close it once. False when it was not open.
+   */
+  closeRunAsk(
+    runId: string,
+    close: { outcome: "answered" | "picked" | "cancelled"; answer?: string; closedBy: string },
+    now = Date.now(),
+  ): boolean {
+    const answer = close.outcome === "cancelled" ? null : scrubSecrets(close.answer ?? "");
+    const run = this.runsMemory.get(runId);
+    if (this.db) {
+      const res = this.db.run(
+        `UPDATE schedule_runs SET ask_closed_at = ?, ask_outcome = ?, ask_answer = ?, ask_closed_by = ?
+         WHERE id = ? AND ask_blocking = 1 AND ask_closed_at IS NULL AND ask_reason IS NOT NULL`,
+        [now, close.outcome, answer, close.closedBy, runId],
+      );
+      if (res.changes === 0) return false;
+    } else if (!run?.ask || run.askClosedAt !== undefined) {
+      return false;
+    }
+    if (run) {
+      run.askClosedAt = now;
+      run.askOutcome = close.outcome;
+      run.askAnswer = answer ?? undefined;
+      run.askClosedBy = close.closedBy;
+    }
+    return true;
+  }
+
+  /**
+   * AUTONOMY-6.a — a due run that waits on the schedule's open ask: it is
+   * skipped with no catch-up. Like `claimRun`, a compare-and-set moves
+   * `next_run_at` to the next cron time only when the row is still active
+   * with the `next_run_at` this process last saw (so two tickers skip it
+   * once), but no run is recorded and the run counters stay. The open ask
+   * gets `ask_skip_at` the first time, which lets a bridge post the one
+   * wait note. False when another ticker got there first.
+   */
+  skipForOpenAsk(schedule: Schedule, ask: OpenScheduleAsk, now = Date.now()): boolean {
+    const next = getNextCronDate(schedule.cronExpression, new Date(now)).getTime();
+    if (this.db) {
+      const db = this.db;
+      const changed = db
+        .transaction(() => {
+          const res = db.run(
+            `UPDATE schedules SET next_run_at = ?, updated_at = ?
+             WHERE id = ? AND status = 'active' AND next_run_at IS ?`,
+            [next, now, schedule.id, schedule.nextRunAt ?? null],
+          );
+          if (res.changes === 0) return false;
+          db.run(
+            `UPDATE schedule_runs SET ask_skip_at = ?
+             WHERE id = ? AND ask_skip_at IS NULL AND ask_closed_at IS NULL`,
+            [now, ask.runId],
+          );
+          return true;
+        })
+        .immediate();
+      if (!changed) {
+        this.refresh();
+        return false;
+      }
+    } else if (schedule.status !== "active") {
+      return false;
+    }
+    schedule.nextRunAt = next;
+    schedule.updatedAt = now;
+    const run = this.runsMemory.get(ask.runId);
+    if (run && run.askSkipAt === undefined && run.askClosedAt === undefined) run.askSkipAt = now;
+    return true;
+  }
+
+  /**
+   * AUTONOMY-6.a — open asks that made a due run wait, were posted, and have
+   * had no wait note yet: the one note a bridge posts per ask. Oldest first.
+   */
+  pendingWaitNotes(): OpenScheduleAsk[] {
+    if (!this.db) {
+      return [...this.newestFinishedRunsMemory().values()]
+        .filter(
+          (r) =>
+            memoryAskOpen(r) &&
+            r.askSkipAt !== undefined &&
+            r.askPostedAt !== undefined &&
+            r.askNoteAt === undefined,
+        )
+        .sort((a, b) => a.askSkipAt! - b.askSkipAt!)
+        .map((r) => memoryOpenAsk(r));
+    }
+    const rows = this.db
+      .query(
+        `SELECT ${OPEN_ASK_COLUMNS} FROM schedule_runs r
+         WHERE ${OPEN_ASK_WHERE}
+           AND r.ask_skip_at IS NOT NULL AND r.ask_posted_at IS NOT NULL AND r.ask_note_at IS NULL
+         ORDER BY r.ask_skip_at ASC, r.rowid ASC`,
+      )
+      .all() as OpenAskRow[];
+    return rows.flatMap((r) => rowToOpenAsk(r) ?? []);
+  }
+
+  /**
+   * AUTONOMY-6.a — take an open ask's wait note to post it: a
+   * compare-and-set on `ask_note_at IS NULL`, so it goes out once across
+   * tickers. False when it was taken, or the ask closed meanwhile.
+   */
+  claimWaitNote(runId: string, now = Date.now()): boolean {
+    const run = this.runsMemory.get(runId);
+    if (this.db) {
+      const res = this.db.run(
+        `UPDATE schedule_runs SET ask_note_at = ?
+         WHERE id = ? AND ask_note_at IS NULL AND ask_closed_at IS NULL AND ask_skip_at IS NOT NULL`,
+        [now, runId],
+      );
+      if (res.changes === 0) return false;
+    } else if (
+      !run ||
+      run.askNoteAt !== undefined ||
+      run.askClosedAt !== undefined ||
+      run.askSkipAt === undefined
+    ) {
+      return false;
+    }
+    if (run) run.askNoteAt = now;
+    return true;
+  }
+
+  /** Hand a taken wait note back (its post did not go out): the next tick retries. */
+  releaseWaitNote(runId: string): void {
+    this.db?.run("UPDATE schedule_runs SET ask_note_at = NULL WHERE id = ?", [runId]);
+    const run = this.runsMemory.get(runId);
+    if (run) run.askNoteAt = undefined;
+  }
+
+  /**
+   * AUTONOMY-6.a — the answer the schedule's next run gets: the newest
+   * finished run's ask, when it closed answered (typed or picked). Once a
+   * later run of the schedule finishes it is no longer the newest, so the
+   * answer reaches one run only.
+   */
+  answeredAsk(scheduleId: string): AnsweredScheduleAsk | undefined {
+    if (this.db) {
+      const row = this.db
+        .query(
+          `SELECT id, ask_question, ask_answer, ask_outcome, ask_closed_by FROM schedule_runs
+           WHERE schedule_id = ? AND completed_at IS NOT NULL
+           ORDER BY completed_at DESC, rowid DESC LIMIT 1`,
+        )
+        .get(scheduleId) as {
+        id: string;
+        ask_question: string | null;
+        ask_answer: string | null;
+        ask_outcome: string | null;
+        ask_closed_by: string | null;
+      } | null;
+      if (
+        !row ||
+        (row.ask_outcome !== "answered" && row.ask_outcome !== "picked") ||
+        !row.ask_question ||
+        !row.ask_answer ||
+        !row.ask_closed_by
+      ) {
+        return undefined;
+      }
+      return {
+        runId: row.id,
+        question: row.ask_question,
+        answer: row.ask_answer,
+        outcome: row.ask_outcome,
+        closedBy: row.ask_closed_by,
+      };
+    }
+    const run = this.newestFinishedRunsMemory().get(scheduleId);
+    if (
+      !run?.ask ||
+      (run.askOutcome !== "answered" && run.askOutcome !== "picked") ||
+      !run.askAnswer ||
+      !run.askClosedBy
+    ) {
+      return undefined;
+    }
+    return {
+      runId: run.id,
+      question: run.ask.question,
+      answer: run.askAnswer,
+      outcome: run.askOutcome,
+      closedBy: run.askClosedBy,
+    };
   }
 
   /**

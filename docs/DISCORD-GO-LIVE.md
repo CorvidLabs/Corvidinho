@@ -165,6 +165,13 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   process must share the bridge's data dir, and the owner must accept DMs from server members). With no owner a stuck question (or a spend-cap stop's "💸 Work is paused for budget.") still posts and the
   bridge logs
   `[discord] run needs a human but no owner is configured — owner ping skipped (AUTONOMY-2 / IDENTITY-3)`.
+- A scheduled run's question blocks its schedule (AUTONOMY-6.a): its post carries **Choose** /
+  **Answer** and **Cancel** buttons (a spend-cap stop: **Cancel** only) that the schedule's
+  creator or the owner presses; a reply does not answer it, and the buttons do not expire while
+  it is open. Until then the schedule's due runs are skipped (not made up) and one note says it
+  is waiting. A schedule with no channel sends its question and buttons to the owner by **direct
+  message** (same DM rule as above). See [`discord.md`](discord.md) "Scheduled questions wait for
+  an answer".
 - Spend is the owner's (SAFE-14.a): with `CORVIDINHO_DAILY_SPEND_CAP_USD` set, a run stopped at
   the cap posts only "💸 Work is paused for budget." (the owner pinged once per cap episode) —
   never the amounts, the cap or the setting name. The details (24 h spend, the next call's

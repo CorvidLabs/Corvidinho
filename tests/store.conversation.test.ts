@@ -54,8 +54,9 @@ function tableCount(db: SqliteDatabase): number {
 
 describe("schema v13 conversation_threads (forward-only migration)", () => {
   test("a v12 DB (forget requests) migrates to v13, keeps its rows, and a re-run changes nothing", () => {
-    // v14 (approval cards, REQ-discord-096) follows v13.
-    expect(SCHEMA_VERSION).toBe(14);
+    // v14 (approval cards, REQ-discord-096) and v15 (blocking schedule
+    // asks, REQ-discord-606) follow v13.
+    expect(SCHEMA_VERSION).toBe(15);
     const db = new SqliteDatabase(":memory:");
     cleanups.push(() => db.close());
     migrateCorvidinhoDb(db);

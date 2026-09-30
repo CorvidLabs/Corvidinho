@@ -26,6 +26,12 @@
  * stored name / description / prompt are scanned (a hit runs nothing, pauses
  * the schedule and tells the owner once) and the prompt reaches the model
  * inside the untrusted-data fence. The owner's own schedules are unchanged.
+ * AUTONOMY-6.a (REQ-discord-606): every ask a run records blocks the
+ * schedule. Its post carries Choose / Answer and Cancel controls (Cancel only
+ * for a spend-cap stop; src/discord/schedule-ask.ts), a schedule with no
+ * channel sends it to the owner by DM, and until the creator or the owner
+ * answers or cancels it each due run is skipped (no catch-up) and one wait
+ * note goes out, pinging nobody. The answer reaches the next run once.
  */
 
 import { basename } from "node:path";
@@ -43,6 +49,11 @@ import {
 } from "../discord/ask-ping.ts";
 import { askPingOwner } from "../discord/spend-post.ts";
 import { spendStopFor, type SpendDm } from "../discord/spend-dm.ts";
+import {
+  formatScheduleWaitNote,
+  scheduleAskComponents,
+  scheduleAskHint,
+} from "../discord/schedule-ask.ts";
 import {
   auditInboundInjection,
   fenceSpeakerText,
@@ -69,7 +80,12 @@ import {
   parkWorktree,
   resolveProjectDir,
 } from "../worktree/index.ts";
-import type { Schedule, ScheduleRun, ScheduleStore } from "./store.ts";
+import type {
+  AnsweredScheduleAsk,
+  Schedule,
+  ScheduleRun,
+  ScheduleStore,
+} from "./store.ts";
 
 export const DEFAULT_POLL_INTERVAL_MS = 60_000;
 export const DEFAULT_MAX_CONCURRENT = 2;
@@ -223,7 +239,14 @@ export type SchedulerOutbound = {
     content: string;
     /** Only these users may be pinged (AUTONOMY-2 owner ping). */
     mentionUserIds?: string[];
+    /** A run ask's Choose / Answer and Cancel buttons (AUTONOMY-6.a). */
+    components?: unknown[];
   }) => Promise<void | boolean>;
+  /**
+   * AUTONOMY-6.a — DM one user (the owner): the ask, its controls and the
+   * wait note of a schedule with no channel. Resolves true when it went out.
+   */
+  dm?: (opts: { userId: string; content: string; components?: unknown[] }) => Promise<boolean>;
 };
 
 /** One finished (or abandoned) schedule run, for operator logs. */
@@ -446,6 +469,15 @@ export class SchedulerService {
           skipped.push(schedule.id);
           continue;
         }
+        // AUTONOMY-6.a: while a run's question is open the schedule waits —
+        // this due run is skipped, not made up later, and the open ask is
+        // marked so the delivery pass posts the one wait note.
+        const open = this.store.openAsk(schedule.id);
+        if (open) {
+          this.store.skipForOpenAsk(schedule, open, now);
+          skipped.push(schedule.id);
+          continue;
+        }
         const run = this.store.claimRun(schedule, now);
         if (!run) {
           skipped.push(schedule.id);
@@ -527,7 +559,7 @@ export class SchedulerService {
       for (const pending of this.store.pendingAsks()) {
         if (this.stopped) break;
         const schedule = this.store.get(pending.scheduleId);
-        if (!schedule?.channelId) continue;
+        if (!schedule || !this.canSend(schedule)) continue;
         // DISCORD-SCHEDULE-3: creator and channel re-checked live before posting.
         if (!this.gateTick(schedule).ok) continue;
         if (!this.store.claimRunAsk(pending.runId, this.nowFn())) continue;
@@ -535,7 +567,6 @@ export class SchedulerService {
         try {
           posted = await this.postRunAsk(
             schedule,
-            schedule.channelId,
             pending.ask,
             pending.summary,
             undefined,
@@ -545,6 +576,28 @@ export class SchedulerService {
           logSchedulerError("ask", err);
         } finally {
           if (!posted) this.store.releaseRunAsk(pending.runId);
+        }
+      }
+      // AUTONOMY-6.a: the one wait note of each open ask a due run waited
+      // on (after its ask went out), pinging nobody; taken with a
+      // compare-and-set and handed back when it does not go out.
+      for (const open of this.store.pendingWaitNotes()) {
+        if (this.stopped) break;
+        const schedule = this.store.get(open.scheduleId);
+        if (!schedule || !this.canSend(schedule)) continue;
+        if (!this.gateTick(schedule).ok) continue;
+        if (!this.store.claimWaitNote(open.runId, this.nowFn())) continue;
+        let sent = false;
+        try {
+          sent = await this.sendToSchedule(schedule, {
+            content: formatScheduleWaitNote(scheduleTitle(schedule, {
+              withName: !scheduleInjection({ name: schedule.name }, this.creatorRole(schedule)),
+            })),
+          });
+        } catch (err) {
+          logSchedulerError("ask", err);
+        } finally {
+          if (!sent) this.store.releaseWaitNote(open.runId);
         }
       }
     })();
@@ -764,6 +817,10 @@ export class SchedulerService {
         branchName = ensured.workspace.branchName;
       }
 
+      // AUTONOMY-6.a: the answer to the question the last run asked (typed
+      // or picked on Discord by the creator or the owner), once.
+      const answered = this.store.answeredAsk(schedule.id);
+
       // SAFE-12: the owner's schedule reads as before; anyone else's name and
       // prompt reach the model only inside the untrusted-data fence (header
       // naming the creator's role), like their chat would.
@@ -781,6 +838,7 @@ export class SchedulerService {
               creatorRole,
               "schedule-prompt",
             ),
+        ...(answered ? ["", this.answerBlock(answered)] : []),
         "",
         "Stay within existing allowlists and SAFE gates. Linux host only.",
       ]
@@ -829,7 +887,6 @@ export class SchedulerService {
           context: result.ask ? result.summary : summary,
           // SAFE-13: a run that ends with an ask still tells the owner.
           injection: result.injection,
-          handBack: done.autoPaused,
         });
       } else if (schedule.channelId && this.outbound?.post) {
         // Re-checked at post time: the allowlist can change mid-run.
@@ -864,9 +921,7 @@ export class SchedulerService {
         // This failure auto-paused the schedule (REQ-discord-353): post the
         // pause ask now, with no context (the error may name host paths).
         try {
-          await this.postOwnRunAsk(schedule, run, done.ask, {
-            handBack: done.autoPaused,
-          });
+          await this.postOwnRunAsk(schedule, run, done.ask);
         } catch (postErr) {
           logSchedulerError("ask", postErr);
         }
@@ -907,7 +962,7 @@ export class SchedulerService {
       ask: { reason: "stuck", question },
     });
     if (done?.ask) {
-      await this.postOwnRunAsk(schedule, run, done.ask, { handBack: done.autoPaused });
+      await this.postOwnRunAsk(schedule, run, done.ask);
     }
   }
 
@@ -917,11 +972,11 @@ export class SchedulerService {
    * the allowlist can change mid-run); a refused one leaves the ask pending,
    * like a daemon run's. The recorded ask is taken first (no await since
    * `finish`), so no other ticker's delivery pass posts it too; an outcome
-   * that could not be recorded has no row to claim. A post that does not go
-   * out here (resolves false or throws) is not retried — the next run posts —
-   * unless `handBack`: the ask about an auto-pause is handed back for the
-   * next delivery pass, because a paused schedule has no next run
-   * (REQ-discord-353).
+   * that could not be recorded has no row to claim (nor controls). A post
+   * that does not go out here (resolves false or throws) is handed back for
+   * the next delivery pass: the ask blocks the schedule (AUTONOMY-6.a), so
+   * there is no next run to post it (as for an auto-pause, REQ-discord-353).
+   * A schedule with no channel sends it to the owner by DM.
    */
   private async postOwnRunAsk(
     schedule: Schedule,
@@ -931,10 +986,9 @@ export class SchedulerService {
       context?: string;
       /** SAFE-13: a tool result in this run looked like an injection. */
       injection?: InjectionNotice;
-      handBack?: boolean;
     } = {},
   ): Promise<void> {
-    if (!schedule.channelId || !this.outbound?.post) return;
+    if (!this.canSend(schedule)) return;
     if (!this.gateTick(schedule).ok) return;
     const recorded = run.ask !== undefined;
     if (recorded && !this.store.claimRunAsk(run.id, this.nowFn())) return;
@@ -942,15 +996,53 @@ export class SchedulerService {
     try {
       posted = await this.postRunAsk(
         schedule,
-        schedule.channelId,
-        ask,
+        // The recorded ask carries its listed choices (the Choose button).
+        recorded ? run.ask! : ask,
         opts.context,
         opts.injection,
-        run.id,
+        recorded ? run.id : undefined,
       );
     } finally {
-      if (!posted && recorded && opts.handBack) this.store.releaseRunAsk(run.id);
+      if (!posted && recorded) this.store.releaseRunAsk(run.id);
     }
+  }
+
+  /**
+   * AUTONOMY-6.a: where a schedule's posts go — its channel, or with no
+   * channel the owner's DM — and whether this ticker can send there.
+   */
+  private canSend(schedule: Schedule): boolean {
+    if (schedule.channelId) return Boolean(this.outbound?.post);
+    return Boolean(this.outbound?.dm && this.owner?.discordId?.trim());
+  }
+
+  /**
+   * Send one schedule post (a run's ask or its wait note) to the schedule's
+   * channel, or with no channel to the owner by DM (AUTONOMY-6.a; mentions
+   * do not apply there). Resolves true when it went out (a channel poster
+   * returning void counts as sent).
+   */
+  private async sendToSchedule(
+    schedule: Schedule,
+    msg: { content: string; mentionUserIds?: string[]; components?: unknown[] },
+  ): Promise<boolean> {
+    if (schedule.channelId) {
+      if (!this.outbound?.post) return false;
+      const sent = await this.outbound.post({
+        channelId: schedule.channelId,
+        content: msg.content,
+        ...(msg.mentionUserIds ? { mentionUserIds: msg.mentionUserIds } : {}),
+        ...(msg.components ? { components: msg.components } : {}),
+      });
+      return sent !== false;
+    }
+    const ownerId = this.owner?.discordId?.trim();
+    if (!ownerId || !this.outbound?.dm) return false;
+    return await this.outbound.dm({
+      userId: ownerId,
+      content: msg.content,
+      ...(msg.components ? { components: msg.components } : {}),
+    });
   }
 
   /**
@@ -962,20 +1054,23 @@ export class SchedulerService {
    * only that work is paused for budget (SAFE-14.a); when it claims the
    * episode's ping, the stop's details go to the owner by DM, once per run
    * (`runId`: a post retried every tick after it failed DMs them once).
+   * AUTONOMY-6.a: a recorded ask (`runId`) carries its controls — Choose or
+   * Answer, and Cancel (Cancel only for a spend-cap stop) — and the hint
+   * says a reply does not answer it; a schedule with no channel sends it to
+   * the owner by DM.
    * Resolves true when the post went out (a poster returning void counts as
    * sent); when it did not, the cap ping is handed back and no ping key is
    * kept. The caller has already checked the channel against the allowlist.
    */
   private async postRunAsk(
     schedule: Schedule,
-    channelId: string,
     ask: HumanAsk,
     context: string | undefined,
     injection?: InjectionNotice,
     runId?: string,
   ): Promise<boolean> {
-    const outbound = this.outbound;
-    if (!outbound?.post) return false;
+    if (!this.canSend(schedule)) return false;
+    const channelId = schedule.channelId;
     const pingKey = askPingKey(ask);
     const alreadyPinged = schedule.askPingKey === pingKey;
     // SAFE-8: a spend-cap ask also pings once per cap episode across
@@ -995,6 +1090,8 @@ export class SchedulerService {
       prefix: `${scheduleTitle(schedule, {
         withName: !scheduleInjection({ name: schedule.name }, this.creatorRole(schedule)),
       })}:`,
+      // AUTONOMY-6.a: its own controls answer it (a reply does not).
+      ...(runId ? { hint: scheduleAskHint(ask) } : {}),
     });
     // `false` until a post resolves (a poster returning void counts as sent).
     let posted: void | boolean = false;
@@ -1006,14 +1103,17 @@ export class SchedulerService {
       ) {
         console.warn(ASK_NO_OWNER_WARNING);
       }
-      posted = await outbound.post(
-        // SAFE-13: a tool result that looked like an injection tells the owner.
-        withInjectionNotice(
-          { channelId, content: reply.content, mentionUserIds: reply.mentionUserIds },
-          injection,
-          this.owner,
-        ),
+      // SAFE-13: a tool result that looked like an injection tells the owner.
+      const withNotice = withInjectionNotice(
+        { content: reply.content, mentionUserIds: reply.mentionUserIds },
+        injection,
+        this.owner,
       );
+      posted = await this.sendToSchedule(schedule, {
+        content: withNotice.content,
+        ...(withNotice.mentionUserIds ? { mentionUserIds: withNotice.mentionUserIds } : {}),
+        ...(runId ? { components: scheduleAskComponents(runId, ask) } : {}),
+      });
       // A ping that never went out is not remembered (AUTONOMY-2).
       if (posted !== false && reply.pinged) {
         this.store.setAskPingKey(schedule.id, pingKey);
@@ -1046,9 +1146,14 @@ export class SchedulerService {
    * community here. Never throws: any failure reads as community.
    */
   private creatorRole(schedule: Schedule): PersonRole {
+    return this.roleOf(schedule.createdByUserId);
+  }
+
+  /** A Discord user's role at this tick (see `creatorRole`); community on any failure. */
+  private roleOf(userId: string): PersonRole {
     try {
       return resolveDiscordActingRole({
-        userId: schedule.createdByUserId,
+        userId,
         allowlist: this.allowlist,
         owner: this.owner,
         mutedUsers: this.mutedUsers,
@@ -1057,6 +1162,29 @@ export class SchedulerService {
     } catch {
       return "community";
     }
+  }
+
+  /**
+   * AUTONOMY-6.a — the answered question as the next run gets it: the
+   * question the last run asked, then the answer. SAFE-12 / SAFE-12.a: the
+   * owner's answer reads as given; the creator's (anyone but the owner) is
+   * fenced as their words, a typed answer (`ask-answer`, SAFE-13 scanned
+   * when it was submitted) or a picked choice (`ask-pick`) alike.
+   */
+  private answerBlock(answered: AnsweredScheduleAsk): string {
+    const role = this.roleOf(answered.closedBy);
+    const how = answered.outcome === "picked" ? "picked on a Discord button" : "typed privately on Discord";
+    return [
+      `[Prior question this schedule's last run asked (the human answered it, ${how}):`,
+      `${answered.question}]`,
+      "",
+      "Human answer:",
+      fenceSpeakerText(
+        answered.answer,
+        role,
+        answered.outcome === "picked" ? "ask-pick" : "ask-answer",
+      ),
+    ].join("\n");
   }
 
   /**
@@ -1092,7 +1220,7 @@ export class SchedulerService {
     });
     if (!done) return;
     if (!done.autoPaused) this.store.setStatus(schedule.id, "paused", this.nowFn());
-    if (done.ask) await this.postOwnRunAsk(schedule, run, done.ask, { handBack: true });
+    if (done.ask) await this.postOwnRunAsk(schedule, run, done.ask);
   }
 
   /**
