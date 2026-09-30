@@ -1,6 +1,6 @@
 ---
 id: the-bridge-s-update-post-bridge-live-note-on-every-restart-announcements-channel-only-is-a-short-note-in-persona-md-s
-state: approved
+state: implementing
 type: feature
 base_commit: 6fad05359166545cbcf26065959406201fdc408a
 ---
