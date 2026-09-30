@@ -7,10 +7,11 @@
   "title": "SAFE-2.a: the file tools refuse .fledge/ like fledge.toml and specs/, so a run cannot weaken the verify lane it is judged by",
   "description": "SAFE-2.a: the file tools refuse .fledge/ like fledge.toml and specs/, so a run cannot weaken the verify lane it is judged by",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "1d28c493ce59084e4a2a8cb09c3f7fc278289b0e",
   "created_at": 1790727096,
-  "updated_at": 1790727447,
+  "updated_at": 1790727464,
   "affected_specs": [
     "plugins",
     "discord"

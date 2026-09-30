@@ -2114,7 +2114,7 @@ WebP image whose magic bytes match its extension, or UTF-8 text with a
 extension; text (and the optional caption) SHALL be secret-scrubbed (SAFE-6:
 vendor-key shapes and set secret env values, `redactSecretEnvValues`) before
 upload, and the caption SHALL parse no mentions (REQ-discord-205). SAFE-2
-protected paths (`.env*`, `.git`, `fledge.toml`, `bunfig.toml`,
+protected paths (`.env*`, `.git`, `fledge.toml`, `.fledge/`, `bunfig.toml`,
 `specs`, `*.spec.md`, keystores), any `.specsync` path and secret paths
 (`.ssh`, keys, credentials) SHALL be refused, judged on the path as given and
 on where it resolves inside the project root with symlinks followed; a path
@@ -2165,6 +2165,7 @@ Acceptance Criteria
 - A file whose size, as first taken, is under 8 MB but which is over it when read is refused with the upload-limit error after at most 8 MB + 1 byte is read: no requester check runs and nothing is uploaded.
 - A checked file swapped for a link to `.env`, or whose folder is swapped for a link into `.ssh`, after the path checks is refused (SAFE-2): no requester check runs and nothing is uploaded.
 - An ask-button pick in a thread resumes with `replyChannelId` = the thread and `replyParentChannelId` = its parent.
+- A file under `.fledge/` (`.fledge/lanes/notes.md`) and a link to it are refused like the rest of the SAFE-2 set (SAFE-2.a); nothing is uploaded (fails on main's `isProtectedPath`).
 
 ### REQ-discord-734
 
