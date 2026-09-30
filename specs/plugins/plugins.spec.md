@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 59
+version: 60
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -602,6 +602,12 @@ plugin, still behind SAFE-1 for dangerous tools (ROLES-CHAT-4 / IDENTITY-9);
 declares the acting Discord id team — runs only `TEAM_REVIEW_TOOLS`
 (`github-issue-comment`, `github-pr-review`) plus, in a `/work` run
 (`CORVIDINHO_ACTING_WORK_TASK=1`), `TEAM_WORK_TOOLS` (`files-write`,
+`files-edit`); `community` (everyone else: undeclared, declared community,
+WATCH, schedules other people create, workers, muted / deny-listed, any read
+failure) runs none (IDENTITY-10/11). A scheduled run (`isScheduleRunEnv`) is
+the owner (the owner's own schedule, which the scheduler stamps with the
+ADMIN bit, re-checked here) or community, never team, whatever its stamp
+(DISCORD-SCHEDULE-1.a, REQ-plugins-065). Refusals are "not allowed for your role" (ROLES-CHAT-3/6).
 `files-edit`, `specsync-change-new`, `specsync-change-answer`,
 `specsync-change-approve`, `specsync-change-finalize`); `community` (everyone else: undeclared, declared community,
 WATCH, schedules, workers, muted / deny-listed, any read failure) runs none
@@ -1195,4 +1201,5 @@ and current rows for plugins host evolution.
 | 2026-09-30 | shared-db-open-takes-the-write-lock-up-front-so-processes-that-open-a-new-file-or-one-with-a-re-scrub-due-at-once-take: Shared DB open takes the write lock up front, so processes that open a new file or one with a re-scrub due at once take turns instead of failing part way |
 | 2026-09-30 | if-a-model-fails-or-is-retired-it-falls-back-to-my-next-configured-model-and-tells-me-agent-11: If a model fails or is retired it falls back to my next configured model and tells me (AGENT-11) |
 | 2026-09-30 | fledge-lane-and-task-runs-start-without-my-github-or-git-credentials-like-the-shell-and-the-runners-now-that-my-talks: Fledge lane and task runs start without my GitHub or git credentials, like the shell and the runners, now that my talks may be offered them (SAFE-21.a, SAFE-3.a) |
+| 2026-09-30 | a-schedule-the-owner-creates-runs-with-the-owner-s-tools-and-allowlist-never-the-shell-runners-or-fledge-commands-and: A schedule the owner creates runs with the owner's tools and allowlist (never the shell, runners or Fledge commands) and asks on Approve cards where the must-ask list says so, a denied or lapsed card ending the run with a blocking ask; schedules other people create stay read-only (DISCORD-SCHEDULE-1.a) |
 | 2026-09-30 | in-a-specsync-repo-it-opens-and-works-a-specsync-change-for-its-edits-and-on-corvidinho-it-approves-and-archives-its: In a SpecSync repo it opens and works a SpecSync change for its edits, and on Corvidinho it approves and archives its own change once verify is green (AGENT-18 SpecSync clause, AGENT-18.a) |

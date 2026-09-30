@@ -14,8 +14,14 @@
  *   declared role is team (IDENTITY-8/10). The surface's stamp can only lower
  *   the role, never raise it;
  * - community: everyone else — undeclared people, declared community, WATCH,
- *   schedules, delegate/council workers, a muted or deny-listed actor, or any
- *   read failure (IDENTITY-11/12).
+ *   schedules other people create, delegate/council workers, a muted or
+ *   deny-listed actor, or any read failure (IDENTITY-11/12).
+ *
+ * DISCORD-SCHEDULE-1.a: a schedule the owner created runs as the owner (the
+ * scheduler stamps the ADMIN bit only for the live owner's own schedule, and
+ * the ADMIN re-check above still applies at every call); anyone else's
+ * schedule is community. A scheduled run (`isScheduleRunEnv`) is never team,
+ * whatever its stamp says.
  */
 
 import { loadAllowlist } from "../allowlist/load.ts";
@@ -170,8 +176,9 @@ export function actingWorkTask(env: NodeJS.ProcessEnv = process.env): boolean {
 
 /**
  * Resolve the acting role at this call (IDENTITY-8..12). `null` ⇒ no role
- * session (local CLI: no role gates). Never throws; any failure reads as
- * community.
+ * session (local CLI: no role gates). A scheduled run is the owner (the
+ * owner's own schedule, ADMIN re-check passed) or community, never team
+ * (DISCORD-SCHEDULE-1.a). Never throws; any failure reads as community.
  */
 export async function resolveActingRole(
   env: NodeJS.ProcessEnv = process.env,
@@ -180,6 +187,9 @@ export async function resolveActingRole(
   if (!roleSessionActive(env)) return null;
   if (await resolveActingIsAdmin(env, userId)) return "owner";
   if (actingRoleCap(env) === "community") return "community";
+  // DISCORD-SCHEDULE-1.a: schedules other people create stay read-only; a
+  // scheduled run is never team, whatever its stamp says.
+  if (isScheduleRunEnv(env)) return "community";
   const actor = (userId ?? env.CORVIDINHO_ACTING_DISCORD_USER_ID ?? "").trim();
   if (!actor) return "community";
   const id = actor.toLowerCase();

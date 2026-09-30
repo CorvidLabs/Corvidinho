@@ -1225,16 +1225,19 @@ the acting Discord user id, matched in the owner's people list re-read now
 (`loadDeclaredPeople` + `resolvePerson`, stable ids only), is a person whose
 role is team, not muted (`DISCORD_MUTED_USER_IDS`) and not on
 `[discord].deny_users`; else `community` — undeclared, declared community or
-without a role, WATCH / schedules / workers (community stamp or no actor), and
-any read failure. A stamp never raises the role. `roleAllowsPlugin(role, cmd,
+without a role, WATCH / schedules other people create / workers (community
+stamp or no actor), and any read failure. A stamp never raises the role. In a
+scheduled run (`isScheduleRunEnv`: `CORVIDINHO_DISCORD_SESSION_ID` starts
+with `schedule_`) `resolveActingRole` SHALL return `owner` only through the
+ADMIN re-check above (the scheduler stamps the ADMIN bit only for the live
+owner's own schedule, DISCORD-SCHEDULE-1.a) and otherwise `community`, never
+`team`, whatever `CORVIDINHO_ACTING_ROLE` says, so schedules other people
+create stay read-only. `roleAllowsPlugin(role, cmd,
 workTask)` SHALL be the one rule: read plugins for every role; mutating
 plugins (`isMutatingPlugin`) for the owner and `null`; for team only
 `TEAM_REVIEW_TOOLS` (`github-issue-comment`, `github-pr-review`) plus, when
 `CORVIDINHO_ACTING_WORK_TASK` is truthy (a `/work` run), `TEAM_WORK_TOOLS`
-(`files-write`, `files-edit`, and working that repo's SpecSync change:
-`specsync-change-new`, `specsync-change-answer`, `specsync-change-approve`,
-`specsync-change-finalize`, AGENT-18 / AGENT-18.a; the last two stay
-dangerous, so SAFE-1 still applies); for community none (IDENTITY-10/11).
+(`files-write`, `files-edit`); for community none (IDENTITY-10/11).
 `runPlugin` SHALL refuse a mutating plugin the role does not allow with the
 existing `Denied: plugin "<name>" is not allowed for your role
 (ROLES-CHAT-3).` (exit 2) before SAFE-1, the audit row or the handler; SAFE-1,
@@ -1272,7 +1275,7 @@ Acceptance Criteria
 - Team reads pass on an allowlisted or confirmed-public repo and are refused on a private non-allowlisted one; team writes on a public non-allowlisted repo are refused; community writes are refused; deny lists win.
 - Every existing ROLES-CHAT test passes unchanged; regression tests in `tests/roles.team.test.ts` fail on the base sources and pass after.
 - In a scheduled run a public repo off the allowlist is refused for every role before any visibility lookup, and the role rules still apply to an allowlisted one (`tests/github.schedule-repo-gate.test.ts`).
-- `TEAM_WORK_TOOLS` is exactly `files-edit`, `files-write`, `specsync-change-answer`, `specsync-change-approve`, `specsync-change-finalize` and `specsync-change-new`; `specsync-change-new` / `-answer` pass the role gate for team only with the work flag and never for community (`tests/roles.team.test.ts`, `tests/agent.repo-ways.test.ts`).
+- In a scheduled run the owner stamp for the owner resolves `owner`, runs `github-issue-comment` (dry run) and `files-write`, and is offered its allowlisted owner tools but not `shell-exec`; a team member's scheduled run with a community, team or owner stamp resolves `community`, gets the role refusal for `github-issue-comment` and is offered no mutating tool; the same team stamp outside a schedule still resolves `team` (`tests/roles.team.test.ts`, failing on the base sources).
 
 ### REQ-plugins-066
 
@@ -1391,9 +1394,11 @@ or other run), labelled for that person and the owner only.
 `--project` on `memory-store` / `memory-recall` SHALL use the run's
 project scope (`projectScopeFor(cwd)`, REQ-discord-101) and SHALL be allowed
 only when `resolveActingRole` is owner, team or null (the local CLI);
-community (undeclared, declared community, WATCH, schedules, workers) SHALL
-get the role refusal (exit 2); a project SHALL have no private notes, and
-`--project` SHALL NOT combine with `--person`.
+community (undeclared, declared community, WATCH, schedules other people
+create, workers; the owner's own schedule resolves owner,
+DISCORD-SCHEDULE-1.a) SHALL get the role refusal (exit 2); a project
+SHALL have no private notes, and `--project` SHALL NOT combine with
+`--person`.
 
 `memory-forget-me` (safe, minTier 0, not mutating, so every role may call
 it) SHALL take no arguments and record a forget request for the acting
@@ -1414,6 +1419,7 @@ Acceptance Criteria
 - `--project` works for owner, team and the local CLI and is refused for community, undeclared and a community-stamped team member; `--project --category private` and `--project --person` are refused.
 - `memory-forget-me` records one pending ask per person (audited), deletes nothing, and refuses with no actor, outside a conversation, with arguments, and with no owner.
 - `tests/memory.profiles.test.ts` and `tests/discord.forget-card.test.ts` cover each and fail on the stacked base sources.
+- In the owner's own scheduled run (owner stamp, `schedule_*` session, no reply channel) `memory-store --project` and `memory-recall --project` work, while `memory-recall --category private`, `memory-recall --person <id>` and `memory-profile` are refused with no private place to show them and no `privateText` (`tests/scheduler.owner-role.test.ts`).
 
 ### REQ-plugins-067
 

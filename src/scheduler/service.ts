@@ -32,6 +32,17 @@
  * channel sends it to the owner by DM, and until the creator or the owner
  * answers or cancels it each due run is skipped (no catch-up) and one wait
  * note goes out, pinging nobody. The answer reaches the next run once.
+ * DISCORD-SCHEDULE-1.a: a schedule runs as its creator's role, read live at
+ * each run after the creator/channel gate: the owner as configured now
+ * (`loadOwner`; the bridge and the daemon re-read the owner config) who
+ * created it, not muted or deny-listed, gets the owner stamp — their tools
+ * per their allowlist, still never the shell, runners or Fledge runs
+ * (SAFE-3.a, the `schedule` surface) nor discovered Fledge plugin commands,
+ * and the must-ask list's Approve cards; a card they deny or let lapse ends
+ * the run with a blocking ask naming the refused action. Anyone else's
+ * schedule stays read-only (community); a schedule is never stamped team.
+ * The schedule's own posts to its channel (result, ask, wait note) are not
+ * announcements it starts (AUTONOMY-10): they go out without a card.
  */
 
 import { basename } from "node:path";
@@ -69,7 +80,7 @@ import {
 } from "../agent/untrusted.ts";
 import type { SpendAlertOutbox } from "../agent/spend-outbox.ts";
 import type { HumanAsk, HumanAskReason, SpendWarning } from "../agent/types.ts";
-import type { OwnerRecord } from "../identity/owner.ts";
+import { isOwnerDiscord, type OwnerRecord } from "../identity/owner.ts";
 import { loadDeclaredPeople, type PersonRole } from "../identity/people.ts";
 import { SCHEDULE_SESSION_PREFIX } from "../plugins/roles.ts";
 import type { BackupTicker } from "../store/backup.ts";
@@ -196,7 +207,10 @@ function errorLine(err: unknown): string {
  * Never throws: it runs in the `.catch` that keeps these promises from
  * rejecting.
  */
-function logSchedulerError(where: "tick" | "tick hook" | "run" | "recovery" | "ask", err: unknown): void {
+function logSchedulerError(
+  where: "tick" | "tick hook" | "run" | "recovery" | "ask" | "owner",
+  err: unknown,
+): void {
   console.error(`[scheduler] ${where} failed: ${errorLine(err)}`);
 }
 
@@ -292,6 +306,13 @@ export type SchedulerServiceOpts = {
   /** Configured owner pinged when a tick needs a human (AUTONOMY-2). */
   owner?: OwnerRecord | null;
   /**
+   * DISCORD-SCHEDULE-1.a — the owner as configured now, read at every run
+   * (the bridge and the daemon re-read the owner config). Only the live
+   * owner's own schedule gets the owner stamp. Without it, `owner` is used;
+   * a read that throws is no owner (fail closed: the run is community).
+   */
+  loadOwner?: () => Promise<OwnerRecord | null> | OwnerRecord | null;
+  /**
    * SAFE-8 — the once-per-episode spend-cap ping (the bridge wires its shared
    * DB). Without it a spend-cap ask pings per the schedule's ping key.
    */
@@ -355,6 +376,7 @@ export class SchedulerService {
   private readonly defaultProjectRoot: string;
   private readonly useWorktrees: boolean;
   private readonly owner: OwnerRecord | null;
+  private readonly loadOwner?: () => Promise<OwnerRecord | null> | OwnerRecord | null;
   private readonly spendAlerts?: SpendAlertOutbox;
   private readonly spendDm?: Pick<SpendDm, "deliver">;
   /**
@@ -391,6 +413,7 @@ export class SchedulerService {
     this.defaultProjectRoot = opts.defaultProjectRoot ?? process.cwd();
     this.useWorktrees = opts.useWorktrees !== false;
     this.owner = opts.owner ?? null;
+    this.loadOwner = opts.loadOwner;
     this.spendAlerts = opts.spendAlerts;
     this.spendDm = opts.spendDm;
     this.onRunFinished = opts.onRunFinished;
@@ -760,11 +783,14 @@ export class SchedulerService {
         return;
       }
 
+      // DISCORD-SCHEDULE-1.a: who the owner is now (not who it was at start).
+      const liveOwner = await this.liveOwner();
+
       // SAFE-12 / SAFE-13 (#71): the creator's role, resolved now (a schedule
       // stored before this check, or by someone who is no longer the owner,
       // is judged by who they are today). Text by anyone but the owner that
       // trips the detector runs nothing — before any worktree is made.
-      const creatorRole = this.creatorRole(schedule);
+      const creatorRole = this.roleOf(schedule.createdByUserId, liveOwner);
       const suspected = scheduleInjection(schedule, creatorRole);
       if (suspected) {
         await this.refuseInjectedRun(schedule, run, suspected);
@@ -828,7 +854,10 @@ export class SchedulerService {
       // SAFE-12: the owner's schedule reads as before; anyone else's name and
       // prompt reach the model only inside the untrusted-data fence (header
       // naming the creator's role), like their chat would.
-      const byOwner = creatorRole === "owner";
+      // DISCORD-SCHEDULE-1.a: the same test decides the stamp — only the live
+      // owner's own schedule (not muted or deny-listed) runs as the owner.
+      const byOwner =
+        creatorRole === "owner" && isOwnerDiscord(liveOwner, schedule.createdByUserId);
       const prompt = [
         byOwner
           ? `Scheduled work "${schedule.name}" on project: ${schedule.project}`
@@ -842,7 +871,7 @@ export class SchedulerService {
               creatorRole,
               "schedule-prompt",
             ),
-        ...(answered ? ["", this.answerBlock(answered)] : []),
+        ...(answered ? ["", this.answerBlock(answered, liveOwner)] : []),
         "",
         "Stay within existing allowlists and SAFE gates. Linux host only.",
       ]
@@ -856,7 +885,10 @@ export class SchedulerService {
         sessionId: `${SCHEDULE_SESSION_PREFIX}${schedule.id}`,
         resume: false,
         actingUserId: schedule.createdByUserId,
-        actingIsAdmin: false,
+        // DISCORD-SCHEDULE-1.a: the owner's own schedule runs as the owner
+        // (the tool layer re-checks it at every call); anyone else's is
+        // community (no `actingRole`: a schedule is never stamped team).
+        actingIsAdmin: byOwner,
         // SAFE-3.a: schedules never get the shell, runners or Fledge runs.
         surface: "schedule",
         cwd: workDir,
@@ -1155,18 +1187,37 @@ export class SchedulerService {
     return this.roleOf(schedule.createdByUserId);
   }
 
-  /** A Discord user's role at this tick (see `creatorRole`); community on any failure. */
-  private roleOf(userId: string): PersonRole {
+  /**
+   * A Discord user's role at this tick (see `creatorRole`), against `owner`
+   * (a run passes the live owner, DISCORD-SCHEDULE-1.a; default the one
+   * given at start); community on any failure.
+   */
+  private roleOf(userId: string, owner: OwnerRecord | null = this.owner): PersonRole {
     try {
       return resolveDiscordActingRole({
         userId,
         allowlist: this.allowlist,
-        owner: this.owner,
+        owner,
         mutedUsers: this.mutedUsers,
-        people: loadDeclaredPeople({ allowlist: this.allowlist, owner: this.owner }),
+        people: loadDeclaredPeople({ allowlist: this.allowlist, owner }),
       });
     } catch {
       return "community";
+    }
+  }
+
+  /**
+   * DISCORD-SCHEDULE-1.a: the owner as configured now (`loadOwner`, read at
+   * every run), else the one given at start. A read that throws is logged
+   * and is no owner, so the run gets the community stamp (fail closed).
+   */
+  private async liveOwner(): Promise<OwnerRecord | null> {
+    if (!this.loadOwner) return this.owner;
+    try {
+      return (await this.loadOwner()) ?? null;
+    } catch (err) {
+      logSchedulerError("owner", err);
+      return null;
     }
   }
 
@@ -1177,8 +1228,8 @@ export class SchedulerService {
    * fenced as their words, a typed answer (`ask-answer`, SAFE-13 scanned
    * when it was submitted) or a picked choice (`ask-pick`) alike.
    */
-  private answerBlock(answered: AnsweredScheduleAsk): string {
-    const role = this.roleOf(answered.closedBy);
+  private answerBlock(answered: AnsweredScheduleAsk, owner: OwnerRecord | null = this.owner): string {
+    const role = this.roleOf(answered.closedBy, owner);
     const how = answered.outcome === "picked" ? "picked on a Discord button" : "typed privately on Discord";
     return [
       `[Prior question this schedule's last run asked (the human answered it, ${how}):`,

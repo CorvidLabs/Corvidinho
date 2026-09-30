@@ -11,7 +11,11 @@ schedule (`tick.allowlist_failed`; the nightly backup still runs). A run whose c
 or whose creator fails the live-chat actor gate (deny-listed, or, when the user
 or role list is non-empty, not listed by user id and not the configured owner;
 a tick knows no member roles), is refused (DISCORD-SCHEDULE-3). The owner is
-read at start: restart the daemon after changing it. Agents it spawns run
+read at start for that gate: restart the daemon after changing it. Whether a
+run is the owner's own schedule is read again at each run (DISCORD-SCHEDULE-1.a):
+a schedule the owner created runs with the owner's allowlisted tools and asks on
+the must-ask Approve cards (never the shell, runners or Fledge commands); a
+schedule anyone else created runs read-only. Agents it spawns run
 non-interactive, so dangerous tools stay denied unless allowlisted (SAFE-1).
 
 ```bash
