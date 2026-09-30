@@ -54,6 +54,24 @@
       "requirement_ids": [
         "REQ-agent-087"
       ]
+    },
+    {
+      "timestamp": 1790804152,
+      "commit": "bd69fef0eec8511aeb3d011206ff7e204b0a65eb",
+      "contract_digest": "534e4516540a6db6b5c932f49fca5f07b5835fe3f7c09dfe35d01371494a3a61",
+      "execution_digest": "9d35eb08930a3b9bfda7b13b5a51ac644bf826d907bc29fda7c7dbb4925a8098",
+      "workspace_digest": "0aa81923445fe3ccf65f53918f6333457d299e007c9ac87180c96987c1c70850",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-087"
+      ]
     }
   ]
 }
