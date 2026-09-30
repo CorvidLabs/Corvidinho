@@ -1,6 +1,6 @@
 ---
 id: a-message-sent-while-a-run-is-going-waits-for-it-and-stop-or-cancel-stops-the-run-waiting-messages-still-run-after
-state: approved
+state: implementing
 type: feature
 base_commit: 41ec90df25d36a9cb4b09c1938860b6cfc70e9fa
 ---
