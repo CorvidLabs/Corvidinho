@@ -3335,9 +3335,11 @@ answer or an explicit cancel").
   (`formatScheduleWaitNote`: the schedule prefix and that its next runs wait
   until its last question is answered or cancelled, skipped runs not made
   up), taken with a compare-and-set on `ask_note_at` and handed back when it
-  does not go out; it SHALL mention nobody, carry no controls and name no
-  amount, and pass the same live DISCORD-SCHEDULE-3 gate as any schedule
-  post.
+  does not go out; it SHALL mention nobody and name no amount, SHALL
+  carry the ask's own controls (the same row as the ask post, below), so an
+  ask whose post was lost (a crash between its claim and its post, or a
+  deleted message) can still be answered or cancelled, and SHALL pass the
+  same live DISCORD-SCHEDULE-3 gate as any schedule post.
 - Controls. The ask post (in-process or from the delivery pass) SHALL carry
   one row of buttons that reuse the DISCORD-ASK controls with the run id
   (`srun_<id>`) as the ask id: **Choose** (`cvask:open:srun_<id>`) when its
@@ -3375,7 +3377,10 @@ answer or an explicit cancel").
   (AUTONOMY-5), a non-owner's answer that trips the SAFE-13 detector closes
   nothing and is refused through `refuseInjectedAnswer` (the owner pinged in
   the schedule's channel, one `injection-suspected` row), else it closes the
-  ask `answered`. Cancel SHALL close it `cancelled` with no answer. A
+  ask `answered`. Cancel SHALL close it `cancelled` with no answer. When the
+  schedule is paused (the auto-pause, a SAFE-13 refusal, `/schedule pause`)
+  the private ack of a pick, a typed answer or a Cancel SHALL add
+  `SCHEDULE_ASK_PAUSED_NOTE`: closing the question does not resume it. A
   `spend-cap` ask SHALL refuse Choose, Answer and a form submit like
   someone else's press. Closing is a compare-and-set on `ask_closed_at IS
   NULL` recording `ask_outcome`, `ask_answer` (scrubbed) and
@@ -3394,24 +3399,31 @@ answer or an explicit cancel").
 - Schema v15 (forward-only, idempotent). `schedule_runs` SHALL gain
   `ask_options`, `ask_blocking` (default 0), `ask_closed_at`,
   `ask_outcome`, `ask_answer`, `ask_closed_by`, `ask_skip_at` and
-  `ask_note_at`, and a partial index on open asks. The migration SHALL close
-  every ask recorded before it (`ask_outcome` `superseded`), so no schedule
+  `ask_note_at`, and a partial index on open asks. An ask recorded before
+  it that no bridge has posted yet, on its schedule's newest finished run
+  (a daemon's question waiting for a bridge, REQ-discord-347, or a
+  handed-back pause ask, REQ-discord-353), has been shown to nobody: the
+  migration SHALL make it blocking (`ask_blocking` 1, left open), so the
+  next delivery pass posts it with its controls and the upgrade never drops
+  it. The migration SHALL close every other ask recorded before it (posted
+  without a Cancel, or moot; `ask_outcome` `superseded`), so no schedule
   starts out waiting on a question that had no Cancel, and none of those is
-  posted. `ask_answer` and `ask_options` (JSON) SHALL be `SCRUB_TARGETS`
-  (new columns, so no scrub-rules version bump).
+  posted again. `ask_answer` and `ask_options` (JSON) SHALL be
+  `SCRUB_TARGETS` (new columns, so no scrub-rules version bump).
 
 No new slash command, env var or config key.
 
 Acceptance Criteria
-- A clarify ask blocks: the next due slots are skipped (`{ started: [], skipped: [id] }`), `next_run_at` moves to the next slot, no run row is added and `execution_count` stays; one wait note goes out (no mention, no controls) and later skipped slots post no second one; after Cancel the next slot runs (nothing made up at once) with no answer in its prompt.
+- A clarify ask blocks: the next due slots are skipped (`{ started: [], skipped: [id] }`), `next_run_at` moves to the next slot, no run row is added and `execution_count` stays; one wait note goes out (no mention; the ask's Answer + Cancel controls) and later skipped slots post no second one; after Cancel the next slot runs (nothing made up at once) with no answer in its prompt.
 - A stuck ask, a spend-cap stop and a run that could not start block the same way; a run that could not start never reaches the auto-pause.
 - The auto-pause ask blocks; `/schedule resume` leaves it open and the next due slot waits with one note; once the owner answers, the next slot runs.
+- An ask claimed for posting whose post never went out (a crash between the claim and the post): the next due slot waits and its one wait note carries the ask's Choose + Cancel, which close it.
 - A daemon's due run waits too, stamping `ask_skip_at`; the bridge posts the ask, then the one note.
-- Listed choices post Choose + Cancel (`cvask:open:srun_…`, `cvask:cancel:srun_…`) with `SCHEDULE_ASK_CHOOSE_HINT`; free text Answer + Cancel with `SCHEDULE_ASK_ANSWER_HINT`; neither carries the reply hint; a spend-cap stop Cancel only, its post only "💸 Work is paused for budget." and its note no amount.
+- Listed choices post Choose + Cancel (`cvask:open:srun_…`, `cvask:cancel:srun_…`) with `SCHEDULE_ASK_CHOOSE_HINT`; free text Answer + Cancel with `SCHEDULE_ASK_ANSWER_HINT`; neither carries the reply hint; a spend-cap stop Cancel only (its note too), its post only "💸 Work is paused for budget." and its note no amount.
 - An in-process ask post that resolves `false` is posted, with its controls, by the next tick.
-- A schedule with no channel DMs the ask with its controls and the one note to the owner and posts nothing in a channel; with no owner nothing is sent and the ask stays pending.
+- A schedule with no channel DMs the ask with its controls and the one note (with the same controls) to the owner and posts nothing in a channel; with no owner nothing is sent and the ask stays pending.
 - The owner's pick reaches the next run unfenced and only that run; the creator's typed answer is stored scrubbed and reaches the next run fenced (`role: community`); a closed ask cannot be closed again.
-- Through `startBridge` with a memory DB and fake interactions: Choose shows the creator the choices privately and a pick closes the ask `picked` (a re-press is "isn't for you"); an unknown option id is `ASK_CHOICE_EXPIRED`; Answer opens the form, a thin submit restates privately with Cancel and keeps it open, a typed submit closes it `answered` with the secret redacted, `cancel` typed cancels; someone else's Cancel or submit is refused and the ask stays open, the owner's and the creator's Cancel close it; a spend-cap ask refuses Choose and a submit and takes Cancel; an ask three days old still takes a pick; a press outside the allowlisted channel, or once the schedule's channel left the allowlist, gets the zero-width ack (the tip for the owner); a deny-listed creator gets the zero-width ack and a muted one `MUTED`; a channel-less schedule's ask is answered in the owner's DM and refused from a guild channel; the creator's injection-like typed answer closes nothing and pings the owner in the schedule's channel; a Cancel id on a session ask is refused.
+- Through `startBridge` with a memory DB and fake interactions: Choose shows the creator the choices privately and a pick closes the ask `picked` (a re-press is "isn't for you"); an unknown option id is `ASK_CHOICE_EXPIRED`; Answer opens the form, a thin submit restates privately with Cancel and keeps it open, a typed submit closes it `answered` with the secret redacted, `cancel` typed cancels; someone else's Cancel or submit is refused and the ask stays open, the owner's and the creator's Cancel close it; a spend-cap ask refuses Choose and a submit and takes Cancel; an ask three days old still takes a pick; a press outside the allowlisted channel, or once the schedule's channel left the allowlist, gets the zero-width ack (the tip for the owner); a deny-listed creator gets the zero-width ack and a muted one `MUTED`; a channel-less schedule's ask is answered in the owner's DM and refused from a guild channel; the creator's injection-like typed answer closes nothing and pings the owner in the schedule's channel; a Cancel id on a session ask is refused; on a paused schedule the ack of a Cancel, a typed answer or a pick ends with `SCHEDULE_ASK_PAUSED_NOTE`, on an active one it does not.
 - Through the bridge's own scheduler: the ask post carries Choose + Cancel, a channel reply to it leaves it open and the creator's Cancel closes it; a channel-less schedule DMs its ask and controls to the owner.
-- A v14 DB migrates to v15: the eight columns exist, asks recorded before are closed `superseded` and are neither open nor pending, the schedule's next due run goes, and a re-run changes nothing; `ask_answer` and `ask_options` are re-scrubbed.
+- A v14 DB migrates to v15: the eight columns exist; asks recorded before that were posted, or are moot, are closed `superseded`, are neither open nor pending and are not posted again, and that schedule's next due run goes; a still-pending ask on its schedule's newest run becomes open and blocking, its schedule's next due run waits and that ask is posted with Answer + Cancel, then the one note; a re-run changes nothing; `ask_answer` and `ask_options` are re-scrubbed.
 
