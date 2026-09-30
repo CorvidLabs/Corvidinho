@@ -20,6 +20,9 @@
  * the same way (command-handlers/work.ts, session.ts).
  * DISCORD-ASK: ephemeral button asks; ASK-6/7 collapse; ASK-8 clear ephemeral after pick;
  * a press passes channel → actor → mute/rate first (REQ-discord-212/201/010);
+ * AGENT-3.a: a run's progress message carries a Stop button (`cvstop:<runId>`)
+ * that its requester or the owner presses to stop it, past the same gates
+ * (REQ-discord-303);
  * ASK-4.a: a free-text ask's Answer button opens a private form whose submit
  * takes the same gates and resumes like a reply (a reply still works);
  * SESSION-MULTI: per-user sessions.
@@ -71,6 +74,7 @@ import {
 import {
   createLiveGateway,
   createNullGateway,
+  type ComponentInteraction,
   type DiscordGateway,
   type GatewayHandlers,
 } from "./gateway.ts";
@@ -138,9 +142,13 @@ import { enforceProtocolVersionOrExit } from "./protocol-version.ts";
 import { SessionStore } from "./session-store.ts";
 import {
   RUN_STOP_ACK,
+  RUN_STOP_NOTHING_RUNNING,
+  RUN_STOP_NOT_YOURS,
   RUN_STOPPED_TEXT,
   SessionRunControl,
+  buildStopComponents,
   isStopRunText,
+  parseStopRunCustomId,
 } from "./run-control.ts";
 import { answerTurnText } from "./session-thread.ts";
 import { handleSlashInteraction } from "./slash-dispatch.ts";
@@ -154,6 +162,7 @@ import {
   EPHEMERAL_SILENT_ACK,
   type BridgeConfig,
   type InboundMessage,
+  type SessionStub,
 } from "./types.ts";
 import { WorkStore } from "./work-store.ts";
 import {
@@ -273,8 +282,16 @@ export type StartBridgeOptions = {
 };
 
 function memoryThinkingOutbound(): ThinkingOutbound & {
-  sends: Array<{ channelId: string; embed: unknown; replyToMessageId?: string; messageId: string }>;
-  edits: Array<{ channelId: string; messageId: string; embed: unknown }>;
+  /** `components`: the progress message's Stop button (AGENT-3.a), when it had one. */
+  sends: Array<{
+    channelId: string;
+    embed: unknown;
+    replyToMessageId?: string;
+    messageId: string;
+    components?: unknown[];
+  }>;
+  /** `components`: set only when the edit set or cleared them (`null`). */
+  edits: Array<{ channelId: string; messageId: string; embed: unknown; components?: unknown[] | null }>;
   contentEdits: Array<{
     channelId: string;
     messageId: string;
@@ -291,9 +308,14 @@ function memoryThinkingOutbound(): ThinkingOutbound & {
     embed: unknown;
     replyToMessageId?: string;
     messageId: string;
+    components?: unknown[];
   }> = [];
-  const edits: Array<{ channelId: string; messageId: string; embed: unknown }> =
-    [];
+  const edits: Array<{
+    channelId: string;
+    messageId: string;
+    embed: unknown;
+    components?: unknown[] | null;
+  }> = [];
   const contentEdits: Array<{
     channelId: string;
     messageId: string;
@@ -316,14 +338,14 @@ function memoryThinkingOutbound(): ThinkingOutbound & {
       posts.push({ channelId, content, ...(embed ? { embed } : {}), messageId });
       return { messageId };
     },
-    async sendEmbed({ channelId, embed, replyToMessageId }) {
+    async sendEmbed({ channelId, embed, replyToMessageId, components }) {
       n += 1;
       const messageId = `progress_${n}`;
-      sends.push({ channelId, embed, replyToMessageId, messageId });
+      sends.push({ channelId, embed, replyToMessageId, messageId, ...(components ? { components } : {}) });
       return { messageId };
     },
-    async editEmbed({ channelId, messageId, embed }) {
-      edits.push({ channelId, messageId, embed });
+    async editEmbed({ channelId, messageId, embed, components }) {
+      edits.push({ channelId, messageId, embed, ...(components !== undefined ? { components } : {}) });
       return true;
     },
     async editMessage(opts) {
@@ -657,17 +679,26 @@ export async function startBridge(
   });
 
   /**
-   * AGENT-3.a (REQ-discord-302): stop the run `runId` (idempotent; its
-   * process tree is killed) and answer the stop message with one short ack,
-   * tracked on the run's session. Waiting messages still run (AGENT-3.b).
+   * AGENT-3.a (REQ-discord-302/303): the one stop path of the stop words and
+   * the Stop button — abort the run `runId` once (idempotent; its process
+   * tree is killed). Waiting messages still run (AGENT-3.b).
+   */
+  function stopRun(runId: string, sessionId: string, byUserId: string) {
+    const outcome = runControl.stop(runId, byUserId);
+    if (outcome === "stopped") {
+      console.log(`[discord] run ${runId} of session ${sessionId} stopped by ${byUserId}`);
+    }
+    return outcome;
+  }
+
+  /**
+   * AGENT-3.a (REQ-discord-302): stop the run `runId` and answer the stop
+   * message with one short ack, tracked on the run's session.
    */
   async function stopRunFor(msg: InboundMessage, runId: string, sessionId: string): Promise<void> {
-    const outcome = runControl.stop(runId, msg.authorId);
+    const outcome = stopRun(runId, sessionId, msg.authorId);
     // Routing and this call happen in one tick, so the run is still there.
     if (outcome === "none") return;
-    if (outcome === "stopped") {
-      console.log(`[discord] run ${runId} of session ${sessionId} stopped by ${msg.authorId}`);
-    }
     const session = store.get(sessionId);
     if (!replyRef.fn) {
       if (session) store.trackBotMessage(`bot_reply_for_${msg.id}`, session);
@@ -679,6 +710,106 @@ export async function startBridge(
       replyToMessageId: msg.id,
     });
     if (sent?.messageId && session) store.trackBotMessage(sent.messageId, session);
+  }
+
+  /**
+   * DISCORD-5 / DISCORD-DENY-2/3 / REQ-discord-212, then REQ-discord-201 /
+   * REQ-discord-010 — the gates a channel button press passes before it
+   * counts (an ask's buttons and form, a run's Stop button): the press
+   * channel (inside `talk`'s thread its allowlisted parent counts,
+   * DISCORD-2.a) and `talk`'s own channel must be allowlisted; then the actor
+   * and mute/rate gates chat and slash run (ALLOW-5 / DISCORD-6). A press
+   * needs an ack, so every refusal is ephemeral: the tip for an admin (else
+   * zero-width) off the allowlist, the zero-width ack for an actor deny
+   * (DISCORD-DENY-3), MUTED / RATE_LIMITED for mute/rate. True ⇒ go on.
+   */
+  async function pressPassesGates(
+    interaction: ComponentInteraction,
+    talk: Pick<SessionStub, "channelId" | "threadId"> | undefined,
+  ): Promise<boolean> {
+    if (!componentChannelAllowlisted(interaction.channelId, talk, config.allowlist)) {
+      const admin =
+        resolvePermissionLevel({
+          userId: interaction.userId,
+          allowlist: config.allowlist,
+          adminUserIds: config.adminUserIds,
+          adminRoleIds: config.adminRoleIds,
+          owner: config.owner ?? null,
+          mutedUsers,
+        }) >= PermissionLevel.ADMIN;
+      await interaction.reply({
+        content: admin ? ALLOWLIST_DENY_TIP : EPHEMERAL_SILENT_ACK,
+        ephemeral: true,
+      });
+      return false;
+    }
+    const actorGate = gateActor({
+      userId: interaction.userId,
+      roleIds: interaction.roleIds,
+      allowlist: config.allowlist,
+      owner: config.owner ?? null,
+    });
+    if (!actorGate.ok) {
+      await interaction.reply({ content: EPHEMERAL_SILENT_ACK, ephemeral: true });
+      return false;
+    }
+    const rateGate = gateRateOrMute({
+      userId: interaction.userId,
+      mutedUsers,
+      rateLimit: {
+        state: rateLimitState,
+        config: rateLimitConfig,
+        // rateLimitByLevel keys on the presser's level (mute is checked first).
+        permLevel: resolvePermissionLevel({
+          userId: interaction.userId,
+          roleIds: interaction.roleIds,
+          allowlist: config.allowlist,
+          owner: config.owner ?? null,
+        }),
+      },
+    });
+    if (!rateGate.ok) {
+      await interaction.reply({ content: rateGate.reply, ephemeral: true });
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * AGENT-3.a (REQ-discord-303): a press of the Stop button (`cvstop:<runId>`)
+   * on a run's progress message. The run is the one that message shows while
+   * it runs (`byProgressMessage`, in the press's channel, with that run id),
+   * so a button left from a finished run or an earlier bridge process stops
+   * nothing. The channel gate sees the pressed message's talk: the session of
+   * the run it shows, else the session its finished answer is tracked on
+   * (else the press channel alone). After the channel, actor and mute/rate
+   * gates: no such run ⇒ "Nothing is running."; anyone but its requester or
+   * the owner ⇒ "This Stop button isn't for you."; else the stop words' stop
+   * path and the same short ack, all ephemeral. Waiting messages still run
+   * (AGENT-3.b); the progress message becomes `⏹ Stopped`, its button gone.
+   */
+  async function pressStopButton(interaction: ComponentInteraction, runId: string): Promise<void> {
+    const messageId = interaction.messageId;
+    const shown = messageId ? runControl.byProgressMessage(messageId) : undefined;
+    const run =
+      shown && shown.runId === runId && shown.channelId === interaction.channelId ? shown : undefined;
+    const talk =
+      (shown ? store.get(shown.sessionId) : undefined) ??
+      (messageId ? store.getByBotMessage(messageId) : undefined);
+    if (!(await pressPassesGates(interaction, talk))) return;
+    if (!run) {
+      await interaction.reply({ content: RUN_STOP_NOTHING_RUNNING, ephemeral: true });
+      return;
+    }
+    if (run.requesterId !== interaction.userId && !isOwnerDiscord(config.owner, interaction.userId)) {
+      await interaction.reply({ content: RUN_STOP_NOT_YOURS, ephemeral: true });
+      return;
+    }
+    const outcome = stopRun(run.runId, run.sessionId, interaction.userId);
+    await interaction.reply({
+      content: outcome === "none" ? RUN_STOP_NOTHING_RUNNING : RUN_STOP_ACK,
+      ephemeral: true,
+    });
   }
 
   function buildSlashCtx(): SlashContext {
@@ -999,6 +1130,8 @@ export async function startBridge(
           sessionId: session.id,
           model: llmModel,
           showUsage: ownerRun,
+          // AGENT-3.a (REQ-discord-303): the run's Stop button.
+          components: buildStopComponents(turn.runId),
           debounceMs: opts.thinkingDebounceMs,
           tickMs: opts.thinkingTickMs,
         });
@@ -1016,7 +1149,8 @@ export async function startBridge(
         });
         await thinking.start({ description: "Working on your request..." });
         inflight.progress(thinking.progressMessageId);
-        // AGENT-3.a: a reply 'stop' / 'cancel' to this progress message stops the run.
+        // AGENT-3.a: a reply 'stop' / 'cancel' to this progress message, or
+        // its Stop button, stops the run.
         turn.setProgressMessage(thinking.progressMessageId);
 
         // SESSION-WORKTREE: bind isolated cwd on start; on continue reuse the
@@ -1419,6 +1553,15 @@ export async function startBridge(
         }
         return;
       }
+      // AGENT-3.a (REQ-discord-303): a run's Stop button — its own branch,
+      // apart from the Approve cards and the asks, past the same gates.
+      const stopRunId = parseStopRunCustomId(interaction.customId);
+      if (stopRunId !== null) {
+        // A Stop press carries no typed text; a forged form submit is ignored.
+        if (interaction.modalValues !== undefined) return;
+        await pressStopButton(interaction, stopRunId);
+        return;
+      }
       const parsed = parseAskCustomId(interaction.customId);
       if (!parsed) return;
       // DISCORD-ASK-4.a — typed text only ever comes from the Answer form's
@@ -1459,64 +1602,13 @@ export async function startBridge(
       // parent counts, DISCORD-2.a), and only while the session's own channel
       // is still allowlisted, since the resumed run posts there. Otherwise the
       // ack is ephemeral only: the tip for an admin, zero-width for anyone else.
-      if (
-        !componentChannelAllowlisted(
-          interaction.channelId,
-          session ?? closed,
-          config.allowlist,
-        )
-      ) {
-        const admin =
-          resolvePermissionLevel({
-            userId: interaction.userId,
-            allowlist: config.allowlist,
-            adminUserIds: config.adminUserIds,
-            adminRoleIds: config.adminRoleIds,
-            owner: config.owner ?? null,
-            mutedUsers,
-          }) >= PermissionLevel.ADMIN;
-        await interaction.reply({
-          content: admin ? ALLOWLIST_DENY_TIP : EPHEMERAL_SILENT_ACK,
-          ephemeral: true,
-        });
-        return;
-      }
-
       // REQ-discord-201 / REQ-discord-010 — then the actor and mute/rate gates
       // chat and slash run (ALLOW-5 / DISCORD-6), on open and pick alike, so a
       // deny-listed, unlisted or muted user cannot keep a session going by
       // buttons. A press needs an ack, so every refusal is ephemeral: the
       // zero-width ack for an actor deny (DISCORD-DENY-3), MUTED /
       // RATE_LIMITED for mute/rate. The pending ask is left as it was.
-      const actorGate = gateActor({
-        userId: interaction.userId,
-        roleIds: interaction.roleIds,
-        allowlist: config.allowlist,
-        owner: config.owner ?? null,
-      });
-      if (!actorGate.ok) {
-        await interaction.reply({ content: EPHEMERAL_SILENT_ACK, ephemeral: true });
-        return;
-      }
-      const rateGate = gateRateOrMute({
-        userId: interaction.userId,
-        mutedUsers,
-        rateLimit: {
-          state: rateLimitState,
-          config: rateLimitConfig,
-          // rateLimitByLevel keys on the presser's level (mute is checked first).
-          permLevel: resolvePermissionLevel({
-            userId: interaction.userId,
-            roleIds: interaction.roleIds,
-            allowlist: config.allowlist,
-            owner: config.owner ?? null,
-          }),
-        },
-      });
-      if (!rateGate.ok) {
-        await interaction.reply({ content: rateGate.reply, ephemeral: true });
-        return;
-      }
+      if (!(await pressPassesGates(interaction, session ?? closed))) return;
 
       // Only a schedule ask has a Cancel button (AUTONOMY-6.a); a cancel
       // press on a session ask is a forged or stale one.
@@ -1780,12 +1872,16 @@ export async function startBridge(
           sessionId: session.id,
           model: llmModel,
           showUsage: ownerRun,
+          // AGENT-3.a (REQ-discord-303): the run's Stop button takes the
+          // Choose / Answer button's place on the stub while it runs.
+          components: buildStopComponents(turn.runId),
           debounceMs: opts.thinkingDebounceMs,
           tickMs: opts.thinkingTickMs,
         });
         await thinking.start({ description: "Working on your request..." });
         inflight?.progress(thinking.progressMessageId);
-        // AGENT-3.a: a reply 'stop' / 'cancel' to this progress message stops the run.
+        // AGENT-3.a: a reply 'stop' / 'cancel' to this progress message, or
+        // its Stop button, stops the run.
         turn.setProgressMessage(thinking.progressMessageId);
 
         // SESSION-WORKTREE-3 / REQ-discord-357: bind on every turn, as the chat

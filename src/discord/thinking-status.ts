@@ -7,6 +7,12 @@
  * owner's own runs only (`showUsage`, `AnswerExtras.spend`); a long answer is
  * split fence-safe into several messages (rich-reply.ts), the footer on the
  * last one.
+ *
+ * AGENT-3.a (REQ-discord-303): the progress message may carry message
+ * components while the run goes — the run's **Stop** button
+ * (`ThinkingStatusOpts.components`, run-control.ts `buildStopComponents`).
+ * They are cleared when the run is done, failed or stopped (`done`, `fail`,
+ * `finalizeContent`, `discard`).
  */
 
 import { formatUsd } from "../agent/spend-notice.ts";
@@ -235,11 +241,18 @@ export type ThinkingOutbound = {
     channelId: string;
     embed: DiscordEmbedPayload;
     replyToMessageId?: string;
+    /** Message components the progress message carries (AGENT-3.a Stop button). */
+    components?: unknown[];
   }): Promise<{ messageId: string } | null>;
   editEmbed(opts: {
     channelId: string;
     messageId: string;
     embed: DiscordEmbedPayload;
+    /**
+     * Set the message's components; `null` clears them (the Stop button once
+     * the run is done or failed). Omitted ⇒ left as they are.
+     */
+    components?: unknown[] | null;
   }): Promise<boolean>;
   /**
    * Optional richer edit (content + clear embeds/components).
@@ -292,6 +305,13 @@ export type ThinkingStatusOpts = {
    * surface instead of posting a new embed (DISCORD-ASK-7 button-pick path).
    */
   existingMessageId?: string;
+  /**
+   * Message components the progress message carries while the run goes —
+   * the run's Stop button (AGENT-3.a, REQ-discord-303). Cleared by `done`,
+   * `fail`, `finalizeContent` and `discard`. Omitted ⇒ no components (as
+   * before).
+   */
+  components?: unknown[];
   /** Debounce between edits (ancestor used 3000ms). */
   debounceMs?: number;
   /** Elapsed tick interval while waiting. */
@@ -308,6 +328,10 @@ export class ThinkingStatus {
   private readonly replyToMessageId?: string;
   private readonly sessionId: string;
   private readonly existingMessageId?: string;
+  /** The progress message's components while the run goes (AGENT-3.a Stop). */
+  private readonly components?: unknown[];
+  /** The progress message went out with `components` and they are not cleared yet. */
+  private componentsShown = false;
   private readonly debounceMs: number;
   private readonly tickMs: number;
   private readonly now: () => number;
@@ -335,6 +359,7 @@ export class ThinkingStatus {
     this.replyToMessageId = opts.replyToMessageId;
     this.sessionId = opts.sessionId;
     this.existingMessageId = opts.existingMessageId?.trim() || undefined;
+    this.components = opts.components?.length ? opts.components : undefined;
     this.model = opts.model?.trim() || undefined;
     this.showUsage = opts.showUsage === true;
     this.debounceMs = opts.debounceMs ?? 3000;
@@ -401,6 +426,9 @@ export class ThinkingStatus {
     if (initial?.description) this.description = initial.description;
     this.startedAt = this.now();
     const embed = buildThinkingEmbed(this.snapshot());
+    // AGENT-3.a (REQ-discord-303): the run's Stop button rides the progress
+    // message; on a reused Choose stub it takes the Choose button's place.
+    const components = this.components;
     if (this.existingMessageId && this.outbound.editMessage) {
       // DISCORD-ASK-7 — reuse Choose stub as the working surface.
       const ok = await this.outbound.editMessage({
@@ -408,7 +436,7 @@ export class ThinkingStatus {
         messageId: this.existingMessageId,
         content: null,
         embed,
-        components: null,
+        components: components ?? null,
       });
       this.messageId = ok ? this.existingMessageId : null;
     } else if (this.existingMessageId) {
@@ -416,6 +444,7 @@ export class ThinkingStatus {
         channelId: this.channelId,
         messageId: this.existingMessageId,
         embed,
+        ...(components ? { components } : {}),
       });
       this.messageId = ok ? this.existingMessageId : null;
     } else {
@@ -423,9 +452,11 @@ export class ThinkingStatus {
         channelId: this.channelId,
         embed,
         replyToMessageId: this.replyToMessageId,
+        ...(components ? { components } : {}),
       });
       this.messageId = sent?.messageId ?? null;
     }
+    this.componentsShown = Boolean(components && this.messageId);
     this.lastEditAt = this.now();
     this.phase = "working";
     this.startTicker();
@@ -469,17 +500,25 @@ export class ThinkingStatus {
     await this.flush(false);
   }
 
-  private async flush(force: boolean): Promise<void> {
+  /**
+   * Edit the progress embed. `final` (done / fail) also clears the Stop
+   * button (AGENT-3.a) when the message carries one; a working edit leaves
+   * the message's components as they are.
+   */
+  private async flush(force: boolean, final = false): Promise<void> {
     if (!this.messageId || this.closed) return;
     const now = this.now();
     if (!force && now - this.lastEditAt < this.debounceMs) return;
     this.lastEditAt = now;
     const embed = buildThinkingEmbed(this.snapshot());
-    await this.outbound.editEmbed({
+    const clear = final && this.componentsShown;
+    const ok = await this.outbound.editEmbed({
       channelId: this.channelId,
       messageId: this.messageId,
       embed,
+      ...(clear ? { components: null } : {}),
     });
+    if (clear && ok) this.componentsShown = false;
   }
 
   async done(
@@ -492,7 +531,7 @@ export class ThinkingStatus {
     this.description = finalDescription ?? "✅ Done";
     if (extras?.plumbing != null) this.plumbing = extras.plumbing.trim() || undefined;
     if (extras?.model != null) this.model = extras.model.trim() || undefined;
-    await this.flush(true);
+    await this.flush(true, true);
     this.closed = true;
   }
 
@@ -506,7 +545,7 @@ export class ThinkingStatus {
     this.description = finalDescription ?? "❌ Failed";
     if (extras?.plumbing != null) this.plumbing = extras.plumbing.trim() || undefined;
     if (extras?.model != null) this.model = extras.model.trim() || undefined;
-    await this.flush(true);
+    await this.flush(true, true);
     this.closed = true;
   }
 
@@ -601,6 +640,9 @@ export class ThinkingStatus {
     for (const stale of complete ? this.answerMessages.slice(parts.length) : []) {
       await this.outbound.deleteMessage?.({ channelId: this.channelId, messageId: stale.messageId });
     }
+    // AGENT-3.a: the first part's edit replaced the Stop button (its
+    // components are the answer's own, or none).
+    this.componentsShown = false;
     this.answerMessages = messages;
     this.closed = true;
     this.phase = phase;
@@ -619,6 +661,7 @@ export class ThinkingStatus {
     this.stopTicker();
     const id = this.messageId;
     this.closed = true;
+    this.componentsShown = false;
     if (this.outbound.deleteMessage) {
       await this.outbound.deleteMessage({
         channelId: this.channelId,

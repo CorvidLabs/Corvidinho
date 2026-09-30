@@ -9,6 +9,7 @@ import {
   formatTokenSegment,
   type ThinkingOutbound,
 } from "../src/discord/thinking-status.ts";
+import { buildStopComponents } from "../src/discord/run-control.ts";
 
 function mockOutbound() {
   const sends: Array<{ messageId: string; embed: ReturnType<typeof buildThinkingEmbed> }> =
@@ -318,5 +319,109 @@ describe("DISCORD-3.a footer-only embed on the collapsed answer", () => {
       color: THINKING_COLORS.success,
       footer: { text: "0s" },
     });
+  });
+});
+
+/**
+ * AGENT-3.a (REQ-discord-303): the run's Stop button rides the progress
+ * message while it runs and is cleared when the run is done, failed or
+ * stopped (the answer's edit).
+ */
+describe("the progress message's Stop button (AGENT-3.a, REQ-discord-303)", () => {
+  const STOP = buildStopComponents("run_4");
+
+  /** Every call with the fields as passed (a field left out stays out). */
+  function recording(opts: { editMessage?: boolean } = {}) {
+    const calls: Array<{ op: string } & Record<string, unknown>> = [];
+    let n = 0;
+    const outbound: ThinkingOutbound = {
+      async sendEmbed(o) {
+        n += 1;
+        calls.push({ op: "send", ...o });
+        return { messageId: `msg_${n}` };
+      },
+      async editEmbed(o) {
+        calls.push({ op: "editEmbed", ...o });
+        return true;
+      },
+      ...(opts.editMessage === false
+        ? {}
+        : {
+            async editMessage(o: Parameters<NonNullable<ThinkingOutbound["editMessage"]>>[0]) {
+              calls.push({ op: "editMessage", ...o });
+              return true;
+            },
+          }),
+    };
+    return { outbound, calls };
+  }
+
+  function status(outbound: ThinkingOutbound, extra: { components?: unknown[]; existingMessageId?: string } = {}) {
+    return new ThinkingStatus({
+      outbound,
+      channelId: "chan-1",
+      sessionId: "sess_stop1234",
+      debounceMs: 0,
+      tickMs: 60_000,
+      ...extra,
+    });
+  }
+
+  test("sent with the progress embed; working edits leave it; done clears it (components: null)", async () => {
+    const { outbound, calls } = recording();
+    const s = status(outbound, { components: STOP });
+    await s.start();
+    expect(calls[0]).toMatchObject({ op: "send", components: STOP });
+    await s.update({ tool: "Read" });
+    expect(calls[1]!.op).toBe("editEmbed");
+    expect("components" in calls[1]!).toBe(false);
+    await s.done("✅ Done");
+    expect(calls.at(-1)).toMatchObject({ op: "editEmbed", components: null });
+  });
+
+  test("fail clears it too", async () => {
+    const { outbound, calls } = recording();
+    const s = status(outbound, { components: STOP });
+    await s.start();
+    await s.fail("❌ boom");
+    expect(calls.at(-1)).toMatchObject({ op: "editEmbed", components: null });
+    expect((calls.at(-1)!.embed as { description: string }).description).toBe("❌ boom");
+  });
+
+  test("the collapsed answer replaces it: no components, or the answer's own (an ask's button)", async () => {
+    for (const answer of [undefined, [{ type: 1, components: [] }]]) {
+      const { outbound, calls } = recording();
+      const s = status(outbound, { components: STOP });
+      await s.start();
+      await s.finalizeContent({ content: "the answer", ...(answer ? { components: answer } : {}) });
+      const edit = calls.at(-1)!;
+      expect(edit.op).toBe("editMessage");
+      expect(edit.components).toEqual(answer ?? null);
+    }
+  });
+
+  test("a reused Choose stub gets it in place of the Choose button (editMessage, else editEmbed)", async () => {
+    const withEdit = recording();
+    await status(withEdit.outbound, { components: STOP, existingMessageId: "stub_9" }).start();
+    expect(withEdit.calls).toEqual([
+      expect.objectContaining({ op: "editMessage", messageId: "stub_9", content: null, components: STOP }),
+    ]);
+    const embedOnly = recording({ editMessage: false });
+    await status(embedOnly.outbound, { components: STOP, existingMessageId: "stub_9" }).start();
+    expect(embedOnly.calls).toEqual([expect.objectContaining({ op: "editEmbed", messageId: "stub_9", components: STOP })]);
+  });
+
+  test("without components nothing changes: no components sent, done and fail edit the embed only", async () => {
+    for (const end of ["done", "fail"] as const) {
+      const { outbound, calls } = recording();
+      const s = status(outbound);
+      await s.start();
+      await (end === "done" ? s.done() : s.fail());
+      for (const c of calls) expect({ end, op: c.op, has: "components" in c }).toEqual({ end, op: c.op, has: false });
+    }
+    // A reused stub still has its Choose button cleared, as before.
+    const stub = recording();
+    await status(stub.outbound, { existingMessageId: "stub_9" }).start();
+    expect(stub.calls[0]).toMatchObject({ op: "editMessage", components: null });
   });
 });
