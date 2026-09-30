@@ -692,7 +692,11 @@ describe("ask option ids and expired button asks (DISCORD-ASK-1/3/5)", () => {
     await press(handlers, customIds[1]!);
     expect(calls).toHaveLength(2);
     expect(calls.at(-1)!.humanText).toBe("Drop");
-    expect(calls.at(-1)!.prompt).toContain("Human answer:\nDrop");
+    // SAFE-12.a: no owner is configured here, so the presser is community and
+    // the picked label reaches the run inside the untrusted-data fence.
+    expect(calls.at(-1)!.prompt).toMatch(
+      /Human answer:\n\[untrusted message from the acting user \(role: community\)[^\n]*\n<<<UNTRUSTED_DATA id=[0-9a-f]{12} source=ask-pick>>>\nDrop\n<<<END_UNTRUSTED_DATA id=[0-9a-f]{12}>>>/,
+    );
     await result.stop();
   });
 

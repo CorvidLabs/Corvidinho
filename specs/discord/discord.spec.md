@@ -368,7 +368,15 @@ answer goes through `fenceSpeakerText` (`source=ask-answer`), and one that
 post in the session's channel replying to the stub that pings only the owner
 and is tracked on the session, one `injection-suspected` / `denied` row with
 surface `discord:<session>`); the owner's answer is neither fenced nor
-scanned. A pick's model-written option label is neither. A
+scanned. A pick's option label is the model's, but it may repeat a
+non-owner's own words, so a team or community presser's pick reaches the
+resumed run as their words, inside the same fence (`fenceSpeakerText`,
+`source=ask-pick`, the role resolved at press time with their Discord role
+ids; not scanned; SAFE-12.a); the owner's pick prompt is byte-identical to
+before. A pressed option id that matches none of the ask's options (a forged
+or stale id, or a pick id on a free-text ask) gets the ephemeral
+`ASK_CHOICE_EXPIRED` and nothing else: no run, the ask left pending, the raw
+id in no prompt. A
 thin or blank submit (`isThinAck`, AUTONOMY-5) is not an answer: the ask
 stays, nothing runs and the question is restated in an ephemeral
 `formatAskReply` with the Answer button; a cancel submit (`isCancelAsk`,
@@ -620,7 +628,7 @@ the configured owner.
 Untrusted text on Discord (SAFE-11/12/13, #71, REQ-discord-071):
 `src/discord/injection-guard.ts` exports `fenceSpeakerText(text, role,
 source, id?)` / `speakerFenceHeader(role)` / `SpeakerSurface`
-(`chat-message`, `session-topic`, `work-task`, `ask-answer`), `inboundInjection(text,
+(`chat-message`, `session-topic`, `work-task`, `ask-answer`, `ask-pick`), `inboundInjection(text,
 role)`, `injectionRefusalHead`, `formatInjectionRefusal(reasons, owner)`,
 `refuseInjectedSlash(ctx, interaction, verdict, source)`,
 `refuseInjectedAnswer(ctx, interaction, verdict, { sessionId, channelId,
@@ -767,7 +775,9 @@ post in the session's channel replying to the stub that pings only them
 (`refuseInjectedAnswer`) — plus an `injection-suspected` / `denied` audit row
 (actor, surface `discord:<session>` or `discord:/<command>`, digest of the
 source and reason ids; never the text). Otherwise the team / community speaker's words go to
-the model through `fenceSpeakerText` (the owner's unchanged). A run whose
+the model through `fenceSpeakerText` (the owner's unchanged), and so does the
+label of a Choose option a team / community presser picks (`ask-pick`, fenced
+but not scanned, SAFE-12.a). A run whose
 result carries `injection` pings the owner on the post that carries its
 answer: chat and button-pick replies (`withInjectionNotice`), `/session
 start` and `/work` owner notices (`slashOwnerNotice`) and a schedule run's
@@ -879,6 +889,12 @@ characters. No new env var, config key, table or column.
 - **Given** an undeclared user with an open free-text ask (the stub with its **Answer** button) and a configured owner
 - **When** they submit the Answer form with text that tells the bot to set aside its previous instructions
 - **Then** no agent run starts; the submit gets a private refusal that never quotes the text; the ask stays open and the session live; one post in the session's channel, replying to the stub, pings only the owner; an `injection-suspected` / `denied` audit row names the user and `discord:<session>`; an ordinary answer from them would reach the model fenced (`source=ask-answer`), and the owner's own answer is neither fenced nor scanned (REQ-discord-548, REQ-discord-071)
+
+### Scenario: A stranger picks a Choose option (SAFE-12.a)
+
+- **Given** an undeclared user with an open Choose ask whose option labels the model wrote (possibly copied from that user's own words) and a configured owner
+- **When** they press Choose and pick an option, or press a pick button whose option id the ask does not have
+- **Then** the pick resumes the session with the label inside the untrusted-data fence (`role: community`, `source=ask-pick`), with `humanText` and the thread turn the plain label and the option buttons cleared at once as before; the owner's own pick reaches the run exactly as before; a pick whose option id matches none of the ask's options gets "that choice expired", runs nothing, leaves the ask open and never puts the raw id in a prompt (REQ-discord-548, REQ-discord-071)
 
 ### Scenario: A stranger named like the owner (SAFE-11)
 
