@@ -483,9 +483,11 @@ naming the tools; other non-git runs keep tool-reported files only
 (REQ-agent-502).
 
 A task run offers the model a dangerous tool only when the run's allowlist
-names it (SAFE-1 consent, CLI-3), never `shell-exec`, the language runners
-or the Fledge core runs (`fledge-lanes-run`, `fledge-run`) until the SAFE-3
-decision, and never to a non-ADMIN role session: the role,
+names it (SAFE-1 consent, CLI-3), `shell-exec`, the language runners and the
+Fledge core runs (`fledge-lanes-run`, `fledge-run`) only with the attempt's
+SAFE-3.a grant (the owner's own chat, `/session start`, `/work` or ask
+answer, inside that talk's own worktree, REQ-agent-503), and never to a
+non-ADMIN role session: the role,
 tier and SAFE-9 filters apply first, and every runtime gate still runs
 (REQ-agent-501). An empty allowlist gives the same catalog as before.
 

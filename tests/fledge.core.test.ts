@@ -50,6 +50,7 @@ dir="$(dirname "$0")"
 } >> "$dir/argv.log"
 echo "cwd=$(pwd -P)" > "$dir/last.env"
 echo "gh=\${GITHUB_TOKEN:+set} dc=\${DISCORD_TOKEN:+set} ai=\${OPENAI_API_KEY:+set} llm=\${CORVIDINHO_LLM_API_KEY:+set} audit=\${CORVIDINHO_AUDIT_HMAC_KEY:+set} acting=\${CORVIDINHO_ACTING_DISCORD_USER_ID:+set} cdpath=\${CDPATH:+set} oldpwd=\${OLDPWD:+set} fni=\${FLEDGE_NON_INTERACTIVE} root=\${CORVIDINHO_PROJECT_ROOT} keep=\${KEEP_ME}" >> "$dir/last.env"
+echo "creds ghtoken=\${GH_TOKEN:+set} askpass=\${GIT_ASKPASS:+set} sshsock=\${SSH_AUTH_SOCK:+set} gcglobal=\${GIT_CONFIG_GLOBAL} gcnosystem=\${GIT_CONFIG_NOSYSTEM} prompt=\${GIT_TERMINAL_PROMPT} gccount=\${GIT_CONFIG_COUNT} helperkey=\${GIT_CONFIG_KEY_0} helperval=[\${GIT_CONFIG_VALUE_0}] ghdir=\${GH_CONFIG_DIR} hosts=$([ -e "\${GH_CONFIG_DIR:-/nonexistent}/hosts.yml" ] && echo yes || echo no) helpers=[$(git config --get-all credential.helper 2>/dev/null | tr '\\n' ',')] sshcmd=\${GIT_SSH_COMMAND}" >> "$dir/last.env"
 [ "$1" = "--non-interactive" ] && shift
 if [ "$1 $2" = "lanes list" ]; then
   [ -f "$dir/list.exit" ] && { echo "error: No fledge.toml found in current directory." >&2; exit "$(cat "$dir/list.exit")"; }
@@ -460,6 +461,39 @@ describe("fledge-lanes-run / fledge-run (dangerous, code tier)", () => {
     expect(env).toContain(
       `gh= dc= ai= llm= audit= acting= cdpath= oldpwd= fni=1 root=${fake.project} keep=kept`,
     );
+  });
+
+  test("lane and task runs start without GitHub or git credentials, like shell-exec and the runners (SAFE-21.a, SAFE-3.a)", async () => {
+    const fake = makeFake();
+    // The owner's credentials as the bot's env and home hold them: tokens,
+    // an askpass helper, the ssh agent, a gh config dir with hosts.yml and a
+    // global git config naming a credential helper.
+    const home = join(fake.bin, "..", "home");
+    const ghDir = join(home, ".config", "gh");
+    mkdirSync(ghDir, { recursive: true });
+    writeFileSync(join(ghDir, "hosts.yml"), "github.com:\n    oauth_token: gho_notreal\n");
+    writeFileSync(join(home, ".gitconfig"), "[credential]\n\thelper = owner-marker-helper\n");
+    const creds = {
+      ...fake.env,
+      HOME: home,
+      GH_TOKEN: "gh-token-value",
+      GIT_ASKPASS: "/usr/bin/askpass-owner",
+      SSH_AUTH_SOCK: join(home, "agent.sock"),
+      GH_CONFIG_DIR: ghDir,
+    };
+    for (const [name, args] of [["fledge-run", ["push"]], ["fledge-lanes-run", ["release"]]] as const) {
+      const r = await call(name, { ...fake, env: creds }, [...args]);
+      expect(r.ok).toBe(true);
+      const line = lastEnv(fake).split("\n").find((l) => l.startsWith("creds ")) ?? "";
+      expect(line).toContain("ghtoken= askpass= sshsock= gcglobal=/dev/null gcnosystem=1 prompt=0 gccount=3");
+      expect(line).toContain("helperkey=credential.helper helperval=[]");
+      expect(line).toContain("hosts=no");
+      expect(line).not.toContain(`ghdir=${ghDir}`);
+      expect(line).not.toContain("owner-marker-helper");
+      expect(line).toContain("sshcmd=ssh -F /dev/null");
+      // The verify-lane scrub still holds.
+      expect(lastEnv(fake)).toContain(`gh= dc= ai= llm= audit= acting= cdpath= oldpwd= fni=1 root=${fake.project} keep=kept`);
+    }
   });
 
   test("fledge run: task args go after fledge's -- verbatim (no shell); no args, no --", async () => {

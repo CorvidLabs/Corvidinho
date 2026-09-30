@@ -1,0 +1,42 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790786158,
+      "digest": "af02ef88ff80b1d79ff54d1786a703808fb8555cffdd2cd85c2065f242deb5e4",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "fledge-lane-and-task-runs-start-without-my-github-or-git-credentials-like-the-shell-and-the-runners-now-that-my-talks",
+        "title": "Fledge lane and task runs start without my GitHub or git credentials, like the shell and the runners, now that my talks may be offered them (SAFE-21.a, SAFE-3.a)",
+        "description": "Fledge lane and task runs start without my GitHub or git credentials, like the shell and the runners, now that my talks may be offered them (SAFE-21.a, SAFE-3.a)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          "plugins/fledge/core.ts",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/testing.md",
+          "tests/fledge.core.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "fledge-lanes-run and fledge-run (and the two Fledge core reads) start fledge with the env shell-exec and the language runners get (withoutGitCredentials over the verify-lane scrub): no GH_TOKEN, GITHUB_TOKEN, GIT_ASKPASS, SSH_AUTH_SOCK or inherited GH_CONFIG_DIR; GIT_CONFIG_GLOBAL=/dev/null, GIT_CONFIG_NOSYSTEM=1, GIT_TERMINAL_PROMPT=0, GIT_CONFIG_COUNT=3 with an empty credential.helper, a key-less GIT_SSH_COMMAND and an empty GH_CONFIG_DIR, so the owner's credential helper and gh login never reach a lane or task; FLEDGE_NON_INTERACTIVE=1, CORVIDINHO_PROJECT_ROOT and the verify-lane scrub are unchanged"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "64fe85639410b1ae5cf1d477b3fc922f94e66d4529179e3786e68ac11067d7c1"
+      }
+    }
+  ],
+  "reopenings": []
+}

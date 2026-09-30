@@ -240,7 +240,7 @@ worktree (SAFE-3.a, see "What an entry unlocks" below):
 |------|-----------|---------|----------|-------------------|
 | `web-fetch` | true | 1 | true | an operator runs `corvidinho plugins run web-fetch` non-interactively (GET-only, SSRF-guarded, SAFE-7) |
 | `fledge-<command>` | true | 2 (native) / 1 (wasm without `exec`) | true | an operator runs `corvidinho plugins run fledge-<command>` non-interactively; one entry per Fledge command you trust, names from `plugins list` (a Fledge plugin command named `run`, `lanes-list`, `lanes-validate` or `lanes-run` is skipped: the Fledge core builtins `fledge-run`, `fledge-lanes-list`, `fledge-lanes-validate` and `fledge-lanes-run` hold those names) |
-| `fledge-lanes-run` / `fledge-run` | true | 2 | true | an operator runs `corvidinho plugins run fledge-lanes-run -- <lane>` or `fledge-run -- <task> [args…]` non-interactively; builtins that run fledge's own `lanes run` / `run` in the project dir (PLUGIN-1), so they run whatever that lane or task's commands do; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, at code tier (SAFE-3.a) |
+| `fledge-lanes-run` / `fledge-run` | true | 2 | true | an operator runs `corvidinho plugins run fledge-lanes-run -- <lane>` or `fledge-run -- <task> [args…]` non-interactively; builtins that run fledge's own `lanes run` / `run` in the project dir (PLUGIN-1), so they run whatever that lane or task's commands do, starting without the owner's GitHub or git credentials like `shell-exec` and the runners (SAFE-21.a), so pushes, PRs and merges go through the checked GitHub tools; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, at code tier (SAFE-3.a) |
 | `git-commit` | true | 2 | true | `/work` should open draft PRs (needed when the work tree has changes) |
 | `git-push` | true | 2 | true | `/work` should open draft PRs; the remote's OWNER/REPO must also pass the GitHub allowlist (GITHUB-6) |
 | `github-pr-create` | true | 1 | true | `/work` should open draft PRs; needs `GITHUB_TOKEN`/`GH_TOKEN` |
@@ -299,10 +299,12 @@ What an entry unlocks **today**:
   run's event stream carries one `[operator] SAFE-3.a: … allowlisted but not offered: <why>`
   line (never part of the reply). Every call still goes through the role re-check, SAFE-1,
   the must-ask Approve card for prod and deploy commands (AUTONOMY-9), the SAFE-5 audit trail
-  and the tools' own SAFE-3 clamp, SAFE-21 refusals and credential-free env. Known limits: the
-  runners' own code (and a Fledge lane or task) can still change directory or write files
-  inside or outside the worktree, which no lexical check sees, and the Fledge runs keep the
-  verify lane's env; keep the allowlist file and other secrets outside every talk worktree.
+  and the tools' own SAFE-3 clamp, SAFE-21 refusals and credential-free env (the Fledge runs
+  included: no GitHub tokens, no global git config or credential helper, no ssh agent, gh
+  logged out). Known limits: the runners' own code (and a Fledge lane or task) can still
+  change directory, read files or write files inside or outside the worktree as the bot's own
+  user, which no lexical check sees; keep the allowlist file and other secrets outside every
+  talk worktree.
   They all still run through `corvidinho plugins run`.
 - Fledge commands (`fledge-<command>`) are discovered for a run only when the allowlist names
   one and the run is not a non-ADMIN session. Naming a Fledge core builtin (`fledge-lanes-list`,

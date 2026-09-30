@@ -759,7 +759,10 @@ task name must match `FLEDGE_NAME_RE` (`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$`,
 no leading `-`), so model argv never becomes a fledge option (`--init`,
 `--list`, `--lang`, `--dry-run`, `--from`); a refused name spawns nothing
 (usage error, exit 1). The child env is the verify lane's scrub
-(`buildVerifyEnv`) minus `CDPATH` / `OLDPWD` plus `FLEDGE_NON_INTERACTIVE=1`
+(`buildVerifyEnv`) minus `CDPATH` / `OLDPWD` and without the owner's GitHub
+or git credentials (`withoutGitCredentials`, the env `shell-exec` and the
+runners get, SAFE-21.a / REQ-plugins-495; the model may be offered the lane
+and task runs under SAFE-3.a) plus `FLEDGE_NON_INTERACTIVE=1`
 and `CORVIDINHO_PROJECT_ROOT`; stdin closed, 64 KiB per-stream caps, process
 group killed on timeout (exit 124) or the calling run's abort (exit 130);
 output and parsed fields are secret-scrubbed, parsed fields control-char
