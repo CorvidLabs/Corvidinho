@@ -1,6 +1,6 @@
 ---
 id: it-asks-me-on-an-approve-card-before-touching-prod-or-deploys-or-making-a-channel-post-anything-else-it-just-does-and
-state: approved
+state: implementing
 type: feature
 base_commit: 151e9baf38ef7e8d67ffa4271ee8c4af614c9ae6
 ---

@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 69
+version: 70
 status: draft
 files:
   - src/cli.ts
@@ -304,3 +304,4 @@ Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), 
 | 2026-09-30 | verification-can-t-be-skipped-and-the-real-diff-since-the-talk-started-decides-what-changed-agent-14-agent-15-agent-15: Verification can't be skipped and the real diff since the talk started decides what changed (AGENT-14, AGENT-15, AGENT-15.a): task run refuses --no-verify, [corvidinho] verify_before_complete is ignored, filesChanged comes from the real git diff alone (a claimed path git does not show still runs the lane), and a talk worktree whose last run did not end verified verifies from the talk branch's merge-base |
 | 2026-09-30 | release-0-0-35-numeric-github-ids-dm-private-reads-github-forget-me-unskippable-verify-shell-guards-schedule-repo-gate: Release 0.0.35: numeric GitHub ids, DM private reads, GitHub forget-me, unskippable verify, shell guards, schedule repo gate |
 | 2026-09-30 | bun-test-keeps-every-temp-dir-it-makes-under-one-per-run-root-in-tmpdir-and-removes-that-root-when-the-run-ends-instead: Bun test keeps every temp dir it makes under one per-run root in TMPDIR and removes that root when the run ends, instead of leaking ~500 mkdtemp dirs into /tmp per run (verify lane filled the agent box's disk) |
+| 2026-09-30 | it-asks-me-on-an-approve-card-before-touching-prod-or-deploys-or-making-a-channel-post-anything-else-it-just-does-and: It asks me on an Approve card before touching prod or deploys or making a channel post; anything else it just does and tells me (AUTONOMY-9/9.a, AUTONOMY-10/10.a channel posts, AUTONOMY-11, #97) |
