@@ -26,6 +26,11 @@
  *   (the one holding the owner's Discord id) keeps owner.
  * - Plan and commit are synchronous, so two admin commands in one bridge
  *   process cannot interleave a read-modify-write.
+ * - GitHub (IDENTITY-7.a): people match on GitHub only by numeric user id.
+ *   The /admin handler looks a `link github:<login>` up once, at link time
+ *   (src/identity/github-user.ts, before the plan), and passes its numeric id
+ *   as a `github_id` link, stored in `github_ids` next to the login (a
+ *   label). A failed lookup links nothing.
  */
 
 import { existsSync, readFileSync } from "node:fs";

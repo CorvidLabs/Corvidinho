@@ -31,6 +31,14 @@ const ADA_DC = "300000000000000003";
 const CHAN = "400000000000000004";
 const OWNER: OwnerRecord = { discordId: OWNER_ID, display: "Leif", githubLogin: "0xleif" };
 
+/**
+ * IDENTITY-7.a: `link github:<login>` looks the numeric id up; this fake
+ * GitHub knows these logins (no network in tests).
+ */
+const GITHUB_IDS: Record<string, string> = { "tofu-dev": "4242", ada: "5151", "0xleif": "8268288" };
+const fakeLookup: NonNullable<SlashContext["lookupGithubUser"]> = async (login) =>
+  GITHUB_IDS[login] ? { ok: true, id: GITHUB_IDS[login]!, login } : { ok: false, error: `GitHub has no user @${login}` };
+
 const SAMPLE_TOML = `# Corvidinho allowlist — operator notes stay
 [github]
 repos = ["corvidlabs/corvidinho"]
@@ -90,6 +98,7 @@ async function fixture(opts: {
     owner: OWNER,
     mutedUsers: new Set(),
     env,
+    lookupGithubUser: fakeLookup,
     recordAudit:
       opts.recordAudit === undefined
         ? (entry) => appendAudit(db, entry)
@@ -155,10 +164,11 @@ describe("/admin people — owner adds, changes and removes people and links (AD
 
     out = await run(f, "link", { person: "tofu", discord: TOFU_DC, github: "@Tofu-Dev", github_id: "4242", nickname: "T" });
     expect(out).toContain(`linked Discord <@${TOFU_DC}>, GitHub @tofu-dev, GitHub id 4242, nickname "T"`);
-    // Live: the next message / comment resolves them, on each stable id.
+    // Live: the next message / comment resolves them, on each stable id
+    // (on GitHub the numeric id only, IDENTITY-7.a).
     expect(who(f, { discordId: TOFU_DC })).toBe("tofu");
-    expect(who(f, { githubLogin: "tofu-dev" })).toBe("tofu");
     expect(who(f, { githubId: 4242 })).toBe("tofu");
+    expect(who(f, { githubLogin: "tofu-dev" })).toBeNull();
     expect(who(f, { githubLogin: "T" })).toBeNull();
 
     const text = readFileSync(f.path, "utf8");
@@ -171,7 +181,9 @@ describe("/admin people — owner adds, changes and removes people and links (AD
     out = await run(f, "unlink", { person: "tofu", github: "tofu-dev", nickname: "nope" });
     expect(out).toContain("unlinked GitHub @tofu-dev");
     expect(out).toContain('Not linked (unchanged): nickname "nope"');
-    expect(who(f, { githubLogin: "tofu-dev" })).toBeNull();
+    // The login is a label: the numeric id stays linked and still matches.
+    expect(out).toContain("GitHub id 4242 stays linked, so GitHub still recognises them — unlink github_id to stop that (IDENTITY-7.a).");
+    expect(who(f, { githubId: 4242 })).toBe("tofu");
     expect(who(f, { discordId: TOFU_DC })).toBe("tofu");
 
     out = await run(f, "add", { person: "tofu", display: "Tofu the Dev" });
@@ -182,6 +194,7 @@ describe("/admin people — owner adds, changes and removes people and links (AD
 
     out = await run(f, "remove", { person: "tofu" });
     expect(out).toContain('"tofu" (Tofu the Dev) is no longer a declared person (3 links dropped)');
+    expect(who(f, { githubId: 4242 })).toBeNull();
     expect(who(f, { discordId: TOFU_DC })).toBeNull();
     expect(readFileSync(f.path, "utf8")).toBe(SAMPLE_TOML);
 
@@ -204,7 +217,7 @@ describe("/admin people — owner adds, changes and removes people and links (AD
     await run(f, "link", { person: "ada", github: "ada" });
     const text = readFileSync(f.path, "utf8");
     expect(text).toContain(
-      `[people.ada]  # hand-written\n# Ada from the hackathon\ndisplay = "Ada"\ndiscord_ids = ["${ADA_DC}"]\ngithub_logins = ["ada"]\nteam = "infra"\n`,
+      `[people.ada]  # hand-written\n# Ada from the hackathon\ndisplay = "Ada"\ndiscord_ids = ["${ADA_DC}"]\ngithub_logins = ["ada"]\ngithub_ids = ["5151"]\nteam = "infra"\n`,
     );
     await run(f, "remove", { person: "ada" });
     const after = readFileSync(f.path, "utf8");
@@ -280,8 +293,12 @@ describe("/admin people refusals (fail closed; nothing written)", () => {
     const f = await fixture();
     await run(f, "add", { person: "leif", display: "Leif" });
     await run(f, "link", { person: "leif", discord: OWNER_ID });
-    const me = resolvePerson(loadDeclaredPeople({ allowlist: f.ctx.allowlist, owner: OWNER }), { githubLogin: "0xleif" });
-    expect(me).toMatchObject({ personId: "leif", role: "owner" });
+    const people = () => loadDeclaredPeople({ allowlist: f.ctx.allowlist, owner: OWNER });
+    expect(resolvePerson(people(), { discordId: OWNER_ID })).toMatchObject({ personId: "leif", role: "owner" });
+    // IDENTITY-7.a: on GitHub the owner is theirs once the numeric id is linked, never by the [owner] login.
+    expect(resolvePerson(people(), { githubLogin: "0xleif" })).toBeNull();
+    await run(f, "link", { person: "leif", github: "0xLeif" });
+    expect(resolvePerson(people(), { githubId: 8268288 })).toMatchObject({ personId: "leif", role: "owner" });
   });
 
   test("bad input: person id, reserved owner id, unknown person, bad link values, missing links", async () => {

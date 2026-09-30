@@ -15,7 +15,7 @@
 - [discord](hi/discord.md): DISCORD (18 criteria)
 - [fledge](hi/fledge.md): FLEDGE (7 criteria)
 - [github](hi/github.md): GITHUB (8 criteria)
-- [identity](hi/identity.md): IDENTITY (14 criteria)
+- [identity](hi/identity.md): IDENTITY (15 criteria)
 - [memory](hi/memory.md): MEMORY (9 criteria)
 - [ops](hi/ops.md): OPS (2 criteria)
 - [persona](hi/persona.md): PERSONA (3 criteria)

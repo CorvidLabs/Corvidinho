@@ -1019,7 +1019,7 @@ Acceptance Criteria
 - A community run whose task claims the owner and asks for `files-write` is offered no mutating tool and the call gets the role refusal.
 - Through `createTaskExecute`: a `delegate` result, and a failed `council` result, carrying `data.injection` put `injectionWorkerNote` and the fence in the tool message, drop `files-write`, `memory-store` and the worker tool from the next request, refuse `memory-store` and `files-write` (nothing stored or written), report the worker's notice once, end the summary with the note and record one audit row; at delegation depth 1 a hit is reported but records no row.
 - Regression tests in `tests/safe.injection.test.ts` fail on the base sources and pass after.
-
+- WATCH (REQ-watch-367, IDENTITY-7.a): `watchInjectionVerdict` exempts the owner only by the owner's GitHub numeric id; an injected body from the owner's login with no or another numeric id is flagged (`tests/safe.injection.test.ts`).
 
 ### REQ-agent-101
 

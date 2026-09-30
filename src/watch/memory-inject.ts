@@ -6,9 +6,10 @@
  * what it found at the top of the prompt, so the model has searched memory
  * before it could say it doesn't know — no extra model call:
  *
- * - the commenter's own profile, when their GitHub numeric id / login
- *   resolves to a declared person in the owner's people list (stable ids
- *   only, IDENTITY-7; `memorySubjectForGithub`) — the same profile as on
+ * - the commenter's own profile, when their GitHub numeric user id resolves
+ *   to a declared person in the owner's people list (stable ids only,
+ *   IDENTITY-7; the numeric id only, never the login, IDENTITY-7.a;
+ *   `memorySubjectForGithub`) — the same profile as on
  *   Discord, never anyone else's, never private notes (MEMORY-7);
  * - the project memory of the thread's repo (`project:<owner/repo>`,
  *   MEMORY-6), for anyone, read-only, when it holds rows.
@@ -95,10 +96,8 @@ export function enrichWatchPromptWithMemories(
   const query = `${opts.event.title ?? ""}\n${opts.event.body ?? ""}`;
   const blocks: string[] = [];
   let count = 0;
-  const subject = memorySubjectForGithub(opts.people, {
-    login: opts.event.sender,
-    id: opts.event.senderId,
-  });
+  // IDENTITY-7.a: the commenter's numeric user id only, never the login.
+  const subject = memorySubjectForGithub(opts.people, { id: opts.event.senderId });
   if (subject) {
     const rows = recallRelevantThenRecent(store, {
       ownerUserId: subject.writeScope,
