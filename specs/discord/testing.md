@@ -316,6 +316,13 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   `tests/discord.thin-ack.test.ts`, `tests/discord.slash-pending-ask.test.ts`
   and `tests/discord.slash-choose-ask.test.ts` now expect the Answer button
   and hint on free-text asks. These fail on the base sources.
+- The community requester's typed answer reaches the resumed run inside the
+  untrusted-data fence (`role: community`, `source=ask-answer`) after the
+  prior-question block, as a reply's words would (SAFE-12, REQ-discord-071);
+  `humanText` and the thread turn stay the plain answer. The submit, thin,
+  follow-up, muted and `/work` tests assert the fence and fail on the base
+  bridge (answer unfenced). The SAFE-13 refusal of an injected submit is in
+  `tests/safe.injection.test.ts` (below).
 
 ## Unique option ids and expired button asks (REQ-discord-044 / REQ-discord-045 / REQ-agent-045, DISCORD-ASK-1/3/5)
 
@@ -745,6 +752,24 @@ no session, public refusal, owner ping post, audit row), fence an ordinary
 non-owner request and leave the owner's unfenced; `slashOwnerNotice` and
 `withInjectionNotice` carry the owner line. `tests/discord.slash-pending-ask.test.ts`
 now expects a non-owner's free-text answer inside the fence.
+› "SAFE-12/13 on the private Answer form" (REQ-discord-548 / REQ-discord-071,
+through `startBridge` with a memory DB and a first run that stops on a
+free-text ask): a community user's and a declared team member's Answer form
+submit that tells the bot to ignore its rules starts no run, gets one
+ephemeral refusal that never quotes it, posts once in the session's channel
+replying to the stub with allowed mentions only the owner (the only post that
+pings the owner), appends one `injection-suspected` / `denied` row (the user,
+`discord:<session>`), keeps the session and its pending ask, adds nothing to
+the thread and tracks the refusal post on the session; a community user's
+ordinary answer resumes inside the fence (`source=ask-answer`) with
+`humanText` and the thread turn the plain answer, the "Got it" ack and no row;
+the owner's answer with injection-like words runs unfenced, with no refusal
+and no row; a declared team member allowlisted only by a Discord role (a
+non-empty user / role allowlist), whose chat run is team, answers through the
+form as team too (acting role team, fence header `role: team`). The first
+three and the role-id test fail on the base bridge (a run starts / the answer
+is unfenced / the form resolved the presser as community); the owner test
+passes on both (unchanged behaviour).
 
 Ranked recall and the inject search (MEMORY-9, #67 / REQ-discord-067):
 `tests/memory.recall-github.test.ts` › "MEMORY-9 ranked recall" — a question
