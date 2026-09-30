@@ -75,15 +75,22 @@ function escapeRe(text: string): string {
 }
 
 /**
- * SAFE-12 (REQ-discord-071): the requester here is community, so the typed
- * answer reaches the resumed run inside the untrusted-data fence, as the
- * same words in a reply would, after the prior-question block.
+ * SAFE-12 (REQ-discord-071): a non-owner requester's typed answer reaches the
+ * resumed run inside the untrusted-data fence, as the same words in a reply
+ * would, after the prior-question block. The requester here is community,
+ * except on /work, which community can't start (IDENTITY-11.a) and a team
+ * member runs instead.
  */
-function expectFencedAnswer(prompt: string, text: string, prior: string | null = PRIOR_BLOCK): void {
+function expectFencedAnswer(
+  prompt: string,
+  text: string,
+  prior: string | null = PRIOR_BLOCK,
+  role: "community" | "team" = "community",
+): void {
   expect(prompt).toMatch(
     new RegExp(
       `${prior === null ? "" : `${escapeRe(prior)}\\n\\n`}Human answer:\\n` +
-        "\\[untrusted message from the acting user \\(role: community\\)[^\\n]*\\n" +
+        `\\[untrusted message from the acting user \\(role: ${role}\\)[^\\n]*\\n` +
         `<<<UNTRUSTED_DATA id=[0-9a-f]{12} source=ask-answer>>>\\n${escapeRe(text)}\\n<<<END_UNTRUSTED_DATA id=[0-9a-f]{12}>>>`,
     ),
   );
@@ -721,7 +728,7 @@ describe("/work free-text answer: Answer form resumes the slash session", () => 
     await b.handlers.onComponent!(submit(pending.askId, USER_ID, "eu-west-1", rec, { messageId: answer.messageId }));
     expect(b.calls).toHaveLength(2);
     expect(b.calls[1]!.sessionId).toBe(b.calls[0]!.sessionId);
-    expectFencedAnswer(b.calls[1]!.prompt, "eu-west-1");
+    expectFencedAnswer(b.calls[1]!.prompt, "eu-west-1", PRIOR_BLOCK, "team");
     expect(b.outbound.contentEdits.filter((e) => e.messageId === answer.messageId).at(-1)!.content).toContain("DONE: 2");
     await b.result.stop();
   });
