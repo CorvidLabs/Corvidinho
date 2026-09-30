@@ -7,10 +7,11 @@
   "title": "Bun test keeps every temp dir it makes under one per-run root in TMPDIR and removes that root when the run ends, instead of leaking ~500 mkdtemp dirs into /tmp per run (verify lane filled the agent box's disk)",
   "description": "bun test keeps every temp dir it makes under one per-run root in TMPDIR and removes that root when the run ends, instead of leaking ~500 mkdtemp dirs into /tmp per run (verify lane filled the agent box's disk)",
   "kind": "bug_fix",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "5093b81f1d8a10582b216c6116d1cfd83db331c7",
   "created_at": 1790743623,
-  "updated_at": 1790743632,
+  "updated_at": 1790743737,
   "affected_specs": [
     "cli"
   ],

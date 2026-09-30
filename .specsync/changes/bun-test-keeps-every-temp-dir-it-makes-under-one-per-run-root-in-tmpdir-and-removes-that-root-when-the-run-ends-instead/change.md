@@ -1,6 +1,6 @@
 ---
 id: bun-test-keeps-every-temp-dir-it-makes-under-one-per-run-root-in-tmpdir-and-removes-that-root-when-the-run-ends-instead
-state: draft
+state: implementing
 type: bug_fix
 base_commit: 5093b81f1d8a10582b216c6116d1cfd83db331c7
 ---
