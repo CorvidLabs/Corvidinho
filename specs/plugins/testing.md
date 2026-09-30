@@ -522,6 +522,73 @@ exists as its own command), `tests/roles.team.test.ts` (REQ-plugins-065:
 `roleAllowsPlugin` over every plugin with the team search rule; the team
 catalog offers `web-search`, the community catalog does not).
 `tests/fledge.plugins.test.ts` keeps the whole tool surface (builtins plus a
+<<<<<<< HEAD
 fake Fledge plugin) under `TOOL_SURFACE_BUDGET_TOKENS` (9000 on main since
 AGENT-18) with `web-search`'s short description (builtins alone: 8078 tokens,
 7951 on main 0aeb345; the reply line adds nothing to any tool schema).
+=======
+fake Fledge plugin) under `TOOL_SURFACE_BUDGET_TOKENS` with `web-search`'s
+short description (builtins alone: 7569 tokens, 7442 on main 507d97b).
+
+## GIF search through GIPHY (REQ-plugins-3182 added, REQ-plugins-065 / -113 / -114 modified, PLUGIN-8 / PLUGIN-9)
+
+`tests/gif.search.test.ts` (no network: a fake resolver and a fake transport
+that answers like GIPHY's Tenor-compatible search, the fake key
+`test-key-not-real`, in-memory ledger DBs):
+
+- Gating: `gif-search` is dangerous, minTier 1, no must-ask entry, in
+  `NO_STATE_CHANGE_TOOLS`; the catalog offers it only when allowlisted, at
+  tool/code tier, never at read tier; owner, no role session and team (chat
+  and `/work`) get it, community never, team still without `web-fetch` and
+  `discord-send-file`; `TEAM_SEARCH_TOOLS` is `web-search` and `gif-search`;
+  SAFE-1 deny with a `denied` audit row, allowlisted runs audited `started`
+  / outcome; a community role session is refused at `runPlugin`, a team one
+  reaches the handler.
+- Request: exactly one GET (no GIF downloaded) to the pinned public address
+  of `api.giphy.com` `/v2/search` with exactly `q`, `key`,
+  `client_key=corvidinho`, `limit` (default 5, `--limit 10`),
+  `media_filter=gif,tinygif` and `contentfilter=medium`, and only the fixed
+  API headers; `cats&contentfilter=off&rating=r` and similar stay the `q`
+  value with one `contentfilter=medium`; `--contentfilter`, `--rating`,
+  `--media-filter`, `--download`, bad limits, words with `--query` and
+  missing / 51-character queries are usage errors that send nothing; no /
+  blank / spaced / 5-character key → `not-configured`; secret-carrying
+  queries (the GIPHY and Brave keys, a Discord token, a `ghp_` token, the key
+  split by a joiner) refused before anything is sent.
+- Output: titles and links only inside the fence, in GIPHY's order (a hostile
+  title, a guessed end marker and control characters included), nothing of a
+  result outside it, `postAs: "link"`, the link-only guidance and "Powered By
+  GIPHY" in `data` / the summary; media-host validation (http, look-alike and
+  suffix hosts, `giphy.com` page URLs, `media5`, credentials, port 8443,
+  trailing dot, over 2048 characters dropped; `tinygif`-only results keep
+  their `Small GIF:` line; results without a valid link dropped; at most
+  `--limit`); `(no results)`; a 2xx `error` body → `api-error`, a body
+  without `results` → `bad-response`.
+- SAFE-6: GIPHY echoing the key or the request URL in titles, links, a 401 /
+  500 / 2xx error body, a non-JSON body, a redirect Location, a transport
+  error or a DNS error never brings back the key or the request's query
+  string (GIPHY's own echo inside the fence reads `key=[redacted:env-secret]`,
+  and no error names the path, `key=` or the Location); the key split by a
+  zero-width space, a soft hyphen, a bidi isolate, a tag character or BEL
+  never comes back whole; through `runPlugin` the result and the audit rows
+  hold neither the key, the path, `key=`, the API host nor the pinned
+  address; the env drop lists (workers, verify lane, Fledge children),
+  `redactSecretEnvValues` and `formatErrorLine`.
+- Transport: a non-public answer for `api.giphy.com` is refused before
+  connecting (exit 2), a redirect after one dial (exit 2, Location not
+  echoed); 401 / 403 / 400 / 429 / 503, `text/html` and malformed JSON map to
+  fixed codes; the run's abort ends a pending search (`aborted`, the
+  transport's signal aborted), a stalled one times out, a run already stopped
+  sends nothing; an unexpected failure is the fixed line.
+- Docs: `.env.example` has `# GIPHY_API_KEY=`; `docs/DISCORD-GO-LIVE.md` has
+  the `gif-search` table row, `GIPHY_API_KEY`, `contentfilter=medium` and
+  "Powered By GIPHY".
+
+Updated: `tests/roles.team.test.ts` and `tests/web.search.test.ts`
+(REQ-plugins-065: `TEAM_SEARCH_TOOLS` is `gif-search` and `web-search`; the
+team catalog offers `gif-search`, the community catalog does not).
+`tests/fledge.plugins.test.ts` (REQ-plugins-114, unchanged test) keeps the
+whole tool surface (builtins plus a fake Fledge plugin) under the default
+budget, now 8500: 8076 tokens with `gif-search` on a machine with all three
+language runners (7973 on the slice A base, where 8000 still held).
+>>>>>>> 7ae58923 (Add: gif-search through GIPHY for the owner and team (PLUGIN-8, PLUGIN-9))

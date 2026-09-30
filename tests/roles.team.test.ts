@@ -278,8 +278,8 @@ describe("IDENTITY-12: the tool layer resolves the role on every call", () => {
       "specsync-change-finalize",
       "specsync-change-new",
     ]);
-    // PLUGIN-9 (#318): the explicit team search rule names web-search only.
-    expect([...TEAM_SEARCH_TOOLS].sort()).toEqual(["web-search"]);
+    // PLUGIN-9 (#318): the explicit team search rule names web-search and gif-search only.
+    expect([...TEAM_SEARCH_TOOLS].sort()).toEqual(["gif-search", "web-search"]);
   });
 });
 
@@ -341,7 +341,7 @@ describe("DISCORD-SCHEDULE-1.a: schedule-run stamps in the tool layer", () => {
 });
 
 describe("IDENTITY-9..11: the catalog by role", () => {
-  test("owner = every allowlisted tool (unchanged); team = read + reviews + web-search (+ file edits in /work); community = read only (unchanged)", () => {
+  test("owner = every allowlisted tool (unchanged); team = read + reviews + web-search + gif-search (+ file edits in /work); community = read only (unchanged)", () => {
     const allowlist = EVERY_DANGEROUS();
     const legacyAdmin = names({ tier: "code", allowlist, actingIsAdmin: true, autonomous: true });
     const legacyNonAdmin = names({ tier: "code", allowlist, actingIsAdmin: false, autonomous: true });
@@ -354,9 +354,11 @@ describe("IDENTITY-9..11: the catalog by role", () => {
     const team = names({ tier: "code", allowlist, actingRole: "team", autonomous: true });
     expect(team.has("github-issue-comment")).toBe(true);
     expect(team.has("github-pr-review")).toBe(true);
-    // PLUGIN-9: web search is for the owner and the team (still allowlisted).
+    // PLUGIN-9: web search and GIF search are for the owner and the team (still allowlisted).
     expect(team.has("web-search")).toBe(true);
     expect(community.has("web-search")).toBe(false);
+    expect(team.has("gif-search")).toBe(true);
+    expect(community.has("gif-search")).toBe(false);
     expect(team.has("files-read")).toBe(true);
     expect(team.has("memory-store")).toBe(true);
     expect(team.has("memory-recall")).toBe(true);

@@ -44,7 +44,7 @@ export type SpawnCappedResult = {
 /**
  * Env keys a Fledge plugin never needs: Corvidinho's own credentials, the
  * audit HMAC key (SAFE-5), acting-identity hints, Discord and LLM keys, and
- * the Brave Search key (PLUGIN-7, #318).
+ * the Brave Search and GIPHY keys (PLUGIN-7 / PLUGIN-8, #318).
  * GitHub tokens stay so GitHub-backed Fledge plugins keep working.
  */
 const DROP_PREFIXES = ["CORVIDINHO_", "DISCORD_"] as const;
@@ -53,6 +53,7 @@ const DROP_KEYS = new Set([
   "ANTHROPIC_API_KEY",
   "OPENROUTER_API_KEY",
   "BRAVE_SEARCH_API_KEY",
+  "GIPHY_API_KEY",
 ]);
 
 /** Child env for fledge: scrubbed copy of `base`, non-interactive, project root hint. */

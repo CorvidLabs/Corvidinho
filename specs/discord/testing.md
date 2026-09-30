@@ -1604,3 +1604,8 @@ stamp, one real `task run` against the fake model; no network):
 REQ-discord-417 (#318): `BRAVE_SEARCH_API_KEY` is on the SAFE-6 secret env
 list — `redactSecretEnvValues` and `formatErrorLine` replace its value with
 `[redacted:env-secret]` (`tests/web.search.test.ts`).
+
+REQ-discord-417 (#318 slice B): `GIPHY_API_KEY` is on the SAFE-6 secret env
+list — `redactSecretEnvValues` and `formatErrorLine` replace its value with
+`[redacted:env-secret]`, so a GIPHY request URL in an error keeps only
+`key=[redacted:env-secret]` (`tests/gif.search.test.ts`).

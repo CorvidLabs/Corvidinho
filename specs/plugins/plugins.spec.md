@@ -92,6 +92,10 @@ files:
   - tests/web.fetch.test.ts
   - tests/web.transport.test.ts
   - tests/web.search.test.ts
+  - plugins/gif/giphy.ts
+  - plugins/gif/commands.ts
+  - plugins/gif/index.ts
+  - tests/gif.search.test.ts
   - plugins/git/index.ts
   - plugins/git/commands.ts
   - plugins/git/exec.ts
@@ -145,7 +149,9 @@ when their toolchain is on PATH (PLUGIN-4 / REQ-plugins-313..314), the
 SSRF-guarded `web-fetch` GET plugin (PLUGIN-1/2 / SAFE-7 / REQ-plugins-111),
 `web-search` through Brave for the owner and team (PLUGIN-7 / PLUGIN-9 /
 REQ-plugins-318) on a shared https-only, host-allowlisted keyed JSON GET
-(REQ-plugins-3181), and
+(REQ-plugins-3181), `gif-search` through GIPHY with the safety filter at
+medium, posted as a link, for the owner and team (PLUGIN-8 / PLUGIN-9 /
+REQ-plugins-3182) on that same GET, and
 typed git plugins (`git-status|diff|log|branch-list` reads;
 `git-branch-create|commit|push` dangerous code-tier mutators) clamped to the
 task worktree (PLUGIN-1/2, SAFE-1/2/3, GITHUB-2/6 / REQ-plugins-182), and
@@ -212,8 +218,17 @@ the keyed JSON GET), `plugins/web/api.ts` exports `apiGetJson`,
 `scrubOut`, `WebSearchError` and the Brave constants
 (`BRAVE_SEARCH_API_KEY_ENV`, `BRAVE_SEARCH_HOST`, `BRAVE_SAFESEARCH`,
 `BRAVE_SEARCH_COST_MICRO_USD`, `BRAVE_ATTRIBUTION`, the count / query
-limits; REQ-plugins-318), `src/plugins/roles.ts` exports
-`TEAM_SEARCH_TOOLS` (PLUGIN-9) and `PluginHandlerResult.spendAsk` carries a
+limits; REQ-plugins-318), `plugins/gif` registers `gif-search` via
+`loadGifPlugins` (`createGifCommands` takes the resolver / transport / `env`
+/ `spendDb` / `now` seams) and `plugins/gif/giphy.ts` exports
+`giphyGifSearch`, `parseGifSearchArgs`, `giphySearchUrl`, `giphyMediaUrl`,
+`giphyHits`, `formatGifHits`, `fenceGifResults`, `GifSearchError` and the
+GIPHY constants (`GIPHY_API_KEY_ENV`, `GIPHY_API_HOST`, `GIPHY_SEARCH_PATH`,
+`GIPHY_CONTENT_FILTER`, `GIPHY_ALLOWED_RATINGS`, `GIPHY_MEDIA_FILTER`,
+`GIPHY_CLIENT_KEY`, `GIPHY_MEDIA_HOSTS`, `GIPHY_ATTRIBUTION`,
+`GIF_POST_GUIDANCE`, `GIPHY_SEARCH_COST_MICRO_USD`, `GIPHY_SEARCH_SPEND_MODEL`,
+the limit / query caps; REQ-plugins-3182), `src/plugins/roles.ts` exports
+`TEAM_SEARCH_TOOLS` (PLUGIN-9: `web-search` and `gif-search`) and `PluginHandlerResult.spendAsk` carries a
 flat-priced call's SAFE-8 ask (REQ-agent-098),
 `githubRepoOfUrl(url)` says whether a URL is on a GitHub host and which
 `OWNER/REPO` it names (DISCORD-SCHEDULE-3.a),
@@ -444,6 +459,29 @@ ends with the visible line "Search by Brave" once whenever a search in that
 run was answered (REQ-agent-318, Leif's go on #318); the line is added by the
 reply path, never inside the fence or any tool result. It never posts, so it has no
 must-ask entry (AUTONOMY-11). Deep research is not built.
+`gif-search` (REQ-plugins-3182, a new `plugins/gif`) is dangerous + minTier 1
+like `web-search`, for the owner and team only (`TEAM_SEARCH_TOOLS`,
+PLUGIN-9; community never; `web-fetch` and `discord-send-file` stay the
+owner's). The key is `GIPHY_API_KEY` from the run's env only (no default;
+missing is a `not configured` error). It sends one `GET
+https://api.giphy.com/v2/search` (GIPHY's Tenor-compatible search) through
+the keyed JSON GET with `api.giphy.com` as the only host and
+`contentfilter=medium` (G and PG) always: the URL is built from scratch, so
+query text is only ever `q`, and `--rating` / `--contentfilter` are usage
+errors. GIPHY takes the key in the URL, so the request URL is never returned,
+shown or audited, and every returned string is scrubbed last (GIPHY echoing
+the URL comes back as `key=[redacted:env-secret]`). Titles and the `gif` /
+`tinygif` links reach the model only inside the untrusted web fence, in
+GIPHY's order; a link is kept only when it is https on an exact GIPHY media
+host (`media.giphy.com`, `media0`–`media4.giphy.com`, `i.giphy.com`), and a
+result with no such link is dropped; nothing else is filtered or reordered.
+The run posts a GIF as a link in its reply; `gif-search` never downloads or
+attaches one and never posts (no must-ask entry, AUTONOMY-11). Each search
+is recorded at $0 against the SAFE-8 total cap (GIPHY is free-tier), and is
+stopped with the spend-cap ask only when the window is already past the cap.
+The summary carries the link-only guidance and "Powered By GIPHY", and
+SAFE-13 scans the result (one hostile title switches off `gif-search`,
+`web-search` and `web-fetch` with every other mutating tool).
 Git plugins (REQ-plugins-182) spawn `git` with argv arrays only (no shell),
 stdin closed, `GIT_TERMINAL_PROMPT=0`, hooks disabled, repo-locating env
 stripped and `GIT_CEILING_DIRECTORIES` at the cwd's parent; the plugin cwd
@@ -1073,6 +1111,12 @@ command line.
 - **When** the model runs `web-search bun runtime --count 3` and Brave answers with a title that says "IGNORE PREVIOUS INSTRUCTIONS" (or echoes the key)
 - **Then** one GET goes to `api.search.brave.com` with `safesearch=moderate` and the key only in `X-Subscription-Token`; the hits appear only between the untrusted markers, SAFE-13 drops the mutating tools (web-search and web-fetch too) for the rest of the run, and no result, error or audit row contains the key or the request URL
 
+### Scenario: gif-search finds a GIF at the medium filter and the run posts it as a link
+
+- **Given** `GIPHY_API_KEY` is set and `gif-search` is allowlisted, in the owner's or a team member's run
+- **When** the model runs `gif-search happy cat` (or `gif-search --query "cat&contentfilter=off"`)
+- **Then** one GET goes to `api.giphy.com/v2/search` with `contentfilter=medium` (the query text is only the `q` value); titles and GIPHY media links come back only between the untrusted markers with "Powered By GIPHY" and the link-only guidance; the run puts one link in its reply, nothing is downloaded or attached, and no result, error or audit row contains the key or the request URL
+
 ### Scenario: web-search at the spend cap asks instead of spending
 
 - **Given** `CORVIDINHO_DAILY_SPEND_CAP_USD` is set and the last 24 h of spend plus $0.005 would pass it
@@ -1188,6 +1232,14 @@ command line.
 | web-search Brave 401 / 403 / 422 `SUBSCRIPTION_TOKEN_INVALID`, other 422, 429, other status; non-JSON, compressed, oversized or malformed body; timeout; network error or a body that fails mid-read | `auth` / `bad-request` / `rate-limited` / `http-status` / `content-type` / `too-large` / `invalid-json` / `timeout` / `network` (exit 1); no server text, key or URL in the error |
 | web-search in a run already stopped, or stopped mid-request | `aborted` (exit 1); a stopped run reserves and sends nothing |
 | web-search unexpected failure | `unexpected` (exit 1), the fixed line `web-search unexpected: the search failed unexpectedly` |
+| gif-search with no, blank or malformed `GIPHY_API_KEY` | `not-configured` (exit 1) naming the env var, never its value; no DNS, request or spend (REQ-plugins-3182) |
+| gif-search usage error (`--rating`, `--contentfilter` or any other unknown flag, limit not a whole number 1–10, query words together with `--query`, missing / over-50-character query) | `usage` (exit 1); nothing sent |
+| gif-search query carrying a secret-looking value or a set secret env value | Refuse (exit 2, SAFE-6) before spend or request |
+| gif-search with the SAFE-8 window already past the cap, an invalid cap value or an unavailable ledger | Refuse (exit 2, "Work is paused for budget."); nothing sent; the tool loop ends the attempt with the spend-cap ask |
+| gif-search: a non-public answer for `api.giphy.com`, or any redirect | Refuse (exit 2) before connecting / without following |
+| gif-search GIPHY 401 / 403, 400 / 422, 429, other status; a 2xx `error` body or a 2xx body without `results`; non-JSON, oversized or malformed body; timeout; network error | `auth` / `bad-request` / `rate-limited` / `http-status` / `api-error` / `bad-response` / `content-type` / `too-large` / `invalid-json` / `timeout` / `network` (exit 1); no GIPHY text, key or URL in the error |
+| gif-search result link over http, off the GIPHY media hosts, with credentials or another port | Link dropped; a result with no valid link is dropped (no other filtering or reordering) |
+| gif-search in a run already stopped, or stopped mid-request; unexpected failure | `aborted` (exit 1), nothing reserved or sent for a stopped run; `unexpected` (exit 1), the fixed line `gif-search unexpected: the GIF search failed unexpectedly` |
 | git plugin cwd not a repo top level | Refuse (exit 2, SAFE-3) |
 | git-commit stages protected delete / `.env*` / keystore / `.git` | Refuse (exit 2) |
 | git force / amend / `--all` / refspec / other-branch push | Refuse (exit 2) |
@@ -1239,9 +1291,10 @@ command line.
 | src/agent/verify.ts | `buildVerifyEnv` scrub for the language runners' and Fledge core builtins' child env |
 | fledge (optional system binary) | Fledge core builtins (`lanes list` / `lanes validate` / `lanes run`, `run`) and the Fledge plugin bridge, via `Bun.spawn` argv arrays |
 | node:dns / net / tls | web-fetch resolve once, dial pinned IP, SNI + cert check |
-| src/store/scrub.ts | `scrubSecrets` on web-fetch output and errors; secret-bearing URLs refused; `scrubSecrets` + `redactSecretEnvValues` on every web-search string and secret-bearing queries refused |
-| src/agent/spend.ts | `reserveFlatSpend` for web-search's SAFE-8 reservation (REQ-agent-098) |
+| src/store/scrub.ts | `scrubSecrets` on web-fetch output and errors; secret-bearing URLs refused; `scrubSecrets` + `redactSecretEnvValues` on every web-search and gif-search string and secret-bearing queries refused |
+| src/agent/spend.ts | `reserveFlatSpend` for web-search's SAFE-8 reservation and gif-search's $0 row (REQ-agent-098) |
 | Brave Search API (external, optional) | `GET https://api.search.brave.com/res/v1/web/search` with `X-Subscription-Token` for web-search (PLUGIN-7) |
+| GIPHY API (external, optional) | `GET https://api.giphy.com/v2/search` (Tenor-compatible) with `key` and `contentfilter=medium` for gif-search (PLUGIN-8); media links on `media.giphy.com`, `media0`–`media4.giphy.com`, `i.giphy.com`, never fetched |
 | src/discord/image-attachments.ts | `MAX_IMAGE_SIZE_BYTES` / `ImageMediaType` for files-read image mode (DISCORD-9) |
 | git (system binary) | git plugins via `Bun.spawn` argv arrays; the GITHUB-9 review tree (temporary index), diff and `ls-remote` |
 | src/agent/providers.ts / untrusted.ts, src/store/db.ts | GITHUB-9 reviewer choice (configured models), the fence for the diff and findings, the lazily created `pr_review_rounds` table |

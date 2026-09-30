@@ -89,13 +89,15 @@ export const STATE_CHANGING_TOOLS: ReadonlySet<string> = new Set([
 
 /**
  * Dangerous or mutating builtins whose success is not a change: a page read
- * (`web-fetch`), a web search (`web-search`), a no-op probe (`danger-ping`), a check lane
+ * (`web-fetch`), a web or GIF search (`web-search`, `gif-search`), a no-op
+ * probe (`danger-ping`), a check lane
  * (`fledge-lanes-run`) and advice (`council`). Every dangerous or mutating
  * builtin is in exactly one of the two sets (tests/agent.loop-guards.test.ts).
  */
 export const NO_STATE_CHANGE_TOOLS: ReadonlySet<string> = new Set([
   "web-fetch",
   "web-search",
+  "gif-search",
   "danger-ping",
   "fledge-lanes-run",
   "council",

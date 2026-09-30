@@ -206,8 +206,8 @@ describe("web-search is a dangerous tool-tier command, offered only when allowli
     expect(names("team")).not.toContain("web-fetch");
     expect(names("community")).not.toContain("web-search");
     expect(names("community", true)).not.toContain("web-search");
-    // The explicit team rule names these search tools only.
-    expect([...TEAM_SEARCH_TOOLS]).toEqual(["web-search"]);
+    // The explicit team rule names these search tools only (gif-search: PLUGIN-8, tests/gif.search.test.ts).
+    expect([...TEAM_SEARCH_TOOLS].sort()).toEqual(["gif-search", "web-search"]);
     const cmd = { name: "web-search", dangerous: true };
     expect(roleAllowsPlugin("team", cmd)).toBe(true);
     expect(roleAllowsPlugin("community", cmd, true)).toBe(false);
