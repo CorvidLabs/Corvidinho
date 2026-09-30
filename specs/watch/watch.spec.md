@@ -189,7 +189,8 @@ numeric id only gets a `forget_requests` ask (SAFE-5 `memory-forget-request`
 `started` first, fail closed) and every sender gets one reply on the thread;
 nothing is deleted there; each cycle (after the rate-limit wait) posts the
 outcome of decided GitHub asks on their thread while its repo is allowlisted,
-stopping at the first failed post and giving up a day after the decision; a
+stopping at the first rate-limited (or unanswered) post — a locked or deleted
+thread holds up nobody else — and giving up a day after the decision; a
 run's retained conversation also keeps the commenter's `github-id:<n>`
 (REQ-watch-1016).
 

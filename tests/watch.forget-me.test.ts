@@ -26,13 +26,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway, type ComponentInteraction, type GatewayHandlers } from "../src/discord/gateway.ts";
-import { MemoryStore } from "../src/memory/index.ts";
+import { ForgetRequestStore, MemoryStore } from "../src/memory/index.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { clearRegistry } from "../src/plugins/registry.ts";
 import { runPlugin } from "../src/plugins/run.ts";
 import { ConversationStore, watchThreadKey } from "../src/store/conversation.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
-import { createEchoAckClient } from "../src/watch/ack.ts";
+import { createEchoAckClient, type AckCommentResult } from "../src/watch/ack.ts";
 import type { AgentRunChatOpts } from "../src/watch/agent-client.ts";
 import { startWatchPoller } from "../src/watch/poller.ts";
 import type { DetectedEvent } from "../src/watch/types.ts";
@@ -143,11 +143,23 @@ function ev(o: Partial<DetectedEvent> & Pick<DetectedEvent, "id" | "body" | "sen
   };
 }
 
-/** The WATCH poller on the shared data dir, with injected events per poll. */
-async function watcher(rounds: DetectedEvent[][]) {
+/**
+ * The WATCH poller on the shared data dir, with injected events per poll.
+ * `failPost` (read at each post) makes a comment post fail with that result.
+ */
+async function watcher(
+  rounds: DetectedEvent[][],
+  failPost?: (o: { issue_number: number; body: string }) => AckCommentResult | null,
+) {
   const shared = db();
   const calls: AgentRunChatOpts[] = [];
-  const ack = createEchoAckClient();
+  const echo = createEchoAckClient();
+  const ack = {
+    posts: echo.posts,
+    async createIssueComment(o: Parameters<typeof echo.createIssueComment>[0]): Promise<AckCommentResult> {
+      return failPost?.(o) ?? echo.createIssueComment(o);
+    },
+  };
   let round = 0;
   const result = await startWatchPoller({
     env: {
@@ -396,6 +408,77 @@ describe("MEMORY-ACL-6.a: someone known only on GitHub asks there to be forgotte
     } finally {
       await b.result.stop();
       await w.stop();
+    }
+  });
+
+  test("a thread that refuses the outcome (locked or gone) does not hold up the others' outcomes; a rate limit stops the pass", async () => {
+    // Mo: a second person declared by GitHub account id, so two asks are open at once.
+    writeFileSync(
+      path,
+      `${FILE.replace('users = ["tofu-dev", "kyn-gh", "stranger-gh"]', 'users = ["tofu-dev", "kyn-gh", "stranger-gh", "mo-gh"]')}
+[people.mo]
+display = "Mo"
+role = "community"
+github_logins = ["mo-gh"]
+github_ids = ["5151"]
+`,
+    );
+    let fail: { issue: number; result: AckCommentResult } | null = null;
+    const failPost = (o: { issue_number: number }) => (fail && o.issue_number === fail.issue ? fail.result : null);
+    const w1 = await watcher(
+      [
+        [
+          ev({ id: "comment-21", number: 21, sender: "tofu-dev", senderId: 4242, body: `@${WATCH_USER} forget me` }),
+          ev({ id: "comment-22", number: 22, sender: "mo-gh", senderId: 5151, body: `@${WATCH_USER} forget me` }),
+        ],
+      ],
+      failPost,
+    );
+    const outcomes = (posts: Array<{ issue_number: number; body: string }>, n: number) =>
+      posts.filter((p) => p.issue_number === n && p.body.includes("did not approve"));
+    try {
+      await w1.poll();
+      const rows = query<{ id: string; subject_id: string }>("SELECT id, subject_id FROM forget_requests ORDER BY subject_id");
+      expect(rows.map((r) => r.subject_id)).toEqual(["mo", "tofu"]);
+      const id = (who: string) => rows.find((r) => r.subject_id === who)!.id;
+      // The owner denies Tofu's ask first, then Mo's (so Tofu's outcome goes first).
+      const d = db();
+      try {
+        let t = Date.now() - 2_000;
+        const store = new ForgetRequestStore({ db: d, now: () => t });
+        expect(store.decide(id("tofu"), "denied", { by: OWNER_ID })).toBe(true);
+        t += 1_000;
+        expect(store.decide(id("mo"), "denied", { by: OWNER_ID })).toBe(true);
+      } finally {
+        d.close();
+      }
+      // A rate limit on the first outcome stops the pass: Mo's waits too.
+      fail = { issue: 21, result: { ok: false, status: 429, error: "rate limited" } };
+      await w1.poll();
+      expect(outcomes(w1.posts, 21)).toHaveLength(0);
+      expect(outcomes(w1.posts, 22)).toHaveLength(0);
+    } finally {
+      await w1.stop();
+    }
+    // Tofu's thread is locked (a bare 403): Mo is still told, Tofu once it opens.
+    fail = { issue: 21, result: { ok: false, status: 403, error: "Unable to create comment because issue is locked." } };
+    const w2 = await watcher([], failPost);
+    try {
+      await w2.poll();
+      expect(outcomes(w2.posts, 22)).toHaveLength(1);
+      expect(outcomes(w2.posts, 21)).toHaveLength(0);
+      const told = () =>
+        query<{ subject_id: string }>("SELECT subject_id FROM forget_requests WHERE notified_at IS NOT NULL ORDER BY subject_id").map(
+          (r) => r.subject_id,
+        );
+      expect(told()).toEqual(["mo"]);
+      fail = null;
+      await w2.poll();
+      expect(outcomes(w2.posts, 21)).toHaveLength(1);
+      expect(outcomes(w2.posts, 22)).toHaveLength(1);
+      expect(told()).toEqual(["mo", "tofu"]);
+    } finally {
+      await w2.stop();
     }
   });
 

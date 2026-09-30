@@ -44,6 +44,7 @@ import {
 } from "../memory/forget.ts";
 import { memorySubjectFor, memorySubjectForPerson, type MemorySubject } from "../memory/scope.ts";
 import type { AckClient, AckCommentResult } from "./ack.ts";
+import { parseGithubRateLimit } from "./rate-limit.ts";
 import { containsMention } from "./searcher.ts";
 import type { DetectedEvent, DetectedEventType } from "./types.ts";
 
@@ -295,8 +296,11 @@ export function watchForgetOutcomeBody(req: ForgetRequest): string {
 /**
  * Post the outcome of each decided GitHub ask on its thread (MEMORY-ACL-6.a)
  * while its repo is still allowlisted, and mark it told; an ask that cannot
- * be told is given up a day after it was decided. Stops at the first failed
- * post (rate limits). Returns how many were posted. Never throws.
+ * be told is given up a day after it was decided. Stops at the first post
+ * that hits a rate limit or gets no answer (the next ones would fail the same
+ * way); any other failed post (a locked or deleted thread) is that thread's
+ * alone, so the next asks still go out. Returns how many were posted. Never
+ * throws.
  */
 export async function deliverWatchForgetOutcomes(opts: {
   db: Database;
@@ -347,7 +351,12 @@ export async function deliverWatchForgetOutcomes(opts: {
     opts.log?.(`[watch] forget outcome post failed ${thread.repo}#${thread.number} (${req.id}): ${res.error ?? "unknown"}`);
     opts.onPostFailed?.(res);
     if (giveUp) store.markNotified(req.id);
-    break;
+    // A rate limit (or no HTTP answer at all) stops the pass; a locked or
+    // deleted thread must not hold up everyone else's outcome for a day.
+    const rateLimited =
+      res.status === undefined ||
+      parseGithubRateLimit({ status: res.status, message: res.error, headers: res.headers }, now()) !== null;
+    if (rateLimited) break;
   }
   return posted;
 }

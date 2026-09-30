@@ -30,7 +30,8 @@ artifact: design
 - **Telling the GitHub asker.** The poller replies once when it records the
   ask, and each cycle posts decided asks' outcomes on their thread
   (`unnotifiedGithub`, repo still allowlisted, give up after a day, stop on
-  the first failed post for rate limits). The bridge never DMs a GitHub asker;
+  the first rate-limited or unanswered post; a locked or deleted thread does
+  not hold up the others). The bridge never DMs a GitHub asker;
   the card says they will be told on GitHub. No count or content goes on a
   public thread.
 - **/admin.** `/admin people forget person:<id>` follows the `/admin people`

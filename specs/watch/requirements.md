@@ -510,9 +510,11 @@ fetch, post the outcome of each decided GitHub ask not yet told on its thread
 (`deliverWatchForgetOutcomes`, `watchForgetOutcomeBody`: approved /
 not approved / no answer in time, @mentioning the asker, never a count or any
 content) while its repo is still allowlisted, marking it told; an ask whose
-thread cannot be reached SHALL be given up a day after its decision; the
-pass SHALL stop at the first failed post (feeding the backoff) and never
-throw. A run's retained conversation SHALL also keep the commenter's numeric
+thread cannot be reached SHALL be given up a day after its decision; every
+failed post SHALL feed the backoff, and the pass SHALL stop at the first post
+that hits a rate limit or gets no HTTP answer, while any other failed post (a
+locked or deleted thread) SHALL not hold up the next asks' outcomes; the pass
+SHALL never throw. A run's retained conversation SHALL also keep the commenter's numeric
 id as a participant (`github-id:<n>`), so a forget reaches a person declared
 by GitHub id only.
 
@@ -520,5 +522,6 @@ Acceptance Criteria
 - Through `startWatchPoller` a declared person's `@watch-user forget me` runs no model, records one pending ask (`github:4242:tofu-dev`, `github:<repo>#7`) with `memory-forget-request` `started` / `ok` as `github:tofu-dev`, posts one reply with the request id, and deletes nothing; after the owner approves on the bridge's card, the next poll posts "was approved" on that thread once (no count) and marks it told.
 - An undeclared sender gets "not on the owner's people list" and no ask; a login-only declared person with another numeric id gets "can't confirm"; "don't forget me …", a quoted "forget me" and an assignment event are normal runs; a forget ask and another comment on the same issue both count; a Deny is posted as "did not approve".
 - A WATCH run's kept conversation lists `github:<login>` and `github-id:<n>`.
+- With two decided asks, a rate limit (429) on the first outcome post stops the pass (neither is posted); a locked thread (a bare 403) on the first does not: the second is posted and marked told, and the first once its thread takes the post.
 - `tests/watch.forget-me.test.ts` covers each and fails on main.
 

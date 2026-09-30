@@ -98,6 +98,8 @@ module: watch
   declared person with another id gets "can't confirm"; "don't forget me …",
   a quoted "forget me" and an assignment event are normal runs; a forget ask
   and another comment on the same issue both count; a run's kept thread lists
-  `github-id:<n>`; a Deny is posted as "did not approve". In a GitHub-shaped
+  `github-id:<n>`; a Deny is posted as "did not approve". A rate limit on an
+  outcome post stops that cycle's outcome pass, but a locked thread (a bare
+  403) does not hold up the next asks' outcomes. In a GitHub-shaped
   env `memory-forget-me` names the comment path and records nothing
   (REQ-plugins-1016).
