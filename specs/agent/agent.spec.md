@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 38
+version: 39
 status: draft
 files:
   - src/agent/types.ts
@@ -26,6 +26,7 @@ files:
   - src/agent/ask.ts
   - src/agent/untrusted.ts
   - src/agent/recall-guard.ts
+  - src/agent/loop-guards.ts
   - tests/agent.execute.test.ts
   - tests/agent.tool-loop.test.ts
   - tests/agent.allowlisted-dangerous.test.ts
@@ -50,6 +51,7 @@ files:
   - tests/autonomous.enabled.test.ts
   - tests/agent.verify-gate.test.ts
   - tests/fixtures/talk-worktree.ts
+  - tests/agent.loop-guards.test.ts
 
 db_tables: []
 depends_on:
@@ -83,8 +85,30 @@ tool message and the `ToolResult` event are built from `data` / `message`
 only (the "sent privately" placeholder), and the loop hands the text to
 `onPrivateReply` for the run result; the prompt tells the model it only gets a
 "sent privately" result for those reads and to point the person to their DMs.
+Repeated failing calls (AGENT-16, REQ-agent-086; `src/agent/loop-guards.ts`):
+the tool loop counts each call's failures (tool name + canonical argv; a
+refusal counts) until something really changes; the 2nd identical failure is
+followed by a harness steer to change approach or ask, and an identical call
+made after the model has seen that steer does not run: the attempt ends with
+the existing "stuck" ask, so every surface pings the owner (AUTONOMY-2/4).
 
 ## Public API
+
+Loop guards (REQ-agent-086, AGENT-16): `src/agent/loop-guards.ts` exports
+`callSignature(name, rawArgs)` (JSON of the name and
+`argvFromToolArguments(rawArgs)`), `changedState(name, result)` (true when the
+result's data reports `filesChanged`, ok or not, or when a tool in
+`STATE_CHANGING_TOOLS` or a Fledge plugin command, `origin` `fledge:`,
+succeeds), `STATE_CHANGING_TOOLS` / `NO_STATE_CHANGE_TOOLS` (every dangerous
+or mutating builtin is in exactly one), `STEER_AFTER_FAILURES` (2),
+`STEER_ERROR_EXCERPT_MAX` (200), `errorExcerpt(error)`,
+`repeatFailureSteer(label, failures, error)` (`error` null ⇒
+`STEER_FENCED_ERROR_NOTE`), `REPEAT_FAILURE_BLOCK_DETAIL`,
+`repeatedFailureAsk(label)` (a `stuck` HumanAsk) and
+`createRepeatFailureGuard()` → `RepeatFailureGuard` (`newConversation`,
+`before(sig, round)` → `"run" | "ask"`, `after(sig, round, result, changed)`
+→ `{ failures, steer }`, `lastError(sig)`). No env var, config key, flag,
+HumanAsk reason or NDJSON field is added.
 
 Export `MEMORY_AGENT_SYSTEM_INSTRUCTIONS` from `src/agent/execute.ts` (and
 `src/agent/index.ts`).
@@ -315,6 +339,18 @@ gains optional `injection?: InjectionNotice` (additive on the NDJSON
 `result` frame: protocol stays 2). No env var, config key or flag.
 
 ## Invariants
+
+A repeated failing call is steered, then asks (AGENT-16, REQ-agent-086): one
+guard per `createTaskExecute` (every surface's `task run`, workers included)
+counts `ok: false` results per `callSignature` across the run's attempts; a
+`changedState` result resets every count and a call's own success resets its
+own. The steer follows the whole tool result (outside any SAFE-12 fence,
+error quoted scrubbed and capped, except a worker result fenced for its
+injection hit, whose error is never quoted outside the fence); the call that
+is not run ends the attempt
+with `repeatedFailureAsk`, whose question names only an offered tool (else
+`(unknown tool)`), never error text. The ask is never given before the model
+has seen the steer in its own conversation.
 
 The persona sets tone only and the rules win (REQ-agent-069, PERSONA-3): the
 persona block is always first in the system prompt and every rule
@@ -620,6 +656,12 @@ instructions for …" or a browser's developer mode do not count.
 - **When** an issue title reads like an instruction to set aside the previous instructions
 - **Then** the tool message starts with the SAFE-13 note and holds the result inside an `UNTRUSTED_DATA` fence, the next request offers no mutating tool, a `files-write` call is refused and writes nothing, `onInjection` gets `{ source: "github-issue-list", reasons: ["ignore-rules"] }`, an `injection-suspected` row is audited, and the summary ends with the "didn't act on it" note (REQ-agent-071)
 
+### Scenario: the model repeats a failing call
+
+- **Given** a tool-tier run whose model calls `files-read` on a missing file
+- **When** it makes the same call a second time, then a third after seeing the steer
+- **Then** the 2nd tool result ends with the AGENT-16 harness steer quoting the error, the 3rd call never runs, and the run ends `blocked` with the stuck question `The same files-read call keeps failing with nothing changed in between. How should I proceed?` (REQ-agent-086)
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -640,6 +682,9 @@ instructions for …" or a browser's developer mode do not count.
 | Provider / HTTP / network failure in execute | `ExecuteResult.error`; state failed, verified=false, summary is the provider error (then the earlier verify output when a verify already failed), `task run` exits 1 (REQ-agent-242) |
 | Model calls ask-human | state blocked, verifySkipped=true, `ask` reason clarify, summary `Needs your input: …` |
 | ask-human with empty question | ToolResult success=false fed back to the model; loop continues |
+| The same tool call (same argv) fails a 2nd time with nothing changed | the call's tool message ends with the AGENT-16 steer (scrubbed error excerpt); the loop continues (REQ-agent-086) |
+| That call is made again after the model saw the steer | not run; `ToolResult` success=false with `REPEAT_FAILURE_BLOCK_DETAIL`, one `[operator] AGENT-16` Text line; state blocked with a `stuck` ask naming only the tool (REQ-agent-086) |
+| Identical failing calls in one batch, or in a fresh verify-retry conversation | they run and get the steer again; never the ask before the model saw the steer (REQ-agent-086) |
 | AbortSignal fired | cancelled=true (outer loop) or execute returns early mid tool loop |
 | AbortSignal fired while verify runs | lane's process tree killed; cancelled=true, no VerifyResult, no retry, no `ask` |
 | Aborted lane left an escaped process holding its output pipe | runner stops waiting after a 250 ms grace; cancelled=true |
@@ -742,3 +787,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-30 | shell-exec-refuses-foot-guns-and-says-why-sed-i-or-edits-downloads-piped-into-a-shell-deletes-outside-the-worktree: Shell-exec refuses foot-guns and says why (sed -i or > edits, downloads piped into a shell, deletes outside the worktree, secret reads), env -C and symlinked cd can't leave the root, and the shell and language runners start without GitHub or git credentials (SAFE-21, SAFE-21.a, SAFE-3) |
 | 2026-09-30 | ask-questions-and-choice-labels-are-secret-scrubbed-before-they-are-cut-or-posted-safe-6-a: Ask questions and choice labels are secret-scrubbed before they are cut or posted (SAFE-6.a) |
 | 2026-09-30 | on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a: On GitHub people match only by their numeric user id: a renamed or re-registered login never counts as the owner or a declared person on WATCH (prompt, memory scope, SAFE-13 exemption); [owner] github_id declares the owner's id; /admin people link github stores the looked-up numeric id; doctor warns about logins without an id (IDENTITY-7.a, #36) |
+| 2026-09-30 | when-it-repeats-a-failing-call-it-is-steered-to-change-approach-then-asks-a-stuck-github-run-pings-the-owner-on-discord: When it repeats a failing call it is steered to change approach, then asks; a stuck GitHub run pings the owner on Discord (AGENT-16, AGENT-16.a) |

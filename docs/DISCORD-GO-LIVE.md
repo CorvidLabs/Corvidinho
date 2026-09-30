@@ -152,8 +152,10 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   and accept DMs from its members, or the note says it could not be sent (it is never posted in
   the channel instead).
 - When a run asks for a human, a clarify question (AUTONOMY-1/4) pings the requester (the message
-  author, or the schedule creator for a scheduled run); a stuck run (AUTONOMY-2) and a spend-cap
-  stop (SAFE-8) ping the owner. With no owner a stuck or spend-cap question still posts and the
+  author, or the schedule creator for a scheduled run); a stuck run (AUTONOMY-2, or a repeated
+  failing call, AGENT-16) and a spend-cap stop (SAFE-8) ping the owner. A stuck WATCH (GitHub)
+  run is sent to the owner by **direct message** on the bridge's next tick (AGENT-16.a; the watch
+  process must share the bridge's data dir, and the owner must accept DMs from server members). With no owner a stuck or spend-cap question still posts and the
   bridge logs
   `[discord] run needs a human but no owner is configured — owner ping skipped (AUTONOMY-2 / IDENTITY-3)`.
 

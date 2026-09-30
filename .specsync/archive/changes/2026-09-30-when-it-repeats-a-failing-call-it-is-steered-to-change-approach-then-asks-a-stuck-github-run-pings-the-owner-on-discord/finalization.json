@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "when-it-repeats-a-failing-call-it-is-steered-to-change-approach-then-asks-a-stuck-github-run-pings-the-owner-on-discord",
+  "implementation_commit": "792e2ee0836d666f04081ce961e5839f51007437",
+  "implementation_tree": "97faf0bafb53625074dfb7aa3e32cfdfad1b2e46",
+  "contract_digest": "6d550df63d209d91907ee8a44185d72edaa35ee1236dae79c677ca6ea7bee040",
+  "workspace_digest": "52c6c5e352b8cfceb28763a046aec47307e064227581cf549425eb378459333d",
+  "closing_digest": "6c2edc69d3f621361f687b6f9af1d700313a90357ff1b0ea57d02712f0533ae8",
+  "review_digest": "dafe9cca2dd02f354cfa2f51b02de9272350dbe7d2b1e4e93fe09e456b50dc94",
+  "finalization_digest": "8e5c53ee98d74b6b00f1c84adbd8b6a3c62d1e446abcb2de5ea2a535d71b30ed",
+  "timestamp": 1790748098
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "when-it-repeats-a-failing-call-it-is-steered-to-change-approach-then-asks-a-stuck-github-run-pings-the-owner-on-discord",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "792e2ee0836d666f04081ce961e5839f51007437",
+      "contract_digest": "6d550df63d209d91907ee8a44185d72edaa35ee1236dae79c677ca6ea7bee040",
+      "execution_digest": "4ef50e285e5e4284419981ba371b32d8614138ce6c5bed8624a95e5a369393e5",
+      "workspace_digest": "52c6c5e352b8cfceb28763a046aec47307e064227581cf549425eb378459333d",
+      "timestamp": 1790748079
+    }
+  ]
+}

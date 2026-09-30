@@ -5,13 +5,16 @@
  * Reads the `task run --output ndjson` event stream (AGENT-8, #73).
  * Sets the commenter's GitHub login / numeric id and the thread's repo for
  * the memory plugins (MEMORY-8, REQ-watch-067); no Discord actor, never ADMIN
- * (REQ-watch-008). Injectable for tests; no ProcessManager.
+ * (REQ-watch-008). The ask a run stopped on comes back as `ask`: a stuck one
+ * pings the owner on Discord (AGENT-16.a, REQ-watch-086). Injectable for
+ * tests; no ProcessManager.
  */
 
 import {
   collectTaskRunStream,
   type TaskProgress,
 } from "../agent/events-ndjson.ts";
+import { askFromUnknown } from "../agent/ask.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
 import { injectionNoticeFromUnknown } from "../agent/untrusted.ts";
 import type { AgentSpawnResult } from "./types.ts";
@@ -90,12 +93,15 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       });
       // SAFE-13: a tool result looked like an injection (tool + reason ids only).
       const injection = injectionNoticeFromUnknown(result?.injection);
+      // AGENT-16.a: the ask the run stopped on (validated, re-normalized).
+      const ask = askFromUnknown(result?.ask);
       return {
         ok: exitCode === 0,
         sessionId,
         summary,
         exitCode,
         ...(injection ? { injection } : {}),
+        ...(ask ? { ask } : {}),
       };
     },
   };

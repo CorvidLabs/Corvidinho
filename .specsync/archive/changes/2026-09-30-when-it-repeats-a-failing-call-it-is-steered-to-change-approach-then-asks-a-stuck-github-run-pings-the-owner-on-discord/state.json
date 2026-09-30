@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "when-it-repeats-a-failing-call-it-is-steered-to-change-approach-then-asks-a-stuck-github-run-pings-the-owner-on-discord",
+  "slug": "when-it-repeats-a-failing-call-it-is-steered-to-change-approach-then-asks-a-stuck-github-run-pings-the-owner-on-discord",
+  "title": "When it repeats a failing call it is steered to change approach, then asks; a stuck GitHub run pings the owner on Discord (AGENT-16, AGENT-16.a)",
+  "description": "When it repeats a failing call it is steered to change approach, then asks; a stuck GitHub run pings the owner on Discord (AGENT-16, AGENT-16.a)",
+  "kind": "feature",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "9abc768f5b1a2122ae55025efea32b4a9113e249",
+  "created_at": 1790743808,
+  "updated_at": 1790748487,
+  "affected_specs": [
+    "agent",
+    "watch",
+    "discord"
+  ],
+  "affected_paths": [
+    "src/agent/loop-guards.ts",
+    "src/agent/execute.ts",
+    "src/watch/owner-ask.ts",
+    "src/watch/poller.ts",
+    "src/watch/agent-client.ts",
+    "src/watch/types.ts",
+    "src/discord/watch-ask.ts",
+    "src/discord/bridge.ts",
+    "src/store/scrub.ts",
+    "tests/agent.loop-guards.test.ts",
+    "tests/watch.stuck-ask.test.ts",
+    "specs/agent/agent.spec.md",
+    "specs/agent/testing.md",
+    "specs/watch/watch.spec.md",
+    "specs/watch/testing.md",
+    "specs/discord/discord.spec.md",
+    "specs/discord/testing.md",
+    "hi/agent.md",
+    "INTENT.md",
+    "docs/discord.md",
+    "docs/WATCH.md",
+    "docs/DISCORD-GO-LIVE.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "AGENT-16 (captured, Leif's 2026-09-28 interview round 2) and AGENT-16.a (captured with hi in this PR from Leif's round 13 decision, 2026-09-30) hold: in every task run (chat, /session, /work, buttons, schedules, WATCH, delegate and council workers) the tool loop counts ok:false results per call signature (tool name + canonical argv; refusals and denials count), a real change (a result reporting filesChanged, or a successful real write tool, one explicit changedState predicate that classifies every dangerous or mutating builtin) resets every count and a call's own success resets its own; the 2nd identical failure gets a harness steer after its whole tool result quoting a scrubbed error excerpt; the next identical call once the model saw that steer in this conversation does not run and the attempt ends with the existing stuck HumanAsk naming only the offered tool (runTask blocked, owner pinged per AUTONOMY-2/4); an identical call in the same batch or in a fresh verify-retry conversation gets the steer again, never the ask; thresholds are constants; a WATCH run that ends with a stuck ask, on any event type, is recorded for the bridge in the shared DB (one per thread, SAFE-6 scrubbed, replaced by a newer one, dropped by a later run that is not stuck) and the bridge DMs the owner on its scheduler tick with the thread link and the stuck-ask post; with no live bridge on the data dir, or no owner Discord id, one watch log line says the Discord ping could not be sent and the run summary comment still carries the question where WATCH posts one; tests/agent.loop-guards.test.ts and tests/watch.stuck-ask.test.ts fail on the base sources and pass on the branch"
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}
