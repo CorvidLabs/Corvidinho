@@ -1570,10 +1570,11 @@ Acceptance Criteria
 
 While the bridge works on a reply to a Discord message, or on the run a button
 pick (DISCORD-ASK) resumes, it SHALL keep one `discord_inflight_replies` row
-(schema v9: id, session id, channel id, the parent channel id when a message
-started the session in a thread (none for a `/session start` / `/work`
-session, whose channel is the command channel), progress embed id once sent,
-request message id, start time; no message text) from before the progress
+(schema v9: id, session id, channel id, the parent channel id when the reply
+is to a message in a thread or the pick is on a session a message started in
+a thread (none for a pick on a `/session start` / `/work` session, whose
+channel is the command channel), progress embed id once sent, request
+message id, start time; no message text) from before the progress
 embed is sent until the reply finishes, and SHALL delete it on every exit path
 (done, failed exit, ask, worktree refused, thrown error). On start, the bridge
 SHALL read the rows left by an earlier process before any new reply begins
@@ -1593,7 +1594,7 @@ REQ-discord-212): nothing is edited or posted and the row is deleted.
 
 Acceptance Criteria
 - A running reply has exactly one row whose progress id is the sent embed; the row is gone after success, failed exit, ask, thrown error and worktree refusal; ignored or refused messages never add one.
-- A reply in a thread records the thread as its channel and the allowlisted parent channel; a button pick's resumed run records a row (request id = the ask stub message; the parent only when a message started the session in a thread) and clears it after.
+- A reply in a thread records the thread as its channel and its parent channel (also when it continues a `/session start` session there); a button pick's resumed run records a row (request id = the ask stub message; the parent only when a message started the session in a thread) and clears it after.
 - A bridge that died mid-reply leaves the row; the next start edits that embed (same channel, same message id) to the error color with the interrupted text, sends no new message, and deletes the row.
 - A failed edit, or a row with no embed id, falls back to a reply to the request message with the interrupted text; the row is deleted.
 - A row whose channel and parent channel are no longer allowlisted gets no edit and no reply; the row is deleted.
@@ -1633,20 +1634,23 @@ is added.
 Deny SHALL always win over an allowlisted parent (REQ-plugins-005): a thread
 on `deny_channels` SHALL count as not allowlisted on every path, even when
 its parent is allowlisted. A parent on `deny_channels` SHALL make its
-threads count as not allowlisted wherever the bridge knows the parent
-(MessageCreate, and the ask buttons, restart rows, `discord-send-file` and
-forget-card fallback notice of a session a message started in a thread),
-even when the thread is allowlisted by its own id. In a deny-listed thread,
-an @mention, a thread continuation and a reply to a tracked bot message
-SHALL be refused silently as above; an ask button pressed there, or for a
-session whose channel or thread is deny-listed, SHALL get only the ephemeral
-ack and SHALL NOT resume; a slash command there, a schedule whose channel is
-that thread and `discord-post-message` to it SHALL be refused (they gate the
-thread id itself, so a deny on only the parent does not reach a thread
-allowlisted by its own id there, nor the ask buttons, files, restart rows
-and forget-card notice of a `/session start` / `/work` session run in it);
-restart recovery (REQ-discord-311) SHALL post and edit nothing there; and
-`discord-send-file` (REQ-discord-476) SHALL upload nothing there.
+threads count as not allowlisted wherever the bridge knows the parent, even
+when the thread is allowlisted by its own id: a message in the thread
+(MessageCreate) and the restart row, `discord-send-file` and forget-card
+fallback notice of the run it starts or continues, and the ask buttons of a
+session a message started in the thread and the same three for the runs
+they resume. In a deny-listed thread, an @mention, a thread continuation and
+a reply to a tracked bot message SHALL be refused silently as above; an ask
+button pressed there, or for a session whose channel or thread is
+deny-listed, SHALL get only the ephemeral ack and SHALL NOT resume; a slash
+command there, a schedule whose channel is that thread and
+`discord-post-message` to it SHALL be refused (they gate the thread id
+itself, so a deny on only the parent does not reach a thread allowlisted by
+its own id there, nor a `/session start` / `/work` run in it and the ask
+buttons of its session, with the files, restart rows and forget-card notice
+of those runs); restart recovery (REQ-discord-311) SHALL post and edit
+nothing there; and `discord-send-file` (REQ-discord-476) SHALL upload
+nothing there.
 `isMonitoredConversation` (`permissions.ts`: the thread or its parent is
 allowlisted and neither is deny-listed) SHALL be the shared check for
 MessageCreate, the ask buttons of a session a message started in a thread,
@@ -1659,10 +1663,11 @@ Acceptance Criteria
 - A reply to a tracked bot message in the same allowlisted channel still continues the same session; a thread under an allowlisted parent still continues its session.
 - An ask button pressed in a non-allowlisted channel, or after the session's channel left the allowlist, gets only the ephemeral zero-width ack (the allowlist tip for an admin): the ask stays pending, the agent is not run, and nothing is sent or edited; a press in the allowlisted channel, or in the session's thread under an allowlisted parent, still resumes (DISCORD-ASK-3).
 - With `channels = [parent]` and `deny_channels = [thread]`, an @mention in the thread is refused silently (no reply): no session is started, the agent is not run and nothing is posted; a session started there before the deny is not continued by a thread message, a reply to its bot message or a mention.
-- A message in a thread under a deny-listed parent is refused silently even when the thread itself is allowlisted (with or without the parent also listed).
+- A message in a thread under a deny-listed parent is refused silently even when the thread itself is allowlisted (with or without the parent also listed), also in a talk started there before the deny (a thread message, a reply to its bot message or a mention).
 - `componentChannelAllowlisted` is false for a press in the deny-listed thread and for a session in it (also when pressed in the parent); the bridge answers only the zero-width ack (the allowlist tip for an admin), the ask stays pending and nothing is sent.
 - A slash command in the deny-listed thread gets only the zero-width ack (the tip for the owner); `/schedule create` naming the thread as its channel is refused, a schedule whose channel is the thread neither runs nor posts at tick, and `discord-post-message` to it is refused (`is denied`).
-- With `deny_channels = [parent]` and the thread allowlisted by its own id (`channels = [thread]` or `[parent, thread]`): an ask press for a session a message started in the thread is not allowlisted; a slash command in the thread, `/schedule create` naming it and a tick on it, `discord-post-message` to it, and an ask press for a `/session start` session in it (resumed with the thread as the reply channel and no parent) are served on the thread's own id.
+- With `deny_channels = [parent]` and the thread allowlisted by its own id (`channels = [thread]` or `[parent, thread]`): an ask press for a session a message started in the thread is not allowlisted (only the zero-width ack, no resume); a slash command in the thread, `/schedule create` naming it and a tick on it, `discord-post-message` to it, and an ask press for a `/session start` session in it (resumed with the thread as the reply channel and no parent) are served on the thread's own id.
+- A reply in a thread to a `/session start` session's answer is a message run: it carries the thread's parent as the reply parent and on its restart row, while that session's pick carries none.
 - The allowlisted parent itself and its other threads are still served (DISCORD-2.a).
 
 ### REQ-discord-215
@@ -2172,17 +2177,18 @@ It SHALL attach only in the channel the bridge set for the run: the spawn
 client SHALL always write `CORVIDINHO_DISCORD_REPLY_CHANNEL_ID` and
 `CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID` from
 `AgentRunChatOpts.replyChannelId` / `replyParentChannelId` (empty when unset,
-never inherited); chat, reply-continue and thread runs, and ask-button runs of
-their sessions, SHALL pass the conversation's channel (the thread, with its
-parent, when a message started the session in a thread) and `/session start` /
-`/work`, and ask-button runs of their sessions, the command channel alone;
-schedules SHALL pass none. A `--channel` / `-c` argument SHALL be refused, and
-a run with no conversation channel or no acting user SHALL be refused, nothing
-sent. The channel allowlist SHALL gate first (a thread as itself or through
-its parent, DISCORD-5), then the DISCORD-8 requester check SHALL run for the
-acting user with View Channel, Send Messages and Attach Files
-(`verifyRequesterCanSend` option `attachFiles`); a check that cannot run SHALL
-refuse. The file SHALL be at most 8 MB (Discord's default upload limit) and
+never inherited); chat, reply-continue and thread runs SHALL pass the
+conversation's channel (the thread, with its parent, for a message in a
+thread), ask-button runs the session's channel (the thread, with its parent,
+for a session a message started in a thread), and `/session start` /
+`/work` the command channel alone (so the ask-button runs of their sessions
+carry no parent); schedules SHALL pass none. A `--channel` / `-c` argument
+SHALL be refused, and a run with no conversation channel or no acting user
+SHALL be refused, nothing sent. The channel allowlist SHALL gate first (a
+thread as itself or through its parent, DISCORD-5), then the DISCORD-8
+requester check SHALL run for the acting user with View Channel, Send
+Messages and Attach Files (`verifyRequesterCanSend` option `attachFiles`); a
+check that cannot run SHALL refuse. The file SHALL be at most 8 MB (Discord's default upload limit) and
 SHALL be a PNG, JPEG, GIF or WebP image whose magic bytes match its extension,
 or UTF-8 text with a `.txt`, `.log`, `.md`, `.diff`, `.patch`, `.json` or
 `.csv` extension; text (and the optional caption) SHALL be secret-scrubbed
