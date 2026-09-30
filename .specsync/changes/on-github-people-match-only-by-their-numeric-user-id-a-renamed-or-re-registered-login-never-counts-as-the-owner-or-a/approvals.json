@@ -1,4 +1,74 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790726655,
+      "digest": "9b102567f96220ac4f10bb554afc75a4fcbade21202d695ed9311697b33f2e8d",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a",
+        "title": "On GitHub people match only by their numeric user id: a renamed or re-registered login never counts as the owner or a declared person on WATCH (prompt, memory scope, SAFE-13 exemption); [owner] github_id declares the owner's id; /admin people link github stores the looked-up numeric id; doctor warns about logins without an id (IDENTITY-7.a, #36)",
+        "description": "On GitHub people match only by their numeric user id: a renamed or re-registered login never counts as the owner or a declared person on WATCH (prompt, memory scope, SAFE-13 exemption); [owner] github_id declares the owner's id; /admin people link github stores the looked-up numeric id; doctor warns about logins without an id (IDENTITY-7.a, #36)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "plugins",
+          "watch"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "allowlist.example.toml",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/WATCH.md",
+          "docs/discord.md",
+          "plugins/memory/commands.ts",
+          "src/cli.ts",
+          "src/discord/admin-people.ts",
+          "src/discord/command-handlers/admin.ts",
+          "src/discord/slash-commands.ts",
+          "src/discord/slash-types.ts",
+          "src/doctor.ts",
+          "src/identity/github-user.ts",
+          "src/identity/owner.ts",
+          "src/identity/people.ts",
+          "src/memory/scope.ts",
+          "src/watch/memory-inject.ts",
+          "src/watch/router.ts",
+          "tests/cli.doctor-truth.test.ts",
+          "tests/discord.admin-people.test.ts",
+          "tests/identity.github-numeric-id.test.ts",
+          "tests/identity.owner.test.ts",
+          "tests/identity.people.test.ts",
+          "tests/identity.recognise.test.ts",
+          "tests/memory.rank.test.ts",
+          "tests/memory.recall-github.test.ts",
+          "tests/safe.injection.test.ts",
+          "tests/watch.github-numeric-id.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "IDENTITY-7.a (captured in this PR from Leif's 2026-09-28 interview, round 12): on GitHub a person, the owner included, matches only by numeric user id; resolvePerson and memorySubjectForGithub never match a GitHub login, so a renamed or re-registered login with another numeric id (or an event with no id) resolves undeclared (community) in the WATCH identity block, the WATCH memory inject and the memory plugins, and is not exempt from the SAFE-13 injection guard, while the declared numeric id matches whatever the login now is; [owner] github_id (TOML or JSON) declares the owner's GitHub id and joins the owner's person, and isOwnerGithub matches that id only; /admin people link github:<login> looks the login's numeric id up once through the GitHub API (owner-only, audited as today) and stores it in github_ids next to the login, a failed or mismatched lookup links nothing and is audited as an error; people entries with only github_logins keep loading and matching on Discord but not on GitHub, and corvidinho doctor prints [warn] people-github naming them by person id only; the live Octokit search client maps user.id to DetectedEvent.senderId; tests/identity.github-numeric-id.test.ts, tests/watch.github-numeric-id.test.ts and the doctor test fail on the base sources and pass after"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "c0d392e7403e0047e99886d3c57bc0ddeba2ddff34dba1159170eaf27f27f7a5",
+        "cli": "d220641f18c44897347b092fcb0d4b221bf854fa9f1d58b0439a8560508e7b26",
+        "discord": "962840dd336b50111d9275d9515d143ce6501554ed45735c526932bde0699923",
+        "plugins": "cae5ad902316e6b8c0e55376aa89b3db5b0db820e39e01b1e13a1b90276a12b5",
+        "watch": "7178b753136a8327f1a545fc6f7300144142d520d99dc340f7de0f6eb695f0a2"
+      }
+    }
+  ],
   "reopenings": []
 }
