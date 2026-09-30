@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "shared-db-open-and-safe-5-audit-append-retry-a-busy-sqlite-lock-every-millisecond-so-other-processes-committing-back-to",
+  "slug": "shared-db-open-and-safe-5-audit-append-retry-a-busy-sqlite-lock-every-millisecond-so-other-processes-committing-back-to",
+  "title": "Shared DB open and SAFE-5 audit append retry a busy SQLite lock every millisecond, so other processes committing back to back cannot pass them over for the whole busy_timeout and lose audit rows",
+  "description": "Shared DB open and SAFE-5 audit append retry a busy SQLite lock every millisecond, so other processes committing back to back cannot pass them over for the whole busy_timeout and lose audit rows",
+  "kind": "bug_fix",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "507d97b75b08ebe86c5e0c5ab19322ea82d683cb",
+  "created_at": 1790783655,
+  "updated_at": 1790791911,
+  "affected_specs": [
+    "plugins",
+    "discord"
+  ],
+  "affected_paths": [
+    "src/audit/log.ts",
+    "src/store/db.ts",
+    "tests/store.busy-lock.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "While another process holds the shared DB write lock for about a second then frees it for 50 ms and keeps it past busy_timeout appendAudit takes the lock while it is free and the chain verifies (before the fix it failed with database is locked)",
+    "While another process holds the shared DB file exclusively for about a second then frees it for 50 ms and keeps it past busy_timeout openCorvidinhoDb opens while it is free and keeps busy_timeout 5000 and foreign_keys on (before the fix it failed with database is locked)",
+    "Four processes that each open the shared DB and append one SAFE-5 row 40 times at once lose no rows and keep one chain when every fsync takes 10 ms longer (before the fix 5 of 20 runs lost a row)"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks",
+    "design",
+    "requirements",
+    "docs",
+    "research",
+    "plan"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

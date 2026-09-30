@@ -15,6 +15,7 @@
 
 import { createHash, createHmac } from "node:crypto";
 import type { Database } from "bun:sqlite";
+import { retryWhileBusy } from "../store/db.ts";
 
 const GENESIS = "0".repeat(64);
 
@@ -92,6 +93,10 @@ function link(
  * Append one entry; returns its sequence number and hash. Takes the write
  * lock up front (BEGIN IMMEDIATE) so a concurrent writer is waited for under
  * busy_timeout; a deferred read-then-write gets SQLITE_BUSY at once instead.
+ * The lock is tried every millisecond (retryWhileBusy), so writers that
+ * commit back to back cannot pass this append over for the whole
+ * busy_timeout. Inside a caller's transaction it is a savepoint of that
+ * transaction.
  */
 export function appendAudit(
   db: Database,
@@ -101,7 +106,7 @@ export function appendAudit(
   const key = opts.key;
   let seq = 0;
   let hash = "";
-  db.transaction(() => {
+  const write = db.transaction(() => {
     const last = db
       .query("SELECT hash, keyed FROM audit_log ORDER BY seq DESC LIMIT 1")
       .get() as { hash: string; keyed: number } | null;
@@ -140,7 +145,18 @@ export function appendAudit(
       ],
     );
     seq = Number(res.lastInsertRowid);
-  }).immediate();
+  });
+  const own = !db.inTransaction;
+  // Only the BEGIN is retried; the commit keeps busy_timeout (a committing
+  // writer blocks new readers, so its wait for current ones is short).
+  if (own) retryWhileBusy(db, () => db.exec("BEGIN IMMEDIATE"));
+  try {
+    write();
+    if (own) db.exec("COMMIT");
+  } catch (err) {
+    if (own && db.inTransaction) db.exec("ROLLBACK");
+    throw err;
+  }
   return { seq, hash };
 }
 

@@ -1,0 +1,131 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790786959,
+      "digest": "b8a9ac16459cd0c520e229bb71cd0d3a8fd46319e5e43740ae0597ea8bc81f24",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "shared-db-open-takes-the-write-lock-up-front-so-processes-that-open-a-new-file-or-one-with-a-re-scrub-due-at-once-take",
+        "title": "Shared DB open takes the write lock up front, so processes that open a new file or one with a re-scrub due at once take turns instead of failing part way",
+        "description": "Shared DB open takes the write lock up front, so processes that open a new file or one with a re-scrub due at once take turns instead of failing part way",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "src/store/db.ts",
+          "tests/store.busy-lock.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Four processes that open a shared DB file with a re-scrub due at once and append one row each all get in and the re-scrub redacts the stored secret and records the rules version with the chain verified (before the fix three of them failed with database is locked after 5 s)",
+          "Six processes that open a new shared DB file at once and append one SAFE-5 row each all get in and the file ends at the current schema version with the chain verified (before the fix five of them failed with no such table)",
+          "The brief-release open and append tests and the concurrent appenders test still pass also with every fsync 20 ms longer"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "cb3f4b752f70104446fa91fdbfae3b08d49d309f38cf46e36e9bd25bc8a12110",
+        "plugins": "0b7e3c554b7a52e7dfe4cc237a3c1617783640be0a36d7e39e30c325c322a306"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790787129,
+      "digest": "87b821e530330d25bef176329c81b0e0c06e7404123e2011c920a66f19c9ffbd",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "shared-db-open-takes-the-write-lock-up-front-so-processes-that-open-a-new-file-or-one-with-a-re-scrub-due-at-once-take",
+        "title": "Shared DB open takes the write lock up front, so processes that open a new file or one with a re-scrub due at once take turns instead of failing part way",
+        "description": "Shared DB open takes the write lock up front, so processes that open a new file or one with a re-scrub due at once take turns instead of failing part way",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "src/store/db.ts",
+          "tests/store.busy-lock.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Four processes that open a shared DB file with a re-scrub due at once and append one row each all get in and the re-scrub redacts the stored secret and records the rules version with the chain verified (before the fix three of them failed with database is locked after 5 s)",
+          "Six processes that open a new shared DB file at once and append one SAFE-5 row each all get in and the file ends at the current schema version with the chain verified (before the fix five of them failed with no such table)",
+          "The brief-release open and append tests and the concurrent appenders test still pass also with every fsync 20 ms longer"
+        ],
+        "dependencies": [
+          "shared-db-open-and-safe-5-audit-append-retry-a-busy-sqlite-lock-every-millisecond-so-other-processes-committing-back-to"
+        ],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "cb3f4b752f70104446fa91fdbfae3b08d49d309f38cf46e36e9bd25bc8a12110",
+        "plugins": "0b7e3c554b7a52e7dfe4cc237a3c1617783640be0a36d7e39e30c325c322a306"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790787177,
+      "digest": "b8a9ac16459cd0c520e229bb71cd0d3a8fd46319e5e43740ae0597ea8bc81f24",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "shared-db-open-takes-the-write-lock-up-front-so-processes-that-open-a-new-file-or-one-with-a-re-scrub-due-at-once-take",
+        "title": "Shared DB open takes the write lock up front, so processes that open a new file or one with a re-scrub due at once take turns instead of failing part way",
+        "description": "Shared DB open takes the write lock up front, so processes that open a new file or one with a re-scrub due at once take turns instead of failing part way",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "src/store/db.ts",
+          "tests/store.busy-lock.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Four processes that open a shared DB file with a re-scrub due at once and append one row each all get in and the re-scrub redacts the stored secret and records the rules version with the chain verified (before the fix three of them failed with database is locked after 5 s)",
+          "Six processes that open a new shared DB file at once and append one SAFE-5 row each all get in and the file ends at the current schema version with the chain verified (before the fix five of them failed with no such table)",
+          "The brief-release open and append tests and the concurrent appenders test still pass also with every fsync 20 ms longer"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "cb3f4b752f70104446fa91fdbfae3b08d49d309f38cf46e36e9bd25bc8a12110",
+        "plugins": "0b7e3c554b7a52e7dfe4cc237a3c1617783640be0a36d7e39e30c325c322a306"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790791934,
+      "digest": "09c28acaeaedefd8f9d50b2f38bfd197e6883f07bd3c94a631b05004b478bb9e",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

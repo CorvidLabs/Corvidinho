@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "shared-db-open-takes-the-write-lock-up-front-so-processes-that-open-a-new-file-or-one-with-a-re-scrub-due-at-once-take",
+  "implementation_commit": "b5e4c9a4f2c8f51900eb93576cbe41ff0397b9b3",
+  "implementation_tree": "1e6b345d5ef8b320b2f99796a9a6ec0551b5c6a6",
+  "contract_digest": "b8a9ac16459cd0c520e229bb71cd0d3a8fd46319e5e43740ae0597ea8bc81f24",
+  "workspace_digest": "b46ed325c1ad7dd58dc5fa0f0808a9e878b475c6993b5eacf8024d4cd7ca4c4f",
+  "closing_digest": "09c28acaeaedefd8f9d50b2f38bfd197e6883f07bd3c94a631b05004b478bb9e",
+  "review_digest": "13ab444c76b3daaaa98facbf25fb0bfe94d0581fc51bef65d510ea772efff9a6",
+  "finalization_digest": "a71830292660e2f0bef9c46dec01f49f4c3370a0515a69f5f2702a743d1a97e0",
+  "timestamp": 1790791934
+}
