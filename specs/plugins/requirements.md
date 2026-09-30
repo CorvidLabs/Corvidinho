@@ -280,13 +280,24 @@ or ending in `.spec.md`, SpecSync state under `.specsync/` (config, registry,
 version, archive, and `.specsync/changes` / `.specsync/changes/<id>`
 themselves) except the files inside an active change folder
 `.specsync/changes/<id>/` (which stay writable so change artifacts can be
-filled, SPECSYNC-4), and any path component inside the project containing
+filled, SPECSYNC-4) other than SpecSync's own lifecycle records there, and
+any path component inside the project containing
 `keystore` (a keystore file such as `wallet-keystore.json` or any file under a
 keystore directory such as `keystore/UTC--…`). Components of the project
 root's own absolute path SHALL NOT be matched against `keystore`, so a project
 checked out under a keystore-named directory keeps its ordinary files
 writable; nor SHALL a SpecSync change folder's name (`.specsync/changes/<id>/`,
 `.specsync/archive/changes/<id>/`), which is a slug of the change title.
+SpecSync's own lifecycle records in an active change folder, the `*.json`
+files directly in `.specsync/changes/<id>/` (state, approvals, review,
+verification; `isSddRecordPath`), SHALL be refused by `files-write`,
+`files-edit` and `files-delete` (exit 2, a "SpecSync lifecycle record"
+refusal naming `specsync-change-answer`): only the `specsync change` commands
+write them, so a run cannot widen the paths its change covers past the
+REQ-agent-518 gate, put acceptance criteria in past the REQ-plugins-518 hi
+check, or write an approval or review a human owes (AGENT-18, AGENT-18.a).
+They stay out of `isProtectedPath`, so git-commit still stages their
+deletion when a change is archived.
 
 Acceptance Criteria
 - Protected write/edit/delete tests refuse; target file unchanged after refuse.
@@ -298,6 +309,7 @@ Acceptance Criteria
 - files-write, files-edit and files-delete of a file under `specs/` that does not end in `.spec.md` (`specs/agent/requirements.md`, `specs/agent/context.md`) and files-write of a new `specs/notes.md` are refused with SAFE-2 (exit 2); the files are unchanged and the new file is not created (the test fails with the `specs` component rule removed).
 - files-write, files-edit and files-delete of `.fledge/lanes/verify.toml` and `.fledge/config.toml` (also spelled `./.fledge/…`, `src/../.fledge/…`, `.FLEDGE/…` or as an absolute path, through a symlink to the lane file or a symlink to `.fledge/lanes`), files-write of a new `.fledge/lanes/extra.toml`, of a dangling symlink to a missing lane file and of `.fledge` itself in a project without one are refused with the SAFE-2 refusal (exit 2, text names `.fledge`); the files are unchanged and nothing is created; files-read and files-list of `.fledge/` still work (SAFE-2.a; the test fails with the `.fledge` component rule removed).
 - git-commit refuses to stage the deletion of a tracked `.fledge/lanes/verify.toml` or `.fledge/config.toml` (exit 2, SAFE-2); the path stays in `ls-files` and nothing is staged (SAFE-2.a; fails with the `.fledge` rule removed).
+- files-write, files-edit and files-delete of `.specsync/changes/<id>/state.json`, files-write of its `approvals.json` and of a planted `.specsync/changes/<new>/state.json` are refused (exit 2, "SpecSync lifecycle record"); the file is unchanged and nothing is created, so a planted or widened change does not cover an edit; `tasks.md` and `deltas/agent.md` in that folder are still written (`tests/agent.repo-ways.test.ts`; fails with the rule removed from the file tools).
 
 ### REQ-plugins-084
 
