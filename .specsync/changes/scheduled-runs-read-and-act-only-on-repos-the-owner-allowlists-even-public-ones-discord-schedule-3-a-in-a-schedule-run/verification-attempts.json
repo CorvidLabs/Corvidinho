@@ -67,6 +67,29 @@
         "REQ-plugins-493",
         "REQ-plugins-496"
       ]
+    },
+    {
+      "timestamp": 1790736388,
+      "commit": "635365c66939abdd908e9367292491e93cf9af5d",
+      "contract_digest": "478672dac5e779aa068f17cb3538d8a1c91cdda3d3c26b4a9d5f16851df1176c",
+      "execution_digest": "6456f450d0927449b55a14df95285413b93c406352079c9a61eb7cc9247cb10b",
+      "workspace_digest": "30afb69b2489123beb9c013588ca5567d08703dbc31655e0e7b8e59f31653c68",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec cli --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-cli-262",
+        "REQ-discord-202",
+        "REQ-plugins-065",
+        "REQ-plugins-111",
+        "REQ-plugins-493",
+        "REQ-plugins-496"
+      ]
     }
   ]
 }
