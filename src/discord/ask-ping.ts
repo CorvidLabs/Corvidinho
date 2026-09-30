@@ -137,7 +137,7 @@ function quote(text: string): string {
  * first line so a length cut can never drop the ping.
  *
  * AUTONOMY-4: clarify → requester; stuck → owner (requester===owner is fine).
- * SAFE-8: spend-cap → owner (the operator is the one who can lift the cap).
+ * SAFE-8: spend-cap → owner (their spend card, or the operator's setting, lifts it).
  * SAFE-14.a: a spend-cap post is the headline alone — the question (amounts,
  * cap, setting names) is never quoted in a channel; the owner gets it by DM.
  */
@@ -148,7 +148,8 @@ export function formatAskReply(opts: FormatAskReplyOpts): AskReply {
   const requesterId = opts.requesterDiscordId?.trim() || "";
 
   // Clarify addresses the requester; stuck pings the owner (AUTONOMY-2/4).
-  // A spend-cap stop needs the operator, so it pings the owner too (SAFE-8);
+  // A spend-cap stop needs the owner — their spend card came to no, or only
+  // the operator's setting can lift it — so it pings the owner too (SAFE-8);
   // callers pass `owner: null` once this cap episode already pinged.
   const pingId = stuck || spendCap ? ownerId : requesterId;
   const mentionUserIds = pingId ? [pingId] : [];
@@ -166,8 +167,9 @@ export function formatAskReply(opts: FormatAskReplyOpts): AskReply {
   if (stuck && opts.context?.trim()) {
     lines.push(clean(opts.context, ASK_REPLY_CONTEXT_MAX));
   }
-  // SAFE-8: a reply cannot lift the cap (no Approve card yet, #96), so a
-  // spend-cap ask never invites one.
+  // SAFE-8: a reply cannot lift the cap (only the owner's spend Approve card
+  // with its one-time code lets one call through, SAFE-8.a), so a spend-cap
+  // ask never invites one.
   if (opts.hint?.trim() && !spendCap) lines.push(opts.hint.trim());
   else if (opts.answerButton && !spendCap) lines.push(ASK_ANSWER_HINT);
   else if (opts.replyHint && !spendCap) lines.push(ASK_REPLY_HINT);

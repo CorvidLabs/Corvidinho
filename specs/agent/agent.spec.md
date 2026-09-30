@@ -42,6 +42,7 @@ files:
   - tests/agent.spend.test.ts
   - tests/agent.spend-ask.test.ts
   - tests/agent.spend-caps.test.ts
+  - tests/agent.spend-approve.test.ts
   - tests/agent.ask.test.ts
   - tests/agent.verify-env.test.ts
   - tests/agent.verify-feedback.test.ts
@@ -357,6 +358,33 @@ marker), `formatProviderSpendDoctorLine`, `formatSpendDoctorLines`, the
 `/status` lines in `formatSpendStatusLine`, and a `SpendSnapshot` of kind
 `cap` with an optional total `capMicroUsd` and `providers`. `askFromUnknown`
 keeps well-formed `spendScopes` of a `spend-cap` ask.
+
+Spend card (REQ-agent-198, SAFE-8 / SAFE-8.a / SAFE-15 / SAFE-19 / SAFE-20,
+AUTONOMY-8): `src/agent/spend.ts` also exports `SPEND_CARD_KIND` (`spend`),
+`SPEND_CARD_CLASS` (`money`), `SPEND_CARD_TTL_MS` (4 min, below
+`COUNCIL_VOICE_TIMEOUT_MS` and `LLM_REQUEST_TIMEOUT_MS`),
+`SPEND_CARD_POLL_MS` (1 s), `SPEND_CARD_TASK_MAX` (1500),
+`spendCardFields` (what the card shows: title, action `send one model call
+to <model> via <provider>`, target the tripped scope(s), amount that call's
+estimate, and the text — who asked where, the project label, each tripped
+cap's spend when it paused and the task excerpt, SAFE-6 scrubbed before it is
+cut), `setSpendCardTestHooks`
+(`SpendCardTestHooks`: TTL, poll and an `onRequest` hook; tests only), the
+`SpendApprovalOptions` type (`taskText`, `project`, `onNote`) taken by
+`createSpendGuard({ approval })`, the `SpendReserveInput` type, and
+`SpendLedger.reserveApproved` (one approved call recorded at its approved
+amount past the cap after a re-fit check; `trips` names the caps it still
+passes; no row for an estimate over the approved amount, `reason: "amount"`,
+or for a call that would now also pass a cap outside the card's target,
+`reason: "target"`).
+`src/agent/spend-notice.ts` adds `spendScopeLabel`, the `SpendCardNo` /
+`SpendCardOutcome` types (`denied`, `expired`, `aborted`, `changed`,
+`unavailable`) and
+`spendCapReachedAsk({ …, card })`, whose question says what the card came to
+and how to continue (ask again for a new card and code, or the operator
+action) without the "replying can't lift the cap" note. `createTaskExecute`
+passes `approval` (the task text, the project label from `projectKeyFor`
+via `projectLabel`, never a host path, and the Text-event notes).
 
 Autonomous gate + delegation core (REQ-agent-117, issue #117):
 `src/autonomous/enabled.ts` exports `parseAutonomousConfig`,
@@ -720,6 +748,20 @@ call. Recording is separate from delivery: a recorded warning stays pending
 (`delivered_at` NULL) until a surface that can reach the owner claims it, so
 a run whose surface cannot show it (WATCH, daemon, delegate worker) never
 uses it up. Money is integer micro-USD, rounded up.
+With an owner configured, a priced call past a cap is held for the owner's
+`spend` Approve card instead (SAFE-8, AUTONOMY-8): it is sent only on an
+approval (Approve plus the SAFE-19 one-time code, recorded by the bridge's
+card engine) that the waiting run uses once, and then only that call, at
+the estimate the card showed (`reserveApproved`); every later call past a cap
+raises a new card (SAFE-8.a). One card per paused call and at most one open
+per run; another run's open card never refuses this one. A deny, no answer
+before the card lapses, a late code, the call's abort signal (a stop or its
+request timeout), an approval whose call would by then pass a cap the card did
+not show, or no owner configured is a no (SAFE-20): nothing is sent
+or recorded, and the stop is a `SpendCapRefusal` — never a model failure,
+even when the request timeout ended the wait. The wait line is a Text event
+without amounts; the card records its waiting process so a killed run's card
+closes as a no. Unpriced, invalid-setting and ledger stops never raise a card.
 Autonomous mode is off unless the project `fledge.toml` sets
 `[corvidinho.autonomous] enabled = true` (AUTONOMOUS-1). Autonomous extras are
 left out of the tool catalog unless the session is allowed (enabled, depth
@@ -914,6 +956,12 @@ A change the run did not open is never touched.
 - **When** the resumed run only answers and changes nothing
 - **Then** its baseline is the talk branch's merge-base, `filesChanged` is `["app.ts"]`, the verify lane runs, and the run is `done` only if it passes (AGENT-15.a, REQ-agent-015)
 
+### Scenario: the owner lets one call past the spend cap
+
+- **Given** `CORVIDINHO_DAILY_SPEND_CAP_USD=1`, $0.999 spent in the last 24 h and a configured owner
+- **When** the run's next `gpt-4o` call would pass the cap
+- **Then** the call is held and a `spend` card (money) is recorded with action `send one model call to gpt-4o via <host>`, target `total` and that call's estimate as amount; the run emits `[operator] AUTONOMY-8: waiting for the owner's OK on an Approve card with the one-time code …` (no amounts); once the owner approves with the code the call goes out once, recorded at that estimate; the next call past the cap raises a new card; a Deny or a lapse sends nothing and the run ends `blocked` on a `spend-cap` ask (REQ-agent-198)
+
 ### Scenario: a run deletes a test and the lane still passes
 - **Given** a git project whose `tests/math.test.ts` has `adds numbers` and `keeps order`
 - **When** a run edits `app.ts`, drops `keeps order` (or turns it into `test.skip`, or adds a `.only` beside it) and the verify lane passes with a `bun test` summary
@@ -1049,7 +1097,7 @@ A change the run did not open is never touched.
 | No usable provider for the run's tier (no entry, or the kind's key unset) | no provider call; `ExecuteResult.error` with the no-provider notice as summary; state failed, no files, no verify; `task run` exits 1 (REQ-agent-179) |
 | The current model fails (HTTP error incl. 404 / 410, network error, timeout, malformed reply) and a next entry exists | the same request goes to the next entry at once; the chain keeps it for the process; Text event, `onModelFallback`, closing note (REQ-agent-080) |
 | Every configured model failed | the last model's error is the summary with the note after it; `error: true`, state failed (REQ-agent-080) |
-| A call stops at the spend cap, the run is stopped, or a must-ask call is denied or its card lapses | no failover; the cap stop asks as before, the stop stops, the tool gets its refusal (REQ-agent-080) |
+| A call stops at the spend cap, the run is stopped, or a must-ask call is denied or its card lapses | no failover; the cap stop asks as before (the request timeout ending a spend card's wait included), the stop stops, the tool gets its refusal (REQ-agent-080, REQ-agent-198) |
 | Provider / HTTP / network failure in execute | `ExecuteResult.error`; state failed, verified=false, summary is the provider error (then the earlier verify output when a verify already failed), `task run` exits 1 (REQ-agent-242) |
 | Model calls ask-human | state blocked, verifySkipped=true, `ask` reason clarify, summary `Needs your input: …` |
 | ask-human with empty question | ToolResult success=false fed back to the model; loop continues |
@@ -1071,7 +1119,8 @@ A change the run did not open is never touched.
 | Source file with no spec coverage | verify lane `spec-check` (`--require-coverage 100`) fails; verified=false, retried like any verify failure |
 | SpecSync registry missing | Planning lists modules from `specs/<name>/<name>.spec.md` instead (REQ-plugins-008); none there → soft-fails; execute continues |
 | Dangerous plugin + non-interactive + not allowlisted | ToolResult success=false (SAFE-1); loop may continue |
-| Spend cap set and 24h spend + estimate over it, unpriced model, invalid cap value, or ledger unavailable | provider call not sent; run ends `blocked` with a `spend-cap` ask stating spend vs cap and the operator action (no yes/no question); summary is the generic `SPEND_CAP_SUMMARY` (SAFE-8) |
+| Spend cap set and 24h spend + estimate over it with no owner configured, unpriced model, invalid cap value, or ledger unavailable | provider call not sent; run ends `blocked` with a `spend-cap` ask stating spend vs cap and the operator action (no yes/no question); summary is the generic `SPEND_CAP_SUMMARY` (SAFE-8) |
+| Spend cap set, an owner configured, and a priced call over a cap: the owner denies the spend card, it lapses (no bridge, no answer), a code comes late, the run is stopped, the request times out, or the card cannot be raised | call held and then not sent, nothing recorded; run ends `blocked` with a `spend-cap` ask naming the card and what it came to, and how to continue (ask again for a new card, or the operator action), no reply note; generic summary (REQ-agent-198) |
 | `CORVIDINHO_PROVIDER_SPEND_CAPS_USD` set and a provider's 24h spend + estimate over its cap (or a bad entry / unknown provider) | provider call not sent (none to any other model either); run ends `blocked` with a `spend-cap` ask naming `provider:<id>` (or the bad setting, never its value) and `spendScopes`; generic summary (SAFE-14 / SAFE-15) |
 | Settled call brings 24h spend to ≥80% of the cap while the warning is armed | one `Text` warning + `TaskResult.spendWarning` + a pending `warn` row; later calls stay quiet until spend is seen under 70% (or 24 h pass) (SAFE-8) |
 | Autonomous tool named while not offered | Refused like any non-offered tool (REQ-agent-128) |
@@ -1181,5 +1230,6 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-30 | a-schedule-the-owner-creates-runs-with-the-owner-s-tools-and-allowlist-never-the-shell-runners-or-fledge-commands-and: A schedule the owner creates runs with the owner's tools and allowlist (never the shell, runners or Fledge commands) and asks on Approve cards where the must-ask list says so, a denied or lapsed card ending the run with a blocking ask; schedules other people create stay read-only (DISCORD-SCHEDULE-1.a) |
 | 2026-09-30 | in-a-specsync-repo-it-opens-and-works-a-specsync-change-for-its-edits-and-on-corvidinho-it-approves-and-archives-its: In a SpecSync repo it opens and works a SpecSync change for its edits, and on Corvidinho it approves and archives its own change once verify is green (AGENT-18 SpecSync clause, AGENT-18.a) |
 | 2026-09-30 | rolling-24-hour-spend-caps-per-provider-plus-the-total-cap-each-warning-the-owner-at-80-and-stopping-to-ask-at-100-safe: Rolling 24-hour spend caps per provider plus the total cap, each warning the owner at 80% and stopping to ask at 100% (SAFE-14, SAFE-15): CORVIDINHO_PROVIDER_SPEND_CAPS_USD (provider=USD keyed on the configured provider id; a malformed or unknown key stops every call, value never echoed) next to CORVIDINHO_DAILY_SPEND_CAP_USD (the total cap); every provider call is recorded while any cap is set; SpendLedger.window(now, provider?) with a (provider, ts) index; reserve() checks the total and the call's provider cap in one IMMEDIATE transaction and names each tripped scope (total, provider:<id>) in owner-only text; spend_alerts gains a scope column (idempotent ALTER, scrubbed) so each cap warns once per crossing and pings once per episode; a cap stop is never a model failure; doctor and the owner's /status show each cap |
+| 2026-09-30 | at-a-spend-cap-the-run-asks-the-owner-on-a-dm-spend-approve-card-with-a-one-time-code-instead-of-refusing-approve-lets: At a spend cap the run asks the owner on a DM spend Approve card with a one-time code instead of refusing; Approve lets only the paused call through at the amount shown and the next call past the cap asks again (SAFE-8, SAFE-8.a, SAFE-15, SAFE-19 money) |
 | 2026-09-30 | the-safe-3-a-approved-prod-command-test-runs-a-stand-in-kubectl-first-on-path-instead-of-the-host-s-real-one-which-took: The SAFE-3.a approved-prod-command test runs a stand-in kubectl first on PATH instead of the host's real one, which took 2.4-3.1 s on CI runners and once passed the 5 s test timeout |
 | 2026-09-30 | if-it-only-plans-or-says-done-without-changing-anything-it-gets-one-nudge-to-the-same-model-a-second-stall-stands-with: If it only plans or says 'Done.' without changing anything, it gets one nudge to the same model; a second stall stands with an operator note (AGENT-17, nudge half) |

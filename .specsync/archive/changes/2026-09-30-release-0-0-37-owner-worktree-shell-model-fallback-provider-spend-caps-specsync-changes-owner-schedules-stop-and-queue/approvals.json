@@ -1,0 +1,50 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790804263,
+      "digest": "3ba2fe60390424bb4ba4dc9de953a2eaf39511e0c5a175b9f1484f213e62006b",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "release-0-0-37-owner-worktree-shell-model-fallback-provider-spend-caps-specsync-changes-owner-schedules-stop-and-queue",
+        "title": "Release 0.0.37: owner worktree shell, model fallback, provider spend caps, SpecSync changes, owner schedules, stop and queue",
+        "description": "Release 0.0.37: owner worktree shell, model fallback, provider spend caps, SpecSync changes, owner schedules, stop and queue",
+        "kind": "operations",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "package.json 0.0.37; version prints 0.0.37; CHANGELOG 0.0.37 extractable; STATUS rows"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "dc1de5b4f0964ad069250819e3bdf572093d9b324d1a197a61f12df875df28ac"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790804287,
+      "digest": "eb2bb33b9ae0962e1c648537246d6635a22e16b7f658d4171969fbee00f9d375",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

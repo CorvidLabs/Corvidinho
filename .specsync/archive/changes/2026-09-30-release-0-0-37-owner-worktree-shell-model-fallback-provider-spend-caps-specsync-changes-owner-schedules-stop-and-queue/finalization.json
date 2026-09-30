@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-37-owner-worktree-shell-model-fallback-provider-spend-caps-specsync-changes-owner-schedules-stop-and-queue",
+  "implementation_commit": "0f99ca7db9078746fd9c1ffb7c715f4ec1b15dfd",
+  "implementation_tree": "755f5d11ec7fef89779c5dacd0fcb338d4c0ecf9",
+  "contract_digest": "3ba2fe60390424bb4ba4dc9de953a2eaf39511e0c5a175b9f1484f213e62006b",
+  "workspace_digest": "a06e5698d37f0bc69c119cab6edae751b82d780191c77e5a89978d7c3bc930a1",
+  "closing_digest": "eb2bb33b9ae0962e1c648537246d6635a22e16b7f658d4171969fbee00f9d375",
+  "review_digest": "bd332de0e915cf951ffa18fac9d3b3b6ef11f37f2b61e7485f22d06004e319dd",
+  "finalization_digest": "b44ec37fa21fdebc256b6c21fa49016c73c52525a7b9a3c7e35c3181fe003fc1",
+  "timestamp": 1790804287
+}

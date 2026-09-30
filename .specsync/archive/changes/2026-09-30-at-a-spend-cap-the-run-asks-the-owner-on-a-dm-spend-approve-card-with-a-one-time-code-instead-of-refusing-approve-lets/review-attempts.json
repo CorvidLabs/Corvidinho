@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "at-a-spend-cap-the-run-asks-the-owner-on-a-dm-spend-approve-card-with-a-one-time-code-instead-of-refusing-approve-lets",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "239854693f80b51e26b37f439f32b14f7908832f",
+      "contract_digest": "5ecff3fe0557120ac0548eba3e56063300f0614ce8063d7e7b46f86a6eda084d",
+      "execution_digest": "bf63eb23aaf6ffb1385e96caabc25a28a035cc8c5c82b61153187eaa27918e24",
+      "workspace_digest": "2931810761ccec6ab7953f1065c9e70baf288423b80ed2c6ef83b53e29c8bb23",
+      "timestamp": 1790805515
+    }
+  ]
+}

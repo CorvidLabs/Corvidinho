@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "at-a-spend-cap-the-run-asks-the-owner-on-a-dm-spend-approve-card-with-a-one-time-code-instead-of-refusing-approve-lets",
+  "implementation_commit": "239854693f80b51e26b37f439f32b14f7908832f",
+  "implementation_tree": "e49bcc76c1726c01902aebeedb3b6ec74c85f3b0",
+  "contract_digest": "5ecff3fe0557120ac0548eba3e56063300f0614ce8063d7e7b46f86a6eda084d",
+  "workspace_digest": "2931810761ccec6ab7953f1065c9e70baf288423b80ed2c6ef83b53e29c8bb23",
+  "closing_digest": "0c89c1bd93c43529004a3bfc8f53058206d27566983f17fcfa7e3a607199cb8a",
+  "review_digest": "e6093266e7559c7c9862072c5069b0760cbaa06d7158610bb13b5360fdf6ce16",
+  "finalization_digest": "532c6054b04168e32edf625687cb73baacec86baca9c4e6e689b691937faad33",
+  "timestamp": 1790805529
+}
