@@ -236,8 +236,8 @@ records the acting person's forget request from a conversation, audited;
 it deletes nothing (MEMORY-ACL-6).
 In a GitHub WATCH run (no Discord actor) the acting person is the commenter
 the poller sets (`CORVIDINHO_ACTING_GITHUB_LOGIN` / `_ID`, thread repo
-`_REPO`; env only) matched by GitHub numeric id / login in the people list
-(MEMORY-8 / REQ-plugins-067): a declared commenter stores and recalls their own
+`_REPO`; env only) matched by the GitHub numeric id only in the people list
+(never the login, IDENTITY-7.a; MEMORY-8 / REQ-plugins-067): a declared commenter stores and recalls their own
 profile; an undeclared one gets community scope — `memory-recall --project`
 reads the thread repo's project memory, nothing is saved; from GitHub project
 memory is never written and `--person`, private notes and `memory-forget-me`

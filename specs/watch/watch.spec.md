@@ -20,6 +20,7 @@ files:
   - tests/watch.auth-stop.test.ts
   - tests/watch.request-actor.test.ts
   - tests/watch.conversation.test.ts
+  - tests/watch.github-numeric-id.test.ts
 
 db_tables: []
 depends_on:
@@ -45,8 +46,8 @@ persist in the shared SQLite DB (`watch_sessions`, schema v6) with the same
 soft TTL as Discord sessions (SESSION-1..3, REQ-watch-037). Memory in GitHub
 runs (MEMORY-8/9, REQ-watch-067): the spawn passes the commenter's GitHub
 login / numeric id and the thread's repo so the memory plugins act for the
-commenter's declared person (undeclared: the repo's project memory,
-read-only), and before each run the poller searches the commenter's profile
+commenter's declared person, matched by the numeric id only (REQ-watch-367;
+undeclared: the repo's project memory, read-only), and before each run the poller searches the commenter's profile
 and the repo's project memory for the comment and prepends what it found
 (`src/watch/memory-inject.ts`).
 
@@ -74,8 +75,9 @@ gates; REQ-watch-302); `DetectedEvent.actor`, `SearchClient.findRequestActor`,
 (REQ-watch-302).
 `RouterDeps.people` (a `PeopleDirectory`), `formatWatchIdentityBlock(event,
 people)` and `WATCH_IDENTITY_HEADER` (`router.ts`); `DetectedEvent.senderId`
-and the search clients' `userId` (GitHub numeric id; fixture `user_id`)
-(REQ-watch-036). `startWatchPoller` loads the owner from its allowlist file +
+and the search clients' `userId` (GitHub numeric id from the API's `user.id`;
+fixture `user_id`) (REQ-watch-036) — the only thing any WATCH path matches a
+sender on (IDENTITY-7.a, REQ-watch-367). `startWatchPoller` loads the owner from its allowlist file +
 env and passes `loadDeclaredPeople` (re-read per event) to `routeEvent`, so a
 declared commenter's prompt opens with a `[Corvidinho acting GitHub user …]`
 paragraph (IDENTITY-14 / IDENTITY-7).
@@ -152,7 +154,8 @@ fence, clipped before fencing so the whole prompt stays within
 `WATCH_PROMPT_MAX_CHARS` and the end marker (random id) is always last; the
 header line, `URL:` and any identity block stay outside it. Before any ack or
 run, `watchInjectionVerdict` checks the title and body of every routed event
-whose sender is not the owner (by GitHub id / login in the people list); a
+whose sender is not the owner (by the owner's GitHub numeric id in the people
+list only; the owner's login with no or another id is checked, REQ-watch-367); a
 hit counts `refused`, runs nothing, posts one `buildInjectionRefusalBody`
 comment (any event type; skipped for the watch user's own events and an
 already-answered id; @mentions the owner's GitHub login when configured),
@@ -164,6 +167,10 @@ the `watchInjectionLine` (owner @mentioned) in its summary comment, or, when
 no summary comment is posted (an event type WATCH does not ack, or no
 successful ack), in one `maybePostWatchInjectionNotice` comment of its own,
 once per event id (REQ-watch-071).
+Every WATCH recognition of the sender — identity block, memory inject, memory
+plugins, SAFE-13 owner exemption — uses `senderId` only, never `sender`; no id
+or an undeclared id is community, never the owner (IDENTITY-7.a,
+REQ-watch-367).
 
 ## Behavioral Examples
 
@@ -181,6 +188,9 @@ gets the thread's earlier events and answers replayed ahead of the new event
 (REQ-watch-472). A non-owner comment whose body claims to be the
 owner and asks for the API keys → no run; one refusal comment @mentioning the
 owner's GitHub login; an `injection-suspected` audit row (REQ-watch-071).
+A comment from the owner's login re-registered by someone else (another
+numeric id) → `declared_person: none`, no owner memory, and its injection is
+refused like anyone's; the owner's own id → `role: owner` (REQ-watch-367).
 
 ## Error Cases
 

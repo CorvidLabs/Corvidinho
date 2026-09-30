@@ -69,6 +69,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `dataDirDoctorCheck` | `env?, home?` | `DoctorCheck` | Doctor `data-dir` line: exists + writable / creatable / `fail` |
 | `projectFilesDoctorChecks` | `cwd?` | `DoctorCheck[]` | Doctor / `init` project-file lines for `cwd` (CLI-4, REQ-cli-430): `fledge.toml`, `verify-lane` (runs spec-check), `.specsync`, `specs`; each missing one `[missing]` in plain language; reads only |
 | `backupDoctorCheck` | `env?, opts?: { db? }` | `DoctorCheck` | Doctor `backup` line (OPS-1/2, REQ-cli-680): `[warn]` off / unusable dir / failing job (reason, owner told or not) / no `/announce` channel set, `[ok]` dir + snapshots + last backup and restore test; never fails doctor; creates nothing |
+| `peopleGithubDoctorCheck` | `dir: PeopleDirectory` | `DoctorCheck \| null` | Doctor `people-github` line (IDENTITY-7.a, REQ-cli-367): `[warn]` naming (person ids only) the owner and declared people with a GitHub login but no GitHub numeric id; null when nobody is affected; never fails doctor |
 | `resolveBackupConfig` | `env?` | `BackupConfig` | `CORVIDINHO_BACKUP_DIR`: unset → `off`, relative → `invalid`, absolute → `on` + resolved dir (src/store/backup.ts) |
 | `gitWorkTreeAbove` / `backupDirRefusal` | `dir` | `string or null` | Nearest dir holding `.git`; why a dir cannot hold backups (in a git work tree as given or with symlinks resolved, not a directory, unreadable) |
 | `snapshotName` | `now: number` | `string` | `corvidinho-<YYYYMMDD>T<HHMMSS>Z.db` (UTC) |
@@ -208,6 +209,7 @@ Nightly backup (OPS-1/2, REQ-cli-680, `src/store/backup.ts`): with `CORVIDINHO_B
 | Doctor: allowlists only in the allowlist file | `[ok] discord` / `[ok] github-watch` naming source `file` (values not shown) |
 | Doctor: every allowlisted channel / repo also deny-listed, or allowlist file does not load | `[missing] discord` / `[missing] github-watch`; exit 1 |
 | Doctor: no LLM key | `[warn] llm` (task run uses the demo stub); exit code unchanged |
+| Doctor: the owner or a declared person has a GitHub login but no GitHub numeric id | `[warn] people-github` naming person ids only (on GitHub they read as undeclared until an id is linked); exit code unchanged (REQ-cli-367) |
 | Doctor: data dir not a directory, a symlink to nothing, not creatable or not writable | `[fail] data-dir`; exit 1 |
 | Doctor: blank (whitespace-only) Discord / GitHub token or watch login | `[missing] discord` / `[missing] github` / `[missing] github-watch` (bridge / WATCH / Octokit trim them); exit 1 |
 | Doctor / `init`: no `fledge.toml`, no verify lane or one without spec-check, no `.specsync/` or `specs/` in the current dir | `[missing]` line per item in plain language; exit 1; nothing is created |

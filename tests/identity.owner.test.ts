@@ -258,11 +258,16 @@ describe("owner matching", () => {
     expect(isOwnerDiscord(undefined, OWNER_ID)).toBe(false);
   });
 
-  test("GitHub: login is case-insensitive, optional @", () => {
-    expect(isOwnerGithub(owner, "0xLeif")).toBe(true);
-    expect(isOwnerGithub(owner, "@0XLEIF")).toBe(true);
-    expect(isOwnerGithub(owner, "0xleif-bot")).toBe(false);
-    expect(isOwnerGithub(null, "0xLeif")).toBe(false);
+  test("GitHub: the numeric user id from [owner] github_id only; a login never counts (IDENTITY-7.a)", () => {
+    const withId: OwnerRecord = { ...owner, githubId: "8268288" };
+    expect(isOwnerGithub(withId, 8268288)).toBe(true);
+    expect(isOwnerGithub(withId, " 8268288 ")).toBe(true);
+    expect(isOwnerGithub(withId, 1)).toBe(false);
+    expect(isOwnerGithub(withId, "0xLeif")).toBe(false);
+    expect(isOwnerGithub(owner, "0xLeif")).toBe(false);
+    expect(isOwnerGithub(owner, 8268288)).toBe(false);
+    expect(isOwnerGithub(withId, null)).toBe(false);
+    expect(isOwnerGithub(null, 8268288)).toBe(false);
   });
 
   test("display name never matches", () => {

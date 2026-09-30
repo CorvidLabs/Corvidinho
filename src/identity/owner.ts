@@ -4,12 +4,15 @@
  * Sources (env wins per field):
  *   - env: CORVIDINHO_OWNER_DISCORD_ID, CORVIDINHO_OWNER_GITHUB_LOGIN,
  *     CORVIDINHO_OWNER_DISPLAY
- *   - allowlist file `[owner]` section (discord_id, github_login, display),
- *     or an `owner` object in a `.json` allowlist file.
+ *   - allowlist file `[owner]` section (discord_id, github_id, github_login,
+ *     display), or an `owner` object in a `.json` allowlist file.
  *
- * Matching is by Discord snowflake or lowercased GitHub login only — never by
- * display name. Missing / blank / non-snowflake Discord id ⇒ no owner
- * (IDENTITY-3 owner path). Ids and logins are never echoed in status lines.
+ * Matching is by Discord snowflake, and on GitHub by the numeric user id
+ * (`[owner] github_id`) only — never by display name, and never by GitHub
+ * login (IDENTITY-7.a: a renamed or re-registered login is someone else).
+ * The login is kept to @mention the owner on GitHub. Missing / blank /
+ * non-snowflake Discord id ⇒ no owner (IDENTITY-3 owner path). Ids and logins
+ * are never echoed in status lines.
  */
 
 import { existsSync } from "node:fs";
@@ -19,7 +22,12 @@ import { resolveAllowlistPath } from "../allowlist/load.ts";
 export type OwnerRecord = {
   /** Discord user snowflake (digits only). */
   discordId: string;
-  /** Lowercased GitHub login without a leading `@`. */
+  /**
+   * GitHub numeric user id (digits), from `[owner] github_id` — the only way
+   * the owner is recognised on GitHub (IDENTITY-7.a).
+   */
+  githubId?: string;
+  /** Lowercased GitHub login without a leading `@` (for @mentions; never matched). */
   githubLogin?: string;
   /** Human display name (never used for matching). */
   display?: string;
@@ -28,6 +36,7 @@ export type OwnerRecord = {
 /** Raw owner fields as read from one source (before validation). */
 export type OwnerFields = {
   discordId?: string;
+  githubId?: string;
   githubLogin?: string;
   display?: string;
 };
@@ -49,6 +58,7 @@ export const OWNER_DISPLAY_MAX = 64;
 
 const SNOWFLAKE_RE = /^\d{1,25}$/;
 const GITHUB_LOGIN_RE = /^[a-z0-9](?:[a-z0-9-]{0,38})$/;
+const GITHUB_ID_RE = /^\d{1,20}$/;
 
 function clean(raw: string | undefined | null): string | undefined {
   if (raw === undefined || raw === null) return undefined;
@@ -60,6 +70,16 @@ export function normalizeGithubLogin(raw: string | undefined | null): string | u
   const t = clean(raw);
   if (!t) return undefined;
   return t.replace(/^@/, "").toLowerCase();
+}
+
+/** GitHub numeric user id as digits (no leading zeros), else undefined. */
+export function normalizeGithubId(raw: string | number | undefined | null): string | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (typeof raw === "number") {
+    return Number.isSafeInteger(raw) && raw > 0 ? String(raw) : undefined;
+  }
+  const t = String(raw).trim();
+  return GITHUB_ID_RE.test(t) ? t.replace(/^0+(?=\d)/, "") : undefined;
 }
 
 export function normalizeDisplay(raw: string | undefined | null): string | undefined {
@@ -103,6 +123,7 @@ export function parseOwnerToml(text: string): OwnerFields {
     const key = kv[1]!.toLowerCase();
     const value = parseScalar(kv[2]!);
     if (key === "discord_id") out.discordId = value;
+    else if (key === "github_id") out.githubId = value;
     else if (key === "github_login") out.githubLogin = value;
     else if (key === "display") out.display = value;
   }
@@ -129,6 +150,14 @@ export function ownerFieldsFromJson(raw: unknown): { fields: OwnerFields; issues
   } else {
     fields.discordId = str("discord_id");
   }
+  // GitHub ids fit a JSON number exactly (well under 2^53), so both spellings read.
+  const gid = rec.github_id;
+  if (typeof gid === "number") {
+    if (Number.isSafeInteger(gid) && gid > 0) fields.githubId = String(gid);
+    else issues.push("owner github_id in the JSON allowlist file is not a numeric GitHub user id (ignored)");
+  } else {
+    fields.githubId = str("github_id");
+  }
   fields.githubLogin = str("github_login");
   fields.display = str("display");
   return { fields, issues };
@@ -153,8 +182,14 @@ export function resolveOwner(
   const issues: string[] = [];
   const pick = (k: keyof OwnerFields) => clean(env?.[k]) ?? clean(file?.[k]);
   const discordId = pick("discordId");
+  const rawGithubId = pick("githubId");
+  const githubId = normalizeGithubId(rawGithubId);
   const githubLogin = normalizeGithubLogin(pick("githubLogin"));
   const display = normalizeDisplay(pick("display"));
+
+  if (rawGithubId && !githubId) {
+    issues.push("owner github_id is not a numeric GitHub user id (ignored — the owner is not recognised on GitHub until fixed)");
+  }
 
   if (githubLogin && !GITHUB_LOGIN_RE.test(githubLogin)) {
     issues.push("owner github_login is not a valid GitHub login (ignored)");
@@ -177,6 +212,7 @@ export function resolveOwner(
     return { owner: null, issues };
   }
   const owner: OwnerRecord = { discordId };
+  if (githubId) owner.githubId = githubId;
   if (validLogin) owner.githubLogin = validLogin;
   if (display) owner.display = display;
   return { owner, issues };
@@ -248,14 +284,18 @@ export function isOwnerDiscord(
   return id.length > 0 && id === owner.discordId;
 }
 
-/** True only when `login` is the owner's GitHub login (case-insensitive). */
+/**
+ * True only when `githubId` is the owner's declared GitHub numeric user id
+ * (IDENTITY-7.a). A login never counts: it can be renamed or re-registered.
+ * No `[owner] github_id` ⇒ nobody is the owner on GitHub.
+ */
 export function isOwnerGithub(
   owner: OwnerRecord | null | undefined,
-  login: string | null | undefined,
+  githubId: string | number | null | undefined,
 ): boolean {
-  if (!owner?.githubLogin) return false;
-  const l = normalizeGithubLogin(login);
-  return Boolean(l) && l === owner.githubLogin;
+  if (!owner?.githubId) return false;
+  const id = normalizeGithubId(githubId);
+  return id !== undefined && id === owner.githubId;
 }
 
 /** Status line: configured yes/no plus display name only (no ids). */
