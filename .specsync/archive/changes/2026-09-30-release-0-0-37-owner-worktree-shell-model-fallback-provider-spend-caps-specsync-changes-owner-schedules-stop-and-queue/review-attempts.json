@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "release-0-0-37-owner-worktree-shell-model-fallback-provider-spend-caps-specsync-changes-owner-schedules-stop-and-queue",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "0f99ca7db9078746fd9c1ffb7c715f4ec1b15dfd",
+      "contract_digest": "3ba2fe60390424bb4ba4dc9de953a2eaf39511e0c5a175b9f1484f213e62006b",
+      "execution_digest": "214ce0b4fc3d01d9963edd910ad0762457a7e4b2321b6fb979d83d0c8ed19532",
+      "workspace_digest": "a06e5698d37f0bc69c119cab6edae751b82d780191c77e5a89978d7c3bc930a1",
+      "timestamp": 1790804272
+    }
+  ]
+}

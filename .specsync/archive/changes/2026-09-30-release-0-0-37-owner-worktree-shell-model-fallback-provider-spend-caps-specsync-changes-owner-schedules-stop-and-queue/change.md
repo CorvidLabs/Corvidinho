@@ -1,6 +1,6 @@
 ---
 id: release-0-0-37-owner-worktree-shell-model-fallback-provider-spend-caps-specsync-changes-owner-schedules-stop-and-queue
-state: implementing
+state: archived
 type: operations
 base_commit: 81ceb4a1423189b50ce25df34363b26b50426d1d
 ---
