@@ -7,11 +7,11 @@
   "title": "Shell-exec refuses foot-guns and says why (sed -i or > edits, downloads piped into a shell, deletes outside the worktree, secret reads), env -C and symlinked cd can't leave the root, and the shell and language runners start without GitHub or git credentials (SAFE-21, SAFE-21.a, SAFE-3)",
   "description": "shell-exec refuses foot-guns and says why (sed -i or > edits, downloads piped into a shell, deletes outside the worktree, secret reads), env -C and symlinked cd can't leave the root, and the shell and language runners start without GitHub or git credentials (SAFE-21, SAFE-21.a, SAFE-3)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "4d84bd62c561926ebbdbf3a2b5c94f8e6066111b",
   "created_at": 1790730807,
-  "updated_at": 1790734819,
+  "updated_at": 1790735280,
   "affected_specs": [
     "plugins",
     "agent"

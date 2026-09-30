@@ -1,6 +1,6 @@
 ---
 id: shell-exec-refuses-foot-guns-and-says-why-sed-i-or-edits-downloads-piped-into-a-shell-deletes-outside-the-worktree
-state: verifying
+state: archived
 type: feature
 base_commit: 4d84bd62c561926ebbdbf3a2b5c94f8e6066111b
 ---
