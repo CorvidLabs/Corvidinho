@@ -1,6 +1,6 @@
 ---
 id: capture-leif-confirmed-identity-7-a-github-matches-people-only-by-numeric-user-id-36-into-hi-from-the-2026-09-28
-state: approved
+state: implementing
 type: documentation
 base_commit: 040087ff0413f3e96156f09366e8ff360fd3df66
 ---
