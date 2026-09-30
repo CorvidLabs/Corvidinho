@@ -1159,3 +1159,17 @@ thinking outbound; no live Discord, no network):
   `src/discord/spend-dm.ts` removed), 29 tests in the six existing files fail
   on their assertions and `tests/discord.spend-dm.test.ts` cannot load; with
   the branch restored all 154 tests in the seven files pass.
+
+## /work checks tests against the merge-base (REQ-discord-185, AGENT-15)
+
+`tests/agent.test-evidence.test.ts` › "/work checks the tree against the
+merge-base before commit and push" (temp repo, bare `origin`, a `talk/…`
+worktree, stubbed plugins and lane): a test removed in an earlier commit on
+the branch → `opened: false`, reason `tests-deleted`, the line names
+`"keeps order" (tests/math.test.ts)` and `main`, no plugin call, no lane,
+nothing on the remote; a `git mv` rename of the test file with a pre-push
+lane that prints no test summary → `verify-failed` naming the missing
+summary, no plugin call; the same with a `bun test` summary → opened
+(`pre-push`), `git-commit` → `git-push` → `github-pr-create`. Both fail on
+the base (the PR opens). `tests/work.pr.test.ts`: the pre-push stub that
+must ship prints a `bun test` summary.

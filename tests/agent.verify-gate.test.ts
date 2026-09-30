@@ -37,6 +37,7 @@ import {
   TALK_VERIFIED_MARKER,
 } from "../src/worktree/base.ts";
 import { gitIn, makeCarriedTalk, makeProject, makeTalk } from "./fixtures/talk-worktree.ts";
+import { LANE_PASS_OUTPUT } from "./fixtures/lane-output.ts";
 
 const root = join(import.meta.dir, "..");
 const bases: string[] = [];
@@ -56,7 +57,7 @@ function lane(outcomes: boolean[] = [true]) {
   const runner: VerifyRunner = async (cwd) => {
     calls.push(cwd);
     const ok = outcomes[Math.min(calls.length - 1, outcomes.length - 1)]!;
-    return { success: ok, output: ok ? "ok" : "app.ts: syntax error" };
+    return { success: ok, output: ok ? LANE_PASS_OUTPUT : "app.ts: syntax error" };
   };
   return { calls, runner };
 }
@@ -275,7 +276,7 @@ describe("'verified' covers every edit since the talk started (AGENT-15.a, REQ-a
     expect(texts(events)).toContain(CARRIED_NOTE);
   });
 
-  test("a talk whose base branch cannot be found verifies anyway (fail closed)", async () => {
+  test("a talk whose base branch cannot be found verifies anyway, and without a readable baseline it is not verified (fail closed)", async () => {
     const base = tempBase();
     const talk = await makeTalk(base);
     gitIn(talk.project, "branch", "-m", "main", "trunk");
@@ -283,10 +284,13 @@ describe("'verified' covers every edit since the talk started (AGENT-15.a, REQ-a
     const v = lane([true]);
     const { result, events } = await run(talk.work, answerOnly, v.runner);
     expect(v.calls).toEqual([talk.work]);
-    expect(result.verified).toBe(true);
     expect(texts(events)).toContain(
       "Verify gate: could not read the git working-tree diff, so verifying anyway.",
     );
+    // AGENT-15 (REQ-agent-185): with no baseline, "none deleted" can't be shown.
+    expect(result.verified).toBe(false);
+    expect(result.state).toBe("failed");
+    expect(result.summary).toContain("could not read the test files to check that no test was deleted");
   });
 
   test("the caller's own checkout keeps the run-start baseline", async () => {

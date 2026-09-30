@@ -247,7 +247,9 @@ What an entry unlocks **today**:
 - The bridge's `/work` draft-PR step: `git-commit` (when the tree is dirty), `git-push` and
   `github-pr-create`. Without them the reply says
   `not opened — opening a PR from /work needs an explicit allow (GITHUB-5): allowlist … (CORVIDINHO_ALLOWLIST)`
-  and the changes stay on the work branch. The PR step also needs verify to pass, the requester
+  and the changes stay on the work branch. The PR step also needs verify to pass (with a test
+  summary showing tests ran), no test deleted or turned off since the branch left its base
+  (AGENT-15), the requester
   to be the owner or a declared team member (only they can start `/work`, IDENTITY-10/11.a),
   and the repo to pass GITHUB-6.
 - The model's tool catalog in `task run` (CLI-3 / SAFE-1). A dangerous tool is offered to the

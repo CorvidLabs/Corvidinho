@@ -5,7 +5,9 @@
  * The gate has no off switch (AGENT-14, REQ-agent-003). In a git work tree
  * the real diff alone decides what changed (AGENT-15, REQ-agent-085), from
  * the talk branch's merge-base when the last run in that talk worktree did
- * not end verified (AGENT-15.a, REQ-agent-015).
+ * not end verified (AGENT-15.a, REQ-agent-015). A passing lane is verified
+ * only when its output shows tests ran and no test was deleted or turned off
+ * (AGENT-15, REQ-agent-185).
  */
 
 import { relative, resolve } from "node:path";
@@ -21,12 +23,14 @@ import {
   VERIFY_FEEDBACK_MAX_CHARS,
   verifyFeedbackExcerpt,
 } from "./verify.ts";
+import { judgeTestEvidence, startTestNameWalk, type TestDropCheck } from "./test-evidence.ts";
 import { startWorkspaceDiff, WORKSPACE_DIFF_MAX_FILES } from "./workspace-diff.ts";
 import type {
   AgentEvent,
   AgentState,
   RunTaskOptions,
   TaskResult,
+  TestDrop,
   WorkspaceDiffTracker,
 } from "./types.ts";
 
@@ -170,6 +174,17 @@ async function gate(
     workspace = null;
   }
   started(workspace);
+  // AGENT-15 (REQ-agent-185): with no git snapshot, the none-deleted check
+  // compares a walk of the project's test files taken now with one taken
+  // after the lane passes; a walk that could not finish fails closed.
+  let testCheck: TestDropCheck | null = workspace;
+  if (!workspace) {
+    try {
+      testCheck = startTestNameWalk(opts.cwd);
+    } catch {
+      testCheck = null;
+    }
+  }
   if (workspace?.carried) {
     emit(onEvent, {
       type: "Text",
@@ -359,6 +374,30 @@ async function gate(
       return cancelledResult(summary, filesChanged, attempts);
     }
 
+    // AGENT-15 (REQ-agent-185): a passing lane counts as verified only when
+    // its output shows tests ran and no test was deleted or turned off since
+    // the baseline. Otherwise it is a failed verify like any other (retry
+    // with the note first, then failed), with no opt-out (AGENT-14).
+    const laneOutput = result.output;
+    let evidenceNote: string | undefined;
+    if (result.success) {
+      let drops: TestDrop[] | null;
+      try {
+        drops = testCheck ? await testCheck.testDrops() : null;
+      } catch {
+        drops = null;
+      }
+      if (isAborted(signal)) {
+        return cancelledResult(summary, filesChanged, attempts);
+      }
+      const verdict = judgeTestEvidence(laneOutput, drops);
+      emit(onEvent, { type: "Text", text: verdict.note });
+      if (!verdict.ok) {
+        evidenceNote = verdict.note;
+        result = { success: false, output: `${laneOutput}\n\n${verdict.note}` };
+      }
+    }
+
     emit(onEvent, {
       type: "VerifyResult",
       success: result.success,
@@ -378,7 +417,9 @@ async function gate(
       };
     }
 
-    lastVerifyFailure = result.output;
+    // The note leads, so a summary or feedback cut to its head keeps it.
+    const failure = evidenceNote ? `${evidenceNote}\n\n${laneOutput}` : result.output;
+    lastVerifyFailure = failure;
     retries += 1;
     if (retries > maxRetries) {
       emit(onEvent, {
@@ -389,7 +430,7 @@ async function gate(
       // AUTONOMY-2: stuck — still failed (AGENT-4), plus a question for a human.
       const ask = stuckAfterVerifyAsk(maxRetries);
       return {
-        summary: `${summary}\n\nVerification failed after ${maxRetries} retries:\n${result.output}\n\n${formatAskSummary(ask)}`,
+        summary: `${summary}\n\nVerification failed after ${maxRetries} retries:\n${failure}\n\n${formatAskSummary(ask)}`,
         filesChanged,
         verified: false,
         verifySkipped: false,
@@ -407,10 +448,19 @@ async function gate(
     // AGENT-4.a: the retry gets the failing step's output. Passing steps
     // (typecheck, a --help smoke) can fill the cap before a failing test, so
     // a long log keeps the failing step and the end, never its first chars.
-    verifyFeedback = `${VERIFY_FEEDBACK_HEAD}${verifyFeedbackExcerpt(
-      result.output,
-      VERIFY_FEEDBACK_MAX_CHARS - VERIFY_FEEDBACK_HEAD.length,
-    )}`;
+    if (evidenceNote) {
+      // AGENT-15: the lane passed; the note says what is missing, and the
+      // rest of the cap carries the lane's output.
+      const head = `${VERIFY_FEEDBACK_HEAD}${evidenceNote}`;
+      const room = VERIFY_FEEDBACK_MAX_CHARS - head.length - 2;
+      verifyFeedback =
+        room > 0 ? `${head}\n\n${verifyFeedbackExcerpt(laneOutput, room)}` : head;
+    } else {
+      verifyFeedback = `${VERIFY_FEEDBACK_HEAD}${verifyFeedbackExcerpt(
+        result.output,
+        VERIFY_FEEDBACK_MAX_CHARS - VERIFY_FEEDBACK_HEAD.length,
+      )}`;
+    }
     // loop → Executing
   }
 }

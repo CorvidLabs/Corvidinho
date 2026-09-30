@@ -5,7 +5,11 @@
  * branch as a draft pull request (GITHUB-2), but only when:
  *
  * - the run finished cleanly and the tree passed the project verify lane
- *   (AGENT-4): trusted from the run's result frame, else re-run once here;
+ *   (AGENT-4): trusted from the run's result frame, else re-run once here,
+ *   where it also has to show that tests ran (AGENT-15, REQ-agent-185);
+ * - no test was deleted or turned off since the branch left its base: the
+ *   tree about to be committed and pushed is compared by test name with the
+ *   merge-base (AGENT-15, REQ-discord-185);
  * - the operator allowed the PR path: `git-commit` (only when the tree is
  *   dirty), `git-push` and `github-pr-create` are allowlisted for
  *   non-interactive use (GITHUB-5 / SAFE-1). Nothing is committed or pushed
@@ -23,8 +27,10 @@ import {
   parseStatusPorcelainZ,
   repoSlugFromRemoteUrl,
 } from "../../plugins/git/parse.ts";
+import { formatTestDrops, judgeTestEvidence } from "../agent/test-evidence.ts";
 import { defaultVerifyRunner } from "../agent/verify.ts";
-import type { VerifyRunner } from "../agent/types.ts";
+import { startWorkspaceDiffFrom } from "../agent/workspace-diff.ts";
+import type { TestDrop, VerifyRunner } from "../agent/types.ts";
 import { loadBuiltins } from "../plugins/builtins.ts";
 import { allowlistFromEnv } from "../plugins/env.ts";
 import { checkRepoGateAsync, type RepoGateResult } from "../plugins/githubDeny.ts";
@@ -68,6 +74,7 @@ export type WorkPrSkipReason =
   | "run-failed"
   | "needs-input"
   | "verify-failed"
+  | "tests-deleted"
   | "no-worktree"
   | "no-changes"
   | "conflicts"
@@ -216,20 +223,52 @@ async function ship(input: OpenWorkPrInput, deps: OpenWorkPrDeps): Promise<WorkP
     return skip("repo-denied", `not opened — ${gate.error}`);
   }
 
-  // AGENT-4: ship only a tree that passed the verify lane.
+  // AGENT-15 (REQ-discord-185): no test deleted or turned off since the
+  // branch left its base, whatever runs made the change; checked on the
+  // tree about to be committed and pushed. Unreadable fails closed.
+  const since = await startWorkspaceDiffFrom(cwd, mergeBase);
+  let drops: TestDrop[] | null = null;
+  try {
+    drops = since ? await since.testDrops() : null;
+  } catch {
+    drops = null;
+  }
+  if (drops === null) {
+    return skip(
+      "tests-deleted",
+      `not opened — could not check that no test was deleted since the branch left \`${base}\`. The changes stay on branch \`${branch}\`.`,
+    );
+  }
+  if (drops.length > 0) {
+    return skip(
+      "tests-deleted",
+      `not opened — ${drops.length} test(s) were deleted or turned off since the branch left \`${base}\` (removed, retitled, skip, todo, or silenced by only): ${formatTestDrops(drops)}. The changes stay on branch \`${branch}\`.`,
+    );
+  }
+
+  // AGENT-4: ship only a tree that passed the verify lane, and (AGENT-15)
+  // whose lane output shows that tests ran.
   let verify: WorkPrVerifySource = "run";
   if (run.task?.verified !== true) {
     const runner = deps.verify ?? defaultVerifyRunner;
     let passed = false;
+    let why = "";
     try {
-      passed = (await runner(cwd)).success;
+      const lane = await runner(cwd);
+      if (lane.success) {
+        const verdict = judgeTestEvidence(lane.output, []);
+        passed = verdict.ok;
+        if (!verdict.ok) why = verdict.note;
+      }
     } catch {
       passed = false;
     }
     if (!passed) {
       return skip(
         "verify-failed",
-        `not opened — the verify lane failed on the work tree (fledge lanes run verify --non-interactive). The changes stay on branch \`${branch}\`.`,
+        why
+          ? `not opened — ${why} The changes stay on branch \`${branch}\`.`
+          : `not opened — the verify lane failed on the work tree (fledge lanes run verify --non-interactive). The changes stay on branch \`${branch}\`.`,
       );
     }
     verify = "pre-push";

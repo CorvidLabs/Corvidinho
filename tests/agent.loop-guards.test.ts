@@ -434,7 +434,7 @@ describe("tool loop: a repeated failing call is steered, then asks (REQ-agent-08
         verified += 1;
         return { success: true, output: "" };
       },
-      workspaceDiff: async () => ({ changed: async () => [] }),
+      workspaceDiff: async () => ({ changed: async () => [], testDrops: async () => [] }),
     });
     expect(result.state).toBe("blocked");
     expect(result.ask).toEqual(repeatedFailureAsk("flaky-read"));

@@ -8,6 +8,7 @@ files:
   - src/agent/verify.ts
   - src/agent/loop.ts
   - src/agent/workspace-diff.ts
+  - src/agent/test-evidence.ts
   - src/agent/specLoader.ts
   - src/agent/index.ts
   - src/agent/task-summary.ts
@@ -52,6 +53,8 @@ files:
   - tests/agent.verify-gate.test.ts
   - tests/fixtures/talk-worktree.ts
   - tests/agent.loop-guards.test.ts
+  - tests/agent.test-evidence.test.ts
+  - tests/fixtures/lane-output.ts
 
 db_tables: []
 depends_on:
@@ -152,7 +155,21 @@ never takes or writes the marker), `WORKSPACE_DIFF_MAX_OUTPUT_BYTES`,
 `WORKSPACE_DIFF_HASH_MAX_BYTES`, `WORKSPACE_DIFF_HASH_BUDGET_BYTES` and
 `WORKSPACE_DIFF_MAX_FILES` (real-diff paths one run adds to `filesChanged`).
 `RunTaskOptions.workspaceDiff` is a test seam like `verifyRunner`, not a
-product surface (`task run` sets it only in a delegate or council worker). The gate has no switch (AGENT-14, REQ-agent-003):
+product surface (`task run` sets it only in a delegate or council worker).
+Tests ran and none deleted (REQ-agent-185, AGENT-15): every
+`WorkspaceDiffTracker` has `testDrops()` (tests active at its baseline that
+are gone or no longer run, by name across the repo root; null when it cannot
+tell), and `startWorkspaceDiffFrom(cwd, commit)` is a tracker from a given
+commit with no dirt (/work's merge-base check, REQ-discord-185).
+`src/agent/test-evidence.ts` exports `countExecutedTests(output)` (executed
+tests from the `bun test`, jest, vitest, `cargo test`, pytest and `go test`
+summaries, `TEST_SUMMARY_RUNNERS`), `isTestFilePath`, `testDeclarations(path,
+source)` (`TestDecl` name + active), `droppedTests(before, after)`,
+`startTestNameWalk(dir)` (the non-git snapshot, a `TestDropCheck`),
+`judgeTestEvidence(laneOutput, drops)` (`{ ok, note }`), `formatTestDrops`
+and its caps (`TEST_SOURCE_MAX_BYTES`, `TEST_NAMES_BUDGET_BYTES`,
+`TEST_NAMES_MAX_FILES`, `TEST_WALK_MAX_ENTRIES`, `TEST_DROPS_NAMED`,
+`TEST_DROPS_MAX_CHARS`); `TestDrop` is in `src/agent/types.ts`. The gate has no switch (AGENT-14, REQ-agent-003):
 `RunTaskOptions` and `AgentConfig` have no `verifyBeforeComplete`;
 `src/agent/config.ts` exports `REMOVED_VERIFY_KEYS` and
 `removedVerifyKeys(cwd)` (a removed `[corvidinho]` key still set, for the
@@ -385,7 +402,17 @@ REQ-agent-015); a new talk worktree and a run after a `done` start from
 their own snapshot, and the caller's own checkout keeps the run-start
 baseline. A delegate or council worker (`CORVIDINHO_DELEGATE_DEPTH` above 0)
 in its lead's talk worktree never takes or writes the marker and keeps its
-own run-start baseline; the lead's gate covers the combined change. The diff is read-only git plus in-process hashing: it never writes
+own run-start baseline; the lead's gate covers the combined change.
+'Verified' requires that tests ran and none were deleted (AGENT-15,
+REQ-agent-185): a passing lane counts only when its output has a recognised
+test summary (`bun test`, jest, vitest, `cargo test`, pytest, `go test`)
+with at least one executed test (skipped and todo don't count), and no test
+active at the baseline is gone or turned off (removed, retitled, `.skip`,
+`.todo`, conditional, a skip decorator or `#[ignore]`, silenced by `.only`)
+by name across the repo root; otherwise the attempt is a failed verify
+whose note names what is missing or which tests, with no opt-out. With no
+git snapshot the names come from a bounded walk of the cwd's test files at
+run start; a walk or a baseline that cannot be read fails closed. The diff is read-only git plus in-process hashing: it never writes
 the index or objects (the talk's verified marker lives in the worktree's own
 git dir).
 With no git snapshot (a non-git cwd, or an unreadable start snapshot), a run
@@ -600,6 +627,16 @@ instructions for …" or a browser's developer mode do not count.
 - **When** the resumed run only answers and changes nothing
 - **Then** its baseline is the talk branch's merge-base, `filesChanged` is `["app.ts"]`, the verify lane runs, and the run is `done` only if it passes (AGENT-15.a, REQ-agent-015)
 
+### Scenario: a run deletes a test and the lane still passes
+- **Given** a git project whose `tests/math.test.ts` has `adds numbers` and `keeps order`
+- **When** a run edits `app.ts`, drops `keeps order` (or turns it into `test.skip`, or adds a `.only` beside it) and the verify lane passes with a `bun test` summary
+- **Then** the run is not verified: one note names `"keeps order" (tests/math.test.ts)`, the retry gets it first, and a retry that restores the test ends `done` verified; a renamed file or a test moved to another file keeps its name and is verified (AGENT-15, REQ-agent-185)
+
+### Scenario: a lane that shows no test ran
+- **Given** a project whose verify lane prints no test summary Corvidinho recognises, or only skipped tests
+- **When** a run changes a file and the lane passes
+- **Then** the run is not verified and the note says the verify lane printed no recognised test summary (or that no test ran); there is no key to turn this off (AGENT-14 / AGENT-15, REQ-agent-185)
+
 ### Scenario: a chat turn that changed nothing
 
 - **Given** a run whose real git diff is empty and whose tools claimed no change
@@ -684,6 +721,9 @@ instructions for …" or a browser's developer mode do not count.
 | Dangerous plugin the run's allowlist does not name | not in the catalog; a model call to it is refused as not offered (REQ-agent-501 / REQ-agent-128) |
 | `shell-exec`, `node-exec`, `python-exec`, `cargo-exec`, `fledge-lanes-run` or `fledge-run` named in the allowlist | still not in the catalog until the SAFE-3 decision; a model call is refused as not offered (REQ-agent-501) |
 | Git diff unreadable after a good start snapshot | fail closed: verify runs; one Text note says the diff could not be read (REQ-agent-085) |
+| Verify lane passes but prints no recognised test summary, or no test ran (all skipped / todo) | not verified: a failed verify whose note names the verify lane (or says no test ran); retried, then `failed` (REQ-agent-185) |
+| A test active at the baseline was deleted, retitled, skipped, made todo or conditional, or silenced by `.only` | not verified: the note names each (up to 10, `"name" (file)`), retried, then `failed`; a renamed file or a moved test keeps its name and passes (REQ-agent-185) |
+| Test names cannot be read (baseline git cannot give, a test file over 4 MiB or unreadable, over 2000 changed test files, a non-git walk over 20000 entries) | fail closed: not verified, with a "could not read the test files" note (REQ-agent-185) |
 | Real diff of thousands of paths (an install, a branch switch) | at most `WORKSPACE_DIFF_MAX_FILES` join filesChanged, the note counts them all, verify runs; the NDJSON result line stays under the parser cap (REQ-agent-085) |
 | Retry after a failed verify changes no files | filesChanged is the union across attempts, so verify runs again; never done unless it passes (REQ-agent-242) |
 | Provider / HTTP / network failure in execute | `ExecuteResult.error`; state failed, verified=false, summary is the provider error (then the earlier verify output when a verify already failed), `task run` exits 1 (REQ-agent-242) |
