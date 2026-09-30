@@ -103,16 +103,27 @@ export function errorExcerpt(error: string | undefined): string {
     : `${line.slice(0, STEER_ERROR_EXCERPT_MAX - 1)}…`;
 }
 
+/** Steer wording when the error sits inside a SAFE-12 fence (never quoted outside it). */
+export const STEER_FENCED_ERROR_NOTE = "its error is in the untrusted result above";
+
 /**
  * Harness text after the tool result of the 2nd (or later) identical
  * failure. It follows the tool content (and any SAFE-12 fence) whole, so
  * the model reads it as the harness speaking, not as data; the error is
- * quoted as a JSON string.
+ * quoted as a JSON string. `error` null: the result was fenced as untrusted
+ * data (a `delegate` / `council` worker that reported an injection), so no
+ * piece of it is quoted outside the fence (SAFE-12).
  */
-export function repeatFailureSteer(label: string, failures: number, error: string | undefined): string {
+export function repeatFailureSteer(
+  label: string,
+  failures: number,
+  error: string | undefined | null,
+): string {
+  const last =
+    error === null ? STEER_FENCED_ERROR_NOTE : `last error: ${JSON.stringify(errorExcerpt(error))}`;
   return (
     `[Corvidinho harness — AGENT-16] This exact ${label} call has now failed ${failures} times ` +
-    `with nothing changed in between (last error: ${JSON.stringify(errorExcerpt(error))}). ` +
+    `with nothing changed in between (${last}). ` +
     "Don't repeat it: change approach (a different tool or different arguments) or call ask-human. " +
     "Making the same call again stops the run and asks the owner."
   );

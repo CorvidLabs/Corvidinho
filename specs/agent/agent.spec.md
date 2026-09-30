@@ -102,7 +102,8 @@ result's data reports `filesChanged`, ok or not, or when a tool in
 succeeds), `STATE_CHANGING_TOOLS` / `NO_STATE_CHANGE_TOOLS` (every dangerous
 or mutating builtin is in exactly one), `STEER_AFTER_FAILURES` (2),
 `STEER_ERROR_EXCERPT_MAX` (200), `errorExcerpt(error)`,
-`repeatFailureSteer(label, failures, error)`, `REPEAT_FAILURE_BLOCK_DETAIL`,
+`repeatFailureSteer(label, failures, error)` (`error` null ⇒
+`STEER_FENCED_ERROR_NOTE`), `REPEAT_FAILURE_BLOCK_DETAIL`,
 `repeatedFailureAsk(label)` (a `stuck` HumanAsk) and
 `createRepeatFailureGuard()` → `RepeatFailureGuard` (`newConversation`,
 `before(sig, round)` → `"run" | "ask"`, `after(sig, round, result, changed)`
@@ -344,7 +345,9 @@ guard per `createTaskExecute` (every surface's `task run`, workers included)
 counts `ok: false` results per `callSignature` across the run's attempts; a
 `changedState` result resets every count and a call's own success resets its
 own. The steer follows the whole tool result (outside any SAFE-12 fence,
-error quoted scrubbed and capped); the call that is not run ends the attempt
+error quoted scrubbed and capped, except a worker result fenced for its
+injection hit, whose error is never quoted outside the fence); the call that
+is not run ends the attempt
 with `repeatedFailureAsk`, whose question names only an offered tool (else
 `(unknown tool)`), never error text. The ask is never given before the model
 has seen the steer in its own conversation.

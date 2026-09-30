@@ -289,7 +289,8 @@ reset on change and on the call's own success); the tool loop over a scripted
 mock LLM (steer after the whole tool result with a scrubbed excerpt, the 3rd
 identical call never runs, `ToolResult` `REPEAT_FAILURE_BLOCK_DETAIL`, the
 `[operator] AGENT-16` line, the stuck ask naming only the tool or
-`(unknown tool)`, a change resets, a verify retry steers before it asks);
+`(unknown tool)`, a change resets, a verify retry steers before it asks, a
+worker result fenced for an injection hit gets a steer quoting none of it);
 `runTask` ends `blocked` without verify; the real CLI `task run --output
 ndjson` against a localhost mock ends with a `blocked` result frame carrying
 the stuck ask.

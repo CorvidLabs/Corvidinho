@@ -1093,7 +1093,9 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       };
       // AGENT-16: count the failure (a real change resets every count); the
       // 2nd identical failure gets the steer after its result, outside any
-      // SAFE-12 fence, the result itself left whole.
+      // SAFE-12 fence, the result itself left whole. A worker result fenced
+      // for its injection hit has no piece of its error quoted outside the
+      // fence (SAFE-12).
       const repeat = repeatGuard.after(
         signature,
         round,
@@ -1101,7 +1103,16 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         changedState(name, result),
       );
       if (repeat.steer) {
-        toolMessage.content = `${toolMessage.content}\n\n${repeatFailureSteer(eventName, repeat.failures, result.error)}`;
+        const errorFenced =
+          offered.has(name) &&
+          WORKER_RESULT_TOOLS.has(name) &&
+          injectionNoticeFromUnknown((result.data as { injection?: unknown } | undefined)?.injection) !==
+            undefined;
+        toolMessage.content = `${toolMessage.content}\n\n${repeatFailureSteer(
+          eventName,
+          repeat.failures,
+          errorFenced ? null : result.error,
+        )}`;
       }
       messages.push(toolMessage);
       if (result.ok && result.image) {
