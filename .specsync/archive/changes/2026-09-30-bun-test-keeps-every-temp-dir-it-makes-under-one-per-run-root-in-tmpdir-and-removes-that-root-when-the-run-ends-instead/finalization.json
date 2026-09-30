@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "bun-test-keeps-every-temp-dir-it-makes-under-one-per-run-root-in-tmpdir-and-removes-that-root-when-the-run-ends-instead",
+  "implementation_commit": "c890b3e62cd3f7c3c1364f733bb7f5995f6321dd",
+  "implementation_tree": "88e8eb1f234b55f2967666b74447a9c2c4e82e03",
+  "contract_digest": "58b8f4e261542d735c60d382dc5bd473477bfd6cf95c0a6b1ae4773154f31688",
+  "workspace_digest": "74a34e70eb207e253f1089cd15624c012cf5afc7393326ab58985ddc89b26978",
+  "closing_digest": "17cedd72c62f79e6049194ae4e3c2ea04380b1b93845e8141ebcba949ad84efd",
+  "review_digest": "3acd1ef418126c6eb5132a7ae805315eda766b98258fd091ae669e12034bd1cc",
+  "finalization_digest": "d1074633561c8865ce28e0d58ec58f7a75f97b9ccc1476a27d9affd9326fc3c5",
+  "timestamp": 1790746477
+}

@@ -144,6 +144,110 @@
       "requirement_ids": [
         "REQ-cli-711"
       ]
+    },
+    {
+      "timestamp": 1790746291,
+      "commit": "c890b3e62cd3f7c3c1364f733bb7f5995f6321dd",
+      "contract_digest": "58b8f4e261542d735c60d382dc5bd473477bfd6cf95c0a6b1ae4773154f31688",
+      "execution_digest": "147350c5ad9289714e9b1e8748baf6f6a134eef2d1163741ba20fc1eb1e951e1",
+      "workspace_digest": "74a34e70eb207e253f1089cd15624c012cf5afc7393326ab58985ddc89b26978",
+      "acceptance_input_digest": "49e46d944d7f68bf51c090bca1185907fea8aa4293fadd1a6acc8a0d90a91b3a",
+      "acceptance_manifest": {
+        "schema_version": 1,
+        "entries": [
+          {
+            "path": "specs/cli/cli.spec.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "34beef65b1ad112474a5561276c20929d7a543da8622901d06cb48237ef965bb",
+            "entry_digest": "1dc6ddd863c05d25cd56bf657cbfb5bde2b16dee0b73e734d1b9733e4790846a",
+            "owners": [
+              "cli"
+            ]
+          },
+          {
+            "path": "specs/cli/context.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "30c4bb67bae0b0c55b7e4814964472d129473160f738d37282ac0e4f35e44215",
+            "entry_digest": "c7ed9b7e95da5de92400b51ea7fd88d43c84ff2074f32f4af404731fc28f1262",
+            "owners": [
+              "cli"
+            ]
+          },
+          {
+            "path": "specs/cli/requirements.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "0308838bb658d738e2304263d2ee61c4d5e244d41c356bf89d2bb433fbaf6798",
+            "entry_digest": "fc367b41a809679b32b97cb44fa23d0a049ba93e5a6d62b331655cc4906d9b6c",
+            "owners": [
+              "cli"
+            ]
+          },
+          {
+            "path": "specs/cli/tasks.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "d885ef8812ae1d26402a1ad5c21afd2b0a6e23613adf12bd8c90099fc0ca2be9",
+            "entry_digest": "53296b4ad13365ae83bfd03b5aa5a28e2e0d02e885d6a6dc4481484d558bb26c",
+            "owners": [
+              "cli"
+            ]
+          },
+          {
+            "path": "specs/cli/testing.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "b0caaa5c04397b4b4fe53a294fba2ba93f41d59ddc594609c42d13c4ca04d64f",
+            "entry_digest": "e5df5ede2b4c130f76e3194cab737fed1ddfffc68c1d9e31ed8ec0dcc868cbe7",
+            "owners": [
+              "cli"
+            ]
+          },
+          {
+            "path": "tests/fixtures/preload-tmp-probe.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "fe2654af0e9b7dda5efc389e1ea05b6ac71ba873dc52d5d87e9bdb287110724c",
+            "entry_digest": "9461e39bd8354463d6836be8a8849d0314447ec019075cbce58d062d07b8dcd1",
+            "owners": [
+              "@exact:test"
+            ]
+          },
+          {
+            "path": "tests/preload.tmp-cleanup.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "e59840b2d42c14cb806ccbd412cba6a0b7cd5f69e44a338d14704ab414e16b86",
+            "entry_digest": "f30d0c3e70a271d76808c0a161ee80ea21d1c1131a1a20125a5ec5da849376eb",
+            "owners": [
+              "@exact:test"
+            ]
+          },
+          {
+            "path": "tests/preload.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "03f70135af200163c2966e84c632dc4eb57ddfe934e42b3812210bda36f890a1",
+            "entry_digest": "808b7b0f31813093ed3792d65b23eec209daffedd46aca706d5cf40ec5468df2",
+            "owners": [
+              "@exact:test"
+            ]
+          }
+        ]
+      },
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec cli",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-cli-711"
+      ]
     }
   ]
 }
