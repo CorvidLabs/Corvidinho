@@ -6,7 +6,7 @@ import { resolveDiscordActingRole } from "../permissions.ts";
 
 import { enrichPromptWithIdentity } from "../identity-inject.ts";
 import { fenceSpeakerText, inboundInjection, refuseInjectedSlash } from "../injection-guard.ts";
-import { loadDeclaredPeople } from "../../identity/people.ts";
+import { loadDeclaredPeople, type PeopleDirectory, type PersonRole } from "../../identity/people.ts";
 import { ThinkingStatus } from "../thinking-status.ts";
 import { answerModelFor, answerSpendFor } from "../rich-reply.ts";
 import { deliverPrivateReplies, withPrivateNote } from "../private-reply.ts";
@@ -26,6 +26,8 @@ import {
   slashOwnerNotice,
 } from "../spend-post.ts";
 import { spendStopFor } from "../spend-dm.ts";
+import { RUN_STOPPED_TEXT, type SessionRunTurn } from "../run-control.ts";
+import type { SessionStub } from "../types.ts";
 
 function formatSessionLine(
   s: {
@@ -140,6 +142,43 @@ export async function handleSessionStart(
     return;
   }
 
+  // AGENT-3.a (REQ-discord-301/302): the run takes its new session's turn
+  // (nothing is queued on a new session), so 'stop' / 'cancel' reaches it.
+  const turn = ctx.runControl?.enqueue({
+    sessionId: session.id,
+    requesterId: interaction.userId,
+    channelId: interaction.channelId,
+  });
+  try {
+    // The bridge is stopping: nothing starts.
+    if (turn && !(await turn.ready)) return;
+    await runSessionStart(ctx, interaction, {
+      session,
+      topic,
+      people,
+      actingRole,
+      actingIsAdmin,
+      turn,
+    });
+  } finally {
+    turn?.done();
+  }
+}
+
+/** The `/session start` run and its answer, holding the session's turn (AGENT-3.a). */
+async function runSessionStart(
+  ctx: SlashContext,
+  interaction: SlashInteraction,
+  input: {
+    session: SessionStub;
+    topic: string;
+    people: PeopleDirectory;
+    actingRole: PersonRole;
+    actingIsAdmin: boolean;
+    turn: SessionRunTurn | undefined;
+  },
+): Promise<void> {
+  const { session, topic, people, actingRole, actingIsAdmin, turn } = input;
   const llmModel = loadLlmEnv(process.env).model;
   // DISCORD-15.a: tokens and cost show on the owner's own runs only.
   const ownerRun = isOwnerDiscord(ctx.owner, interaction.userId);
@@ -158,6 +197,8 @@ export async function handleSessionStart(
 
   if (thinking) {
     await thinking.start({ description: `Session: ${topic.slice(0, 80)}` });
+    // AGENT-3.a: a reply 'stop' / 'cancel' to this progress message stops the run.
+    turn?.setProgressMessage(thinking.progressMessageId);
   }
 
   // SAFE-12: a non-owner's topic goes to the model fenced as untrusted data.
@@ -190,6 +231,8 @@ export async function handleSessionStart(
         // the talk's own worktree in the run).
         surface: "session",
         cwd: ctx.store.cwdFor(session),
+        // AGENT-3.a: a stop (or the bridge stopping) kills its process tree.
+        ...(turn ? { signal: turn.signal } : {}),
         // DISCORD-17: files attach in the channel the command ran in.
         replyChannelId: interaction.channelId,
         onStatus: (u) => {
@@ -218,6 +261,19 @@ export async function handleSessionStart(
       post: ctx.post,
     });
     return;
+  }
+
+  // AGENT-3: the bridge is stopping and the run was killed: nothing is posted.
+  if (turn?.stopReason === "closed") {
+    thinking?.dispose();
+    return;
+  }
+  // AGENT-3.a (REQ-discord-302): a stopped run's answer is "⏹ Stopped" with
+  // the DISCORD-15/15.a footer; any question it raised is dropped.
+  const stopped = turn?.stopReason === "stopped";
+  if (stopped) {
+    const { ask: _dropped, ...rest } = result;
+    result = { ...rest, ok: false };
   }
 
   const plumbing = result.task
@@ -290,7 +346,9 @@ export async function handleSessionStart(
   // DISCORD-16: the whole answer; it is split into messages when long.
   // ROLES-CHAT-3: splits keep a closing role note instead of clipping it.
   const summary = withPrivateNote(
-    ask
+    stopped
+      ? RUN_STOPPED_TEXT
+      : ask
       ? ask.content
       : result.ok
         ? result.summary
@@ -337,7 +395,7 @@ export async function handleSessionStart(
       trackBotMessage: ctx.trackBotMessage,
       thinkExtras,
       ok: result.ok,
-      failStatus: `❌ exit ${result.exitCode}`,
+      failStatus: stopped ? RUN_STOPPED_TEXT : `❌ exit ${result.exitCode}`,
       ...(ask ? { askStatus: { status: ask.status, failed: ask.failed }, mentionUserIds: ask.mentionUserIds } : {}),
       ...(choice
         ? {
