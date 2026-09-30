@@ -268,7 +268,11 @@ the verify gate runs, SAFE-2.a), `bunfig.toml`,
 `specs/**` / `*.spec.md`, `.specsync/` state outside the files of an active
 `.specsync/changes/<id>/` folder, and any keystore file or directory inside
 the project; a change folder's slug name is not a keystore) cannot be
-overwritten or deleted via file tools (SAFE-2); no in-band override. Memory plugins take the acting user and ADMIN
+overwritten or deleted via file tools (SAFE-2); no in-band override. Inside
+an active change folder the file tools fill the `.md` artifacts but refuse
+SpecSync's own `*.json` records there (state, approvals, review,
+verification; `isSddRecordPath`), which only `specsync change` writes
+(AGENT-18 / AGENT-18.a, REQ-plugins-083). Memory plugins take the acting user and ADMIN
 only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID` /
 `CORVIDINHO_ACTING_IS_ADMIN`), never argv — `--user` / `--admin` / `--db` are
 refused; ADMIN is re-checked in the handler (empty admin lists ⇒ nobody);
