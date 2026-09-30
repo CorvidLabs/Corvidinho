@@ -9,6 +9,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseGlobalFlags } from "../src/cli.ts";
+import { startFakeLlm } from "./fixtures/fake-llm.ts";
 
 const CLI = join(import.meta.dir, "..", "src", "cli.ts");
 
@@ -185,10 +186,19 @@ describe("corvidinho plugins run <name> -- ...args (REQ-cli-186)", () => {
 
   test("`task run --task -h` runs the task instead of printing help (REQ-cli-143)", async () => {
     const s = setup();
-    const r = await cli(["task", "run", "--json", "--task", "-h"], s.project, {
-      PATH: s.path,
-    });
+    // AGENT-13: no built-in default model, so the run calls a fake provider.
+    const llm = startFakeLlm();
+    let r: Awaited<ReturnType<typeof cli>>;
+    try {
+      r = await cli(["task", "run", "--json", "--task", "-h"], s.project, {
+        PATH: s.path,
+        ...llm.env,
+      });
+    } finally {
+      llm.stop();
+    }
     expect(r.code).toBe(0);
+    expect(llm.requests).toHaveLength(1);
     expect(r.out).not.toContain("Usage:");
     const body = JSON.parse(r.out) as { result: { state: string } };
     expect(body.result.state).toBe("done");

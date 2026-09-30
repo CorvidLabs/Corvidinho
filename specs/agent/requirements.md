@@ -92,13 +92,13 @@ Acceptance Criteria
 
 ### REQ-agent-007
 
-The execute hook for `task run` SHALL call an OpenAI-compatible chat completions endpoint when `CORVIDINHO_LLM_API_KEY` or `OPENAI_API_KEY` is set (`CORVIDINHO_LLM_BASE_URL` / `CORVIDINHO_LLM_MODEL`, with the model chosen for the run's capability tier per REQ-agent-079), and SHALL keep the demo execute stub (synthetic filesChanged for the verify-gate exercise) when no key is set. Secrets SHALL stay in env and SHALL never be committed.
+The execute hook for `task run` SHALL call the OpenAI-compatible chat completions endpoint of the model provider the operator configured for the run's capability tier (AGENT-13, REQ-agent-179: the tier's first `kind:model` entry from `CORVIDINHO_LLM_MODEL_*` / `CORVIDINHO_LLM_MODEL`, with that kind's endpoint and key; the model per REQ-agent-079). There SHALL be no demo execute stub and no built-in default model: when the run's tier has no usable provider (no entry, or the kind's key is unset) the attempt SHALL make no provider call and SHALL return `error: true` with the no-provider notice as its summary and no files (AGENT-10), so the run ends `failed`. Secrets SHALL stay in env and SHALL never be committed.
 
 Acceptance Criteria
-- No API key → demo summary + filesChanged for gate exercise.
-- Key present → chat completions path (tool loop or read-tier chat per REQ-agent-008/009).
-- Fixture tests cover no-key path; key path mocks fetch (no live API in CI).
-- Key present → every request's `model` is the run tier's model (REQ-agent-079); with no per-tier model key it is `CORVIDINHO_LLM_MODEL` (default `gpt-4o-mini`) as before.
+- No usable provider (nothing set, a key with no model, or a model whose kind has no key) → no fetch; `error: true`, the summary starts `No model provider is configured`, `filesChanged` `[]`; never a demo summary or `gpt-4o-mini`.
+- Usable provider → chat completions path (tool loop or read-tier chat per REQ-agent-008/009).
+- Fixture tests cover the no-provider path; provider paths mock fetch or use a localhost fake provider (no live API in CI).
+- Provider set → every request's `model` is the run tier's model without its `kind:` prefix (REQ-agent-079); with no per-tier model key it is `CORVIDINHO_LLM_MODEL`'s first entry.
 
 ### REQ-agent-008
 
@@ -629,13 +629,15 @@ The repository SHALL ship a root `agent.3md` that validates with
 `@corvidlabs/agent3md` `validateAgent`, exposes guidance-only skill planes
 (no `tool=` bindings that duplicate the SAFE plugin registry), and is covered
 by a bun smoke that `route`s and `get`s at least one playbook. The agent loop
-SHALL NOT load this file for progressive disclosure until AGENT-13 is HI'd
-separately.
+SHALL NOT load this file for progressive disclosure until that is HI'd
+separately (the captured AGENT-13 is model providers, REQ-agent-179, not
+this).
 Acceptance Criteria
 - `validateAgent(readFileSync("agent.3md")).ok` is true in CI/tests.
 - Every skill in `Agent.manifest().skills` has `tool: null`.
 - `Agent.route` + `Agent.get` resolve a named guidance playbook (e.g. `discord-ask`).
 - `package.json` lists `@corvidlabs/agent3md` as a dependency.
+
 ### REQ-agent-312
 When the LLM tool loop exhausts `maxToolRounds` without a final no-tool reply, execute SHALL soft-land (AGENT-9): `ExecuteResult.summary` SHALL be the last assistant prose when present, otherwise a short clarifying ask (e.g. "I'm not sure I have enough to answer that cleanly — can you clarify what you meant?"). The summary SHALL NOT contain the operator phrase `Stopped after N tool rounds`. An operator note with that phrase MAY be emitted as a `Text` event for thinking/NDJSON. `chatBodyFromTaskResult` SHALL strip any leftover `Stopped after N tool rounds` lines before Discord outbound (defense in depth).
 The tool-loop system prompt SHALL include Discord chat discipline (IDENTITY-5 / DISCORD-13 / ROLES-CHAT-9): prefer conversational prose for social/game banter; call `discord-user-lookup` for snowflakes/@mentions/named members before repo tools; only use SpecSync/git/github/files when the query clearly needs Corvidinho codebase or product data; treat bare `bug <snowflake>` in Discord as a user id, not a GitHub issue.
@@ -647,7 +649,7 @@ The tool-loop system prompt SHALL include Discord chat discipline (IDENTITY-5 / 
 
 ### REQ-agent-079
 
-`loadLlmEnv(env, tier?)` SHALL resolve the model for the run's effective capability tier (the explicit tier — `--tier` / `createTaskExecute` `tier` — else `CORVIDINHO_LLM_TIER`, default `tool`): the optional key for that tier (`CORVIDINHO_LLM_MODEL_READ`, `CORVIDINHO_LLM_MODEL_TOOL` or `CORVIDINHO_LLM_MODEL_CODE`; blank counts as unset) SHALL win, else `CORVIDINHO_LLM_MODEL`, else `gpt-4o-mini` (AGENT-5). Every chat request of the run SHALL carry that model in `body.model`, so SAFE-8 spend pricing prices the tier's model. The endpoint (`CORVIDINHO_LLM_BASE_URL`) and the API key SHALL stay shared by all tiers. Delegate workers and council voices SHALL inherit the per-tier keys (they are not worker-env-dropped) and SHALL resolve the model at their own tier. With no per-tier key set, every tier SHALL call `CORVIDINHO_LLM_MODEL` exactly as before. Model resolution SHALL NOT print or log the API key. Under a SAFE-8 cap the unpriced-model ask SHALL name the env key that set the run's model (the tier's key when set, else `CORVIDINHO_LLM_MODEL`), and when any per-tier key is set the doctor `spend` line (REQ-cli-098) and the Discord `/status` spend line SHALL warn when any tier's model has no known price and SHALL name that tier; with no per-tier key they SHALL read as before.
+`loadLlmEnv(env, tier?)` SHALL resolve the model for the run's effective capability tier (the explicit tier — `--tier` / `createTaskExecute` `tier` — else `CORVIDINHO_LLM_TIER`, default `tool`): the optional key for that tier (`CORVIDINHO_LLM_MODEL_READ`, `CORVIDINHO_LLM_MODEL_TOOL` or `CORVIDINHO_LLM_MODEL_CODE`; blank counts as unset) SHALL win, else `CORVIDINHO_LLM_MODEL`, else no model at all (AGENT-5; AGENT-13: there is no built-in default, and the run fails with the no-provider notice, REQ-agent-179). Each key holds `kind:model` entries (REQ-agent-179); the tier's model is its first entry. Every chat request of the run SHALL carry that model, without its `kind:` prefix, in `body.model`, so SAFE-8 spend pricing prices the tier's model. The endpoint and the API key SHALL come from the entry's kind (REQ-agent-179), so tiers of one kind share them (`openai` entries share `CORVIDINHO_LLM_BASE_URL` and its key). Delegate workers and council voices SHALL inherit the per-tier keys (they are not worker-env-dropped) and SHALL resolve the model at their own tier. With no per-tier key set, every tier SHALL call `CORVIDINHO_LLM_MODEL` exactly as before. Model resolution SHALL NOT print or log the API key. Under a SAFE-8 cap the unpriced-model ask SHALL name the env key that set the run's model (the tier's key when set, else `CORVIDINHO_LLM_MODEL`), and when any per-tier key is set the doctor `spend` line (REQ-cli-098) and the Discord `/status` spend line SHALL warn when any tier's model has no known price and SHALL name that tier; with no per-tier key they SHALL read as before. A tier with no model calls nothing, so it SHALL NOT be flagged as unpriced.
 
 Acceptance Criteria
 - `CORVIDINHO_LLM_MODEL=big`, `CORVIDINHO_LLM_MODEL_READ=cheap`: a read run sends `cheap`, tool and code runs send `big`; adding `CORVIDINHO_LLM_MODEL_CODE=big2` / `CORVIDINHO_LLM_MODEL_TOOL=mid` makes code send `big2` and tool `mid`.
@@ -655,8 +657,9 @@ Acceptance Criteria
 - A read-tier `buildDelegateSpawn` env keeps the per-tier keys and resolves `cheap` (env tier or `--tier read`).
 - Under a SAFE-8 cap, an unpriced read model stops a read run before any provider call and the spend-cap ask names that model and `CORVIDINHO_LLM_MODEL_READ` as the key to switch; a tool run on an unpriced shared model names `CORVIDINHO_LLM_MODEL`.
 - Under a cap with a priced configured model and `CORVIDINHO_LLM_MODEL_READ` unpriced, doctor prints `[warn] spend: … model "<m>" has no known price, so read-tier runs stop and ask before calling the provider` and `/status` flags the read-tier model; with every tier priced or no per-tier key the lines read as before.
-- No per-tier keys → every tier sends `CORVIDINHO_LLM_MODEL`; a blank per-tier key falls back; no model at all → `gpt-4o-mini`.
+- No per-tier keys → every tier sends `CORVIDINHO_LLM_MODEL`; a blank per-tier key falls back; no model at all → no model (`model` `""` and the no-provider notice), never `gpt-4o-mini`.
 - Fixture tests mock fetch; no live API.
+
 ### REQ-agent-085
 
 Real-diff verify gate (AGENT-4, AGENT-15, issue #85). `runTask` SHALL always
@@ -702,8 +705,8 @@ paths were listed), so the NDJSON `result` line stays under the parser's line
 cap and a bridge still gets the summary; the gate is unaffected because
 `filesChanged` is non-empty either way. An empty real diff with no ghost
 claim SHALL end `done` with `verifySkipped=true` and the "no changes" note
-(REQ-agent-003). The demo execute (no LLM key) changes nothing and SHALL
-report no files. Git SHALL run read-only through `runGit` (argv, no shell,
+(REQ-agent-003). A run whose model called no tool, and a run with no usable
+provider (REQ-agent-179), changes nothing and SHALL report no files. Git SHALL run read-only through `runGit` (argv, no shell,
 hooks off, repo-locating env stripped, discovery clamped to the root,
 optional locks off) with fsmonitor off, and fingerprints are hashed in
 process: nothing is written to the index or object store (the talk marker of
@@ -723,7 +726,7 @@ Acceptance Criteria
 - With the content budget spent, an already-dirty file left alone is not reported and an edit to it is (stat compare).
 - The snapshot is always taken (the `workspaceDiff` seam is called once per run) and a real change is verified.
 - A tool that claims `dist/out.js` (gitignored, written), `app.ts` (edited) and `ghost.ts` (never written) in a git repo: `filesChanged` is `["app.ts"]`, the lane runs, and one note names `dist/out.js, ghost.ts`; a run whose only change is such a claim still runs the lane, and its retry after the failed verify runs it again.
-- The demo execute reports `filesChanged: []`.
+- A reply-only (fake provider) run and a no-provider run report `filesChanged: []`.
 - End to end: the tool loop runs the real code-tier `shell-exec` with `printf broken > app.ts` in a temp git repo; its payload has no `filesChanged`, yet `runTask` runs verify once and ends `failed` with `filesChanged: ["app.ts"]`.
 
 ### REQ-agent-428
@@ -1218,7 +1221,7 @@ Acceptance Criteria
 - A talk whose base branch cannot be found verifies anyway with the "could not read the git working-tree diff" note.
 - The caller's own checkout: an edit left by a blocked run is not carried into the next run.
 - `talkWorktreeGitDir` is null for a main checkout and for a linked worktree not named `talk-*`; `takeTalkVerified` is true once, then false, and false for a symlink in the marker's place; a `done` settle never writes through that symlink; a marker planted during a run that does not end `done` is removed.
-- The real CLI in a carried talk worktree runs the verify lane although the demo run changes nothing.
+- The real CLI in a carried talk worktree runs the verify lane although its run (a fake provider whose reply calls no tool) changes nothing.
 - A worker (`{ nested: true }`) in a talk worktree whose lead took the marker and edited `app.ts`: one that changes nothing ends `done` without the lane; one that edits `lib.ts` lists only `lib.ts` and ends `done` verified; neither writes the marker, so the next top-level run (the lead died) carries `app.ts` and `lib.ts`. A worker that ends `failed` removes a marker; one that ends `done` leaves it as it was. The real CLI with `CORVIDINHO_DELEGATE_DEPTH=1` in a carried talk worktree runs no lane and writes no marker.
 
 ### REQ-agent-086
@@ -1285,4 +1288,66 @@ Acceptance Criteria
 - A verify retry (new conversation) whose first call repeats a call that failed twice in attempt 1 runs it and steers; its next identical call asks.
 - `runTask` with that execute ends `blocked`, `ask` = the stuck ask, verified false, verify never called.
 - The real CLI (`task run --output ndjson`, localhost mock LLM repeating a missing `files-read`) exits 0 with a `blocked` result frame whose `ask` is the stuck ask after exactly three LLM requests.
+
+### REQ-agent-179
+
+I configure its models (OpenAI-compatible, Ollama, Anthropic or a headless
+agent CLI), and there's no built-in default (AGENT-13, partial: the headless
+agent CLI kind is a later change); with no provider set, it says so at startup
+and in /status (AGENT-10). Both were captured in `hi/agent.md` from Leif's
+2026-09-28 interview. `src/agent/providers.ts` SHALL read the model entries:
+`CORVIDINHO_LLM_MODEL` and the per-tier `CORVIDINHO_LLM_MODEL_READ` / `_TOOL`
+/ `_CODE` (REQ-agent-079) each hold an ordered, comma-separated list of
+entries (blanks skipped); an entry is `kind:model` with kind `openai`,
+`ollama` or `anthropic` (case-insensitive, split on the first `:` only when
+the prefix is a kind), and a bare entry or one whose prefix is not a kind
+(`qwen3:30b`) is OpenAI-compatible. Only the first entry of a tier SHALL be
+called; the AGENT-11 fallback chain is a later change. Each kind SHALL use
+its vendor endpoint (the endpoint of a provider the operator chose, not a
+default model) and its own key, never another kind's: `openai` →
+`CORVIDINHO_LLM_BASE_URL` (else `https://api.openai.com/v1`) with
+`CORVIDINHO_LLM_API_KEY`, else `OPENAI_API_KEY`; `ollama` → `OLLAMA_HOST` read
+as Ollama reads it (`host`, `host:port` or a URL; no scheme means http and
+port 11434; a bind-all address is reached on loopback; default
+`127.0.0.1:11434`) plus `/v1`, with no key; `anthropic` →
+`https://api.anthropic.com/v1` (its OpenAI-compatible API) with
+`ANTHROPIC_API_KEY`. Every kind SHALL go through the one OpenAI-compatible
+chat transport (`chatCompletions`, `extractUsage`) and the SAFE-8 spend guard
+unchanged; the request's `body.model` SHALL be the entry's model without its
+`kind:` prefix, and `authorization: Bearer <key>` SHALL be sent only when the
+kind has a key. There SHALL be no built-in default model and no demo stub. A
+tier's provider is usable when it has an entry and, for `openai` /
+`anthropic`, its key is set; a keyless `ollama` entry is usable. With no
+usable provider for a run's tier, `loadLlmEnv` SHALL carry the no-provider
+notice (`providerNotice`, starting with `NO_PROVIDER_NOTICE` "No model
+provider is configured") and the execute attempt SHALL make no provider call
+and SHALL return `error: true` with the notice as its summary and no files,
+so `runTask` ends `failed` on every surface (CLI, Discord chat, slash
+commands, `/work`, schedules, WATCH, delegate and council workers). The
+notice SHALL name what is missing — `CORVIDINHO_LLM_MODEL is not set` with
+how to set it (`openai:<model>`, `ollama:<model>` or `anthropic:<model>`,
+per-tier keys, no built-in default), or `<entry> needs <KEY>, which is not
+set` — grouping tiers with the same problem and naming the tiers when not
+every tier asked about has it; it SHALL name env keys and models only, never
+a key value. `providerStatus`, `providerForTier`, `defaultProviderLabel`
+(`<label> @ <host>` of the default tier, `openai` entries shown bare) and
+`providerId` (the endpoint host, which the SAFE-8 ledger records as
+`provider`) serve doctor, `/status` and the startup lines.
+`ANTHROPIC_API_KEY` SHALL be a SAFE-6 secret env name (`redactSecretEnvValues`
+/ `formatErrorLine`), as it already is dropped from the verify lane and the
+shell (`VERIFY_ENV_DROP`). No schema change, slash command, CLI flag or
+/admin knob is added; `OLLAMA_HOST` and `ANTHROPIC_API_KEY` are read only for
+their kind.
+
+Acceptance Criteria
+- `parseModelEntry`: `openai:gpt-4.1`, `ollama:qwen3:30b` (model `qwen3:30b`), `Anthropic:<m>`; bare `gpt-4o` and `qwen3:30b` are `openai`; blank and `ollama:` are null. `parseModelChain("ollama:a, anthropic:b ,, c")` keeps order and skips blanks.
+- A tier's own key wins, a blank or `,`-only key falls back to `CORVIDINHO_LLM_MODEL`, and nothing set is `[]`; `modelForTier` is the model without its kind, `""` when none.
+- `resolveEntry`: openai default `https://api.openai.com/v1`, `CORVIDINHO_LLM_BASE_URL` wins (trailing `/` dropped), `CORVIDINHO_LLM_API_KEY` over `OPENAI_API_KEY`, unusable without a key; ollama `http://127.0.0.1:11434/v1`, no key even when `OPENAI_API_KEY` is set, usable; anthropic `https://api.anthropic.com/v1` with `ANTHROPIC_API_KEY` only, unusable without it; `providerId` is the host.
+- `OLLAMA_HOST` `gpu-box` → `http://gpu-box:11434`, `gpu-box:9000`, `0.0.0.0` → `127.0.0.1:11434`, `https://…/` and `http://10.0.0.5:11434` as given.
+- Mock fetch: an `ollama:qwen3:30b` run posts to `http://gpu-box:9000/v1/chat/completions` with no authorization header and `model` `qwen3:30b`; an `anthropic:` run posts to `https://api.anthropic.com/v1/chat/completions` with `Bearer <ANTHROPIC_API_KEY>`, never the OpenAI key; `openai:gpt-4.1, ollama:later` calls only `gpt-4.1` at the base URL with its key.
+- `providerNotice({})` and with only `OPENAI_API_KEY` is the "CORVIDINHO_LLM_MODEL is not set" notice with how to set it; `anthropic:c` without its key names `ANTHROPIC_API_KEY`; only `_READ` set names the tool and code tiers; one run's own tier with a provider is null; the key value never appears.
+- `runTask` over `createTaskExecute` with only a key: `failed`, summary the notice, `filesChanged` `[]`, one attempt, no verify, no provider call.
+- The real `task run` with a keyless `ollama:` model pointed at a localhost fake server ends `done` with the server's reply; the server saw no authorization header and `model` `fake-model`.
+- `redactSecretEnvValues` / `formatErrorLine` redact an `ANTHROPIC_API_KEY` value.
+- On the base sources `tests/agent.providers.test.ts` fails 15 of 18 (the three that pass are pure units of the new module); on the branch all pass.
 

@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 69
+version: 70
 status: draft
 files:
   - src/cli.ts
@@ -37,7 +37,7 @@ depends_on:
 
 ## Purpose
 
-Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daemon, attribution, and task run with optional LLM plugin tool loop.
+Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daemon, attribution, and task run with its LLM plugin tool loop on the model the operator configures (AGENT-13: no built-in default; with none, `task run`, the daemon, doctor and `init` say so, AGENT-10, REQ-cli-079).
 
 ## Public API
 
@@ -67,7 +67,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `githubRepoUsage` | `allow` | `AllowlistUsage` | WATCH repo set (`expandWatchRepos`) minus deny-listed repos / orgs and entries the gate cannot use: listed / usable / denied count and sources |
 | `discordDoctorCheck` | `allow, env?` | `DoctorCheck` | Doctor `discord` line (token + usable channels, source named) |
 | `githubWatchDoctorCheck` | `allow, env?` | `DoctorCheck` | Doctor `github-watch` line (token + username + usable repos, source named) |
-| `llmDoctorCheck` | `env?` | `DoctorCheck` | Doctor `llm` line; `warn` (demo stub) without a key, never fails |
+| `llmDoctorCheck` | `env?` | `DoctorCheck` | Doctor / `init` `llm` line (AGENT-13 / AGENT-10, REQ-cli-003): `[ok]` key env present (never the value) or `no key needed` (ollama), model and host of the default tier, per-tier models; `[warn]` with the no-provider notice when a tier has no usable provider; never fails |
 | `dataDirDoctorCheck` | `env?, home?` | `DoctorCheck` | Doctor `data-dir` line: exists + writable / creatable / `fail` |
 | `projectFilesDoctorChecks` | `cwd?` | `DoctorCheck[]` | Doctor / `init` project-file lines for `cwd` (CLI-4, REQ-cli-430): `fledge.toml`, `verify-lane` (runs spec-check), `.specsync`, `specs`; each missing one `[missing]` in plain language; reads only |
 | `removedVerifyKeyDoctorCheck` | `cwd?` | `DoctorCheck \| null` | Doctor `[warn] verify-gate` line when `cwd`'s `fledge.toml` still sets `[corvidinho] verify_before_complete` (ignored, AGENT-14); null otherwise; never fails doctor (REQ-cli-085) |
@@ -136,7 +136,7 @@ task run honors --tier and agent config (`max_retries`); it has no verify skip (
 plugins list/run load builtins and honor non-interactive deny; doctor reports plugin count.
 `specsync <list|read|check|brief|coverage|score|change-list|ship-status>` runs the matching `specsync-*` plugin through `plugins run`; `score` is `specsync-score`, the local `specsync score` report (SPECSYNC-3, REQ-cli-089).
 plugins list/run load builtins and honor non-interactive deny; doctor reports plugin count. The `plugins list` text view also prints which PLUGIN-4 language runners loaded (with their binary) and one `<name> not loaded: <tool> not found on PATH` line per missing toolchain, and still exits 0 (REQ-cli-112).
-doctor reads what the long-running surfaces read (CLI-4, REQ-cli-003): the `discord` and `github-watch` checks load allowlists through the bridge / WATCH loader (allowlist file + env overlays, `mergeChannelIds` / `expandWatchRepos`), drop deny-listed entries (deny wins) and entries the gate cannot use (a repo that is not OWNER/REPO; the line names deny wins only when every entry is deny-listed), count a token / watch login only when not blank (as the bridge / WATCH trim; the `github` Octokit line too), and name the source (`file`, `env`, `file + env`) and count, never ids, repos or tokens; a file that does not load fails both. The `llm` line is `ok` with `CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY` (value not shown) and `warn` (task run uses the demo stub) without, never changing the exit code. The `data-dir` line probes the shared data dir with a temp dir it removes: `ok` exists + writable, `info` missing but creatable (not created), `fail` otherwise, including a symlink to nothing (exit 1).
+doctor reads what the long-running surfaces read (CLI-4, REQ-cli-003): the `discord` and `github-watch` checks load allowlists through the bridge / WATCH loader (allowlist file + env overlays, `mergeChannelIds` / `expandWatchRepos`), drop deny-listed entries (deny wins) and entries the gate cannot use (a repo that is not OWNER/REPO; the line names deny wins only when every entry is deny-listed), count a token / watch login only when not blank (as the bridge / WATCH trim; the `github` Octokit line too), and name the source (`file`, `env`, `file + env`) and count, never ids, repos or tokens; a file that does not load fails both. The `llm` line (AGENT-13 / AGENT-10) is `ok` with the default tier's model, its host and its key env present (value not shown; `no key needed` for `ollama:`) and `warn` with the no-provider notice when a tier has no usable provider (there is no demo stub or default model), never changing the exit code. The `data-dir` line probes the shared data dir with a temp dir it removes: `ok` exists + writable, `info` missing but creatable (not created), `fail` otherwise, including a symlink to nothing (exit 1).
 `plugins run <name> [--json] [-- ...args]`: every argv item after the first `--` that follows the name reaches the plugin verbatim; global flags, `--json` and help are read only before it (REQ-cli-186).
 Attribution output uses only the project name and repository link and contains no account handle.
 doctor always prints a `spend` line (SAFE-8 / AUTONOMOUS-8, REQ-cli-098): `info` when `CORVIDINHO_DAILY_SPEND_CAP_USD` is unset (no DB opened), otherwise rolling 24 h spend vs the cap with the percent, `warn` at the 80% warning, at the cap, for an unpriced model, an invalid value or an unreadable ledger; it never changes the doctor exit code. `task run` copies the run's 80% spend warning onto `TaskResult.spendWarning` (`--json` and the NDJSON `result` frame); a run stopped at the cap is `blocked` and exits 0, its summary is the generic `SPEND_CAP_SUMMARY`, and text output also prints the ask question (the operator details). The headless daemon, which has no Discord, logs a `warn` `spend.warning` line for a schedule run that crossed 80% and a `warn` `run.needs_human` line (with `reason`) for a run that stopped to ask; the recorded warning and the ask recorded on the run row stay pending, and a bridge's next scheduler tick posts the ask to the schedule's channel (REQ-discord-347; the daemon never posts it).
@@ -217,7 +217,9 @@ Nightly backup (OPS-1/2, REQ-cli-680, `src/store/backup.ts`): with `CORVIDINHO_B
 | Doctor missing tools/env | Print per-check status; exit 1 (no secrets) |
 | Doctor: allowlists only in the allowlist file | `[ok] discord` / `[ok] github-watch` naming source `file` (values not shown) |
 | Doctor: every allowlisted channel / repo also deny-listed, or allowlist file does not load | `[missing] discord` / `[missing] github-watch`; exit 1 |
-| Doctor: no LLM key | `[warn] llm` (task run uses the demo stub); exit code unchanged |
+| Doctor / `init`: no usable model provider (no `CORVIDINHO_LLM_MODEL`, or its kind's key unset) | `[warn] llm: No model provider is configured …` naming what to set; exit code unchanged (REQ-cli-003) |
+| `task run` with no usable provider for its tier | the notice on stderr first (text output); the run calls nothing and ends `failed` with the notice as its summary; exit 1 (REQ-cli-079) |
+| Daemon start with no usable provider | `llm.no_provider` warn line with the notice; `daemon.started` carries `llm: "none"` (REQ-cli-079) |
 | Doctor: the owner or a declared person has a GitHub login but no GitHub numeric id | `[warn] people-github` naming person ids only (on GitHub they read as undeclared until an id is linked); exit code unchanged (REQ-cli-367) |
 | Doctor: data dir not a directory, a symlink to nothing, not creatable or not writable | `[fail] data-dir`; exit 1 |
 | Doctor: blank (whitespace-only) Discord / GitHub token or watch login | `[missing] discord` / `[missing] github` / `[missing] github-watch` (bridge / WATCH / Octokit trim them); exit 1 |
@@ -303,3 +305,4 @@ Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), 
 | 2026-09-30 | verification-can-t-be-skipped-and-the-real-diff-since-the-talk-started-decides-what-changed-agent-14-agent-15-agent-15: Verification can't be skipped and the real diff since the talk started decides what changed (AGENT-14, AGENT-15, AGENT-15.a): task run refuses --no-verify, [corvidinho] verify_before_complete is ignored, filesChanged comes from the real git diff alone (a claimed path git does not show still runs the lane), and a talk worktree whose last run did not end verified verifies from the talk branch's merge-base |
 | 2026-09-30 | release-0-0-35-numeric-github-ids-dm-private-reads-github-forget-me-unskippable-verify-shell-guards-schedule-repo-gate: Release 0.0.35: numeric GitHub ids, DM private reads, GitHub forget-me, unskippable verify, shell guards, schedule repo gate |
 | 2026-09-30 | bun-test-keeps-every-temp-dir-it-makes-under-one-per-run-root-in-tmpdir-and-removes-that-root-when-the-run-ends-instead: Bun test keeps every temp dir it makes under one per-run root in TMPDIR and removes that root when the run ends, instead of leaking ~500 mkdtemp dirs into /tmp per run (verify lane filled the agent box's disk) |
+| 2026-09-30 | i-configure-the-models-openai-compatible-ollama-anthropic-with-no-built-in-default-and-it-says-so-when-none-is-set: I configure the models (OpenAI-compatible, Ollama, Anthropic) with no built-in default, and it says so when none is set (AGENT-13, AGENT-10) |

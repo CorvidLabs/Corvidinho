@@ -493,7 +493,9 @@ function unpricedTierModel(
   const models = perTierModels(env);
   if (!models) return null;
   for (const tier of ["read", "tool", "code"] as const) {
-    if (priceForModel(models[tier]) === null) return { tier, model: models[tier] };
+    // AGENT-10: a tier with no model calls nothing (its runs fail with the
+    // no-provider notice), so it never stops at the spend check.
+    if (models[tier] && priceForModel(models[tier]) === null) return { tier, model: models[tier] };
   }
   return null;
 }
@@ -519,7 +521,8 @@ export function readSpendSnapshot(opts: {
   try {
     db = opts.db ?? openCorvidinhoDb({ env });
     const window = new SpendLedger(db).window(opts.now ?? Date.now());
-    const priced = priceForModel(opts.model) !== null;
+    // No model configured (AGENT-10): nothing is called, nothing to price.
+    const priced = !opts.model.trim() || priceForModel(opts.model) !== null;
     const tierGap = priced ? unpricedTierModel(env) : null;
     return {
       kind: "cap",

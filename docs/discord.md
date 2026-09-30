@@ -18,7 +18,7 @@ Registered via `buildSlashCommandBodies()` → guild PUT overwrite + clear globa
 |---------|---------|------------|---------|
 | `/session list` | — | yes | List active sessions: the owner (ADMIN) sees everyone's with full project paths; anyone else sees only their own, project shown by name (REQ-discord-418) |
 | `/session start` | `topic` (required), optional `project` | public (deferred) | Start session + agent run in isolated worktree |
-| `/status` | — | yes | Bridge metrics (version, uptime, protocol, channels, sessions, work, LLM line, slash names, announce channel, owner configured, audit chain, 24 h spend vs cap for the owner only — anyone else sees just “Work is paused for budget.” while runs are paused at the cap (SAFE-14.a), optional git tip) |
+| `/status` | — | yes | Bridge metrics (version, uptime, protocol, channels, sessions, work, LLM line — the configured model @ host, or `LLM: none — No model provider is configured.` when none is set (AGENT-10/13; the setting names to fix it for the owner only) —, slash names, announce channel, owner configured, audit chain, 24 h spend vs cap for the owner only — anyone else sees just “Work is paused for budget.” while runs are paused at the cap (SAFE-14.a), optional git tip) |
 | `/agents` | — | yes | List local Corvidinho agent |
 | `/work` | `description` (required), optional `project` | public (deferred) | Drive a work task in isolated worktree. Owner and team only: community (anyone undeclared included) gets the ephemeral `not authorized` and nothing starts (IDENTITY-11.a) |
 | `/mute` | `user` (user, required) | yes | Mute user (ADMIN; DISCORD-7 re-check). Refuses yourself and the configured owner (DISCORD-6 / IDENTITY-2) |

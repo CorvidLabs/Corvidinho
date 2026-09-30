@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import { enterProject, envFileFlags, parseGlobalFlags, readStartEnv } from "../src/cli.ts";
+import { startFakeLlm } from "./fixtures/fake-llm.ts";
 
 const CLI = join(import.meta.dir, "..", "src", "cli.ts");
 
@@ -40,7 +41,7 @@ function fixture(): Fixture {
   const p = join(root, "P");
   write(
     join(a, ".env"),
-    `CORVIDINHO_DAILY_SPEND_CAP_USD=3.00\nCORVIDINHO_LLM_API_KEY=${FAKE_LLM_KEY}\nA_MARK=from-a\n`,
+    `CORVIDINHO_DAILY_SPEND_CAP_USD=3.00\nCORVIDINHO_LLM_API_KEY=${FAKE_LLM_KEY}\nCORVIDINHO_LLM_MODEL=a-model\nA_MARK=from-a\n`,
   );
   write(join(a, "fledge.toml"), "[corvidinho]\nmax_retries = 0\n");
   // Bun's own loading: .env.local over .env, with $VAR expansion.
@@ -172,21 +173,28 @@ describe("readStartEnv / enterProject (CLI-5)", () => {
 describe("corvidinho --project <path> (CLI-5, REQ-cli-505)", () => {
   test("task run plans with the project's specs, not the start dir's", async () => {
     const f = fixture();
-    for (const args of [
-      ["--project", f.p, "task", "run", "--task", "touch widget", "--json"],
-      // After the command, relative to the start dir.
-      ["task", "run", "--task", "touch widget", "--json", "--project=../P"],
-    ]) {
-      const r = await cli(args, f.a, f.env);
-      expect(r.code).toBe(0);
-      const parsed = JSON.parse(r.out) as TaskJson;
-      // The demo run changed nothing in P: nothing to verify (REQ-agent-003).
-      expect(parsed.result.state).toBe("done");
-      expect(parsed.result.verifySkipped).toBe(true);
-      // P's specs brief the planner.
-      const planning = parsed.events.find((e) => e.text?.startsWith("Planning:"))?.text ?? "";
-      expect(planning).toContain("# Spec: widget");
-      expect(planning).toContain("Widget marker purpose-7f3a.");
+    // AGENT-13: no built-in default model, so the run calls a fake provider
+    // (a priced model id: P's .env sets a SAFE-8 cap).
+    const llm = startFakeLlm({ model: "gpt-4o-mini" });
+    try {
+      for (const args of [
+        ["--project", f.p, "task", "run", "--task", "touch widget", "--json"],
+        // After the command, relative to the start dir.
+        ["task", "run", "--task", "touch widget", "--json", "--project=../P"],
+      ]) {
+        const r = await cli(args, f.a, { ...f.env, ...llm.env });
+        expect(r.code).toBe(0);
+        const parsed = JSON.parse(r.out) as TaskJson;
+        // The fake model changed nothing in P: nothing to verify (REQ-agent-003).
+        expect(parsed.result.state).toBe("done");
+        expect(parsed.result.verifySkipped).toBe(true);
+        // P's specs brief the planner.
+        const planning = parsed.events.find((e) => e.text?.startsWith("Planning:"))?.text ?? "";
+        expect(planning).toContain("# Spec: widget");
+        expect(planning).toContain("Widget marker purpose-7f3a.");
+      }
+    } finally {
+      llm.stop();
     }
   }, T);
 
