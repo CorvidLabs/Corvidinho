@@ -302,7 +302,7 @@ describe("no built-in default: with no usable provider it says so (AGENT-10)", (
     expect(other).not.toContain("CORVIDINHO_");
     // Partly configured: the provider plus the notice.
     const partial = { CORVIDINHO_LLM_MODEL_TOOL: "ollama:qwen3", CORVIDINHO_LLM_TIER: "tool" };
-    expect(formatLlmStatusLine(partial)).toBe(
+    expect(formatLlmStatusLine(partial, { ownerView: true })).toBe(
       `LLM: ollama:qwen3 @ 127.0.0.1:11434 — No model provider is configured for some runs — read, code tiers: CORVIDINHO_LLM_MODEL is not set. ${UNSET_NOTICE.slice(UNSET_NOTICE.indexOf("Set CORVIDINHO_LLM_MODEL ("))}`,
     );
     expect(formatLlmStatusLine(partial, { ownerView: false })).toBe(
@@ -326,7 +326,7 @@ describe("no built-in default: with no usable provider it says so (AGENT-10)", (
     const partial = llmDoctorCheck({ CORVIDINHO_LLM_MODEL: "ollama:m", CORVIDINHO_LLM_MODEL_CODE: "anthropic:c" });
     expect(partial.mark).toBe("warn");
     expect(partial.detail).toBe(
-      "no key needed; model ollama:m @ 127.0.0.1:11434; per tier: read m, tool m, code c — No model provider is configured for some runs — code tier: anthropic:c needs ANTHROPIC_API_KEY, which is not set.",
+      "no key needed; model ollama:m @ 127.0.0.1:11434; per tier: read ollama:m, tool ollama:m, code anthropic:c — No model provider is configured for some runs — code tier: anthropic:c needs ANTHROPIC_API_KEY, which is not set.",
     );
   });
 

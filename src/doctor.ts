@@ -33,7 +33,7 @@ import { Database } from "bun:sqlite";
 import { removedVerifyKeys } from "./agent/config.ts";
 import { entryLabel, providerForTier, providerNotice } from "./agent/providers.ts";
 import { findProjectRoot } from "./agent/project-instructions.ts";
-import { loadTierFromEnv, perTierModels } from "./agent/tier.ts";
+import { loadTierFromEnv, perTierModels, type CapabilityTier } from "./agent/tier.ts";
 import { llmBaseHost } from "./version.ts";
 import { checkChannel } from "./allowlist/discord.ts";
 import { isRepoAllowed } from "./allowlist/github.ts";
@@ -284,13 +284,17 @@ export function githubWatchDoctorCheck(
 
 /**
  * `; per tier: read …, tool …, code …` when any per-tier model key is set
- * (AGENT-5), else "" so the line reads as before. Model names only.
+ * (AGENT-5), else "" so the line reads as before. Each tier's first entry as
+ * configured (`kind:model` for non-openai kinds, AGENT-13), or `none`. Model
+ * names only.
  */
 function perTierModelsDetail(env: NodeJS.ProcessEnv): string {
-  const m = perTierModels(env);
-  return m
-    ? `; per tier: read ${m.read || "none"}, tool ${m.tool || "none"}, code ${m.code || "none"}`
-    : "";
+  if (!perTierModels(env)) return "";
+  const label = (tier: CapabilityTier): string => {
+    const p = providerForTier(env, tier);
+    return p ? entryLabel(p.entry) : "none";
+  };
+  return `; per tier: read ${label("read")}, tool ${label("tool")}, code ${label("code")}`;
 }
 
 /**

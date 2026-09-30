@@ -34,7 +34,14 @@ artifact: design
   failed result in every mode). `/status`: `formatLlmStatusLine(env, {
   ownerView })`; the handler passes `isOwnerViewer` (already computed for the
   spend line), so setting names reach only the owner (SAFE-14.a pattern).
-  Doctor / init: `llmDoctorCheck` `[warn]` with the notice.
+  `formatLlmStatusLine` without `ownerView` gives the non-owner line (fail
+  closed). Doctor / init: `llmDoctorCheck` `[warn]` with the notice.
+- **Chat replies unchanged.** A failed run's Discord reply (chat, button
+  answers, `/session start`, `/work`, schedules) stays the usual
+  `… failed (exit 1)` line; only `task run` output and the WATCH run-summary
+  comment carry the run's summary. AGENT-10 asks for the notice at startup and
+  in `/status`, and the notice's setting names are owner-only there, so the
+  channel body is not changed here (pending Leif).
 - **Spend.** `readSpendSnapshot` treats an empty model as nothing to price,
   and `unpricedTierModel` skips tiers with no model, so a missing model never
   reads as "paused for budget".

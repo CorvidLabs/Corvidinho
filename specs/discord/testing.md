@@ -1167,7 +1167,8 @@ thinking outbound; no live Discord, no network):
 owner the full notice and anyone else only "No model provider is
 configured." with no setting name; configured and partly configured lines.
 `tests/discord.slash.test.ts` ("/status reports metrics"), `tests/version.test.ts`
-and `tests/discord.spend.test.ts` (the non-owner body still has no
+(`formatLlmStatusLine` without `ownerView` gives the non-owner line, fail
+closed) and `tests/discord.spend.test.ts` (the non-owner body still has no
 `CORVIDINHO_`). Bridge footer tests configure a model for the file
 (`useConfiguredModel`, `tests/fixtures/fake-llm.ts`); the stub agent calls
 no model.

@@ -482,8 +482,8 @@ changelog bullet list (PERSONA-1.a); editing `persona.md` does not change it.
 **Upgrading:** Corvidinho no longer falls back to `gpt-4o-mini` and has no demo stub. A box that
 set only `CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY` must now also set `CORVIDINHO_LLM_MODEL`
 (for the old behaviour, `CORVIDINHO_LLM_MODEL=gpt-4o-mini`), then restart the bridge, `github
-watch` and the daemon. Until a model is set, every run fails with the notice below instead of
-answering.
+watch` and the daemon. Until a model is set, every run fails instead of answering, and the places
+below say why.
 
 `CORVIDINHO_LLM_MODEL` (and the optional per-tier `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` /
 `_CODE`, AGENT-5) holds `kind:model` entries. Every kind speaks the OpenAI-compatible chat API
@@ -508,8 +508,10 @@ With no usable model for a tier (nothing set, or the kind's key is missing) it s
 - in `/status`: `LLM: none — …`. The owner sees which tier and what to set; anyone else sees
   only `No model provider is configured.` (no setting names, like the spend line, SAFE-14.a);
 - in `doctor` and `init`: `[warn] llm: No model provider is configured …` (never fails them);
-- as the reply of every run on that tier: the run ends failed with the same notice and calls
-  nothing.
+- in the runs themselves: a run on that tier calls nothing and ends failed with the notice as its
+  result. `task run` prints it, and a WATCH run's summary comment carries it; Discord chat,
+  button answers, `/session start`, `/work` and schedules post their usual `… failed (exit 1)`
+  reply, like any failed run, so check `/status` or the start-up line.
 
 Keys stay in the environment and are never printed; `ANTHROPIC_API_KEY` is scrubbed from
 error lines like the other LLM keys and never reaches the verify lane or a shell (SAFE-6).

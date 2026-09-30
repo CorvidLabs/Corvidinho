@@ -14,8 +14,11 @@ captured from Leif's 2026-09-28 interview). The Discord bridge SHALL log one
 `[discord] <notice>` line with `console.warn` at start (after the audit
 line) when any tier has no usable model provider
 (`providerNotice(env)`, REQ-agent-179) and nothing when every tier has one.
-Runs it starts on such a tier fail with the notice as their answer
-(REQ-agent-179). No new slash command, setting or schema change.
+Runs it starts on such a tier (chat, button answers, `/session start`,
+`/work`, schedules) fail and call no model (REQ-agent-179): the run's result
+summary is the notice, while the channel gets the usual failed reply
+(`… failed (exit 1)`), as for any failed run; the start-up line and `/status`
+say why. No new slash command, setting or schema change.
 
 Acceptance Criteria
 - A dry-run bridge started with no model logs `[discord] No model provider is configured: CORVIDINHO_LLM_MODEL is not set. …` once; with `CORVIDINHO_LLM_MODEL=ollama:qwen3` it logs no no-provider line.

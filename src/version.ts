@@ -63,15 +63,16 @@ export function llmBaseHost(baseUrl: string): string {
  * kinds as `kind:model`), followed by the no-provider notice when any tier has
  * no usable provider; "LLM: none — <notice>" when the default tier has none.
  * The notice's details (which tier, the setting names to set) are for the
- * owner (`ownerView`, default true); anyone else sees only that no provider
- * is configured, like the owner-only spend line (SAFE-14.a).
+ * owner (`ownerView: true`); anyone else, and a caller that does not say
+ * (default false, fail closed), sees only that no provider is configured,
+ * like the owner-only spend line (SAFE-14.a).
  * NEVER includes an API key.
  */
 export function formatLlmStatusLine(
   env: NodeJS.ProcessEnv = process.env,
   opts: { ownerView?: boolean } = {},
 ): string {
-  const ownerView = opts.ownerView ?? true;
+  const ownerView = opts.ownerView ?? false;
   const provider = defaultProviderLabel(env);
   const full = providerNotice(env);
   const notice =
