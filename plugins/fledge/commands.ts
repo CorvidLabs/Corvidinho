@@ -27,6 +27,7 @@ import { resolve } from "node:path";
 import { scrubSecrets } from "../../src/store/scrub.ts";
 import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
 import type { FledgePluginInfo } from "./discover.ts";
+import { fledgePluginMustAsk } from "./must-ask.ts";
 import { fledgeChildEnv, spawnCapped } from "./spawn.ts";
 
 export const FLEDGE_COMMAND_PREFIX = "fledge-";
@@ -170,6 +171,8 @@ export function fledgePluginCommand(
     dangerous: true,
     minTier: fledgeMinTier(info),
     origin: fledgeOrigin(info),
+    // AUTONOMY-9/9.a: a command whose name or argv names a prod or deploy tool asks first.
+    mustAsk: fledgePluginMustAsk(command),
     handler: async (ctx) => {
       if (resolve(ctx.cwd) !== root) {
         return {

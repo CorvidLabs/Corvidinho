@@ -22,5 +22,7 @@ When Corvidinho is blocked or stuck, it asks clarifying questions in Discord —
 - **AUTONOMY-7**  Impossible / joke “build free energy / dark matter / zero-point generator” style asks: witty public-safe decline or a tiny toy demo — not a long formal MCQ unless they clearly want a real utility.
 - **AUTONOMY-8**  It asks before any spend that would go over a cap.
 - **AUTONOMY-9**  It asks before touching prod or deploys (VPS, secrets, env, DNS); updating itself to a tagged release is not a deploy.
+  - **AUTONOMY-9.a**  Any contact with prod asks me first, read-only looks included, and every prod card needs the one-time code.
 - **AUTONOMY-10**  It asks before announcements it starts and before its first 20 replies in public threads; GitHub comments and social posts don't need asking.
+  - **AUTONOMY-10.a**  Every channel post it makes, and each of its first 20 public-thread replies, waits for my OK, even text I dictated and replies to me.
 - **AUTONOMY-11**  Anything else inside its guardrails, it just does and tells me.

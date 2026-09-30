@@ -14,8 +14,20 @@ import {
 } from "../src/discord/requester-perms.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { runPlugin } from "../src/plugins/run.ts";
+import { answerMustAsk } from "./fixtures/must-ask.ts";
 
 const originalFetch = globalThis.fetch;
+
+// AUTONOMY-10/10.a: every post waits for the owner's OK on an Approve card;
+// these tests exercise the DISCORD-8 check a post gets once it is approved.
+let mustAsk: ReturnType<typeof answerMustAsk> | null = null;
+beforeEach(() => {
+  mustAsk = answerMustAsk("approved");
+});
+afterEach(() => {
+  mustAsk?.restore();
+  mustAsk = null;
+});
 
 afterEach(() => {
   setRequesterPermCheckerForTests(undefined);

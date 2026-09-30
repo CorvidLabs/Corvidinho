@@ -94,6 +94,7 @@ import {
   APPROVAL_POLL_MS,
   APPROVAL_UNKNOWN_KIND,
   createApprovalCards,
+  mustAskApprovalKinds,
   type ApprovalDeliveryResult,
 } from "./approval-cards.ts";
 import { forgetApprovalKind } from "./forget-card.ts";
@@ -507,7 +508,8 @@ export async function startBridge(
   const mutedUsers = new Set<string>(config.mutedUserIds);
   // SAFE-18..20: everything that needs the owner's OK reaches them as a DM
   // Approve/Deny card from one engine (src/discord/approval-cards.ts); the
-  // MEMORY-ACL-6 forget request is its `forget` kind.
+  // MEMORY-ACL-6 forget request is its `forget` kind, and the must-ask gate's
+  // prod and channel-post asks its `mustask` / `mustask-post` kinds.
   const sendDmRef: { fn?: GatewayHandlers["sendDm"] } = {};
   // SAFE-14.a: spend amounts and cap settings reach only the owner, by DM —
   // the 80% warning and a cap stop's details, after each run and every tick.
@@ -555,6 +557,9 @@ export async function startBridge(
               store.forgetTurnsOfUsers(discordIds);
             },
           }),
+          // AUTONOMY-9/10: prod / deploy asks (code) and channel-post asks
+          // the must-ask gate (src/plugins/must-ask.ts) records.
+          ...mustAskApprovalKinds({ db }),
         ],
       })
     : undefined;

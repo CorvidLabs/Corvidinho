@@ -461,6 +461,11 @@ describe("progressFromFrame (AGENT-8 / DISCORD-3)", () => {
       message: "verify passed",
     });
     expect(p({ type: "Text", text: "hi" })).toBeNull();
+    // The must-ask gate's wait line is the one Text the status shows (AUTONOMY-9/10).
+    expect(
+      p({ type: "Text", text: "[operator] AUTONOMY-9: waiting for the owner's OK on an Approve card with the one-time code (x)" }),
+    ).toEqual({ message: "waiting for the owner's OK on an Approve card" });
+    expect(p({ type: "Text", text: "I am waiting for the owner's OK on an Approve card" })).toBeNull();
     expect(
       progressFromFrame(usageFrame({ promptTokens: 1, completionTokens: 1, totalTokens: 2 })),
     ).toEqual({ totalTokens: 2 });

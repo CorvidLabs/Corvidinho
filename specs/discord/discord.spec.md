@@ -235,7 +235,9 @@ notified }`, `press(interaction, parsed, mayDecide)`, `start(pollMs)`,
 `stop()`, `settle(ms)`, `has(kind)`), the kind contract (`ApprovalKind`,
 `ApprovalKindStore`, `ApprovalRecord`, `ApprovalCardView`,
 `ApprovalTelling`, `AnyApprovalKind`), `storedApprovalKind(opts)` (a kind
-over `approval_requests`), `APPROVAL_POLL_MS` (5 s), `APPROVAL_DM_RETRY_MS`
+over `approval_requests`), `mustAskApprovalKinds(opts)` (the must-ask gate's
+`mustask` destructive and `mustask-post` plain kinds, REQ-discord-097),
+`APPROVAL_POLL_MS` (5 s), `APPROVAL_DM_RETRY_MS`
 (60 s), `APPROVAL_NOT_OWNER` and `APPROVAL_UNKNOWN_KIND`.
 `src/discord/approve-card.ts` exports the custom ids
 (`approveCardCustomId` / `parseApproveCardCustomId`, decisions `approve |
@@ -802,7 +804,14 @@ mention, led by `GitHub <repo>#<n> — answer on the thread: <link>`),
 
 Empty channel allowlist fail-start; empty user/role = deny-all when checked;
 empty admin lists = nobody ADMIN; missing token clean exit; no ProcessManager;
-secrets out of repo; discord-post-message dangerous; thinking status edits one
+secrets out of repo; discord-post-message dangerous, and every post it makes
+waits for the owner's OK on the plain `mustask-post` card showing the exact
+defanged text (dictated text and replies to the owner included; a dry run and
+a post its channel / requester-flag / token / strict checks refuse raise no
+card; the DISCORD-8 requester lookup runs after the Approve), while the bridge
+registers the must-ask kinds (`mustAskApprovalKinds`: `mustask` destructive
+for prod, `mustask-post` plain) on its one card engine (AUTONOMY-10/10.a,
+AUTONOMY-9.a, REQ-discord-097); thinking status edits one
 progress message in-place; slash handlers re-check channel allowlist and
 minPermission before acting; rate/mute refuse only the offending user;
 outbound post with requesting_user_id verifies requester channel perms, and in a bridge-started run always for the acting Discord user (`CORVIDINHO_ACTING_DISCORD_USER_ID`): a requesting id naming anyone else refuses and a check that cannot run refuses, nothing posted (REQ-discord-012);
@@ -1301,4 +1310,5 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-30 | when-it-repeats-a-failing-call-it-is-steered-to-change-approach-then-asks-a-stuck-github-run-pings-the-owner-on-discord: When it repeats a failing call it is steered to change approach, then asks; a stuck GitHub run pings the owner on Discord (AGENT-16, AGENT-16.a) |
 | 2026-09-30 | only-the-owner-sees-spend-amounts-and-cap-settings-on-discord-everyone-else-sees-only-work-is-paused-for-budget-safe-14: Only the owner sees spend amounts and cap settings on Discord; everyone else sees only 'Work is paused for budget.' (SAFE-14.a): spend-cap posts, the /work PR line, the slash owner notice and SPEND_CAP_SUMMARY say only that; the question quote is dropped on every path including the daemon pending-ask pass; the 80% warning never rides a channel post and, with a cap stop's details, goes to the owner by DM (src/discord/spend-dm.ts, retried every scheduler tick); the /status spend line is owner-only |
 | 2026-09-30 | one-approve-deny-dm-card-engine-for-everything-that-needs-the-owner-s-ok-exact-action-target-and-amount-one-line-each: One Approve/Deny DM card engine for everything that needs the owner's OK: exact action, target and amount one line each with a diff or text sent first as verbatim quoted-data parts and buttons last, never cut; destructive and money cards also need a one-time code DMed apart and typed into a form, valid once, only for that card and action, for 2 minutes; no answer, a late answer or a gone waiter is a no; the engine's own poll delivers with the scheduler off; the forget card becomes its destructive 'forget' kind; schema v14 approval_requests / approval_codes (SAFE-18/19/20, #96) |
+| 2026-09-30 | it-asks-me-on-an-approve-card-before-touching-prod-or-deploys-or-making-a-channel-post-anything-else-it-just-does-and: It asks me on an Approve card before touching prod or deploys or making a channel post; anything else it just does and tells me (AUTONOMY-9/9.a, AUTONOMY-10/10.a channel posts, AUTONOMY-11, #97) |
 | 2026-09-30 | i-configure-the-models-openai-compatible-ollama-anthropic-with-no-built-in-default-and-it-says-so-when-none-is-set: I configure the models (OpenAI-compatible, Ollama, Anthropic) with no built-in default, and it says so when none is set (AGENT-13, AGENT-10) |

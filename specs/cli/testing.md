@@ -83,6 +83,14 @@ run's session id do not reach the suite" — a child `bun test` of
 inherits it) sees no such key. Without the preload line the probe reports it,
 and the full suite run under that key fails 13 ROLES-CHAT-8 / team gate tests.
 
+## Must-ask notes on the event stream (REQ-cli-097)
+
+`tests/must-ask.gate.test.ts` — the notifier receives the `AUTONOMY-9:
+waiting for the owner's OK on an Approve card with the one-time code` line
+and the approval line; a lapse's refusal says the running bridge DMs the card
+and that with no bridge it lapses. `tests/must-ask.boundary.test.ts` — with
+no notifier set the wait line goes to stderr.
+
 ## No provider: task run, daemon, doctor / init (REQ-cli-079, REQ-cli-003, REQ-cli-007, REQ-cli-098, REQ-cli-262; AGENT-10 / AGENT-13)
 
 `tests/agent.providers.test.ts` — `task run` with only a key exits 1 with the

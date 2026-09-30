@@ -60,6 +60,7 @@ import { loadBuiltins } from "./plugins/builtins.ts";
 import { allowlistFromEnv, isNonInteractive } from "./plugins/env.ts";
 import { forwardedSignals } from "./plugins/proc-group.ts";
 import { get, list, size } from "./plugins/registry.ts";
+import { setMustAskNotifier } from "./plugins/must-ask.ts";
 import { PluginNotFoundError, runPlugin } from "./plugins/run.ts";
 import {
   formatPluginsListText,
@@ -846,6 +847,10 @@ async function taskRun(opts: {
   // it too, for the machine modes whose stderr stays quiet).
   const noProvider = loadLlmEnv(process.env, opts.tier).notice;
   if (noProvider && !quiet) console.error(noProvider);
+  // AUTONOMY-9/10: the must-ask gate's "waiting for the owner's OK" and
+  // outcome lines ride the event stream (a Text frame in ndjson, stderr in
+  // text mode), so bridges and the CLI say why a call is held.
+  const prevNotifier = setMustAskNotifier((text) => handleEvent({ type: "Text", text }));
   const execute = createTaskExecute({
     taskText: opts.taskText,
     cwd,
@@ -908,6 +913,7 @@ async function taskRun(opts: {
     });
   } finally {
     for (const sig of hooked) process.off(sig, onSignal);
+    setMustAskNotifier(prevNotifier);
   }
   if (spendWarning) result.spendWarning = spendWarning;
   if (injection) result.injection = injection;

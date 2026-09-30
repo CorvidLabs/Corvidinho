@@ -130,7 +130,10 @@ NDJSON event stream (REQ-agent-073, issue #73): `src/agent/events-ndjson.ts`
 owns `CORVIDINHO_PROTOCOL_VERSION` (2) and exports `frameFromEvent`,
 `usageFrame`, `resultFrame`, `serializeFrame`, `createNdjsonWriter`,
 `summarizeToolArgs`, `parseNdjsonLine`, `createNdjsonParser`,
-`readNdjsonStream`, `progressFromFrame`, `collectTaskRunStream`. Frames:
+`readNdjsonStream`, `progressFromFrame`, `collectTaskRunStream`,
+`MUST_ASK_WAIT_TEXT_RE` and `MUST_ASK_WAIT_STATUS` (`progressFromFrame` shows
+only one `Text` frame: the must-ask gate's wait line, as "waiting for the
+owner's OK on an Approve card" — REQ-agent-097). Frames:
 `{protocol, type}` with AgentEvent types `StateChanged` / `Text` / `ToolCall`
 (`name`, `argsSummary`) / `ToolResult` / `VerifyResult`, plus `usage`
 (running prompt / completion / total tokens) and a final `result`
@@ -315,7 +318,11 @@ Ask the human (REQ-agent-044, issue #44, AUTONOMY-1/2/7 / DISCORD-ASK):
 `src/agent/ask.ts` exports `ASK_TOOL_NAME` (`ask-human`), `withAskTool`,
 `askFromToolArguments`, `askFromUnknown`, `formatAskSummary`, `stuckAfterVerifyAsk`,
 `ASK_AGENT_SYSTEM_INSTRUCTIONS` (AUTONOMY-7 + prefer `options` / numbered choices
-for ephemeral Discord buttons). `src/agent/ask-options.ts` exports
+for ephemeral Discord buttons + the one AUTONOMY-11 sentence: anything inside
+its guardrails it just does and then says what it did; only prod or deploy
+contact and channel posts need the owner's OK, which the tool itself waits
+for on the Approve card, so it never calls ask-human for permission first and
+never repeats a call the owner denied — REQ-agent-097). `src/agent/ask-options.ts` exports
 `resolveAskOptions` / `parseChoicesFromQuestion` / `normalizeAskOptions`
 (option ids come out unique within an ask: a repeated id takes the first
 unused position number, and already-unique ids are kept byte-identical,
@@ -831,4 +838,5 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-30 | on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a: On GitHub people match only by their numeric user id: a renamed or re-registered login never counts as the owner or a declared person on WATCH (prompt, memory scope, SAFE-13 exemption); [owner] github_id declares the owner's id; /admin people link github stores the looked-up numeric id; doctor warns about logins without an id (IDENTITY-7.a, #36) |
 | 2026-09-30 | when-it-repeats-a-failing-call-it-is-steered-to-change-approach-then-asks-a-stuck-github-run-pings-the-owner-on-discord: When it repeats a failing call it is steered to change approach, then asks; a stuck GitHub run pings the owner on Discord (AGENT-16, AGENT-16.a) |
 | 2026-09-30 | only-the-owner-sees-spend-amounts-and-cap-settings-on-discord-everyone-else-sees-only-work-is-paused-for-budget-safe-14: Only the owner sees spend amounts and cap settings on Discord; everyone else sees only 'Work is paused for budget.' (SAFE-14.a): spend-cap posts, the /work PR line, the slash owner notice and SPEND_CAP_SUMMARY say only that; the question quote is dropped on every path including the daemon pending-ask pass; the 80% warning never rides a channel post and, with a cap stop's details, goes to the owner by DM (src/discord/spend-dm.ts, retried every scheduler tick); the /status spend line is owner-only |
+| 2026-09-30 | it-asks-me-on-an-approve-card-before-touching-prod-or-deploys-or-making-a-channel-post-anything-else-it-just-does-and: It asks me on an Approve card before touching prod or deploys or making a channel post; anything else it just does and tells me (AUTONOMY-9/9.a, AUTONOMY-10/10.a channel posts, AUTONOMY-11, #97) |
 | 2026-09-30 | i-configure-the-models-openai-compatible-ollama-anthropic-with-no-built-in-default-and-it-says-so-when-none-is-set: I configure the models (OpenAI-compatible, Ollama, Anthropic) with no built-in default, and it says so when none is set (AGENT-13, AGENT-10) |
