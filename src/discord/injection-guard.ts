@@ -38,8 +38,12 @@ import type { SlashContext, SlashInteraction } from "./slash-types.ts";
 export const INJECTION_NO_OWNER_WARNING =
   "[discord] SAFE-13 refusal but no owner is configured — owner ping skipped (IDENTITY-3)";
 
-/** Where the speaker's words came from (fence source; no module names). */
-export type SpeakerSurface = "chat-message" | "session-topic" | "work-task";
+/**
+ * Where the speaker's words came from (fence source; no module names).
+ * `schedule-prompt` is a schedule's name / description / prompt, written by
+ * its creator at `/schedule create` and replayed on every tick.
+ */
+export type SpeakerSurface = "chat-message" | "session-topic" | "work-task" | "schedule-prompt";
 
 /** Header line of a non-owner speaker's fenced message (SAFE-12). */
 export function speakerFenceHeader(role: PersonRole): string {

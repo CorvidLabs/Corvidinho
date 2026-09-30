@@ -6,6 +6,9 @@
  * `delete` drops the schedule and its run history, so it leaves SAFE-5
  * audit rows like /admin: intent first, fail closed when the trail is
  * unavailable; a non-ADMIN delete appends `denied`.
+ * SAFE-13 (#71): a non-owner's `create` whose name or prompt looks like an
+ * injection attempt is refused before the ADMIN gate (so the owner hears
+ * about it instead of a quiet not-authorized) and nothing is stored.
  */
 
 import { checkChannel } from "../../allowlist/discord.ts";
@@ -17,8 +20,12 @@ import {
 import { resolveProjectDir } from "../../worktree/index.ts";
 import {
   PermissionLevel,
+  resolveDiscordActingRole,
   resolvePermissionLevel,
 } from "../permissions.ts";
+import { refuseInjectedSlash } from "../injection-guard.ts";
+import { loadDeclaredPeople } from "../../identity/people.ts";
+import { scheduleInjection } from "../../scheduler/service.ts";
 import { projectLabel } from "../list-scope.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
 import { NOT_AUTHORIZED } from "../types.ts";
@@ -126,6 +133,8 @@ export async function handleScheduleCommand(
     case "pause":
     case "resume":
     case "delete":
+      // SAFE-13: checked before the ADMIN gate so the owner is told.
+      if (sub === "create" && (await refusedAsInjection(ctx, interaction))) return;
       if (!requireAdmin(ctx, interaction)) {
         if (sub === "delete") {
           auditSoft(
@@ -150,6 +159,50 @@ export async function handleScheduleCommand(
         ephemeral: true,
       });
   }
+}
+
+/**
+ * SAFE-13 (#71): a `/schedule create` by anyone but the owner whose name or
+ * prompt trips the detector (`scheduleInjection`, the same one chat,
+ * `/session start` and `/work` use) is refused with `refuseInjectedSlash`:
+ * the requester gets the refusal privately (every `/schedule` reply is
+ * ephemeral), the owner one fresh post in the channel that pings only them,
+ * and the trail one `injection-suspected` / `denied` row (surface
+ * `discord:/schedule`, source `schedule-prompt`; never the text). Nothing is
+ * stored. The role is resolved as `/work` resolves it; the owner's own words
+ * are never scanned. Returns true when it refused.
+ */
+async function refusedAsInjection(
+  ctx: SlashContext,
+  interaction: SlashInteraction,
+): Promise<boolean> {
+  const role = resolveDiscordActingRole({
+    userId: interaction.userId,
+    roleIds: interaction.roleIds,
+    allowlist: ctx.allowlist,
+    adminUserIds: ctx.adminUserIds,
+    adminRoleIds: ctx.adminRoleIds,
+    owner: ctx.owner,
+    mutedUsers: ctx.mutedUsers,
+    people: loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner }),
+  });
+  const suspected = scheduleInjection(
+    { name: optString(interaction, "name"), prompt: optString(interaction, "prompt") },
+    role,
+  );
+  if (!suspected) return false;
+  await refuseInjectedSlash(
+    ctx,
+    {
+      userId: interaction.userId,
+      channelId: interaction.channelId,
+      commandName: interaction.commandName,
+      reply: (opts) => interaction.reply({ ...opts, ephemeral: true }),
+    },
+    suspected,
+    "schedule-prompt",
+  );
+  return true;
 }
 
 async function handleList(
