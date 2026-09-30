@@ -17,6 +17,8 @@ files:
   - src/watch/rate-limit.ts
   - src/watch/index.ts
   - src/watch/memory-inject.ts
+  - src/watch/forget-me.ts
+  - tests/watch.forget-me.test.ts
   - tests/watch.auth-stop.test.ts
   - tests/watch.request-actor.test.ts
   - tests/watch.conversation.test.ts
@@ -48,7 +50,12 @@ login / numeric id and the thread's repo so the memory plugins act for the
 commenter's declared person (undeclared: the repo's project memory,
 read-only), and before each run the poller searches the commenter's profile
 and the repo's project memory for the comment and prepends what it found
-(`src/watch/memory-inject.ts`).
+(`src/watch/memory-inject.ts`). Forget from GitHub (MEMORY-ACL-6.a,
+REQ-watch-1016): a clear "forget me" to the watch user never starts a run —
+the poller matches the sender by GitHub numeric id, records a declared
+person's ask for the owner's Discord Approve/Deny card, replies once on the
+thread, and posts the outcome there once the owner decides
+(`src/watch/forget-me.ts`).
 
 ## Public API
 
@@ -102,6 +109,15 @@ REQ-watch-067).
 `WATCH_THREAD_HEADER` / `WATCH_THREAD_FOOTER` (`src/watch/poller.ts`) frame
 an issue or PR thread's replayed conversation (REQ-watch-472); the retained
 store and condensing are `src/store/conversation.ts` (REQ-discord-472).
+
+`src/watch/forget-me.ts` (MEMORY-ACL-6.a, REQ-watch-1016):
+`isWatchForgetMeRequest(event, mentionUsername)`,
+`forgetSubjectForGithubId(people, githubId)`, `recordWatchForgetMe(opts)` →
+`WatchForgetMeOutcome` (`requested` / `not_declared` / `unconfirmed` /
+`no_owner` / `error`), `watchForgetMeReplyBody(login, outcome)`,
+`handleWatchForgetMe(opts)`, `watchForgetOutcomeBody(req)`,
+`deliverWatchForgetOutcomes(opts)`, `WATCH_FORGET_AUDIT_SURFACE`
+(`watch:forget-me`).
 
 ## Invariants
 
@@ -164,6 +180,18 @@ the `watchInjectionLine` (owner @mentioned) in its summary comment, or, when
 no summary comment is posted (an event type WATCH does not ack, or no
 successful ack), in one `maybePostWatchInjectionNotice` comment of its own,
 once per event id (REQ-watch-071).
+A clear "forget me" to the watch user (`isWatchForgetMeRequest`: an
+issue_comment / issues / review-comment event, not the watch user's own, that
+@mentions it outside quoted lines and says only that) that passed the
+allowlist gates never starts a run and is taken out before the per-issue
+dedupe; its id is marked processed first; a declared person matched by GitHub
+numeric id only gets a `forget_requests` ask (SAFE-5 `memory-forget-request`
+`started` first, fail closed) and every sender gets one reply on the thread;
+nothing is deleted there; each cycle (after the rate-limit wait) posts the
+outcome of decided GitHub asks on their thread while its repo is allowlisted,
+stopping at the first failed post and giving up a day after the decision; a
+run's retained conversation also keeps the commenter's `github-id:<n>`
+(REQ-watch-1016).
 
 ## Behavioral Examples
 
@@ -181,6 +209,10 @@ gets the thread's earlier events and answers replayed ahead of the new event
 (REQ-watch-472). A non-owner comment whose body claims to be the
 owner and asks for the API keys → no run; one refusal comment @mentioning the
 owner's GitHub login; an `injection-suspected` audit row (REQ-watch-071).
+A declared person's `@watch-user forget me` → no run, one ask for the owner's
+card, one reply "I've asked the owner…"; an undeclared sender's → "not on the
+owner's people list", no ask; after the owner approves or denies, the next
+poll posts the outcome on that thread once (REQ-watch-1016).
 
 ## Error Cases
 

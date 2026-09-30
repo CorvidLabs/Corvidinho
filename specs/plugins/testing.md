@@ -202,3 +202,10 @@ mutating tool and a role refusal for `files-write`. `tests/web.fetch.test.ts`
 `delegate` over a fake worker bin whose result frame carries `injection`
 returns the validated `data.injection` (an unknown reason dropped, a bad
 source gives none); `runCouncil` keeps a voice's notice on its outcome.
+
+## memory-forget-me on GitHub (REQ-plugins-1016, MEMORY-ACL-6.a)
+
+- `tests/watch.forget-me.test.ts` › "in a WATCH run the model's
+  memory-forget-me points at the comment path" — with the GitHub commenter
+  env, the tool fails naming `says just "forget me"` and MEMORY-ACL-6.a, and no
+  forget request is recorded.

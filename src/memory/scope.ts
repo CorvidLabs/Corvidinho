@@ -133,6 +133,20 @@ export function memorySubjectFor(
 }
 
 /**
+ * The subject of the declared person `personId` exactly (MEMORY-ACL-6.a:
+ * `/admin people forget`), never a Discord id: not declared under
+ * `[people]` ⇒ null.
+ */
+export function memorySubjectForPerson(
+  dir: PeopleDirectory | null | undefined,
+  personId: string | null | undefined,
+): MemorySubject | null {
+  const id = (personId ?? "").trim().toLowerCase();
+  if (!dir || !PERSON_ID_RE.test(id)) return null;
+  return personSubject(dir, id);
+}
+
+/**
  * The subject a `--person` value names (the owner looking at someone's
  * memory, MEMORY-7): a declared person id, or a Discord user id / mention
  * (their declared person when they have one). Unknown ⇒ null.

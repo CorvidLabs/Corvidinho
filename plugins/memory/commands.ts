@@ -28,7 +28,10 @@
  * (`memory-recall --project`) and nothing saved. Project writes, `--person`,
  * private notes and forget-me stay off on GitHub (a WATCH run is community
  * and its thread is public, MEMORY-7). A search (`--query`) is ranked by
- * relevance, then recency (MEMORY-9, src/memory/rank.ts).
+ * relevance, then recency (MEMORY-9, src/memory/rank.ts). On GitHub a forget
+ * ask is a comment to the watch user that says "forget me", which the WATCH
+ * poller records for the owner's card itself (MEMORY-ACL-6.a,
+ * src/watch/forget-me.ts); `memory-forget-me` in a WATCH run says so.
  */
 
 import { appendAudit, argsDigest, auditContextFromEnv, auditKeyFromEnv } from "../../src/audit/log.ts";
@@ -235,6 +238,14 @@ const FORGET_NEEDS_CONVERSATION: PluginHandlerResult = {
   ok: false,
   error:
     "refused: a forget request comes from the person themself in a conversation with me (a Discord message or command), never from a schedule or another run (MEMORY-ACL-6)",
+  exitCode: 2,
+};
+
+/** MEMORY-ACL-6.a: on GitHub the ask is a comment the poller handles, never this tool. */
+const FORGET_ON_GITHUB: PluginHandlerResult = {
+  ok: false,
+  error:
+    'refused: on GitHub a forget request is a comment that @mentions me and says just "forget me" — I then ask the owner, who approves or denies it on their card (MEMORY-ACL-6.a); this tool records nothing here',
   exitCode: 2,
 };
 
@@ -676,8 +687,8 @@ export const memoryCommands: PluginCommand[] = [
       if (refused) return refused;
       const env = process.env;
       const user = actingUser(env);
-      // A GitHub thread is not a conversation for this (MEMORY-ACL-6).
-      if (!user) return actingGithub(env) ? FORGET_NEEDS_CONVERSATION : NO_ACTOR;
+      // On GitHub the poller takes the ask from a "forget me" comment (MEMORY-ACL-6.a).
+      if (!user) return actingGithub(env) ? FORGET_ON_GITHUB : NO_ACTOR;
       if (ctx.args.some((a) => a.trim() !== "")) {
         return {
           ok: false,

@@ -241,7 +241,10 @@ the poller sets (`CORVIDINHO_ACTING_GITHUB_LOGIN` / `_ID`, thread repo
 profile; an undeclared one gets community scope — `memory-recall --project`
 reads the thread repo's project memory, nothing is saved; from GitHub project
 memory is never written and `--person`, private notes and `memory-forget-me`
-are refused. `memory-recall --query` is ranked by relevance, then recency
+are refused — `memory-forget-me` names the path that works there instead: a
+comment that @mentions the watch user and says just "forget me", which the
+WATCH poller records for the owner's card (MEMORY-ACL-6.a / REQ-plugins-1016).
+`memory-recall --query` is ranked by relevance, then recency
 (MEMORY-9).
 Memory plugin command descriptions SHALL include concrete argv examples so the
 LLM tool loop can call them (REQ-plugins-085). OpenAI tool schema argv text for

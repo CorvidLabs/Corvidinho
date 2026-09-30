@@ -1,0 +1,61 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790726355,
+      "digest": "1b2dd6cec3d9dc8f2f25ffb447213b108b994d51ed06c13ec90a82d167d98a80",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "forget-from-github-and-from-admin-approved-on-the-card-a-declared-person-matched-by-github-numeric-id-who-comments",
+        "title": "Forget from GitHub and from /admin, approved on the card: a declared person (matched by GitHub numeric id) who comments 'forget me' to the watch user raises the owner's existing Approve/Deny forget card with no model run and gets a reply on the thread (an undeclared sender is told nothing is kept, no card), the outcome is posted on that thread; the owner can start a forget for any declared person with owner-only, SAFE-5 audited /admin people forget, the same card; either way nothing is forgotten until the owner approves, and Approve also deletes the person's kept WATCH conversations by the GitHub login and numeric id the ask came from, never the owner who started it (MEMORY-ACL-6.a, #101)",
+        "description": "Forget from GitHub and from /admin, approved on the card: a declared person (matched by GitHub numeric id) who comments 'forget me' to the watch user raises the owner's existing Approve/Deny forget card with no model run and gets a reply on the thread (an undeclared sender is told nothing is kept, no card), the outcome is posted on that thread; the owner can start a forget for any declared person with owner-only, SAFE-5 audited /admin people forget, the same card; either way nothing is forgotten until the owner approves, and Approve also deletes the person's kept WATCH conversations by the GitHub login and numeric id the ask came from, never the owner who started it (MEMORY-ACL-6.a, #101)",
+        "kind": "feature",
+        "affected_specs": [
+          "discord",
+          "plugins",
+          "watch"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/WATCH.md",
+          "docs/discord.md",
+          "hi/memory.md",
+          "plugins/memory/commands.ts",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/admin.ts",
+          "src/discord/forget-card.ts",
+          "src/discord/slash-commands.ts",
+          "src/discord/slash-types.ts",
+          "src/memory/forget.ts",
+          "src/memory/index.ts",
+          "src/memory/scope.ts",
+          "src/store/conversation.ts",
+          "src/watch/forget-me.ts",
+          "src/watch/poller.ts",
+          "tests/discord.admin-forget.test.ts",
+          "tests/discord.admin-slash.test.ts",
+          "tests/watch.forget-me.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A clear 'forget me' comment (or issue body) to the watch user from an allowlisted sender on an allowlisted repo is handled by the WATCH poller with no model run and never hides another request on its issue; a declared person matched by GitHub numeric id only (IDENTITY-7) gets the same forget_requests ask as a Discord ask (requester github:<id>:<login>, origin github:<owner/repo>#<n>, no schema change; SAFE-5 memory-forget-request started/ok, fail closed; one open ask per person) and one thread reply that it went to the owner, and the bridge DMs the owner the existing Approve/Deny card naming the GitHub asker and thread; an undeclared sender is told nothing is kept and no card is raised, and a login on the list without a matching id is told it cannot be confirmed; once decided the next poll posts the outcome on the thread (no count, no content) and marks it told, and the bridge never DMs a GitHub asker; owner-only /admin people forget person:<id> (SAFE-5 admin-people-forget started/ok, denied for an undeclared id, fail closed without the trail) records the same ask (requester admin:<owner id>) and sends the same card at once, reusing an open ask; nothing is deleted before Approve; Approve deletes the person's memory, session turns and kept conversations including WATCH threads by the GitHub login and numeric id the ask came from and the declared ones (WATCH runs now keep the commenter's numeric id with the thread), never the owner who started it, and tells nobody else; memory-forget-me in a WATCH run points at the comment path; tests/watch.forget-me.test.ts and tests/discord.admin-forget.test.ts fail on main and pass on the branch (MEMORY-ACL-6.a)"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "51d51d7937bc54656c11d887d4bc5ffaa24929db27e14b2b5d08d5a5baa97447",
+        "plugins": "fa58f9ee8f8ab2052f2270de5a14c0565519152ef2bf5e89f253c1b4fa3841b6",
+        "watch": "8b031fad337864f78c5248161b0097ea924c830dcb5a75c1e3134b17394c7bce"
+      }
+    }
+  ],
+  "reopenings": []
+}

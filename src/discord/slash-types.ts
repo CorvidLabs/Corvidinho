@@ -12,7 +12,7 @@ import type { DiscordEmbedPayload, ThinkingOutbound } from "./thinking-status.ts
 import type { RateLimitConfig, RateLimitState } from "./permissions.ts";
 import type { WorkStore } from "./work-store.ts";
 import type { ScheduleStore } from "../scheduler/store.ts";
-import type { MemoryStore } from "../memory/index.ts";
+import type { ForgetRequest, MemoryStore, MemorySubject } from "../memory/index.ts";
 import type { AnnounceStore } from "./announce-store.ts";
 import type { WorkPrRunner } from "../work/pr.ts";
 import type { SpendAlertOutbox } from "../agent/spend-outbox.ts";
@@ -85,6 +85,17 @@ export type SlashContext = {
    * when this is unset (no DB).
    */
   recordAudit?: (entry: AuditEntryInput) => { seq: number };
+  /**
+   * MEMORY-ACL-6.a — record a forget request in the shared DB (one open ask
+   * per person; a pending one is returned). Unset (no DB) ⇒ `/admin people
+   * forget` refuses.
+   */
+  requestForget?: (input: {
+    subject: MemorySubject;
+    requesterUserId: string;
+  }) => { request: ForgetRequest; created: boolean };
+  /** MEMORY-ACL-6.a — one forget-card delivery pass now (DMs the owner the card). */
+  deliverForgetCards?: () => Promise<unknown>;
   allowlist: AllowlistConfig;
   agent: AgentClient;
   version: string;
