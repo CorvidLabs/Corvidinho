@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 55
+version: 56
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -15,6 +15,7 @@ files:
   - src/plugins/githubDeny.ts
   - src/plugins/githubPublic.ts
   - tests/github.public.community.test.ts
+  - tests/github.schedule-repo-gate.test.ts
   - tests/github.gate-allowlist-file.test.ts
   - tests/files.secret-path.test.ts
   - tests/search.secret-path.test.ts
@@ -166,7 +167,10 @@ with a reason) that `runnerStatusLines` renders for `plugins list`;
 exported for tests. Git plugins
 register via `loadGitPlugins` (`plugins/git/index.ts`).
 `plugins/web` registers `web-fetch` via `loadWebPlugins`; `createWebCommands`
-takes the resolver/transport seams, `webFetch` is the guarded GET core,
+takes the resolver/transport seams (and optional `env` / `allowlist`, the
+schedule-run GitHub gate's seams), `webFetch` is the guarded GET core,
+`githubRepoOfUrl(url)` says whether a URL is on a GitHub host and which
+`OWNER/REPO` it names (DISCORD-SCHEDULE-3.a),
 `checkAddress` classifies one IP, and `createSocketTransport` is the pinned
 HTTP/1.1 socket transport. Autonomous plugins
 register via `loadAutonomousPlugins` (`plugins/autonomous/index.ts`);
@@ -513,6 +517,30 @@ public repo; GitHub writes (`checkRepoGateForActingRole(repo, { write: true
 allowlisted repo and are refused for community (IDENTITY-10). Owner / non-role
 sessions keep the GITHUB-6 allowlist gate.
 
+Scheduled runs read and act only on allowlisted repos, even public ones
+(DISCORD-SCHEDULE-3.a, REQ-plugins-496). `src/plugins/roles.ts` exports
+`SCHEDULE_SESSION_PREFIX` (`schedule_`, from which the scheduler builds its
+run session id) and `isScheduleRunEnv(env)` (true when
+`CORVIDINHO_DISCORD_SESSION_ID` starts with it; `delegate` / `council`
+workers inherit that key, since the worker env drops only `DISCORD_*`,
+`CORVIDINHO_ACTING_*` and the token keys). In such an env
+`checkRepoGateForActingRole` refuses a repo that fails `checkGithubRepo`
+(the GITHUB-6 allowlist, deny wins) right after the deny lists, for every role
+and with no visibility lookup, naming DISCORD-SCHEDULE-3.a; what passes still
+goes through the role rules above (a community run's reads still need a
+confirmed-public repo, its writes stay refused). That one gate covers every
+`github-*` command, the review readers and the docs / milestone readers.
+`web-fetch` in such an env refuses, in the shared per-hop URL rule (first hop
+and every redirect, before DNS), any URL on `github.com`, a `*.github.com`
+host, `githubusercontent.com` or a `*.githubusercontent.com` host that does
+not name an `OWNER/REPO` passing `checkGithubRepo`; only `/<owner>/<repo>/…` on
+`github.com`, `www.github.com`, `codeload.github.com` and
+`raw.githubusercontent.com` and `/repos/<owner>/<repo>/…` on `api.github.com`
+name one (a trailing `.git` dropped), so gists, other API routes and other
+GitHub hosts are refused; the allowlist is read once per call for the run's
+env (an unreadable one refuses every GitHub hop). Other hosts and every other
+run are unchanged.
+
 ROLES-CHAT-8.a (REQ-plugins-066, `plugins/github/public-docs.ts`): the
 community site / roadmap sources are the public repo docs and the public
 issues and milestones of allowed public repos, read with
@@ -785,6 +813,12 @@ command line.
 - **When** the tool loop fetches it
 - **Then** the title appears only as a `Title:` line between the untrusted markers, and the prose Content-Type or status is refused / reported as a numeric status without echoing it
 
+### Scenario: a scheduled run cannot read a public repo off the allowlist (DISCORD-SCHEDULE-3.a)
+
+- **Given** a scheduled run (`CORVIDINHO_DISCORD_SESSION_ID=schedule_…`, owner or community stamp, or a `delegate` / `council` worker it started) and a GitHub allowlist of `CorvidLabs`
+- **When** it calls `github-pr-list --repo torvalds/linux`, `github-docs-read --repo torvalds/linux`, or `web-fetch https://example.com/r` that redirects to `https://raw.githubusercontent.com/torvalds/linux/master/README`
+- **Then** each is refused (GitHub tools exit 3 before any GitHub call, `web-fetch` exit 2 on the redirect hop), naming DISCORD-SCHEDULE-3.a; the same calls in a community chat still reach the public repo
+
 ### Scenario: git-push refuses a repo off the allowlist
 
 - **Given** the task worktree's `origin` points at OWNER/REPO not on the GitHub allowlist
@@ -871,6 +905,8 @@ command line.
 | web-fetch URL or redirect carrying a secret-looking value | Refuse before DNS (exit 2, SAFE-6) |
 | web-fetch non-interactive + not allowlisted | Deny (exit 2, SAFE-1) |
 | web-fetch > 5 redirects | Refuse (exit 2) |
+| Scheduled run (or its worker): GitHub tool on a repo off the GITHUB-6 allowlist, public or not (DISCORD-SCHEDULE-3.a) | Refuse (exit 3) before any GitHub call, no visibility lookup |
+| Scheduled run: web-fetch hop (first or redirect) to a GitHub host not naming an allowlisted OWNER/REPO, or with the allowlist unreadable (DISCORD-SCHEDULE-3.a) | Refuse before DNS (exit 2) |
 | web-fetch non-text or malformed content-type / compressed body / non-2xx / timeout / every checked address unreachable | Error (exit 1); nothing returned |
 | git plugin cwd not a repo top level | Refuse (exit 2, SAFE-3) |
 | git-commit stages protected delete / `.env*` / keystore / `.git` | Refuse (exit 2) |
@@ -991,3 +1027,4 @@ and current rows for plugins host evolution.
 | 2026-09-30 | on-github-people-match-only-by-their-numeric-user-id-a-renamed-or-re-registered-login-never-counts-as-the-owner-or-a: On GitHub people match only by their numeric user id: a renamed or re-registered login never counts as the owner or a declared person on WATCH (prompt, memory scope, SAFE-13 exemption); [owner] github_id declares the owner's id; /admin people link github stores the looked-up numeric id; doctor warns about logins without an id (IDENTITY-7.a, #36) |
 | 2026-09-30 | safe-2-a-the-file-tools-refuse-fledge-like-fledge-toml-and-specs-so-a-run-cannot-weaken-the-verify-lane-it-is-judged-by: SAFE-2.a: the file tools refuse .fledge/ like fledge.toml and specs/, so a run cannot weaken the verify lane it is judged by |
 | 2026-09-30 | shell-exec-refuses-foot-guns-and-says-why-sed-i-or-edits-downloads-piped-into-a-shell-deletes-outside-the-worktree: Shell-exec refuses foot-guns and says why (sed -i or > edits, downloads piped into a shell, deletes outside the worktree, secret reads), env -C and symlinked cd can't leave the root, and the shell and language runners start without GitHub or git credentials (SAFE-21, SAFE-21.a, SAFE-3) |
+| 2026-09-30 | scheduled-runs-read-and-act-only-on-repos-the-owner-allowlists-even-public-ones-discord-schedule-3-a-in-a-schedule-run: Scheduled runs read and act only on repos the owner allowlists, even public ones (DISCORD-SCHEDULE-3.a): in a schedule run and its delegate/council workers (CORVIDINHO_DISCORD_SESSION_ID schedule_*, SCHEDULE_SESSION_PREFIX / isScheduleRunEnv) the GitHub tools, review readers and docs/milestone readers refuse a repo off the GITHUB-6 allowlist with no visibility lookup (deny still wins, role rules still apply on top); web-fetch refuses GitHub-host URLs that do not name an allowlisted OWNER/REPO at every hop, redirects included; a schedule project that lies in a git checkout nested inside the bridge root needs an allowlisted origin at /schedule create and every tick |

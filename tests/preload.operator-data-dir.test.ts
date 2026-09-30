@@ -149,10 +149,12 @@ describe("bun test preload never writes the operator data dir (SAFE-5)", () => {
     expect(probe!.worktreeBase).toBeNull();
   }, 60_000);
 
-  test("bot run settings (non-interactive, spend cap, LLM keys) do not reach the suite", async () => {
+  test("bot run settings (non-interactive, spend cap, LLM keys, a scheduled run's session id) do not reach the suite", async () => {
     // A Discord / WATCH / daemon task run sets CORVIDINHO_NON_INTERACTIVE=1 and
     // its verify lane runs this suite; with it, a SAFE-8 cap or an LLM key in
-    // the env, CLI and mock-LLM tests fail (or call a real model) off CI.
+    // the env, CLI and mock-LLM tests fail (or call a real model) off CI. A
+    // scheduled run's `schedule_*` session id narrows the GitHub gate
+    // (DISCORD-SCHEDULE-3.a), so the ROLES-CHAT-8 tests would fail under it.
     const op = operatorDir();
     const { code, probe, out } = await runProbe(op, {
       CORVIDINHO_NON_INTERACTIVE: "1",
@@ -160,6 +162,7 @@ describe("bun test preload never writes the operator data dir (SAFE-5)", () => {
       CORVIDINHO_DAILY_SPEND_CAP_USD: "5",
       CORVIDINHO_LLM_API_KEY: "sk-operator-llm-key",
       OPENAI_API_KEY: "sk-operator-openai-key",
+      CORVIDINHO_DISCORD_SESSION_ID: "schedule_sched_verifylane",
     });
     expect(code, out).toBe(0);
     expect(probe, out).not.toBeNull();

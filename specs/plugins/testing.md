@@ -237,6 +237,45 @@ mutating tool and a role refusal for `files-write`. `tests/web.fetch.test.ts`
 returns the validated `data.injection` (an unknown reason dropped, a bad
 source gives none); `runCouncil` keeps a voice's notice on its outcome.
 
+## Scheduled runs use allowlisted repos only (REQ-plugins-496, REQ-plugins-065 / -493 / -111 modified, DISCORD-SCHEDULE-3.a)
+
+`tests/github.schedule-repo-gate.test.ts` (stubbed `fetch` for GitHub,
+resolver / transport seams for `web-fetch`; no token, no network):
+
+- Marker: `SCHEDULE_SESSION_PREFIX` is `schedule_`; `isScheduleRunEnv` is
+  true for `schedule_*` only (not `sess_*`, `work_*`, `wsess_*`, empty or
+  unset); the scheduler's `runChat` session id is the prefix plus the
+  schedule id; `buildDelegateSpawn` from a schedule lead (owner or community
+  stamp, and a council voice's env) keeps the marker.
+- Gate: in a schedule env a public repo off the allowlist is refused for the
+  community and owner stamps and for a worker env, naming
+  DISCORD-SCHEDULE-3.a, and the visibility lookup is never called; an
+  allowlisted repo passes; deny wins; a community write is still refused
+  (ROLES-CHAT-3) and a community read of an allowlisted private repo is still
+  refused (ROLES-CHAT-8) while the owner stamp reads it; a `sess_*` community
+  chat still reads the public repo.
+- Plugins: `github-pr-list`, `github-issue-list`, `github-pr-diff`,
+  `github-pr-files`, `github-docs-read` and `github-milestone-list` refuse the
+  public off-list repo (exit 3) with no GitHub request; `github-pr-list` in a
+  chat still sends its requests.
+- `web-fetch`: in a schedule env, `raw.githubusercontent.com`, `github.com`
+  (any case, trailing dot), `www.github.com`, `api.github.com/repos/…`,
+  `codeload.github.com`, gist and other GitHub-host URLs of an off-list repo,
+  or naming no repo, and a denied repo are refused (`blocked`) with no DNS or
+  dial; allowlisted repos (a `.git` suffix too) and other hosts fetch; a
+  redirect into `raw.githubusercontent.com`, and an allowlisted GitHub URL
+  that redirects off the list, are refused on that hop after one dial; an
+  unreadable allowlist refuses GitHub hops while other hosts fetch; with no
+  session id or a `sess_*` one the same URLs and redirect fetch; the handler
+  refuses in a schedule env (exit 2) and fetches in a chat.
+- Fail on base: with the base sources (main dec7c31) of `roles.ts`,
+  `githubPublic.ts`, `plugins/web/fetch.ts`, `plugins/web/commands.ts`,
+  the worktree manager, the schedule handler and the scheduler swapped in, 11
+  of the 17 tests fail (marker, gate refusals, plugin refusals, web-fetch
+  refusals); the allowlisted / deny / role-rule / outside-a-schedule guards
+  pass on both. All 17 pass on the branch. `tests/web.fetch.test.ts`,
+  `tests/github.public.community.test.ts`, `tests/github.public-docs.test.ts`
+  and `tests/roles.team.test.ts` pass unchanged.
 ## memory-forget-me on GitHub (REQ-plugins-1016, MEMORY-ACL-6.a)
 
 - `tests/watch.forget-me.test.ts` › "in a WATCH run the model's
