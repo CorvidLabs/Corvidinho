@@ -67,6 +67,10 @@ export const NDJSON_LIMITS = {
   maxLine: 1_048_576,
   /** Non-frame stdout kept for the fallback summary. */
   otherText: 65_536,
+  /** `result.privateReplies` kept (MEMORY-7.a, REQ-agent-710). */
+  privateReplies: 5,
+  /** One private reply, cut marker included (three DM messages' worth). */
+  privateReplyText: 6000,
 } as const;
 
 type Versioned = { protocol: number };
@@ -301,6 +305,40 @@ export function resultFrame(result: TaskResult): NdjsonResultFrame {
     result: { ...result, summary: text },
     truncated: true,
   };
+}
+
+/** Ends a private reply cut at NDJSON_LIMITS.privateReplyText (MEMORY-7.a). */
+export const PRIVATE_REPLY_CUT_MARKER = "\n… (cut here — ask for a narrower part to see the rest)";
+
+/**
+ * A run's private replies (MEMORY-7.a, REQ-agent-710), bounded for the
+ * result frame and the DM: non-blank strings only, at most
+ * NDJSON_LIMITS.privateReplies, each secret-scrubbed first (so a cut never
+ * leaves a token prefix a later scrub misses, SAFE-6) and then cut to
+ * NDJSON_LIMITS.privateReplyText with a visible marker, never inside a
+ * surrogate pair. When more came than are kept, the last one kept says how
+ * many were not sent. Idempotent: a bounded list comes back unchanged.
+ */
+export function boundPrivateReplies(texts: readonly unknown[]): string[] {
+  const valid = texts.filter((t): t is string => typeof t === "string" && t.trim() !== "");
+  const max = NDJSON_LIMITS.privateReplies;
+  const kept = valid.slice(0, max);
+  const dropped = valid.length - kept.length;
+  return kept.map((text, i) => {
+    const note =
+      dropped > 0 && i === kept.length - 1
+        ? `\n… (${dropped} more private ${dropped === 1 ? "result was" : "results were"} not sent — at most ${max} per answer; ask again for the rest)`
+        : "";
+    return cutPrivateReply(scrubSecrets(text), NDJSON_LIMITS.privateReplyText - note.length) + note;
+  });
+}
+
+function cutPrivateReply(text: string, max: number): string {
+  if (text.length <= max) return text;
+  let end = Math.max(0, max - PRIVATE_REPLY_CUT_MARKER.length);
+  const last = text.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end -= 1;
+  return `${text.slice(0, end)}${PRIVATE_REPLY_CUT_MARKER}`;
 }
 
 /** One frame → one line (no trailing newline; JSON escapes embedded newlines). */

@@ -98,6 +98,7 @@ export {
 export type { TaskResultSummaryInput } from "./task-summary.ts";
 
 export {
+  boundPrivateReplies,
   collectTaskRunStream,
   CORVIDINHO_PROTOCOL_VERSION,
   createNdjsonParser,
@@ -105,6 +106,7 @@ export {
   frameFromEvent,
   NDJSON_LIMITS,
   parseNdjsonLine,
+  PRIVATE_REPLY_CUT_MARKER,
   progressFromFrame,
   protocolMismatchSummary,
   readNdjsonStream,

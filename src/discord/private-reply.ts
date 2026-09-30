@@ -14,8 +14,10 @@
  * there, and those surfaces ignore the field).
  */
 
+import { boundPrivateReplies, NDJSON_LIMITS } from "../agent/events-ndjson.ts";
 import { scrubSecrets } from "../store/scrub.ts";
-import { DISCORD_ANSWER_MAX, splitDiscordMessage } from "./rich-reply.ts";
+import { defangMassMentions } from "./allowed-mentions.ts";
+import { splitDiscordMessage } from "./rich-reply.ts";
 
 /** A direct message to one user (gateway `sendDm`); null when it did not go out. */
 export type SendPrivateDm = (opts: {
@@ -24,9 +26,9 @@ export type SendPrivateDm = (opts: {
 }) => Promise<{ channelId: string; messageId: string } | null>;
 
 /** At most this many private replies are taken from one run. */
-export const PRIVATE_REPLIES_MAX = 5;
+export const PRIVATE_REPLIES_MAX = NDJSON_LIMITS.privateReplies;
 /** Longest private reply taken from a run (three messages' worth). */
-export const PRIVATE_REPLY_TEXT_MAX = DISCORD_ANSWER_MAX;
+export const PRIVATE_REPLY_TEXT_MAX = NDJSON_LIMITS.privateReplyText;
 /** A DM part stays within the gateway's direct-message cap (1900). */
 export const PRIVATE_DM_PART_MAX = 1900;
 
@@ -44,26 +46,24 @@ export const PRIVATE_NOT_SENT_NOTE =
 export type PrivateDelivery = "sent" | "failed";
 
 /**
- * Validated `privateReplies` from a child's result frame: non-empty strings
- * only, at most {@link PRIVATE_REPLIES_MAX}, each cut to
- * {@link PRIVATE_REPLY_TEXT_MAX}. Anything else ⇒ undefined.
+ * Validated `privateReplies` from a child's result frame, bounded as the
+ * child bounds them (`boundPrivateReplies`): non-empty strings only, at most
+ * {@link PRIVATE_REPLIES_MAX}, each scrubbed and then cut to
+ * {@link PRIVATE_REPLY_TEXT_MAX} with a visible marker (a note on the last
+ * one says how many more were left out). Anything else ⇒ undefined.
  */
 export function privateRepliesFromUnknown(raw: unknown): string[] | undefined {
   if (!Array.isArray(raw)) return undefined;
-  const out: string[] = [];
-  for (const item of raw) {
-    if (typeof item !== "string" || !item.trim()) continue;
-    out.push(item.slice(0, PRIVATE_REPLY_TEXT_MAX));
-    if (out.length >= PRIVATE_REPLIES_MAX) break;
-  }
+  const out = boundPrivateReplies(raw);
   return out.length > 0 ? out : undefined;
 }
 
 /**
  * Send a run's private replies to `userId` by direct message, scrubbed
- * (SAFE-6) and split under the DM cap. `null` when there were none;
- * `"failed"` when any part did not go out (or there is no DM path) — never
- * a channel fallback.
+ * (SAFE-6), mass mentions defanged and then split under the DM cap (so the
+ * gateway's own defang and cap never cut a part). `null` when there were
+ * none; `"failed"` when any part did not go out (or there is no DM path) —
+ * never a channel fallback.
  */
 export async function deliverPrivateReplies(opts: {
   replies: readonly string[] | undefined;
@@ -75,7 +75,7 @@ export async function deliverPrivateReplies(opts: {
   if (!opts.sendDm || !userId) return "failed";
   for (const text of opts.replies) {
     const parts = splitDiscordMessage(
-      `${PRIVATE_DM_HEADER}\n${scrubSecrets(text)}`,
+      defangMassMentions(`${PRIVATE_DM_HEADER}\n${scrubSecrets(text)}`),
       PRIVATE_DM_PART_MAX,
     );
     for (const content of parts) {

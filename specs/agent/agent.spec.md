@@ -81,6 +81,10 @@ tool message and the `ToolResult` event are built from `data` / `message`
 only (the "sent privately" placeholder), and the loop hands the text to
 `onPrivateReply` for the run result; the prompt tells the model it only gets a
 "sent privately" result for those reads and to point the person to their DMs.
+`boundPrivateReplies` (`src/agent/events-ndjson.ts`) bounds that list for the
+result frame and the DM: at most `NDJSON_LIMITS.privateReplies` (5), each
+secret-scrubbed and then cut to `NDJSON_LIMITS.privateReplyText` (6000) with a
+visible marker, the last one kept saying how many more were not sent.
 
 ## Public API
 

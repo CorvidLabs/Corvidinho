@@ -39,4 +39,6 @@ bridge / WATCH tests drive the owner notice from it.
 real `task run --output ndjson` against a local fake LLM that calls
 `memory-profile` and `memory-recall --category private`; the result frame's
 `privateReplies` holds both texts, the summary and every model request lack
-them.
+them. Spawned directly with seven private reads of different notes, its own
+result frame (read off stdout) carries the first five, the last saying 2 more
+were not sent.

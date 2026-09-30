@@ -401,6 +401,81 @@ describe("task run → result frame → the Discord agent client (REQ-cli-710 / 
     expect(privateRepliesFromUnknown(Array.from({ length: 9 }, (_, i) => `r${i}`))).toHaveLength(PRIVATE_REPLIES_MAX);
     expect(privateRepliesFromUnknown(["x".repeat(20_000)])![0]!.length).toBe(6000);
   });
+
+  test("task run bounds privateReplies in its own result frame: at most 5, the last says how many more were not sent", async () => {
+    const dataDir = join(dir, "data");
+    const db = openCorvidinhoDb({ env: { CORVIDINHO_DATA_DIR: dataDir } });
+    try {
+      const m = new MemoryStore({ db });
+      for (let i = 1; i <= 7; i += 1) {
+        m.store({ ownerUserId: "person:tofu", category: "private", key: `note${i}`, content: `PRIVATE-NOTE-${i}` });
+      }
+    } finally {
+      db.close();
+    }
+    // Seven private reads, each of a different note, then a plain answer.
+    const reads: Reply[] = [
+      ...Array.from({ length: 7 }, (_, i) => ({
+        tool: { name: "memory-recall", argv: ["--category", "private", "--query", `note${i + 1}`] },
+      })),
+      { content: "Sent to you privately — check your DMs." },
+    ];
+    const { bodies, answer } = fakeLlm(reads);
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: async (req) => {
+        bodies.push(await req.text());
+        return answer(bodies.length);
+      },
+    });
+    try {
+      const work = join(dir, "work");
+      mkdirSync(work);
+      // The child's own frame, read straight off its stdout (no client re-check).
+      const { buildCorvidinhoArgv } = await import("../src/agent/spawn-argv.ts");
+      const proc = Bun.spawn(
+        buildCorvidinhoArgv(CLI, ["task", "run", "--task", "show all my private notes", "--output", "ndjson"]),
+        {
+          cwd: work,
+          stdout: "pipe",
+          stderr: "pipe",
+          env: {
+            PATH: process.env.PATH ?? "",
+            HOME: dir,
+            CORVIDINHO_LLM_API_KEY: "test-key-not-real",
+            OPENAI_API_KEY: "",
+            CORVIDINHO_LLM_BASE_URL: `http://127.0.0.1:${server.port}/v1`,
+            CORVIDINHO_LLM_MODEL: "test-model",
+            CORVIDINHO_LLM_TIER: "tool",
+            CORVIDINHO_DATA_DIR: dataDir,
+            CORVIDINHO_ALLOWLIST_FILE: join(dir, "allowlist.toml"),
+            CORVIDINHO_ALLOWLIST: "",
+            CORVIDINHO_NON_INTERACTIVE: "1",
+            CORVIDINHO_ACTING_DISCORD_USER_ID: TOFU,
+            CORVIDINHO_ACTING_IS_ADMIN: "0",
+            CORVIDINHO_ACTING_ROLE: "team",
+            CORVIDINHO_ACTING_WORK_TASK: "0",
+            CORVIDINHO_DISCORD_REPLY_CHANNEL_ID: CHAN,
+          },
+        },
+      );
+      const [stdout] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+      const frame = stdout
+        .split("\n")
+        .filter((l) => l.startsWith("{"))
+        .map((l) => JSON.parse(l) as { type?: string; result?: { privateReplies?: string[] } })
+        .find((f) => f.type === "result");
+      const replies = frame?.result?.privateReplies ?? [];
+      expect(replies).toHaveLength(5);
+      for (let i = 1; i <= 5; i += 1) expect(replies[i - 1]).toContain(`PRIVATE-NOTE-${i}`);
+      expect(replies.join("\n")).not.toContain("PRIVATE-NOTE-6");
+      expect(replies[4]).toContain("2 more private results were not sent");
+      for (const b of bodies) expect(b).not.toContain("PRIVATE-NOTE-");
+    } finally {
+      server.stop(true);
+    }
+  }, 30_000);
 });
 
 describe("delivery helpers (REQ-discord-710)", () => {
@@ -439,6 +514,52 @@ describe("delivery helpers (REQ-discord-710)", () => {
     expect(withPrivateNote("answer", null)).toBe("answer");
     expect(withPrivateNote("answer", "sent")).toBe(`${PRIVATE_SENT_NOTE}\n\nanswer`);
     expect(withPrivateNote("", "failed")).toBe(PRIVATE_NOT_SENT_NOTE);
+  });
+
+  test("a long reply is scrubbed before it is cut, shows the cut, never splits a surrogate pair; mass mentions never push a DM part past the gateway's cap", async () => {
+    const { deliverPrivateReplies, privateRepliesFromUnknown, PRIVATE_REPLY_TEXT_MAX } = await import(
+      "../src/discord/private-reply.ts"
+    );
+    const { defangMassMentions } = await import("../src/discord/allowed-mentions.ts");
+    const dms: Array<{ userId: string; content: string }> = [];
+    const sendDm = async (o: { userId: string; content: string }) => {
+      dms.push(o);
+      return { channelId: "dm", messageId: `d${dms.length}` };
+    };
+    const deliver = async (raw: unknown[]) => {
+      dms.length = 0;
+      expect(
+        await deliverPrivateReplies({ replies: privateRepliesFromUnknown(raw), userId: TOFU, sendDm }),
+      ).toBe("sent");
+      return dms.map((d) => d.content).join("");
+    };
+
+    // A token that straddles the cut is redacted, never left as a prefix a
+    // later scrub misses (SAFE-6).
+    const straddling = `${"x".repeat(PRIVATE_REPLY_TEXT_MAX - 20)}ghp_${"a".repeat(36)}`;
+    const cut = privateRepliesFromUnknown([straddling])![0]!;
+    expect(cut.length).toBeLessThanOrEqual(PRIVATE_REPLY_TEXT_MAX);
+    expect(cut).toContain("cut here");
+    expect(cut).not.toContain("ghp_a");
+    expect(await deliver([straddling])).not.toContain("ghp_a");
+
+    // Never half a surrogate pair at the cut.
+    const emoji = privateRepliesFromUnknown(["😀".repeat(PRIVATE_REPLY_TEXT_MAX)])![0]!;
+    expect(emoji).toContain("cut here");
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(emoji)).toBe(false);
+
+    // More than five: the last one kept says how many were not sent.
+    const many = privateRepliesFromUnknown(Array.from({ length: 8 }, (_, i) => `reply ${i}`))!;
+    expect(many).toHaveLength(5);
+    expect(many[4]).toContain("3 more private results were not sent");
+    // Bounded twice is bounded once (the child bounds, the client re-checks).
+    expect(privateRepliesFromUnknown(many)).toEqual(many);
+
+    // Mass mentions are defanged before the split, so the gateway's own
+    // defang and 1900 cap never cut a part.
+    await deliver(["@everyone ".repeat(600)]);
+    expect(dms.length).toBeGreaterThan(1);
+    for (const d of dms) expect(defangMassMentions(d.content).length).toBeLessThanOrEqual(1900);
   });
 });
 

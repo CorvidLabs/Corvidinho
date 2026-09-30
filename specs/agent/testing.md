@@ -227,3 +227,7 @@ title is reported but records no row.
 `memory-profile` and `memory-recall --category private` hands both texts to
 `onPrivateReply`; no request body, event or the result holds them and the
 model gets the "sent privately" placeholder; the prompt names the rule.
+`boundPrivateReplies` (through `privateRepliesFromUnknown`): a token
+straddling the 6000 cut is redacted, never left as a prefix, and the cut is
+marked; no lone surrogate; 8 texts ⇒ 5, the last saying how many more were not
+sent; a bounded list comes back unchanged.
