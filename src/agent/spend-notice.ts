@@ -14,14 +14,20 @@
  *
  * Bridges rebuild the warning from integer micro-USD (SpendWarning), never
  * from child-written text. A model id or provider id is SAFE-6 scrubbed
- * before it is quoted. The Approve card (#96) is not wired to spend yet, so
- * a reply cannot lift a cap: the ask is addressed to the operator and names
- * the operator action that does (raise or unset the cap that stopped the
- * call and restart, or wait for the window) instead of asking a yes/no
- * question. The run's summary (posted wherever the run reports, e.g. a public
- * GitHub comment for WATCH) is the generic SPEND_PAUSED_TEXT without amounts,
- * scopes or setting names (SAFE-14.a); the details live in the ask question,
- * which on Discord reaches only the owner, by DM (src/discord/spend-dm.ts).
+ * before it is quoted. A reply cannot lift a cap. With an owner configured,
+ * a priced call past a cap first waits for the owner's `spend` Approve card
+ * (src/agent/spend.ts, SAFE-8 / SAFE-8.a); when that card comes to no
+ * (denied, no answer in time, the wait cut short, the card unavailable) the
+ * ask says so and how to continue — ask again for a new card and code, or
+ * the operator action — without the "replying can't lift the cap" note. With
+ * no owner, and for an unpriced model, an unreadable setting or ledger (no
+ * price to approve), the ask is addressed to the operator and names the
+ * operator action (raise or unset the cap that stopped the call and restart,
+ * or wait for the window) instead of asking a yes/no question. The run's
+ * summary (posted wherever the run reports, e.g. a public GitHub comment for
+ * WATCH) is the generic SPEND_PAUSED_TEXT without amounts, scopes or setting
+ * names (SAFE-14.a); the details live in the ask question, which on Discord
+ * reaches only the owner, by DM (src/discord/spend-dm.ts).
  */
 
 import { scrubSecrets } from "../store/scrub.ts";
@@ -163,8 +169,59 @@ export function spendWarningFromUnknown(raw: unknown): SpendWarning | undefined 
 /** Where the operator makes the change. */
 const OPERATOR_HINT =
   "in the environment Corvidinho runs with and restarts the bridge or daemon so new runs pick it up";
-/** No Approve card yet (#96): say plainly that answering does not unblock. */
+/**
+ * Nobody's Approve card can lift this stop (no owner configured, or nothing
+ * priced to approve): say plainly that answering does not unblock. Not on a
+ * stop that already went through the owner's spend card.
+ */
 const NO_REPLY_NOTE = "Replying can't lift the cap — this needs the operator.";
+
+/**
+ * How the owner's spend card (SAFE-8 / SAFE-8.a) came to no: denied,
+ * no answer in time (SAFE-20), the wait cut short (the run was stopped or its
+ * request timed out), approved but the call would by then pass a cap the card
+ * did not show (`changed`: the approval counts only for what it showed), or
+ * the card could not be raised or read.
+ */
+export type SpendCardOutcome = "denied" | "expired" | "aborted" | "changed" | "unavailable";
+
+/** A spend card that did not let the call through, for the ask. */
+export type SpendCardNo = {
+  /** The card's request id, when one was recorded. */
+  requestId?: string;
+  outcome: SpendCardOutcome;
+  /** Why it was unavailable (scrubbed and cut when quoted). */
+  error?: string;
+};
+
+function spendCardNoText(card: SpendCardNo): string {
+  const which = card.requestId ? `Approve card ${card.requestId}` : "the Approve card";
+  switch (card.outcome) {
+    case "denied":
+      return `The owner denied ${which}, so the call was not sent and nothing was spent (SAFE-20).`;
+    case "expired":
+      return (
+        `No answer on ${which} in time, so the call was not sent and nothing was spent ` +
+        "(SAFE-20: no answer means no; the running Discord bridge DMs the card to the owner, and with no " +
+        "bridge running it lapses)."
+      );
+    case "aborted":
+      return (
+        `The wait on ${which} was cut short (the run was stopped or its request timed out), so the call ` +
+        "was not sent and nothing was spent."
+      );
+    case "changed":
+      return (
+        `The owner approved ${which}, but by then the call would also pass a cap the card did not show, ` +
+        "so it was not sent and nothing was spent (an approval counts only for what its card showed)."
+      );
+    case "unavailable": {
+      const why = scrubSecrets(card.error ?? "").replace(/\s+/g, " ").trim().slice(0, 200) || "unknown error";
+      const what = card.requestId ? `Approve card ${card.requestId}` : "The Approve card";
+      return `${what} could not be raised or read (${why}), so the call was not sent and nothing was spent.`;
+    }
+  }
+}
 
 function spendCapAsk(question: string, scopes?: readonly string[]): HumanAsk {
   const ask: HumanAsk = { reason: "spend-cap", question };
@@ -193,7 +250,8 @@ function tripSetting(t: SpendTrip): string {
     : `the ${shownProvider(provider)} entry of ${PROVIDER_SPEND_CAPS_ENV} (or removes it)`;
 }
 
-function scopeLabel(scope: string): string {
+/** A scope as shown to the owner and operator: `total` or `provider:<id>` (the id scrubbed, one token). */
+export function spendScopeLabel(scope: string): string {
   const provider = providerOfSpendScope(scope);
   return provider === undefined ? TOTAL_SPEND_SCOPE : `provider:${shownProvider(provider)}`;
 }
@@ -228,37 +286,48 @@ export function spendScopesOf(ask: HumanAsk): string[] | undefined {
  * each tripped scope (`total`, `provider:<id>`) with its spend and cap, and
  * the ask carries the scopes (`spendScopes`) so a bridge pings the owner once
  * per episode of each cap. Called with plain amounts it is the total cap.
+ *
+ * With `card` (SAFE-8 / SAFE-8.a) the call was held for the owner's spend
+ * card and that card came to no: the question says so (denied, no answer in
+ * time, the wait cut short, unavailable), keeps the amounts and the "Stopped
+ * at cap" marker, and names both ways on — ask again for a new card and code,
+ * or the operator action — with no "replying can't lift the cap" note.
  */
 export function spendCapReachedAsk(
-  o:
+  o: (
     | { spentMicroUsd: number; estimateMicroUsd: number; capMicroUsd: number; scope?: string }
-    | { estimateMicroUsd: number; trips: readonly SpendTrip[] },
+    | { estimateMicroUsd: number; trips: readonly SpendTrip[] }
+  ) & { card?: SpendCardNo },
 ): HumanAsk {
   const trips: SpendTrip[] =
     "trips" in o
       ? [...o.trips]
       : [{ scope: o.scope ?? TOTAL_SPEND_SCOPE, spentMicroUsd: o.spentMicroUsd, capMicroUsd: o.capMicroUsd }];
   const est = formatUsd(o.estimateMicroUsd);
-  const scopes = trips.map((t) => scopeLabel(t.scope));
-  const wait = "or waits until earlier spend leaves the 24h window; then ask again.";
+  const scopes = trips.map((t) => spendScopeLabel(t.scope));
   const fixes = `raises ${trips.map(tripSetting).join(" and ")}`;
+  const held = "so I held it and asked the owner on a spend Approve card to let that one call through (SAFE-8.a)";
+  const next = o.card
+    ? `${spendCardNoText(o.card)} ${stoppedAt(scopes)} To continue, ask again — the next call past the cap ` +
+      `raises a new card and code — or the operator ${fixes} ${OPERATOR_HINT}, or waits until earlier ` +
+      "spend leaves the 24h window."
+    : `${stoppedAt(scopes)} To continue, the operator ${fixes} ${OPERATOR_HINT}, ` +
+      `or waits until earlier spend leaves the 24h window; then ask again. ${NO_REPLY_NOTE}`;
   if (trips.length === 1) {
     const t = trips[0]!;
     const total = providerOfSpendScope(t.scope) === undefined;
     return spendCapAsk(
       `Daily spend cap reached (${total ? "SAFE-8" : "SAFE-15"}): ${tripClause(t)}, and the next ` +
-        `${total ? "provider call" : "call to it"} (~${est}) would pass it, so I stopped before ` +
-        `sending it. ${stoppedAt(scopes)} To continue, the operator ${fixes} ${OPERATOR_HINT}, ` +
-        `${wait} ${NO_REPLY_NOTE}`,
+        `${total ? "provider call" : "call to it"} (~${est}) would pass it, ` +
+        `${o.card ? held : "so I stopped before sending it"}. ${next}`,
       trips.map((x) => x.scope),
     );
   }
   return spendCapAsk(
     `Daily spend cap reached (SAFE-15): the next provider call (~${est}) would pass ${trips.length} ` +
-      `caps, so I stopped before sending it: ` +
+      `caps, ${o.card ? held : "so I stopped before sending it"}: ` +
       trips.map((t, i) => `${scopes[i]} — ${tripClause(t)}`).join("; ") +
-      `. ${stoppedAt(scopes)} To continue, the operator ${fixes} ${OPERATOR_HINT}, ` +
-      `${wait} ${NO_REPLY_NOTE}`,
+      `. ${next}`,
     trips.map((x) => x.scope),
   );
 }
@@ -317,7 +386,7 @@ export function spendCapUnpricedAsk(
   return spendCapAsk(
     `Spend cap can't be enforced (SAFE-8): model "${shown}" has no known price, so I can't ` +
       `count it against ${cap} and stopped before calling ` +
-      `the provider. ${stoppedAt([scopeLabel(scope)])} To continue, the operator switches ${modelKey} to a priced model ` +
+      `the provider. ${stoppedAt([spendScopeLabel(scope)])} To continue, the operator switches ${modelKey} to a priced model ` +
       `or ${unset} ${OPERATOR_HINT}; then ask again. ${NO_REPLY_NOTE}`,
     [scope],
   );

@@ -1,0 +1,118 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790799323,
+      "digest": "5ecff3fe0557120ac0548eba3e56063300f0614ce8063d7e7b46f86a6eda084d",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "at-a-spend-cap-the-run-asks-the-owner-on-a-dm-spend-approve-card-with-a-one-time-code-instead-of-refusing-approve-lets",
+        "title": "At a spend cap the run asks the owner on a DM spend Approve card with a one-time code instead of refusing; Approve lets only the paused call through at the amount shown and the next call past the cap asks again (SAFE-8, SAFE-8.a, SAFE-15, SAFE-19 money)",
+        "description": "At a spend cap the run asks the owner on a DM spend Approve card with a one-time code instead of refusing; Approve lets only the paused call through at the amount shown and the next call past the cap asks again (SAFE-8, SAFE-8.a, SAFE-15, SAFE-19 money)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "discord"
+        ],
+        "affected_paths": [
+          "INTENT.md",
+          "docs/DAEMON.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "hi/safe.md",
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "src/agent/execute.ts",
+          "src/agent/index.ts",
+          "src/agent/spend-notice.ts",
+          "src/agent/spend.ts",
+          "src/discord/ask-ping.ts",
+          "src/discord/bridge.ts",
+          "src/discord/spend-card.ts",
+          "tests/agent.spend-approve.test.ts",
+          "tests/discord.spend-card.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "With an owner configured and a spend cap set, a priced model call whose estimate would pass the total cap or its provider's cap is held, not refused: the run records one spend Approve card (kind spend, class money) on the shared approvals store showing the action (send one model call to <model> via <provider>), the target (the tripped scope(s): total, provider:<id>) and the amount (that call's estimate), with the task and project label as quoted data, and says once in a Text event that it is waiting for the owner's OK (the live status shows the must-ask wait line; no amounts). The bridge's card engine DMs it to the owner; Approve alone sends nothing; Approve plus the one-time code (SAFE-19) lets exactly that call through, recorded once at the amount shown (SpendLedger.reserveApproved after a re-fit check), and the next call past the cap raises a new card and code (SAFE-8.a). Deny, no answer before the card lapses (4 min, below the council voice and LLM request timeouts), a late code, a run that is gone (waiter pid + start time), a stop or the per-request timeout while waiting is a no (SAFE-20): nothing is sent or spent and the attempt ends blocked with a spend-cap ask whose question says what the card came to and how to continue, without the reply note; the summary stays 'Work is paused for budget.' (SAFE-14.a) and a cap stop is never a model failure (no AGENT-11 fallback). One card per paused call, at most one open per run, none refused because another run's card is open. With no owner configured, and for unpriced, invalid-setting or ledger stops, the operator-action ask stays as on main. A CLI-only or daemon-only install records the card and waits out its TTL. The new tests fail on main's sources and pass on the branch; no schema bump; no new config key."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "fa46a625247134e976649ae1d470b969f4db8bc704efaf1224fbfeb0eb2f6008",
+        "discord": "d104e30a3d2f39172b7b7724ede03cd40db9d1015a7050b188b86eba2ebcbbb6"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790800468,
+      "digest": "5ecff3fe0557120ac0548eba3e56063300f0614ce8063d7e7b46f86a6eda084d",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "at-a-spend-cap-the-run-asks-the-owner-on-a-dm-spend-approve-card-with-a-one-time-code-instead-of-refusing-approve-lets",
+        "title": "At a spend cap the run asks the owner on a DM spend Approve card with a one-time code instead of refusing; Approve lets only the paused call through at the amount shown and the next call past the cap asks again (SAFE-8, SAFE-8.a, SAFE-15, SAFE-19 money)",
+        "description": "At a spend cap the run asks the owner on a DM spend Approve card with a one-time code instead of refusing; Approve lets only the paused call through at the amount shown and the next call past the cap asks again (SAFE-8, SAFE-8.a, SAFE-15, SAFE-19 money)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "discord"
+        ],
+        "affected_paths": [
+          "INTENT.md",
+          "docs/DAEMON.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "hi/safe.md",
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "src/agent/execute.ts",
+          "src/agent/index.ts",
+          "src/agent/spend-notice.ts",
+          "src/agent/spend.ts",
+          "src/discord/ask-ping.ts",
+          "src/discord/bridge.ts",
+          "src/discord/spend-card.ts",
+          "tests/agent.spend-approve.test.ts",
+          "tests/discord.spend-card.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "With an owner configured and a spend cap set, a priced model call whose estimate would pass the total cap or its provider's cap is held, not refused: the run records one spend Approve card (kind spend, class money) on the shared approvals store showing the action (send one model call to <model> via <provider>), the target (the tripped scope(s): total, provider:<id>) and the amount (that call's estimate), with the task and project label as quoted data, and says once in a Text event that it is waiting for the owner's OK (the live status shows the must-ask wait line; no amounts). The bridge's card engine DMs it to the owner; Approve alone sends nothing; Approve plus the one-time code (SAFE-19) lets exactly that call through, recorded once at the amount shown (SpendLedger.reserveApproved after a re-fit check), and the next call past the cap raises a new card and code (SAFE-8.a). Deny, no answer before the card lapses (4 min, below the council voice and LLM request timeouts), a late code, a run that is gone (waiter pid + start time), a stop or the per-request timeout while waiting is a no (SAFE-20): nothing is sent or spent and the attempt ends blocked with a spend-cap ask whose question says what the card came to and how to continue, without the reply note; the summary stays 'Work is paused for budget.' (SAFE-14.a) and a cap stop is never a model failure (no AGENT-11 fallback). One card per paused call, at most one open per run, none refused because another run's card is open. With no owner configured, and for unpriced, invalid-setting or ledger stops, the operator-action ask stays as on main. A CLI-only or daemon-only install records the card and waits out its TTL. The new tests fail on main's sources and pass on the branch; no schema bump; no new config key."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "89a51795e84d06ccae0199135f89aff611d39598fc3c2c2ad0b0057cf10fa563",
+        "discord": "d104e30a3d2f39172b7b7724ede03cd40db9d1015a7050b188b86eba2ebcbbb6"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790805529,
+      "digest": "0c89c1bd93c43529004a3bfc8f53058206d27566983f17fcfa7e3a607199cb8a",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

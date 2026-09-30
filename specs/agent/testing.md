@@ -588,3 +588,61 @@ carries `keys`) and `tests/agent.spend.test.ts` (a refused reservation carries
   with only `CORVIDINHO_PROVIDER_SPEND_CAPS_USD=api.openai.com=0` sends the
   provider call on base and stops it with `SpendCapRefusal` on the branch.
 
+
+## The owner's spend card at a cap (REQ-agent-198 added, REQ-agent-098 / REQ-agent-114 modified; SAFE-8, SAFE-8.a, SAFE-15, SAFE-19, SAFE-20, AUTONOMY-8)
+
+`tests/agent.spend-approve.test.ts` (21 tests; mocked fetch as the fake LLM,
+in-memory or temp-dir SQLite, the owner in the run's env, the card decided in
+the store as the engine would — `tests/discord.spend-card.test.ts` drives the
+real engine):
+
+- Approve + code (approved, used once): exactly the paused call goes out,
+  recorded once at the estimate the card showed; the card is `spend` /
+  `money` with action `send one model call to gpt-4o via llm.test`, target
+  `total`, amount `~$… (this one call's estimate)`, requester `local`, this
+  process as waiter and a text with surface, project label, spend when it
+  paused and the task; the wait note is the must-ask status line
+  (`progressFromFrame`) with no `$`, then the approval note.
+- SAFE-8.a: after one approved call, the next call past the cap raises a new
+  card; denied, nothing more is sent.
+- Deny, no answer before the card lapses, a late approval, the call's abort
+  signal, and a stop that lands as the owner approves: nothing sent or
+  recorded; the ask names the card and its outcome, keeps the marker, offers
+  a new card or the operator action, with no reply note and no `?`; `finish`
+  gives the generic summary.
+- No owner (even with a long card lifetime), `withSpendCap` with an owner,
+  and an unpriced model: no card; the plain operator ask.
+- SAFE-15: a provider cap's card targets `provider:llm.test`; past both caps,
+  `total, provider:llm.test`.
+- An approval counts only for the target its card showed: a provider cap's
+  card approved after other spend took the total past its cap too sends and
+  records nothing (the request ends `used`); the ask names both caps and says
+  the approval did not stretch to the one the card did not show.
+- The card's task text is SAFE-6 scrubbed before it is cut: a GitHub token
+  straddling the `SPEND_CARD_TASK_MAX` cut shows no part of itself.
+- One card at a time per run (the second is recorded only after the first is
+  decided); two runs paused at once each have a pending card.
+- `SpendLedger.reserveApproved`: the approved amount past the cap with
+  `trips`; a larger estimate refused with no row (`reason: "amount"`); a
+  fitting call with `trips` empty; a call that would now also pass a cap
+  outside the approved scopes refused with no row (`reason: "target"`).
+  `SPEND_CARD_TTL_MS` below the council voice and request timeouts.
+- `createTaskExecute` at a $0 cap: approved — one call and both Text notes,
+  the card text holds the task and never the run's directory; denied —
+  `runTask` `blocked`, generic summary, verify not run; a card wait cut short
+  by a 50 ms request timeout with a two-model chain calls no provider and
+  never falls back (AGENT-11).
+
+Unchanged suites that cover the touched files pass: `tests/agent.spend.test.ts`,
+`tests/agent.spend-ask.test.ts`, `tests/agent.spend-caps.test.ts`,
+`tests/agent.fallback.test.ts`, `tests/must-ask.gate.test.ts`.
+
+- Fail on base: with main's (0aeb345) sources swapped in, the file cannot load
+  (`setSpendCardTestHooks` and the other new exports are missing), and a
+  probe using only main's APIs (`createTaskExecute` at a $0 cap with an owner
+  configured and every pending approval approved at once) makes no provider
+  call and records no card on base (`{"calls":0,"ask":"spend-cap","cards":[]}`),
+  while on the branch the call goes out once on a `spend` / `money` card that
+  ends `used`. The target and scrub-before-cut tests fail on the branch's
+  first cut (`6ac2d8c`) sources, which recorded and sent the call past a cap
+  the card did not show and cut the task before scrubbing it.
