@@ -1,13 +1,45 @@
 /**
  * bun test preload (bunfig.toml): isolate the shared SQLite data dir so no
- * test (or CLI it spawns) touches the operator's data dir, and never read
- * the operator's allowlist file (ALLOW-4).
+ * test (or CLI it spawns) touches the operator's data dir, never read the
+ * operator's allowlist file (ALLOW-4), and keep every temp dir the run makes
+ * under one root that is removed when the run ends (REQ-cli-711).
  */
-import { mkdtempSync } from "node:fs";
+import { afterAll } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const scratch = mkdtempSync(join(tmpdir(), "corvidinho-test-data-"));
+// One temp root per `bun test` run. Tests make ~450 mkdtemp dirs per run
+// (git repos, fake projects, stub bins) and most never remove them, so each
+// verify-lane run left them in the OS temp dir until the disk filled. Every
+// later tmpdir() reads TMPDIR at call time (Bun's node:os, like Node), and
+// preload runs before any test module, so pointing TMPDIR here moves them all,
+// including those computed at a test file's top level. Children get it too:
+// the Bun.spawn wrapper below and node:child_process pass process.env.
+const runRoot = mkdtempSync(join(tmpdir(), "corvidinho-test-run-"));
+process.env.TMPDIR = runRoot;
+process.env.TMP = runRoot;
+process.env.TEMP = runRoot;
+
+/** Best-effort: never throws, so cleanup can never turn a run's result. */
+function removeRunRoot(): void {
+  // Retry once: a child a test left running may still be adding files.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      rmSync(runRoot, { recursive: true, force: true });
+      return;
+    } catch {
+      // Leave it; the next attempt or the OS temp cleaner gets it.
+    }
+  }
+}
+// Bun 1.4 fires no process "exit" event when `bun test` finishes (pass or
+// fail), but runs a preload's afterAll once, after the last test file. "exit"
+// still fires when a test calls process.exit(), which skips afterAll.
+afterAll(removeRunRoot);
+process.on("exit", removeRunRoot);
+
+const scratch = mkdtempSync(join(runRoot, "corvidinho-test-data-"));
 
 // Always overwrite: the prove-before-done verify lane runs this suite with the
 // operator's env, so an inherited CORVIDINHO_DATA_DIR is the live bot DB. Tests
