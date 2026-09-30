@@ -279,8 +279,9 @@ export function blockedHostnameReason(host: string): string | null {
 /**
  * Resolve once, refuse if any address is non-public, and return every checked
  * address (answer order, de-duplicated) — these are the only IPs dialed.
+ * Shared with the keyed JSON API GET (`api.ts`, REQ-plugins-3181).
  */
-async function pinTargets(url: URL, resolver: Resolver): Promise<ResolvedAddress[]> {
+export async function pinTargets(url: URL, resolver: Resolver): Promise<ResolvedAddress[]> {
   const host = url.hostname.replace(/^\[|\]$/g, "");
   const literal = ipFamily(host);
   let addrs: ResolvedAddress[];
@@ -332,7 +333,8 @@ function isConnectError(e: unknown): boolean {
   return typeof code === "string" && CONNECT_ERROR_CODES.has(code);
 }
 
-function mediaType(contentType: string | undefined): { mime: string; charset?: string } {
+/** `type/subtype` (lower-cased) and charset of a Content-Type header (shared with `api.ts`). */
+export function mediaType(contentType: string | undefined): { mime: string; charset?: string } {
   if (!contentType) return { mime: "" };
   const [first, ...params] = contentType.split(";");
   const mime = (first ?? "").trim().toLowerCase();
@@ -361,7 +363,8 @@ function decode(bytes: Uint8Array, charset: string | undefined): string {
   return new TextDecoder("utf-8").decode(bytes);
 }
 
-async function readCapped(
+/** Read the body up to `maxBytes` (shared with `api.ts`); `truncated` when there was more. */
+export async function readCapped(
   resp: TransportResponse,
   maxBytes: number,
 ): Promise<{ bytes: Uint8Array; truncated: boolean }> {
@@ -398,11 +401,15 @@ function capChars(text: string, max: number): string {
 /**
  * Dial the checked addresses in order. Only a socket-level connect failure
  * moves on to the next one (same deadline); anything else ends the hop.
+ * `headers` go out as given (web-fetch: {@link REQUEST_HEADERS}; the keyed
+ * JSON API GET adds its key header, REQ-plugins-3181). Errors name the host
+ * only, never the path, query or a header.
  */
-async function dialPinned(
+export async function dialPinned(
   url: URL,
   pins: readonly ResolvedAddress[],
-  deps: HopDeps,
+  transport: Transport,
+  headers: Readonly<Record<string, string>>,
   signal: AbortSignal,
 ): Promise<{ resp: TransportResponse; pin: ResolvedAddress }> {
   let lastMsg = "no addresses";
@@ -410,11 +417,11 @@ async function dialPinned(
     const pin = pins[i]!;
     if (signal.aborted) throw new WebFetchError("timeout", "aborted");
     try {
-      const resp = await deps.transport({
+      const resp = await transport({
         url,
         address: pin.address,
         family: pin.family,
-        headers: { ...REQUEST_HEADERS },
+        headers: { ...headers },
         signal,
       });
       return { resp, pin };
@@ -450,7 +457,7 @@ async function run(
     const pins = await pinTargets(url, deps.resolver);
     if (signal.aborted) throw new WebFetchError("timeout", "aborted");
 
-    const { resp, pin } = await dialPinned(url, pins, deps, signal);
+    const { resp, pin } = await dialPinned(url, pins, deps.transport, REQUEST_HEADERS, signal);
 
     try {
       if (REDIRECT_STATUSES.has(resp.status)) {

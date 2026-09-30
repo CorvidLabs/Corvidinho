@@ -1601,3 +1601,6 @@ stamp, one real `task run` against the fake model; no network):
 - Fail on base: 17 of 28 fail with the base's ten modified source files
   (the gate's own units and "outside a public thread" pass on both);
   `tests/must-ask.boundary.test.ts` fails on the base's `send-file.ts`.
+REQ-discord-417 (#318): `BRAVE_SEARCH_API_KEY` is on the SAFE-6 secret env
+list — `redactSecretEnvValues` and `formatErrorLine` replace its value with
+`[redacted:env-secret]` (`tests/web.search.test.ts`).

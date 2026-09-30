@@ -86,6 +86,8 @@ const SECRET_ENV_NAMES = [
   // AGENT-13: the anthropic: provider's key.
   "ANTHROPIC_API_KEY",
   "CORVIDINHO_AUDIT_HMAC_KEY",
+  // Brave Search key (PLUGIN-7, #318): no known vendor shape, so its value is redacted by name.
+  "BRAVE_SEARCH_API_KEY",
 ] as const;
 
 /** Shorter values are too likely to be ordinary words to redact safely. */

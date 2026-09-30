@@ -33,7 +33,7 @@ import { scrubSecrets } from "../store/scrub.ts";
 import { projectLabel } from "../discord/list-scope.ts";
 import { projectKeyFor } from "../memory/scope.ts";
 import { createSpendGuard, SpendCapRefusal } from "./spend.ts";
-import { formatSpendWarningLine } from "./spend-notice.ts";
+import { formatSpendWarningLine, SPEND_CAP_SUMMARY } from "./spend-notice.ts";
 import { ROLE_REFUSED_SUMMARY_NOTE } from "./task-summary.ts";
 import { verifyFeedbackExcerpt } from "./verify.ts";
 import {
@@ -1423,6 +1423,21 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       ) {
         await onStateChange();
       }
+      // SAFE-8 (REQ-agent-098): a flat-priced tool call (`web-search`)
+      // stopped at the daily spend cap before it was sent ends the attempt
+      // with the same `spend-cap` ask a model call stopped at the cap gets:
+      // the run is blocked and the owner is asked. The ask (amounts, cap
+      // settings) never reaches the model, a tool message or the summary
+      // (SAFE-14.a).
+      if (offered.has(name) && result.spendAsk?.reason === "spend-cap") {
+        emit(onEvent, { type: "ToolResult", name: eventName, success: false, detail: SPEND_CAP_SUMMARY });
+        return {
+          summary: SPEND_CAP_SUMMARY,
+          filesChanged: [...filesChanged],
+          ask: { reason: "spend-cap", question: result.spendAsk.question },
+          ...unreportedEdits(unreportedEditTools),
+        };
+      }
       // MEMORY-7.a (REQ-agent-710): private text goes to the run result for
       // the bridge to send privately — never into the tool message, the
       // ToolResult event or the model's context (stringifyToolPayload
@@ -1549,7 +1564,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
  * The tool message for `result` (SAFE-12 / SAFE-13). A result of a tool that
  * carries third-party text (issue / PR bodies and titles, repo docs, guild
  * member names) is fenced as untrusted data; `web-fetch` fences its page
- * already. A result the detector scans that looks like an injection is
+ * and `web-search` its results already. A result the detector scans that looks like an injection is
  * reported once (`onInjection`) and gets the SAFE-13 note in front. A
  * `delegate` / `council` result whose worker reported a hit of its own
  * (`data.injection`, finished or not) counts as this run's hit: the note,

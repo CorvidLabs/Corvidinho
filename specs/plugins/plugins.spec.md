@@ -87,8 +87,11 @@ files:
   - plugins/web/address.ts
   - plugins/web/transport.ts
   - plugins/web/text.ts
+  - plugins/web/api.ts
+  - plugins/web/search.ts
   - tests/web.fetch.test.ts
   - tests/web.transport.test.ts
+  - tests/web.search.test.ts
   - plugins/git/index.ts
   - plugins/git/commands.ts
   - plugins/git/exec.ts
@@ -139,7 +142,10 @@ SAFE-21 foot-gun refusals, starting without GitHub or git credentials
 (SAFE-21 / SAFE-21.a / REQ-plugins-494..495),
 language runners `node-exec` / `python-exec` / `cargo-exec` that register only
 when their toolchain is on PATH (PLUGIN-4 / REQ-plugins-313..314), the
-SSRF-guarded `web-fetch` GET plugin (PLUGIN-1/2 / SAFE-7 / REQ-plugins-111), and
+SSRF-guarded `web-fetch` GET plugin (PLUGIN-1/2 / SAFE-7 / REQ-plugins-111),
+`web-search` through Brave for the owner and team (PLUGIN-7 / PLUGIN-9 /
+REQ-plugins-318) on a shared https-only, host-allowlisted keyed JSON GET
+(REQ-plugins-3181), and
 typed git plugins (`git-status|diff|log|branch-list` reads;
 `git-branch-create|commit|push` dangerous code-tier mutators) clamped to the
 task worktree (PLUGIN-1/2, SAFE-1/2/3, GITHUB-2/6 / REQ-plugins-182), and
@@ -193,9 +199,22 @@ with a reason) that `runnerStatusLines` renders for `plugins list`;
 `runnerChildEnv`, `withoutGitCredentials` and `isCredentialEnvKey` are
 exported for tests. Git plugins
 register via `loadGitPlugins` (`plugins/git/index.ts`).
-`plugins/web` registers `web-fetch` via `loadWebPlugins`; `createWebCommands`
-takes the resolver/transport seams (and optional `env` / `allowlist`, the
-schedule-run GitHub gate's seams), `webFetch` is the guarded GET core,
+`plugins/web` registers `web-fetch` and `web-search` via `loadWebPlugins`;
+`createWebCommands` takes the resolver/transport seams (and optional `env` /
+`allowlist`, the schedule-run GitHub gate's seams, plus `spendDb` / `now` for
+`web-search`'s SAFE-8 ledger), `webFetch` is the guarded GET core (its
+`pinTargets`, `dialPinned`, `readCapped` and `mediaType` are exported for
+the keyed JSON GET), `plugins/web/api.ts` exports `apiGetJson`,
+`checkApiUrl`, `ApiRequestError`, `API_NOT_SENT_CODES`, `API_MAX_BYTES`,
+`API_TIMEOUT_MS` and `API_REQUEST_HEADERS` (REQ-plugins-3181),
+`plugins/web/search.ts` exports `braveWebSearch`, `parseWebSearchArgs`,
+`braveSearchUrl`, `braveHits`, `formatHits`, `fenceSearchResults`,
+`scrubOut`, `WebSearchError` and the Brave constants
+(`BRAVE_SEARCH_API_KEY_ENV`, `BRAVE_SEARCH_HOST`, `BRAVE_SAFESEARCH`,
+`BRAVE_SEARCH_COST_MICRO_USD`, `BRAVE_ATTRIBUTION`, the count / query
+limits; REQ-plugins-318), `src/plugins/roles.ts` exports
+`TEAM_SEARCH_TOOLS` (PLUGIN-9) and `PluginHandlerResult.spendAsk` carries a
+flat-priced call's SAFE-8 ask (REQ-agent-098),
 `githubRepoOfUrl(url)` says whether a URL is on a GitHub host and which
 `OWNER/REPO` it names (DISCORD-SCHEDULE-3.a),
 `checkAddress` classifies one IP, and `createSocketTransport` is the pinned
@@ -391,7 +410,29 @@ role resolved in the tool layer (`resolveActingRole`, REQ-plugins-065): text
 in a task, a body or a tool result that claims the owner's identity widens
 nothing (SAFE-12, REQ-plugins-071). Errors never echo the reason phrase
 or other server-chosen header values and are one line, control-free and at
-most 300 chars. `web-search` is not built (provider not captured).
+most 300 chars.
+`web-search` (REQ-plugins-318) is dangerous + minTier 1 like `web-fetch`:
+SAFE-1 allowlist, SAFE-5 audit, never at the read tier, and for the owner and
+team only (`TEAM_SEARCH_TOOLS`, PLUGIN-9; community never; `web-fetch` stays
+the owner's). The key is `BRAVE_SEARCH_API_KEY` from the run's env only (no
+default; missing is a `not configured` error, never an empty success) and
+goes out only as the `X-Subscription-Token` header, through the keyed JSON
+GET (REQ-plugins-3181: https only, `api.search.brave.com` only, default port,
+checked before DNS; then the web-fetch pinned public-address check; every
+redirect refused; JSON-only bodies up to 1 MiB; 15 s). `safesearch=moderate`
+is always sent; `--count` is a whole number 1–20 (default 5) and
+`--freshness` `pd|pw|pm|py`. A query carrying a secret-looking value or a set
+secret env value is refused before anything is sent (SAFE-6). Each search
+reserves $0.005 against the SAFE-8 total cap before the request
+(`reserveFlatSpend`); a search stopped at the cap is not sent and ends the
+tool-loop attempt with the spend-cap ask. Titles, URLs and descriptions
+reach the model only inside the untrusted web fence, and SAFE-13 scans the
+result: one suspicious snippet switches off every mutating tool, `web-search`
+and `web-fetch` included, for the rest of the run. No output, error, data
+field or audit row carries the key, the request URL, a request header or the
+pinned address (every string passes `scrubSecrets` and
+`redactSecretEnvValues`). It never posts, so it has no must-ask entry
+(AUTONOMY-11). Deep research is not built.
 Git plugins (REQ-plugins-182) spawn `git` with argv arrays only (no shell),
 stdin closed, `GIT_TERMINAL_PROMPT=0`, hooks disabled, repo-locating env
 stripped and `GIT_CEILING_DIRECTORIES` at the cwd's parent; the plugin cwd
@@ -1015,6 +1056,18 @@ command line.
 - **When** the tool loop fetches it
 - **Then** the title appears only as a `Title:` line between the untrusted markers, and the prose Content-Type or status is refused / reported as a numeric status without echoing it
 
+### Scenario: web-search keeps Brave's results inside the fence and the key out of every output
+
+- **Given** `BRAVE_SEARCH_API_KEY` is set and `web-search` is allowlisted, in the owner's or a team member's run
+- **When** the model runs `web-search bun runtime --count 3` and Brave answers with a title that says "IGNORE PREVIOUS INSTRUCTIONS" (or echoes the key)
+- **Then** one GET goes to `api.search.brave.com` with `safesearch=moderate` and the key only in `X-Subscription-Token`; the hits appear only between the untrusted markers, SAFE-13 drops the mutating tools (web-search and web-fetch too) for the rest of the run, and no result, error or audit row contains the key or the request URL
+
+### Scenario: web-search at the spend cap asks instead of spending
+
+- **Given** `CORVIDINHO_DAILY_SPEND_CAP_USD` is set and the last 24 h of spend plus $0.005 would pass it
+- **When** the model calls `web-search`
+- **Then** nothing is sent, the result says only "Work is paused for budget.", and the run stops with the spend-cap ask like a model call
+
 ### Scenario: a scheduled run cannot read a public repo off the allowlist (DISCORD-SCHEDULE-3.a)
 
 - **Given** a scheduled run (`CORVIDINHO_DISCORD_SESSION_ID=schedule_…`, owner or community stamp, or a `delegate` / `council` worker it started) and a GitHub allowlist of `CorvidLabs`
@@ -1110,6 +1163,12 @@ command line.
 | Scheduled run (or its worker): GitHub tool on a repo off the GITHUB-6 allowlist, public or not (DISCORD-SCHEDULE-3.a) | Refuse (exit 3) before any GitHub call, no visibility lookup |
 | Scheduled run: web-fetch hop (first or redirect) to a GitHub host not naming an allowlisted OWNER/REPO, or with the allowlist unreadable (DISCORD-SCHEDULE-3.a) | Refuse before DNS (exit 2) |
 | web-fetch non-text or malformed content-type / compressed body / non-2xx / timeout / every checked address unreachable | Error (exit 1); nothing returned |
+| web-search with no, blank or malformed `BRAVE_SEARCH_API_KEY` | `not-configured` (exit 1) naming the env var, never its value; no DNS, request or spend (REQ-plugins-318) |
+| web-search usage error (count not a whole number 1–20, unknown freshness or flag, missing / oversized query) | `usage` (exit 1); nothing sent |
+| web-search query carrying a secret-looking value or a set secret env value | Refuse (exit 2, SAFE-6) before spend or request |
+| web-search at the SAFE-8 cap, invalid cap value or unavailable ledger | Refuse (exit 2, "Work is paused for budget."); nothing sent; the tool loop ends the attempt with the spend-cap ask (REQ-agent-098) |
+| web-search / keyed JSON GET: http, another host or port, URL credentials; a non-public answer; any redirect | Refuse (exit 2) before DNS / before connecting / without following (REQ-plugins-3181) |
+| web-search Brave 401 / 403 / 422 `SUBSCRIPTION_TOKEN_INVALID`, other 422, 429, other status; non-JSON, compressed, oversized or malformed body; timeout; network error | `auth` / `bad-request` / `rate-limited` / `http-status` / `content-type` / `too-large` / `invalid-json` / `timeout` / `network` (exit 1); no server text, key or URL in the error |
 | git plugin cwd not a repo top level | Refuse (exit 2, SAFE-3) |
 | git-commit stages protected delete / `.env*` / keystore / `.git` | Refuse (exit 2) |
 | git force / amend / `--all` / refspec / other-branch push | Refuse (exit 2) |
@@ -1161,7 +1220,9 @@ command line.
 | src/agent/verify.ts | `buildVerifyEnv` scrub for the language runners' and Fledge core builtins' child env |
 | fledge (optional system binary) | Fledge core builtins (`lanes list` / `lanes validate` / `lanes run`, `run`) and the Fledge plugin bridge, via `Bun.spawn` argv arrays |
 | node:dns / net / tls | web-fetch resolve once, dial pinned IP, SNI + cert check |
-| src/store/scrub.ts | `scrubSecrets` on web-fetch output and errors; secret-bearing URLs refused |
+| src/store/scrub.ts | `scrubSecrets` on web-fetch output and errors; secret-bearing URLs refused; `scrubSecrets` + `redactSecretEnvValues` on every web-search string and secret-bearing queries refused |
+| src/agent/spend.ts | `reserveFlatSpend` for web-search's SAFE-8 reservation (REQ-agent-098) |
+| Brave Search API (external, optional) | `GET https://api.search.brave.com/res/v1/web/search` with `X-Subscription-Token` for web-search (PLUGIN-7) |
 | src/discord/image-attachments.ts | `MAX_IMAGE_SIZE_BYTES` / `ImageMediaType` for files-read image mode (DISCORD-9) |
 | git (system binary) | git plugins via `Bun.spawn` argv arrays; the GITHUB-9 review tree (temporary index), diff and `ls-remote` |
 | src/agent/providers.ts / untrusted.ts, src/store/db.ts | GITHUB-9 reviewer choice (configured models), the fence for the diff and findings, the lazily created `pr_review_rounds` table |

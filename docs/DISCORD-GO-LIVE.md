@@ -262,6 +262,7 @@ worktree, and in a local `corvidinho task run` inside the worktree it made for i
 | Tool | dangerous | minTier | mutating | Allowlist it when |
 |------|-----------|---------|----------|-------------------|
 | `web-fetch` | true | 1 | true | an operator runs `corvidinho plugins run web-fetch` non-interactively (GET-only, SSRF-guarded, SAFE-7) |
+| `web-search` | true | 1 | true | the owner's and declared team members' runs should search the web through Brave (PLUGIN-7/9); also needs `BRAVE_SEARCH_API_KEY`, see E.3.a |
 | `fledge-<command>` | true | 2 (native) / 1 (wasm without `exec`) | true | an operator runs `corvidinho plugins run fledge-<command>` non-interactively; one entry per Fledge command you trust, names from `plugins list` (a Fledge plugin command named `run`, `lanes-list`, `lanes-validate` or `lanes-run` is skipped: the Fledge core builtins `fledge-run`, `fledge-lanes-list`, `fledge-lanes-validate` and `fledge-lanes-run` hold those names) |
 | `fledge-lanes-run` / `fledge-run` | true | 2 | true | an operator runs `corvidinho plugins run fledge-lanes-run -- <lane>` or `fledge-run -- <task> [args…]` non-interactively; builtins that run fledge's own `lanes run` / `run` in the project dir (PLUGIN-1), so they run whatever that lane or task's commands do, starting without the owner's GitHub or git credentials like `shell-exec` and the runners (SAFE-21.a), so pushes, PRs and merges go through the checked GitHub tools; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
 | `git-commit` | true | 2 | true | `/work` should open draft PRs (needed when the work tree has changes) |
@@ -361,6 +362,41 @@ What an entry unlocks **today**:
   itself; `/work` and `plugins run` have no run model, so they open only a tree a run already had
   reviewed (the `/work` round driver is a later change) and otherwise say why on one line.
 
+### E.3.a Web search through Brave: `web-search` (PLUGIN-7, PLUGIN-9)
+
+`web-search` searches the web through the Brave Search API. It stays off until you turn it on in
+two places, like `web-fetch`:
+
+1. `BRAVE_SEARCH_API_KEY` in the environment Corvidinho runs with (the bridge's
+   `EnvironmentFile`; spawned runs inherit it). It is read from the environment only, with no
+   default. Without it the tool answers `web search is not configured: set BRAVE_SEARCH_API_KEY …`
+   and sends nothing.
+2. `web-search` in `CORVIDINHO_ALLOWLIST` (SAFE-1, E.3). Then it is offered at the tool and code
+   tiers to the owner's runs and to declared team members' Discord runs (chat, button picks,
+   `/session start`, `/work`). Community, WATCH and schedules never get it, `delegate` /
+   `council` workers never get the key, and `web-fetch` stays the owner's.
+
+What one search does:
+
+- It sends one request to `https://api.search.brave.com/res/v1/web/search` with the key in the
+  `X-Subscription-Token` header and `safesearch=moderate` every time. `--count` is a whole
+  number from 1 to 20 (default 5), and `--freshness` is `pd`, `pw`, `pm` or `py`. There is no
+  deep research.
+- Requests go out over https to `api.search.brave.com` only. Every redirect is refused, and the
+  host's addresses must be public (SAFE-7), as for `web-fetch`.
+- Titles, URLs and descriptions reach the model only inside the untrusted web fence. A result
+  that looks like a prompt-injection attempt turns off every mutating tool for the rest of the
+  run, `web-search` and `web-fetch` included, and the owner is told (SAFE-13, E.6.a).
+- A query carrying a secret-looking value is refused and sent nowhere. The key never appears in
+  a reply, an error, an audit row or a log line. Delegate workers, the verify lane, the shell,
+  the language runners and Fledge plugins never get it.
+- Spend (SAFE-8): with `CORVIDINHO_DAILY_SPEND_CAP_USD` set, each search reserves $0.005 against
+  the same total cap as the model calls before it is sent. A search that would pass the cap is
+  not sent, and the run stops with the spend-cap ask, as a model call does. Prepay the Brave
+  account with a usage limit as a hard backstop too.
+- Each call is on the audit trail like any dangerous tool (SAFE-5), and each result summary
+  carries Brave's "Powered by Brave Search" attribution.
+
 ### E.4 `corvidinho daemon` under systemd (CLI-8, AUTONOMOUS-4)
 
 Run the daemon when schedules should tick without the bridge. Full guide and unit file:
@@ -436,7 +472,8 @@ Who is who in an allowlisted channel:
   run's own worktree (never on a secret-looking path); their `/work` can open the draft PR
   like the owner's. Memory stays their
   own (`memory-store` / `-recall` / `-profile`; forget/override stay owner-only), plus the
-  project's memory (`--project`, MEMORY-6). No shell, runners, git
+  project's memory (`--project`, MEMORY-6), and `web-search` when it is allowlisted
+  (PLUGIN-9, E.3.a). No shell, runners, git
   writes, other GitHub writes, Discord posts, `web-fetch`, `delegate` or `council`. Briefings
   (#102) do not exist yet.
 - Everyone else ⇒ **community**: declared `community`, declared without a role, undeclared,
@@ -461,7 +498,7 @@ the owner did not create):
 
 - **Catalog:** only read/chat tools. No dangerous or mutating tool is offered, so no file
   write/edit/delete, no shell, no git/GitHub writes, no Discord posts, no memory
-  forget/override, no `delegate`/`council`, no `web-fetch` (dangerous counts as mutating).
+  forget/override, no `delegate`/`council`, no `web-fetch` or `web-search` (dangerous counts as mutating).
   Read tools stay, including `files-read`/`-list`/`-glob`, `search-grep`,
   `git-status`/`-diff`/`-log`/`-branch-list`, GitHub reads, `specsync-*` reads,
   `fledge-lanes-list`/`-validate`,

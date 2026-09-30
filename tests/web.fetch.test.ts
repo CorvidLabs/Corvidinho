@@ -582,7 +582,9 @@ describe("web-fetch plugin command (PLUGIN-1/2, REQ-plugins-111)", () => {
     expect(entry).toBeTruthy();
     expect(entry!.dangerous).toBe(true);
     expect(entry!.minTier).toBe(1);
-    expect(list().some((e) => e.name === "web-search")).toBe(false);
+    // web-search is its own command (REQ-plugins-318, tests/web.search.test.ts).
+    const search = list().find((e) => e.name === "web-search");
+    expect(search).toMatchObject({ dangerous: true, minTier: 1 });
   });
 
   test("left out of the default tool catalog; offered at tool/code tier only with dangerous tools, never at read tier", () => {

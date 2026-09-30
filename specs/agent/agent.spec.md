@@ -316,7 +316,11 @@ Daily spend cap (REQ-agent-098, issue #98, SAFE-8 as amended / AUTONOMOUS-8):
 in the shared DB), `SpendCapRefusal` (carries a `spend-cap` `HumanAsk`),
 `createSpendGuard` (`{ fetch, finish }`: the capped provider fetch plus the
 hook that turns a stopped call into the attempt's ask), `withSpendCap` (the
-fetch alone; unchanged when no cap is set), `readSpendSnapshot` and
+fetch alone; unchanged when no cap is set), `reserveFlatSpend` (a
+flat-priced tool call's reservation in the same ledger — `off` / `held` with
+`settle(billed | not-billed | unknown)` / `stopped` with the spend-cap ask;
+`FlatSpendHold`, `FlatSpendOutcome`; a Brave `web-search` is 5000 micro-USD,
+#318), `readSpendSnapshot` and
 `spendDoctorCheck` (doctor line). `src/agent/spend-notice.ts` holds the
 pure text: `formatSpendWarningLine`, `spendWarningFromUnknown`, the
 `spendCap*Ask` question builders, `formatSpendDoctorLine`,
@@ -328,7 +332,10 @@ model, invalid value, unreadable ledger) and
 while paused, else undefined — the only spend line anyone but the owner sees).
 `createTaskExecute` builds its fetch with `createSpendGuard`, emits the 80%
 warning as a `Text` event and through `onSpendWarning`, and passes every
-attempt's result through `finish`. `HumanAskReason` gains `spend-cap`;
+attempt's result through `finish`; an offered tool whose result carries a
+`spend-cap` `spendAsk` (a flat-priced call stopped at the cap, never sent)
+ends the attempt the same way, with `SPEND_CAP_SUMMARY` and that ask and no
+further model call. `HumanAskReason` gains `spend-cap`;
 `TaskResult` gains optional `spendWarning` (`SpendWarning`: integer
 `spentMicroUsd` / `capMicroUsd` and `percent`). A run stopped at the cap
 reports the generic `SPEND_CAP_SUMMARY` (= `SPEND_PAUSED_TEXT`, SAFE-14.a) as
@@ -1001,8 +1008,9 @@ markers and tool results marked untrusted are data that never grant a
 permission; what may run is the sender's role, enforced in the tool layer;
 who someone is comes only from the acting-user block). A successful result of
 a tool in `UNTRUSTED_RESULT_TOOLS` (GitHub readers, `discord-user-lookup`)
-reaches the model inside a `fenceUntrustedData` fence (`web-fetch` keeps its
-own). A successful result of a tool in `INJECTION_SCAN_TOOLS` (`web-fetch`,
+reaches the model inside a `fenceUntrustedData` fence (`web-fetch` and
+`web-search` keep their own). A successful result of a tool in
+`INJECTION_SCAN_TOOLS` (`web-fetch`, `web-search`,
 the GitHub title / docs / milestone readers, `discord-user-lookup`; never PR
 diffs or file lists) is scanned by `detectInjection` over its strings (the web
 fence's own lines left out): a hit puts `injectionToolNote` in front of that
@@ -1293,6 +1301,7 @@ A change the run did not open is never touched.
 | Spend cap set, an owner configured, and a priced call over a cap: the owner denies the spend card, it lapses (no bridge, no answer), a code comes late, the run is stopped, the request times out, or the card cannot be raised | call held and then not sent, nothing recorded; run ends `blocked` with a `spend-cap` ask naming the card and what it came to, and how to continue (ask again for a new card, or the operator action), no reply note; generic summary (REQ-agent-198) |
 | A cap covers a call to a model with no known price, an owner is configured, and its unknown-price card comes to no (deny, lapse, late code, stop, timeout, unavailable) | call not sent, nothing recorded; run ends `blocked` with the unpriced `spend-cap` ask naming the card, the amount shown as unknown, and both ways on (a new card, or a priced model / the cap), no reply note; generic summary (REQ-agent-199) |
 | `CORVIDINHO_PROVIDER_SPEND_CAPS_USD` set and a provider's 24h spend + estimate over its cap (or a bad entry / unknown provider) | provider call not sent (none to any other model either); run ends `blocked` with a `spend-cap` ask naming `provider:<id>` (or the bad setting, never its value) and `spendScopes`; generic summary (SAFE-14 / SAFE-15) |
+| A flat-priced tool call (`web-search`) would pass the total cap, or a spend-cap setting is invalid, or the ledger is unavailable | not sent; the tool returns the ask in `spendAsk`; the attempt ends `blocked` with that `spend-cap` ask and `SPEND_CAP_SUMMARY`, no further model call (REQ-agent-098) |
 | Settled call brings 24h spend to ≥80% of the cap while the warning is armed | one `Text` warning + `TaskResult.spendWarning` + a pending `warn` row; later calls stay quiet until spend is seen under 70% (or 24 h pass) (SAFE-8) |
 | Autonomous tool named while not offered | Refused like any non-offered tool (REQ-agent-128) |
 | Non-ADMIN caller (checked at the call) names a mutating / dangerous plugin it was not offered (or `runPlugin` refuses an offered one for the role) | ToolResult success=false with the role refusal `not allowed for your role`, nothing runs; the run summary ends with `(not allowed for your role)` once, and the result frame / chat body caps keep it (ROLES-CHAT-3, REQ-agent-333) |

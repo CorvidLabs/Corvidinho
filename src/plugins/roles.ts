@@ -8,7 +8,8 @@
  * The role is resolved here, in the tool layer, on every call (IDENTITY-12):
  * - owner: the ADMIN re-check below (owner match + bridge bit, not muted or
  *   deny-listed) — everything, as ROLES-CHAT-4 (IDENTITY-9);
- * - team: the spawning surface allowed team (`CORVIDINHO_ACTING_ROLE=team`,
+ * - team (read tools, reviews, `web-search` (PLUGIN-9) and `/work` edits):
+ *   the spawning surface allowed team (`CORVIDINHO_ACTING_ROLE=team`,
  *   Discord chat / slash / buttons only) AND the acting Discord user id
  *   resolves, in the owner's people list re-read now, to a person whose
  *   declared role is team (IDENTITY-8/10). The surface's stamp can only lower
@@ -98,6 +99,17 @@ export const TEAM_WORK_TOOLS: ReadonlySet<string> = new Set([
   "specsync-change-answer",
   "specsync-change-approve",
   "specsync-change-finalize",
+]);
+
+/**
+ * Team search (PLUGIN-9, #318): "Web search and GIF search are for me and the
+ * team only, and stay off until I allow them, like web-fetch." Dangerous
+ * (SAFE-1: offered and run only when `CORVIDINHO_ALLOWLIST` names them;
+ * SAFE-5 audited), on every team session, not only `/work`. These tools
+ * only: `web-fetch` itself stays owner-only. Community never gets them.
+ */
+export const TEAM_SEARCH_TOOLS: ReadonlySet<string> = new Set([
+  "web-search",
 ]);
 
 function truthy(raw: string | undefined): boolean {
@@ -211,9 +223,9 @@ export async function resolveActingRole(
 
 /**
  * May `role` see and run `cmd` (IDENTITY-9..11 / ROLES-CHAT-2/3)? Read tools:
- * everyone. Mutating tools: the owner; team only its review tools, plus its
- * work tools in a `/work` run; community none. `null` (no role session) ⇒
- * no role gate.
+ * everyone. Mutating tools: the owner; team only its review and search tools
+ * (PLUGIN-9), plus its work tools in a `/work` run; community none. `null`
+ * (no role session) ⇒ no role gate.
  */
 export function roleAllowsPlugin(
   role: ActingRole | null,
@@ -224,7 +236,11 @@ export function roleAllowsPlugin(
   if (!isMutatingPlugin(cmd)) return true;
   if (role === "owner") return true;
   if (role === "team") {
-    return TEAM_REVIEW_TOOLS.has(cmd.name) || (workTask && TEAM_WORK_TOOLS.has(cmd.name));
+    return (
+      TEAM_REVIEW_TOOLS.has(cmd.name) ||
+      TEAM_SEARCH_TOOLS.has(cmd.name) ||
+      (workTask && TEAM_WORK_TOOLS.has(cmd.name))
+    );
   }
   return false;
 }

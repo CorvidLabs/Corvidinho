@@ -466,3 +466,47 @@ the four files 82 of 82.
 prints every 0.1 s for 1.5 s keeps a 500 ms idle watchdog from firing; a
 silent 1.2 s child lets it fire. Fail on base: the printing child lets it
 fire.
+## Web search through Brave (REQ-plugins-318 / -3181 added, REQ-plugins-065 / -111 / -113 modified, PLUGIN-7 / PLUGIN-9)
+
+`tests/web.search.test.ts` (no network: a fake resolver and a fake transport
+that answers like Brave, the fake key `test-key-not-real`, in-memory ledger
+DBs):
+
+- Gating: `web-search` is dangerous, minTier 1, next to `web-fetch`; the
+  catalog offers it only when allowlisted, at tool/code tier, never at read
+  tier; owner, no role session and team (chat and `/work`) get it, community
+  never, team still without `web-fetch`; `TEAM_SEARCH_TOOLS` is `web-search`
+  only; SAFE-1 deny with a `denied` audit row, allowlisted runs audited
+  `started` / outcome; a community role session is refused at `runPlugin`, a
+  team one reaches the handler.
+- Request: one GET to the pinned public address of `api.search.brave.com`
+  `/res/v1/web/search` with `q`, `count` (default 5, `--count 20`),
+  `safesearch=moderate` and `freshness` when given, the key only in
+  `X-Subscription-Token`; usage errors, the `not-configured` result (no,
+  blank, malformed key) and secret-carrying queries send nothing.
+- Output: hostile hits only inside the untrusted web fence (unique end
+  marker, HTML / entities / controls reduced), nothing of a hit outside it,
+  attribution in the summary, at most `count` hits, non-http and
+  credentialed URLs dropped, `(no results)`.
+- SAFE-6: the key echoed by results, error bodies, a non-JSON body, a
+  transport error or a DNS error never comes back; through `runPlugin` the
+  result and the audit rows hold neither the key, the request path, the
+  header name nor the pinned address; the env drop lists (workers, verify
+  lane, Fledge children) and `formatErrorLine`.
+- Keyed JSON GET (REQ-plugins-3181): http, other hosts, a look-alike host,
+  port 8443 and URL credentials refused before DNS; non-public answers
+  refused before connecting; 301/302/303/307/308 refused after one dial,
+  Location not echoed; non-JSON, gzip, missing content type, malformed JSON
+  and oversized bodies refused; a stalled transport times out; the run's
+  abort stops it; `web-fetch` unchanged for any public host with its own
+  headers.
+- Brave error mapping (401, 422 `SUBSCRIPTION_TOKEN_INVALID`, 422
+  `VALIDATION`, 429, 503) without server text.
+
+Updated: `tests/web.fetch.test.ts` (REQ-plugins-111: `web-search` now
+exists as its own command), `tests/roles.team.test.ts` (REQ-plugins-065:
+`roleAllowsPlugin` over every plugin with the team search rule; the team
+catalog offers `web-search`, the community catalog does not).
+`tests/fledge.plugins.test.ts` keeps the whole tool surface (builtins plus a
+fake Fledge plugin) under `TOOL_SURFACE_BUDGET_TOKENS`: 7957 of 8000 with
+`web-search`'s short description.
