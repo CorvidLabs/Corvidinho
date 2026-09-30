@@ -1,4 +1,43 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790785913,
+      "digest": "53cac4404a63dcae574c69c84952d5cda97818781c843ba9814c6cb17c290c97",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "release-0-0-36-approval-cards-and-codes-must-ask-gate-owner-only-spend-no-default-model-tests-ran-verify-schedule-asks",
+        "title": "Release 0.0.36: approval cards and codes, must-ask gate, owner-only spend, no default model, tests-ran verify, schedule asks",
+        "description": "Release 0.0.36: approval cards and codes, must-ask gate, owner-only spend, no default model, tests-ran verify, schedule asks",
+        "kind": "operations",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "package.json 0.0.36; version prints 0.0.36; CHANGELOG 0.0.36 extractable; STATUS rows"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "eed10a7fc8f8d6033b47cd0ba38018a5f3c5eb5be091069dc143cf1ac026e899"
+      }
+    }
+  ],
   "reopenings": []
 }

@@ -1,6 +1,6 @@
 ---
 id: release-0-0-36-approval-cards-and-codes-must-ask-gate-owner-only-spend-no-default-model-tests-ran-verify-schedule-asks
-state: draft
+state: implementing
 type: operations
 base_commit: 507d97b75b08ebe86c5e0c5ab19322ea82d683cb
 ---

@@ -7,10 +7,11 @@
   "title": "Release 0.0.36: approval cards and codes, must-ask gate, owner-only spend, no default model, tests-ran verify, schedule asks",
   "description": "Release 0.0.36: approval cards and codes, must-ask gate, owner-only spend, no default model, tests-ran verify, schedule asks",
   "kind": "operations",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "507d97b75b08ebe86c5e0c5ab19322ea82d683cb",
   "created_at": 1790785906,
-  "updated_at": 1790785910,
+  "updated_at": 1790785919,
   "affected_specs": [
     "cli"
   ],
