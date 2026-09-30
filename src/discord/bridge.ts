@@ -1344,8 +1344,9 @@ export async function startBridge(
       const people = declaredPeople();
       // IDENTITY-8..12: the presser's role, as on the chat path (their
       // Discord role ids included, so a team member allowlisted by role is
-      // team here as in chat). Resolved before the run: SAFE-12/13 need to
-      // know whose words a typed answer is.
+      // team here as in chat). Resolved at press time, before the run:
+      // SAFE-12/13 need to know whose words a typed answer or a picked label
+      // is (SAFE-12.a).
       const actingRole = resolveDiscordActingRole({
         userId: interaction.userId,
         roleIds: interaction.roleIds,
@@ -1359,7 +1360,7 @@ export async function startBridge(
       const actingIsAdmin = actingRole === "owner";
       // The human's answer (a chosen label or the privately typed text) and
       // the prior-question block the resumed run gets ahead of it. `spoken`
-      // is the answer as the model gets it (SAFE-12).
+      // is the answer as the model gets it (SAFE-12 / SAFE-12.a).
       let answer: string;
       let spoken: string;
       let priorBlock: string;
@@ -1432,8 +1433,17 @@ export async function startBridge(
         // untrusted data, as their chat reply would; the owner's is unchanged.
         spoken = fenceSpeakerText(answer, actingRole, "ask-answer");
       } else {
+        // SAFE-12.a: only one of the ask's own options can answer it. A
+        // pressed option id that matches none of them (a forged or stale id,
+        // or a pick id on a free-text ask) is treated as expired: no run, the
+        // ask stays as it was, and the raw id never reaches a prompt.
+        const label = findOptionLabel(pending.options, parsed.optionId);
+        if (label === undefined) {
+          await interaction.reply({ content: ASK_CHOICE_EXPIRED, ephemeral: true });
+          return;
+        }
+        answer = label;
         // pick — claim immediately so a concurrent re-press cannot double-resume.
-        answer = findOptionLabel(pending.options, parsed.optionId) ?? parsed.optionId;
         // Only the pressed ask: the session's other open asks stay (SESSION-MULTI-3).
         store.clearPendingAsk(session, pending.askId);
         // DISCORD-ASK-8 — strip option buttons on the ephemeral right away.
@@ -1444,9 +1454,12 @@ export async function startBridge(
           components: [],
         });
         priorBlock = `[Prior clarifying question you asked (the human answered via Discord button):\n${prior}]`;
-        // A pick carries the label of an option the model wrote (or the
-        // bot's own option id), not text the presser typed.
-        spoken = answer;
+        // SAFE-12.a: the model wrote the label, but it may have copied it
+        // from a non-owner's own (fenced) words, so a team or community
+        // presser's pick reaches the model as their words, inside the same
+        // fence as their typed answer (role resolved above at press time).
+        // The owner's pick is unchanged.
+        spoken = fenceSpeakerText(answer, actingRole, "ask-pick");
       }
 
       const channelId = session.threadId ?? session.channelId;

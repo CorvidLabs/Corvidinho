@@ -21,7 +21,7 @@
 - [persona](hi/persona.md): PERSONA (4 criteria)
 - [plugin](hi/plugin.md): PLUGIN (7 criteria)
 - [roles](hi/roles.md): ROLES (0 criteria)
-- [safe](hi/safe.md): SAFE (24 criteria)
+- [safe](hi/safe.md): SAFE (25 criteria)
 - [session](hi/session.md): SESSION (7 criteria)
 - [specsync](hi/specsync.md): SPECSYNC (7 criteria)
 - [watch](hi/watch.md): WATCH (0 criteria)

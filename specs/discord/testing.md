@@ -333,7 +333,10 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   and restates no Choose button; after the newest ask timed out a thin reply
   restates the earlier live ask; a substantive reply after expiry runs the
   agent and clears the ask; `cancel` after expiry keeps its short ack and
-  runs nothing (no live Discord).
+  runs nothing (no live Discord). No owner is configured there, so the
+  presser is community and the pressed label reaches the run inside the
+  untrusted-data fence (`source=ask-pick`, SAFE-12.a); that assertion fails
+  on the base bridge (label unfenced).
 
 ## Discord user lookup (REQ-discord-312 / REQ-plugins-312)
 `tests/discord.user-lookup.test.ts` covers guild gate, dry-run, mocked REST.
@@ -856,6 +859,27 @@ form as team too (acting role team, fence header `role: team`). The first
 three and the role-id test fail on the base bridge (a run starts / the answer
 is unfenced / the form resolved the presser as community); the owner test
 passes on both (unchanged behaviour).
+› "SAFE-12.a on a Choose pick" (REQ-discord-548 / REQ-discord-071, through
+`startBridge` with a memory DB and a first run that stops on a Choose ask):
+a community user's and a declared team member's pick resumes the session
+with the label inside the untrusted-data fence after the button
+prior-question block (`role: community` / `role: team`, `source=ask-pick`),
+`humanText` and the thread turn the plain label, the option buttons cleared
+at once with "Got it — **<label>**" (DISCORD-ASK-8), the ask claimed
+(DISCORD-ASK-3) and no audit row (fenced, not scanned); a label that repeats
+a community user's injection-like words stays fenced when they pick it; a
+declared team member allowlisted only by a Discord role picks as team (role
+ids resolved at press time); the owner's pick of an injection-like label runs
+unfenced (`Human answer:\n<label>`), with no refusal and no row; a community
+user's, a team member's and the owner's press on an option id the ask does
+not have gets only the ephemeral `ASK_CHOICE_EXPIRED` (no run, nothing
+posted, the ask pending, nothing in the thread) and a real pick afterwards
+resumes with the label, no prompt ever holding the forged id; a pick press
+on a free-text ask is treated the same and the Answer form still answers it.
+All but the owner test fail on the base bridge (label unfenced / the forged
+id resumes the run raw); the owner test passes on both, and the owner's
+resumed prompt was compared byte for byte between the base and the branch
+bridge (identical).
 
 Ranked recall and the inject search (MEMORY-9, #67 / REQ-discord-067):
 `tests/memory.recall-github.test.ts` › "MEMORY-9 ranked recall" — a question

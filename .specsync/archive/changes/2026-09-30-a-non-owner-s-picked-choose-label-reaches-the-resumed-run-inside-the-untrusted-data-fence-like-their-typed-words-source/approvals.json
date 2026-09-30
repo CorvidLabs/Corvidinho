@@ -1,0 +1,56 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790732209,
+      "digest": "5ae21fbdb3cfbc5bbfa82e670121d4a99d09b25711c4bd1b19c6c778b817bcb4",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "a-non-owner-s-picked-choose-label-reaches-the-resumed-run-inside-the-untrusted-data-fence-like-their-typed-words-source",
+        "title": "A non-owner's picked Choose label reaches the resumed run inside the untrusted-data fence like their typed words (source=ask-pick, the presser's role resolved at press time with their Discord role ids); the owner's pick prompt is byte-identical; a pressed option id that matches none of the ask's options is refused as expired and never reaches the run raw (SAFE-12.a, DISCORD-ASK-3/5/8)",
+        "description": "A non-owner's picked Choose label reaches the resumed run inside the untrusted-data fence like their typed words (source=ask-pick, the presser's role resolved at press time with their Discord role ids); the owner's pick prompt is byte-identical; a pressed option id that matches none of the ask's options is refused as expired and never reaches the run raw (SAFE-12.a, DISCORD-ASK-3/5/8)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "INTENT.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "hi/safe.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/requirements.md",
+          "specs/discord/testing.md",
+          "src/discord/bridge.ts",
+          "src/discord/injection-guard.ts",
+          "tests/discord.ask-ephemeral.test.ts",
+          "tests/safe.injection.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Through startBridge with a memory DB (the SAFE-11/12/13 bridge harness): a community user's pick of a Choose option resumes the session with the picked label inside the UNTRUSTED_DATA fence (header role: community, source=ask-pick) after the button prior-question block; a declared team member's pick (and a team member allowlisted only by a Discord role, whose role ids are passed at press time) is fenced with role: team; humanText and the recorded thread turn stay the plain label; the owner's pick prompt is byte-identical to before (Human answer:\\n<label>, no fence); a pick whose option id matches none of the ask's options (a forged or stale id, or a pick id on a free-text ask) gets the ephemeral ASK_CHOICE_EXPIRED, starts no run, leaves the ask pending and never puts the raw id in a prompt, while a real pick afterwards still resumes; DISCORD-ASK-3/5/8 resume, expiry and button clearing are unchanged. The new tests fail on main and pass on the branch; no env var, config key, table, column or schema version."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "4bc3c33f64e277c133e09c319b11aafb559850ad41c11c249566273152008d0c"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790741751,
+      "digest": "6ebc36f6b5780c0352ed7a4db0b248b25829a121e82a65081e90ba307d894053",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

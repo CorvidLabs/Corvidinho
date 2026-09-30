@@ -375,7 +375,7 @@ Community sessions (every non-owner who is not team, plus all WATCH and schedule
   surface allows) and `CORVIDINHO_ACTING_WORK_TASK` (`1` for `/work`); both are internal and
   always overwritten, and the tool layer never trusts them to raise a role.
 
-### E.6.a Untrusted text and injection attempts (SAFE-11/12/13)
+### E.6.a Untrusted text and injection attempts (SAFE-11/12/13, SAFE-12.a)
 
 Nothing to configure; it is always on (details in [`discord.md`](discord.md) "Untrusted
 text and injection attempts").
@@ -383,9 +383,10 @@ text and injection attempts").
 - Discord names (the speaker's, and `discord-user-lookup` results) are cleaned before the model
   sees them, and a name that imitates the owner's or a declared person's is flagged as someone
   else. Identity and role come only from declared ids.
-- A non-owner's message, `/session start` topic, `/work` description and answer typed in an
-  ask's private Answer form, WATCH titles and bodies, and GitHub / guild-member tool results
-  reach the model fenced as untrusted data.
+- A non-owner's message, `/session start` topic, `/work` description, answer typed in an
+  ask's private Answer form and picked Choose label (SAFE-12.a), WATCH titles and bodies, and
+  GitHub / guild-member tool results reach the model fenced as untrusted data. A Choose press
+  whose option the ask doesn't have gets "that choice expired" and runs nothing.
 - A non-owner message (an Answer form answer included: private refusal, question kept open,
   owner pinged in the channel) or WATCH event that looks like an injection attempt gets one short reply
   (Discord) or comment (GitHub) and no run; the owner is pinged on Discord, or @mentioned on
