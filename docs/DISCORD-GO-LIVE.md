@@ -536,7 +536,8 @@ and your own stop is a stop. It tells you on every surface:
 - the Discord answer footer names the model that answered, `anthropic:claude-sonnet-5 (fell back
   from gpt-4.1)`; on your own runs the cost prices each model's tokens at its own price (a model
   with no known price makes it `cost unknown`); everyone else sees model and time only;
-- a run that is not yours (someone else's chat, WATCH, a schedule) also logs one warn line: the
+- every run that fell back (yours too) also logs one warn line, which is how you hear of one in a
+  run that is not yours (someone else's chat, WATCH, a schedule): the
   bridge `[discord] llm.fallback: …`, `github watch` `[watch] llm.fallback: …`, the daemon an
   `llm.fallback` event. There is no DM for it.
 

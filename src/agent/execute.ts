@@ -1462,8 +1462,9 @@ async function chatCompletions(opts: {
         ok: false,
         error: `LLM HTTP ${resp.status}: ${text || resp.statusText}`,
         status: resp.status,
-        // AGENT-11: any HTTP error, 404 / 410 for a retired model included.
-        failure: { kind: "http", status: resp.status },
+        // AGENT-11: any HTTP error, 404 / 410 for a retired model included —
+        // unless the run's own stop landed meanwhile (never a model failure).
+        failure: opts.signal.aborted ? null : { kind: "http", status: resp.status },
       };
     }
 

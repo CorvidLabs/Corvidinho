@@ -217,7 +217,7 @@ export type AnswerPart = {
  * embed (as before). Longer plain prose (`allowEmbed`, see
  * `readsBetterAsEmbed`): one embed holding the text and the footer. Anything
  * else: `splitDiscordMessage` parts, the footer embed on the last one. A text
- * over DISCORD_ANSWER_MAX is cut to it (ending in `…`, a closing role note
+ * over DISCORD_ANSWER_MAX is cut to it (ending in `…`, its closing notes
  * kept) after the scrub, so no path posts more than that.
  */
 export function planAnswerParts(

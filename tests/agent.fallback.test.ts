@@ -487,22 +487,35 @@ describe("what is not a model failure never fails over (REQ-agent-080)", () => {
   });
 
   test("the run's own stop: no failover, the next model is never called", async () => {
-    const ctrl = new AbortController();
-    const f = perModel({
-      "model-a": [
-        () => {
+    // The stop lands while the head's request is out: it throws, or its HTTP
+    // error reply still arrives — either way the stop is not a model failure.
+    const heads: Array<[string, (ctrl: AbortController) => Behavior]> = [
+      [
+        "thrown abort",
+        (ctrl) => () => {
           ctrl.abort();
           throw new DOMException("The operation was aborted.", "AbortError");
         },
       ],
-      "model-b": [ok("never")],
-    });
-    const h = harness(f.fetchImpl);
-    const r = await attempt(h.exec, 1, ctrl.signal);
-    expect(f.models).toEqual(["model-a"]);
-    expect(r.error).toBe(true);
-    expect(h.hops).toEqual([]);
-    expect(r.summary).not.toContain("model fallback");
+      [
+        "HTTP error reply",
+        (ctrl) => () => {
+          ctrl.abort();
+          return new Response("upstream", { status: 503 });
+        },
+      ],
+    ];
+    for (const [label, head] of heads) {
+      const ctrl = new AbortController();
+      const f = perModel({ "model-a": [head(ctrl)], "model-b": [ok("never")] });
+      const h = harness(f.fetchImpl);
+      const r = await attempt(h.exec, 1, ctrl.signal);
+      expect({ label, models: f.models }).toEqual({ label, models: ["model-a"] });
+      expect(r.error).toBe(true);
+      expect(h.hops).toEqual([]);
+      expect(texts(h.events).some((t) => t.includes("falling back"))).toBe(false);
+      expect(r.summary).not.toContain("model fallback");
+    }
   });
 
   for (const answer of ["denied", "none"] as const) {
