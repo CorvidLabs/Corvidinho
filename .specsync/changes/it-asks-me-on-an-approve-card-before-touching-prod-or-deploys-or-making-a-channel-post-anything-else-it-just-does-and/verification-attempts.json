@@ -126,6 +126,27 @@
         "REQ-discord-097",
         "REQ-plugins-097"
       ]
+    },
+    {
+      "timestamp": 1790779540,
+      "commit": "0caff822fc7b2f9325df301e84d7be1a1987e5f9",
+      "contract_digest": "1c4177976a07bb53c9e2d9b1456525d5db531e9773d1f2e25985a2553de08e65",
+      "execution_digest": "f3ef2a8208c0c9d52ecc7acc6d0ec9656564b38818250d40214572912db3a642",
+      "workspace_digest": "580e1ef6a3c519bf47620fb8f5aef27df3d665c8bceda4c555a2926f1499a9f6",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-097",
+        "REQ-cli-097",
+        "REQ-discord-097",
+        "REQ-plugins-097"
+      ]
     }
   ]
 }
