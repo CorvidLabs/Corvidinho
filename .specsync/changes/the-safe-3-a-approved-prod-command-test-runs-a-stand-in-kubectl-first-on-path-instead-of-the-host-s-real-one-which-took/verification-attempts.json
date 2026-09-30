@@ -72,6 +72,24 @@
       "requirement_ids": [
         "REQ-agent-503"
       ]
+    },
+    {
+      "timestamp": 1790799893,
+      "commit": "83588021d88683481b315e0c1f5b5dfbe2c7b7ca",
+      "contract_digest": "2c21f2f941172f5aa82d8cad1e0927ea8969780ac47bf21ee1b405ecf4ff9193",
+      "execution_digest": "b1387e06d5c8afe26a36bf88078610cfb1f858cbb5f501db1757d7e49067ee76",
+      "workspace_digest": "3375982d74112d66be4939dcdafa69dc9f9f082bb975e6e4cef578d975dbf8d7",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-503"
+      ]
     }
   ]
 }
