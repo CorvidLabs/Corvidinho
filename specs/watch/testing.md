@@ -176,3 +176,18 @@ value; `tests/agent.safe3a-gate.test.ts` and
 `CORVIDINHO_WATCH_SESSION_ID` marker) never gets the shell.
 - Fail on base: with the base's `src/watch/agent-client.ts` the stamp is
   unset and the test fails.
+
+## Spend-cap stops reach the owner (REQ-watch-099, REQ-watch-086 modified; AUTONOMY-8)
+
+`tests/spend.surfaces.test.ts` ("WATCH: a run stopped at a spend cap is
+handed to the bridge …") — the poller (injected event, stub agent ending
+with a `spend-cap` ask, echo ack client, in-memory DB with a live bridge
+mark) records one `spend-cap` row whose question keeps `Stopped at cap:
+total.`, logs `[watch] spend-cap stop CorvidLabs/Corvidinho#7 id=comment-1:
+queued for the owner's Discord DM (AUTONOMY-8)` with no amount, and posts
+only "Work is paused for budget." in its summary comment; `noteWatchRunAsk`
+gives `not-sent` / `no-owner` and `no-bridge` with lines naming no amount, and
+a later run with no ask drops the row. `tests/watch.stuck-ask.test.ts` passes
+unchanged (a clarify ask still never records one).
+- Fail on base: `noteWatchRunAsk` drops every non-stuck ask, so no row is
+  recorded and the three tests fail.

@@ -61,7 +61,10 @@ thread, and posts the outcome there once the owner decides
 (`src/watch/forget-me.ts`). Stuck runs (AGENT-16.a, REQ-watch-086): a run that
 ends with a "stuck" ask, on any event type, is handed to the Discord bridge
 through the shared DB so the owner is pinged on Discord like other stuck asks
-(`src/watch/owner-ask.ts`).
+(`src/watch/owner-ask.ts`). Spend-cap stops (AUTONOMY-8, REQ-watch-099): a run
+that ends stopped at a spend cap is handed over the same way, so the bridge
+DMs the owner its details once per cap episode while GitHub shows only that
+work is paused for budget.
 
 ## Public API
 
@@ -130,7 +133,8 @@ store and condensing are `src/store/conversation.ts` (REQ-discord-472).
 (`watch:forget-me`).
 
 `src/watch/owner-ask.ts` (AGENT-16.a, REQ-watch-086): `WatchOwnerAskStore`
-(`record({ event, ask, now })` — stuck asks only, one per thread, replaced —
+(`record({ event, ask, now })` — stuck and spend-cap asks only
+(`WATCH_OWNER_ASK_REASONS`, REQ-watch-099), one per thread, replaced —
 `clear(repo, number)`, `pending()`, `claim(ask)`, `release(ask)`) over the
 module-owned `watch_owner_asks` table (`ensureWatchOwnerAsks`, created on
 first use, no schema version bump), `WatchOwnerAsk`, `threadUrl(repo, n)`,
@@ -229,14 +233,14 @@ plugins, SAFE-13 owner exemption — uses `senderId` only, never `sender`; no id
 or an undeclared id is community, never the owner (IDENTITY-7.a,
 REQ-watch-367).
 After every run (any event type, ackable or not), `noteWatchRunAsk` hands a
-`stuck` ask to the bridge: with an owner Discord id and a DB it is recorded in
+`stuck` ask or a `spend-cap` stop (its log line says `spend-cap stop` and the
+owner's Discord DM, `AUTONOMY-8`, and names no amount) to the bridge: with an owner Discord id and a DB it is recorded in
 `watch_owner_asks` (keyed by the thread, question SAFE-6 scrubbed and a
 re-scrub target, a newer ask replacing it) and one log line says it is queued,
 or — with no live bridge mark on the data dir — that the owner's Discord ping
 could not be sent and waits for a bridge; with no owner Discord id or no DB
 nothing is recorded and one line says it could not be sent. Any other outcome
-(done, failed without an ask, a clarify or spend-cap ask) drops the thread's
-pending ask. The run summary comment is unchanged (it still carries
+(done, failed without an ask, a clarify ask) drops the thread's pending ask. The run summary comment is unchanged (it still carries
 `Needs your input: …` where WATCH posts one); nothing new is posted on GitHub
 (REQ-watch-086).
 
@@ -267,6 +271,10 @@ An assignment whose run ends stuck on a repeated failing call → no GitHub
 comment, one `watch_owner_asks` row for the thread, and the bridge DMs the
 owner the question with the thread link; with no bridge running, one log line
 says the Discord ping could not be sent (REQ-watch-086).
+An issue comment whose run stops at a spend cap → the summary comment says
+only "Work is paused for budget.", one `spend-cap` row for the thread, one
+log line with no amount, and the bridge DMs the owner the stop's details once
+per cap episode (REQ-watch-099).
 
 ## Error Cases
 

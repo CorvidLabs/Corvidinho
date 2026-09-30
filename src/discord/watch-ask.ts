@@ -15,9 +15,21 @@
  * {@link WATCH_ASK_RETRY_MS}. An ask older than a day is given up with a log
  * line, never posted late. A stop waits a short grace for a DM in flight,
  * then hands its ask back so the next start sends it.
+ *
+ * AUTONOMY-8 / SAFE-14.a (#98): a WATCH run stopped at a spend cap is handed
+ * over the same way. Its DM is the spend-stop DM other surfaces send
+ * (`formatSpendStopDm`: "💸 Work is paused for budget. Only you see these
+ * details." and the quoted, scrubbed question with the amounts and caps), led
+ * by the GitHub thread, and it goes out once per cap episode like the
+ * channel ping of a chat or schedule stop (`claimCapPing` on the spend alert
+ * outbox, keyed on the caps the stop names): a stop whose episode was already
+ * told is taken and dropped with a log line. A DM that does not go out hands
+ * both the episode claim and the ask back.
  */
 
 import type { Database } from "bun:sqlite";
+import { spendScopesOf } from "../agent/spend-notice.ts";
+import { createSpendAlertOutbox, type SpendAlertOutbox } from "../agent/spend-outbox.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import { formatErrorLine } from "../store/scrub.ts";
 import {
@@ -27,6 +39,7 @@ import {
 } from "../watch/owner-ask.ts";
 import { formatAskReply } from "./ask-ping.ts";
 import type { SendPrivateDm } from "./private-reply.ts";
+import { formatSpendStopDm } from "./spend-dm.ts";
 
 /** Wait before retrying an ask whose DM did not go out. */
 export const WATCH_ASK_RETRY_MS = 10 * 60 * 1000;
@@ -39,6 +52,20 @@ export function formatWatchStuckAskDm(a: WatchOwnerAsk): string {
     owner: null,
     prefix: `GitHub ${a.repo}#${a.number} — answer on the thread: ${a.htmlUrl}`,
   }).content;
+}
+
+/**
+ * The owner's DM for a WATCH run stopped at a spend cap (SAFE-14.a: only the
+ * owner sees the amounts): the spend-stop DM with the GitHub thread second.
+ */
+export function formatWatchSpendStopDm(a: WatchOwnerAsk): string {
+  const [head, ...rest] = formatSpendStopDm({ ask: a.ask }).split("\n");
+  return [head, `GitHub ${a.repo}#${a.number}: ${a.htmlUrl}`, ...rest].join("\n");
+}
+
+/** The owner's DM for a pending WATCH ask: stuck, or a spend-cap stop. */
+export function formatWatchOwnerAskDm(a: WatchOwnerAsk): string {
+  return a.ask.reason === "spend-cap" ? formatWatchSpendStopDm(a) : formatWatchStuckAskDm(a);
 }
 
 export type WatchAskDeliveryResult = { sent: number; failed: number; expired: number };
@@ -62,8 +89,11 @@ export function createWatchAskDelivery(opts: {
   sendDm: () => SendPrivateDm | undefined;
   now?: () => number;
   log?: (msg: string) => void;
+  /** SAFE-8: the once-per-cap-episode owner ping for spend-cap stops. Default: over `db`. */
+  spendAlerts?: SpendAlertOutbox;
 }): WatchAskDelivery {
   const store = new WatchOwnerAskStore(opts.db);
+  const spendAlerts = opts.spendAlerts ?? createSpendAlertOutbox({ db: opts.db, ...(opts.now ? { now: opts.now } : {}) });
   const now = opts.now ?? Date.now;
   const log = opts.log ?? ((m: string) => console.log(m));
   const retryAt = new Map<string, number>();
@@ -72,6 +102,8 @@ export function createWatchAskDelivery(opts: {
   let current: { ask: WatchOwnerAsk; handedBack: boolean } | null = null;
 
   const where = (a: WatchOwnerAsk) => `${a.repo}#${a.number} id=${a.eventId}`;
+  const label = (a: WatchOwnerAsk) => (a.ask.reason === "spend-cap" ? "WATCH spend-cap stop" : "WATCH stuck ask");
+  const why = (a: WatchOwnerAsk) => (a.ask.reason === "spend-cap" ? "AUTONOMY-8" : "AGENT-16.a");
 
   async function run(): Promise<WatchAskDeliveryResult> {
     const out: WatchAskDeliveryResult = { sent: 0, failed: 0, expired: 0 };
@@ -84,20 +116,30 @@ export function createWatchAskDelivery(opts: {
         if (store.claim(a)) {
           out.expired += 1;
           retryAt.delete(a.id);
-          log(`[discord] WATCH stuck ask ${where(a)}: gave up after a day without reaching the owner on Discord (AGENT-16.a)`);
+          log(`[discord] ${label(a)} ${where(a)}: gave up after a day without reaching the owner on Discord (${why(a)})`);
         }
         continue;
       }
       if (!send || !ownerId) continue;
       if ((retryAt.get(a.id) ?? 0) > t) continue;
       if (!store.claim(a)) continue;
+      // SAFE-8: a spend-cap stop DMs the owner once per cap episode.
+      let episode: { release(): void } | null = null;
+      if (a.ask.reason === "spend-cap") {
+        episode = spendAlerts.claimCapPing(spendScopesOf(a.ask));
+        if (!episode) {
+          retryAt.delete(a.id);
+          log(`[discord] ${label(a)} ${where(a)}: the owner was already told about this cap episode; not DMed again (AUTONOMY-8)`);
+          continue;
+        }
+      }
       const entry = { ask: a, handedBack: false };
       current = entry;
       let sent = false;
       try {
-        sent = (await send({ userId: ownerId, content: formatWatchStuckAskDm(a) })) !== null;
+        sent = (await send({ userId: ownerId, content: formatWatchOwnerAskDm(a) })) !== null;
       } catch (err) {
-        log(`[discord] WATCH stuck ask ${where(a)}: owner DM failed: ${formatErrorLine(err)}`);
+        log(`[discord] ${label(a)} ${where(a)}: owner DM failed: ${formatErrorLine(err)}`);
       } finally {
         current = null;
       }
@@ -106,12 +148,13 @@ export function createWatchAskDelivery(opts: {
         if (entry.handedBack) store.claim(a);
         retryAt.delete(a.id);
         out.sent += 1;
-        log(`[discord] WATCH stuck ask ${where(a)}: owner DMed (AGENT-16.a)`);
+        log(`[discord] ${label(a)} ${where(a)}: owner DMed (${why(a)})`);
       } else {
+        episode?.release();
         if (!entry.handedBack) store.release(a);
         retryAt.set(a.id, now() + WATCH_ASK_RETRY_MS);
         out.failed += 1;
-        log(`[discord] WATCH stuck ask ${where(a)}: the owner DM did not go out; retried in ${WATCH_ASK_RETRY_MS / 60_000} min`);
+        log(`[discord] ${label(a)} ${where(a)}: the owner DM did not go out; retried in ${WATCH_ASK_RETRY_MS / 60_000} min`);
       }
     }
     return out;
@@ -152,7 +195,7 @@ export function createWatchAskDelivery(opts: {
         try {
           store.release(held.ask);
         } catch (err) {
-          log(`[discord] WATCH stuck ask ${where(held.ask)}: hand-back failed: ${formatErrorLine(err)}`);
+          log(`[discord] ${label(held.ask)} ${where(held.ask)}: hand-back failed: ${formatErrorLine(err)}`);
         }
       }
       return pass === null;

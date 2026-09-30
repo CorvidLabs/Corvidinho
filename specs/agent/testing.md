@@ -683,3 +683,62 @@ Unchanged suites that cover the touched files pass: `tests/agent.spend.test.ts`,
   ends `used`. The target and scrub-before-cut tests fail on the branch's
   first cut (`6ac2d8c`) sources, which recorded and sent the call past a cap
   the card did not show and cut the task before scrubbing it.
+
+## Unknown prices ask on the card; every surface asks (REQ-agent-199; SAFE-16 / SAFE-16.a, AUTONOMY-8)
+
+`tests/agent.spend-unknown.test.ts` (18 tests; mocked fetch, in-memory or temp
+SQLite, the card decided in the store as the engine would, plus the real
+engine with recording DMs):
+- An unpriced call under a $5 cap with an owner records one `spend` / `money`
+  card before any provider call: title `Spend at an unknown price — asks
+  first (SAFE-16.a) · from cli`, target `total`, amount `unknown (no known
+  price for this model; never counted as free)` with no `$` figure, text with
+  the cap's spend and the task; the wait note has no amounts.
+- Approved: one call, the request `used`, one `unknown` ledger row (estimate
+  and cost 0, the reply's tokens) and `unknownCalls` 1 with the priced spend
+  unchanged; the next unpriced call raises a second card.
+- Denied, lapsed or aborted: nothing sent or recorded; the ask starts `Spend
+  at an unknown price (SAFE-16.a)`, names the card, keeps `Stopped at cap:
+  total.`, has no reply note and no `?`.
+- Provider cap alone → target `provider:llm.test`; both caps → `total,
+  provider:llm.test`. No covering cap → runs, no card, no ledger. No owner or
+  `withSpendCap` → the operator ask, no card, no DB file. HTTP error → `failed`.
+  No price override: the table is frozen and env keys naming a price change
+  nothing.
+- Owner lines: `formatSpend`, doctor (`$4.50 + unknown of $5.00 …, 1 at an
+  unknown price`), the provider doctor line, the owner's `/status`, the 80%
+  warning and its outbox DM, `spendWarningFromUnknown` (a whole positive
+  count only), the priced stop's card text and ask (`$4.9990 + unknown`); the
+  public line stays without amounts.
+- `createTaskExecute`: approved → the call goes out with the wait and
+  approval Text events; denied → `runTask` `blocked`, generic summary, verify
+  not run. The engine DMs `Amount: unknown (…)` and answers Approve plus the
+  code with `SPEND_CARD_UNKNOWN_APPROVED`.
+
+`tests/spend.surfaces.test.ts` (40 tests; a stand-in `corvidinho` bin that
+records the env its spawner gives `task run`, then `createTaskExecute` over
+that env with a mocked provider): chat, slash `/session`, slash `/work`, ask
+buttons, schedules, the daemon, WATCH, the CLI and a delegate / council
+worker each make no provider call before the owner's card is decided, past
+the total cap, past a provider cap and at an unknown price under a cap; the
+card names the surface; a no ends `blocked` on the spend-cap ask; with no
+owner each stops at once with the operator ask and no card. It also covers
+the WATCH spend-cap hand-over (REQ-watch-099, REQ-discord-199) and a
+schedule's spend-cap Continue / Cancel controls (REQ-discord-606).
+
+`tests/agent.spend-approve.test.ts` now expects a card whose amount is unknown
+for an unpriced model (was: no card); `tests/agent.spend.test.ts`,
+`tests/agent.spend-ask.test.ts` and `tests/agent.spend-caps.test.ts` add
+`unknownCalls: 0` to the windows they compare.
+
+- Fail on base: with main's (`9ea4005`) sources swapped in,
+  `tests/agent.spend-unknown.test.ts` cannot load (`isUnknownSpendAmount` and
+  the other new exports are missing) and `tests/spend.surfaces.test.ts` fails
+  13 of 40 (the unknown-price case on all nine surfaces, the three WATCH
+  hand-over tests and the schedule controls), while its 18 priced and 9
+  no-owner cases pass there too (regression coverage). A probe on main's APIs
+  records no card and sends nothing for an unpriced call with an owner
+  (`{"calls":0,"cards":[]}`), ignores a WATCH spend-cap stop (`none`) and
+  gives a schedule's spend-cap stop `["Cancel"]`; on the branch: one card
+  with the amount unknown and one call, `no-bridge` (recorded), `["Continue",
+  "Cancel"]`. Restored, all pass.

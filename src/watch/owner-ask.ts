@@ -26,6 +26,16 @@
  *   `<pid>:<proc start>` id in `schema_meta`, checked with the same liveness
  *   test as schedule runners) and DMs the owner each pending ask on its
  *   scheduler tick (src/discord/watch-ask.ts, REQ-discord-086).
+ *
+ * AUTONOMY-8 / SAFE-8 / SAFE-14.a (#98): a WATCH run that ends stopped at a
+ * spend cap (a `spend-cap` ask: no owner to raise a card, an unpriced or
+ * priced call whose spend card came to no, or a setting or ledger problem)
+ * is handed over the same way, so the owner hears about it on Discord
+ * instead of the stop reaching nobody: the GitHub comment still says only
+ * "Work is paused for budget.", and the bridge DMs the owner the stop's
+ * details (amounts, caps, what the card came to) once per cap episode. The
+ * card itself, when one was raised, already reached the owner through the
+ * card engine while the run waited (REQ-agent-198).
  */
 
 import type { Database } from "bun:sqlite";
@@ -107,13 +117,16 @@ export function threadUrl(repo: string, number: number): string {
   return `https://github.com/${repo}/issues/${number}`;
 }
 
-/** Pending stuck WATCH asks in the shared DB (see module doc). */
+/** The ask reasons handed to the owner: stuck asks (AGENT-16.a) and spend-cap stops (AUTONOMY-8). */
+export const WATCH_OWNER_ASK_REASONS: ReadonlySet<string> = new Set(["stuck", "spend-cap"]);
+
+/** Pending stuck and spend-cap WATCH asks in the shared DB (see module doc). */
 export class WatchOwnerAskStore {
   constructor(private readonly db: Database) {
     ensureWatchOwnerAsks(db);
   }
 
-  /** Record (or replace) the thread's pending ask. Only "stuck" asks. */
+  /** Record (or replace) the thread's pending ask. Only "stuck" and "spend-cap" asks. */
   record(opts: {
     event: Pick<DetectedEvent, "id" | "type" | "repo" | "number" | "htmlUrl">;
     ask: HumanAsk;
@@ -121,7 +134,7 @@ export class WatchOwnerAskStore {
   }): WatchOwnerAsk | null {
     const { event } = opts;
     const ask = askFromUnknown(opts.ask);
-    if (!ask || ask.reason !== "stuck") return null;
+    if (!ask || !WATCH_OWNER_ASK_REASONS.has(ask.reason)) return null;
     const row: WatchOwnerAsk = {
       id: watchThreadKey(event.repo, event.number),
       repo: event.repo,
@@ -217,7 +230,7 @@ export function bridgeRunning(
 }
 
 export type WatchRunAskOutcome =
-  /** Not a stuck ask; a pending ask on the thread (if any) was dropped. */
+  /** Not a stuck or spend-cap ask; a pending ask on the thread (if any) was dropped. */
   | { kind: "none"; cleared: boolean }
   /** Recorded; a live bridge will DM the owner. */
   | { kind: "queued" }
@@ -227,9 +240,11 @@ export type WatchRunAskOutcome =
   | { kind: "not-sent"; why: "no-owner" | "no-db" };
 
 /**
- * After a WATCH run (every event type): a stuck ask is handed to the bridge
- * for the owner's Discord DM; any other outcome makes the thread's pending
- * ask moot. Logs one line for a stuck ask. Never throws.
+ * After a WATCH run (every event type): a stuck ask (AGENT-16.a) or a
+ * spend-cap stop (AUTONOMY-8) is handed to the bridge for the owner's
+ * Discord DM; any other outcome makes the thread's pending ask moot. Logs one
+ * line for a handed-over ask (a spend-cap line names no amount). Never
+ * throws.
  */
 export function noteWatchRunAsk(opts: {
   db: Database | undefined;
@@ -243,40 +258,47 @@ export function noteWatchRunAsk(opts: {
   isAlive?: (runner: string) => boolean;
 }): WatchRunAskOutcome {
   const { db, event, log } = opts;
+  const spendCap = opts.ask?.reason === "spend-cap";
+  // SAFE-14.a: a spend-cap stop's comment says only "Work is paused for budget."
+  const what = spendCap ? "spend-cap stop" : "stuck ask";
+  const why = spendCap ? "AUTONOMY-8" : "AGENT-16.a";
   const where = `${event.repo}#${event.number} id=${event.id}`;
-  const onGithub = opts.summaryPosted
+  const onGithub = spendCap
+    ? "GitHub shows only that work is paused for budget (SAFE-14.a)"
+    : opts.summaryPosted
     ? "the run summary comment carries the question"
     : "no comment on GitHub carries the question";
+  const ping = spendCap ? "the owner's Discord DM" : "the owner's Discord ping";
   try {
-    if (opts.ask?.reason !== "stuck") {
+    if (!opts.ask || !WATCH_OWNER_ASK_REASONS.has(opts.ask.reason)) {
       const cleared = db ? new WatchOwnerAskStore(db).clear(event.repo, event.number) : false;
       return { kind: "none", cleared };
     }
     const ownerId = opts.owner?.discordId?.trim();
     if (!ownerId || !db) {
-      const why = !ownerId ? "no-owner" : "no-db";
+      const reason = !ownerId ? "no-owner" : "no-db";
       log(
-        `[watch] stuck ask ${where}: the owner's Discord ping could not be sent — ` +
-          (why === "no-owner"
+        `[watch] ${what} ${where}: ${ping} could not be sent — ` +
+          (reason === "no-owner"
             ? "no owner Discord id is configured (IDENTITY-3)"
             : "no shared DB to hand it to the bridge") +
-          `; ${onGithub} (AGENT-16.a)`,
+          `; ${onGithub} (${why})`,
       );
-      return { kind: "not-sent", why };
+      return { kind: "not-sent", why: reason };
     }
     new WatchOwnerAskStore(db).record({ event, ask: opts.ask, now: opts.now });
     if (!bridgeRunning(db, opts.isAlive)) {
       log(
-        `[watch] stuck ask ${where}: the owner's Discord ping could not be sent — no Discord bridge is running ` +
-          `on this data dir (CORVIDINHO_DATA_DIR); it is sent if one starts within a day; ${onGithub} (AGENT-16.a)`,
+        `[watch] ${what} ${where}: ${ping} could not be sent — no Discord bridge is running ` +
+          `on this data dir (CORVIDINHO_DATA_DIR); it is sent if one starts within a day; ${onGithub} (${why})`,
       );
       return { kind: "no-bridge" };
     }
-    log(`[watch] stuck ask ${where}: queued for the owner's Discord ping (AGENT-16.a)`);
+    log(`[watch] ${what} ${where}: queued for ${ping} (${why})`);
     return { kind: "queued" };
   } catch (err) {
     log(
-      `[watch] stuck ask ${where}: the owner's Discord ping could not be sent — recording it failed: ${formatErrorLine(err)}`,
+      `[watch] ${what} ${where}: ${ping} could not be sent — recording it failed: ${formatErrorLine(err)}`,
     );
     return { kind: "not-sent", why: "no-db" };
   }

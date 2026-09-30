@@ -10,7 +10,7 @@
  * creator or the live owner may answer, in the schedule's still-allowlisted
  * channel (or, for a schedule with no channel, the owner's DM), past the
  * actor and mute / rate gates; the ask never lapses while open (DISCORD-ASK-5
- * stays for session asks); a spend-cap stop takes Cancel only; a channel
+ * stays for session asks); a spend-cap stop takes the owner's Continue or Cancel; a channel
  * reply does not answer it. Fixtures only: `startBridge` with a memory DB, a
  * null gateway recording replies and DMs, fake interactions; no live
  * Discord, no network, no token.
@@ -37,6 +37,7 @@ import { createNullGateway, type ComponentInteraction, type GatewayHandlers } fr
 import {
   SCHEDULE_ASK_ANSWERED_ACK,
   SCHEDULE_ASK_CANCELLED_ACK,
+  SCHEDULE_ASK_CONTINUED_ACK,
   SCHEDULE_ASK_NOT_YOURS,
   SCHEDULE_ASK_PAUSED_NOTE,
   isScheduleAskId,
@@ -312,20 +313,32 @@ describe("schedule ask controls: Choose, Answer, Cancel (AUTONOMY-6.a)", () => {
     expect(creator).toEqual([{ content: SCHEDULE_ASK_CANCELLED_ACK, ephemeral: true }]);
   });
 
-  test("a spend-cap stop takes Cancel only: a Choose or Answer press on it is refused", async () => {
+  test("a spend-cap stop takes the owner's Continue or Cancel: the creator's Continue and an Answer submit are refused (AUTONOMY-8)", async () => {
     const b = await scheduleBridge();
     const runId = b.recordAsk(CAP);
     const modals: DiscordModal[] = [];
-    const open: Reply[] = [];
-    await b.handlers.onComponent!(press(openCustomId(runId), OWNER_ID, open, { modals }));
-    expect(open).toEqual([{ content: SCHEDULE_ASK_NOT_YOURS, ephemeral: true }]);
-    expect(modals).toHaveLength(0);
+    // The creator may not continue past a cap (only the owner approves spend).
+    const creatorOpen: Reply[] = [];
+    await b.handlers.onComponent!(press(openCustomId(runId), CREATOR_ID, creatorOpen, { modals }));
+    expect(creatorOpen).toEqual([{ content: SCHEDULE_ASK_NOT_YOURS, ephemeral: true }]);
     const typed: Reply[] = [];
     await b.handlers.onComponent!(submit(runId, OWNER_ID, "raise it", typed));
     expect(typed).toEqual([{ content: SCHEDULE_ASK_NOT_YOURS, ephemeral: true }]);
     expect(b.scheduleStore.openRunAsk(runId)).toBeDefined();
+    // The owner's Continue closes it with no answer handed on; no form opens.
+    const owner: Reply[] = [];
+    await b.handlers.onComponent!(press(openCustomId(runId), OWNER_ID, owner, { modals }));
+    expect(owner).toEqual([{ content: SCHEDULE_ASK_CONTINUED_ACK, ephemeral: true }]);
+    expect(modals).toHaveLength(0);
+    expect(runRow(b.db, runId)).toMatchObject({ ask_outcome: "continued", ask_answer: null, ask_closed_by: OWNER_ID });
+    expect(b.scheduleStore.openRunAsk(runId)).toBeUndefined();
+    expect(b.scheduleStore.answeredAsk(b.schedule.id)).toBeUndefined();
+    // The ack names no amount, cap or setting.
+    expect(SCHEDULE_ASK_CONTINUED_ACK).not.toMatch(/\$\d|CORVIDINHO_/);
+    // Cancel still closes a spend-cap stop, for the creator too.
+    const second = b.recordAsk(CAP);
     const cancel: Reply[] = [];
-    await b.handlers.onComponent!(press(cancelCustomId(runId), CREATOR_ID, cancel));
+    await b.handlers.onComponent!(press(cancelCustomId(second), CREATOR_ID, cancel));
     expect(cancel).toEqual([{ content: SCHEDULE_ASK_CANCELLED_ACK, ephemeral: true }]);
   });
 

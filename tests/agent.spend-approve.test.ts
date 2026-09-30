@@ -325,14 +325,16 @@ describe("at 100% the owner's spend card holds the call (SAFE-8, AUTONOMY-8)", (
     expect(requests(db)).toEqual([]);
   });
 
-  test("an unpriced model under a cap never raises a card (no price to approve)", async () => {
+  test("SAFE-16.a: an unpriced model under a cap asks on a card whose amount is unknown (tests/agent.spend-unknown.test.ts)", async () => {
     const db = openCorvidinhoDb({ memory: true });
     const { g, bodies } = guard(db);
-    answer("approved");
+    const asked = answer("denied");
     const r = await refusal(g.fetch(URL_, chatInit("some-unpriced-model")));
     expect(bodies).toEqual([]);
-    expect(requests(db)).toEqual([]);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!.amount.startsWith("unknown")).toBe(true);
     expect(r.ask.question).toContain("has no known price");
+    expect(r.ask.question).toContain(`The owner denied Approve card ${asked[0]!.id}`);
   });
 
   test("SAFE-15: a provider cap's card targets provider:<id>; a call past both caps targets both", async () => {

@@ -7,7 +7,7 @@
  * clarify / stuck / spend-cap ask, and the scheduler's own REQ-discord-353
  * asks (could not start, auto-pause). While it is open each due run is
  * skipped with no catch-up and one wait note goes out, pinging nobody; the
- * ask post carries its controls (Choose or Answer, and Cancel; Cancel only
+ * ask post carries its controls (Choose or Answer, and Cancel; Continue and Cancel
  * for a spend-cap stop); a schedule with no channel sends the ask, its
  * controls and the note to the owner by DM; `/schedule resume` does not
  * close it; the answer reaches the next run once; schema v15 closes asks
@@ -361,18 +361,18 @@ describe("the ask post carries its own controls (AUTONOMY-6.a)", () => {
     expect(free.mentionUserIds).toEqual([OWNER_ID]);
   });
 
-  test("a spend-cap stop: Cancel only, and the post still says only that work is paused for budget (SAFE-14.a)", async () => {
+  test("a spend-cap stop: Continue (the owner's) and Cancel, and the post still says only that work is paused for budget (SAFE-14.a, AUTONOMY-8)", async () => {
     const h = harness();
     await h.due(CAP_ASK);
     const post = h.posts[0]!;
-    expect(buttonLabels(post.components)).toEqual(["Cancel"]);
+    expect(buttonLabels(post.components)).toEqual(["Continue", "Cancel"]);
     expect(post.content.split("\n").slice(1)).toEqual([`${SPEND_CAP_HEADLINE} <@${OWNER_ID}>`]);
     expect(post.content).not.toMatch(/\$\d|CORVIDINHO_|daily cap/);
-    // Its wait note names no amount either, and carries Cancel only.
+    // Its wait note names no amount either, and carries the same controls.
     await h.due("ok");
     expect(waitNote(h.posts[1]!)).toBe(true);
     expect(h.posts[1]!.content).not.toMatch(/\$\d|CORVIDINHO_|cap/);
-    expect(buttonLabels(h.posts[1]!.components)).toEqual(["Cancel"]);
+    expect(buttonLabels(h.posts[1]!.components)).toEqual(["Continue", "Cancel"]);
   });
 
   test("an ask post that does not go out is handed back and posted by the next tick (there is no next run to post it)", async () => {
