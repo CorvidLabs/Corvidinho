@@ -42,7 +42,7 @@ describe("parseGlobalFlags: plugins run passthrough (REQ-cli-186)", () => {
     expect(r.rest).toEqual(["plugins", "run", "fledge-hello"]);
     expect(r.nonInteractiveFlag).toBe(false);
     expect(r.json).toBe(false);
-    expect(r.noVerify).toBe(false);
+    expect(r.removedFlag).toBeUndefined();
     expect(r.taskText).toBeUndefined();
     expect(r.tier).toBeUndefined();
     expect(r.maxRetries).toBeUndefined();
@@ -62,7 +62,7 @@ describe("parseGlobalFlags: plugins run passthrough (REQ-cli-186)", () => {
     ]);
     expect(r.nonInteractiveFlag).toBe(true);
     expect(r.json).toBe(true);
-    expect(r.noVerify).toBe(false);
+    expect(r.removedFlag).toBeUndefined();
     expect(r.rest).toEqual(["plugins", "run", "search-grep"]);
     expect(r.pluginArgs).toEqual(["--no-verify", "src"]);
   });
@@ -185,7 +185,7 @@ describe("corvidinho plugins run <name> -- ...args (REQ-cli-186)", () => {
 
   test("`task run --task -h` runs the task instead of printing help (REQ-cli-143)", async () => {
     const s = setup();
-    const r = await cli(["task", "run", "--no-verify", "--json", "--task", "-h"], s.project, {
+    const r = await cli(["task", "run", "--json", "--task", "-h"], s.project, {
       PATH: s.path,
     });
     expect(r.code).toBe(0);

@@ -1,5 +1,6 @@
 /**
- * IDENTITY-13 / IDENTITY-14 / IDENTITY-6 / IDENTITY-7 — declared people (#36).
+ * IDENTITY-13 / IDENTITY-14 / IDENTITY-6 / IDENTITY-7 / IDENTITY-7.a —
+ * declared people (#36).
  *
  * The owner declares who's who in the allowlist file the process loaded
  * (ALLOW-4; `CORVIDINHO_ALLOWLIST_FILE`, else ~/.config/corvidinho/
@@ -17,19 +18,23 @@
  * Singular keys (`discord_id`, `github_login`, `github_id`, `nickname`) are
  * read too, as the `[owner]` section spells them. Values stay on one line.
  *
- * - People are matched only on stable ids: Discord user snowflakes, GitHub
- *   numeric ids and GitHub logins (IDENTITY-7). Display names and nicknames
- *   are for humans and the prompt; they never match anyone.
- * - A login match is dropped when the caller also knows the GitHub numeric id
- *   and the person declared ids that do not include it (renamed or re-used
- *   login).
+ * - People are matched only on stable ids (IDENTITY-7): Discord user
+ *   snowflakes and, on GitHub, the numeric user id only (IDENTITY-7.a). A
+ *   GitHub login never matches anyone — it can be renamed or re-registered —
+ *   so a person (or `[owner]`) with a login but no `github_ids` /
+ *   `github_id` is not recognised on GitHub until an id is linked (`corvidinho
+ *   doctor` warns). Logins stay as labels: shown to the model and the owner,
+ *   used to @mention the owner and to find a person's kept GitHub threads on
+ *   forget-me. Display names and nicknames are for humans and the prompt;
+ *   they never match anyone either.
  * - Fail closed: a person entry with any unreadable value is skipped whole
  *   (never half-matched), and an id declared for two people matches nobody.
  *   Problems are reported as plain-language issues that name the person id
  *   and key, never the account ids.
  * - The configured owner (IDENTITY-1) is always a person: the declared person
  *   whose `discord_ids` hold the owner's Discord id, else a built-in `owner`
- *   entry from `[owner]` / env. Its role is always "owner".
+ *   entry from `[owner]` / env (its `github_id` and `github_login` added).
+ *   Its role is always "owner".
  * - Roles (IDENTITY-8, #65): every other declared person has exactly one role,
  *   `role = "team"` or `role = "community"`; no `role` key reads as community.
  *   A role that is not one string among owner / team / community makes the
@@ -46,6 +51,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import {
   normalizeDisplay,
+  normalizeGithubId,
   normalizeGithubLogin,
   type OwnerRecord,
 } from "./owner.ts";
@@ -57,7 +63,6 @@ export const OWNER_PERSON_ID = "owner";
 
 const SNOWFLAKE_RE = /^\d{1,25}$/;
 const GITHUB_LOGIN_RE = /^[a-z0-9](?:[a-z0-9-]{0,38})$/;
-const GITHUB_ID_RE = /^\d{1,20}$/;
 // Control characters (other than whitespace, which normalizeDisplay collapses).
 // eslint-disable-next-line no-control-regex
 const CONTROL_RE = /[\u0000-\u0008\u000e-\u001f\u007f]/g;
@@ -97,9 +102,9 @@ export type DeclaredPerson = {
   nicknames: string[];
   /** Discord user snowflakes. */
   discordIds: string[];
-  /** Lowercased GitHub logins without `@`. */
+  /** Lowercased GitHub logins without `@` (labels; never matched, IDENTITY-7.a). */
   githubLogins: string[];
-  /** GitHub numeric user ids (digits). */
+  /** GitHub numeric user ids (digits) — the only GitHub match (IDENTITY-7.a). */
   githubIds: string[];
   /** Declared role as written (IDENTITY-8); absent ⇒ community. */
   role?: PersonRole;
@@ -123,13 +128,21 @@ export type PeopleDirectory = {
   issues: string[];
   /** Stable-id indexes (ids declared for two people are left out). */
   byDiscordId: Map<string, string>;
+  /** Login → person, for clash checks and forget-me only; never used to match. */
   byGithubLogin: Map<string, string>;
   byGithubId: Map<string, string>;
 };
 
-/** What a surface knows about the actor: only stable ids (IDENTITY-7). */
+/**
+ * What a surface knows about the actor. Only stable ids match (IDENTITY-7):
+ * the Discord user id and the GitHub numeric user id.
+ */
 export type PersonQuery = {
   discordId?: string | null;
+  /**
+   * Accepted and ignored: a GitHub login never identifies anyone, since it
+   * can be renamed or re-registered (IDENTITY-7.a).
+   */
   githubLogin?: string | null;
   githubId?: string | number | null;
 };
@@ -173,15 +186,8 @@ export function validGithubLogin(raw: string | undefined | null): string | undef
   return l && GITHUB_LOGIN_RE.test(l) ? l : undefined;
 }
 
-/** GitHub numeric id as digits, else undefined. */
-export function normalizeGithubId(raw: string | number | undefined | null): string | undefined {
-  if (raw === undefined || raw === null) return undefined;
-  if (typeof raw === "number") {
-    return Number.isSafeInteger(raw) && raw > 0 ? String(raw) : undefined;
-  }
-  const t = raw.trim();
-  return GITHUB_ID_RE.test(t) ? t.replace(/^0+(?=\d)/, "") : undefined;
-}
+/** GitHub numeric id as digits, else undefined (shared with the `[owner]` reader). */
+export { normalizeGithubId };
 
 // ---------------------------------------------------------------------------
 // Parsing (TOML subset + JSON)
@@ -574,8 +580,9 @@ export function readPeopleFile(path: string | null | undefined): PeopleParseResu
 /**
  * Effective directory: declared people plus the owner. The owner's person is
  * the declared entry whose `discord_ids` hold the owner's Discord id (the
- * owner's GitHub login is added to it), else a built-in `owner` entry.
- * Any id declared for two people is left out of the indexes (matches nobody).
+ * owner's `[owner]` GitHub id and login are added to it), else a built-in
+ * `owner` entry. Any id declared for two people is left out of the indexes
+ * (matches nobody).
  */
 export function buildPeopleDirectory(
   parsed: PeopleParseResult,
@@ -595,6 +602,9 @@ export function buildPeopleDirectory(
     if (holders.length === 1) {
       const p = holders[0]!;
       ownerPersonId = p.id;
+      if (owner.githubId && !p.githubIds.includes(owner.githubId)) {
+        p.githubIds.push(owner.githubId);
+      }
       if (owner.githubLogin && !p.githubLogins.includes(owner.githubLogin)) {
         p.githubLogins.push(owner.githubLogin);
       }
@@ -603,6 +613,7 @@ export function buildPeopleDirectory(
       const p = emptyPerson(OWNER_PERSON_ID);
       if (owner.display) p.display = owner.display;
       p.discordIds.push(owner.discordId);
+      if (owner.githubId) p.githubIds.push(owner.githubId);
       if (owner.githubLogin) p.githubLogins.push(owner.githubLogin);
       people.push(p);
     }
@@ -653,10 +664,11 @@ export function buildPeopleDirectory(
 }
 
 /**
- * Who is this? Matches only on stable ids (IDENTITY-7): the Discord user id,
- * the GitHub numeric id, the GitHub login. A login match is dropped when the
- * GitHub id is known and the person declared other GitHub ids. No match, or
- * the ids point at two different people ⇒ null (never a guess).
+ * Who is this? Matches only on stable ids (IDENTITY-7): the Discord user id
+ * and the GitHub numeric user id. On GitHub the numeric id is the only match
+ * (IDENTITY-7.a): no id, or an id nobody declared ⇒ null (undeclared, so
+ * community), whatever the login says. No match, or the ids point at two
+ * different people ⇒ null (never a guess).
  */
 export function resolvePerson(
   dir: PeopleDirectory | null | undefined,
@@ -674,14 +686,6 @@ export function resolvePerson(
     const p = dir.byGithubId.get(githubId);
     if (p) hits.add(p);
   }
-  const login = validGithubLogin(q.githubLogin ?? undefined);
-  if (login) {
-    const p = dir.byGithubLogin.get(login);
-    const person = p ? dir.people.find((x) => x.id === p) : undefined;
-    if (person && !(githubId && person.githubIds.length > 0 && !person.githubIds.includes(githubId))) {
-      hits.add(person.id);
-    }
-  }
   if (hits.size !== 1) return null;
   const personId = [...hits][0]!;
   const person = dir.people.find((p) => p.id === personId);
@@ -697,6 +701,18 @@ export function resolvePerson(
   if (isOwner) out.role = "owner";
   else if (person.role === "team" || person.role === "community") out.role = person.role;
   return out;
+}
+
+/**
+ * IDENTITY-7.a — people (the owner's included) who have a GitHub login but no
+ * GitHub numeric id, so they are not recognised on GitHub until an id is
+ * linked (`/admin people link … github:<login>` looks it up, or `github_ids` /
+ * `[owner] github_id` in the file). Person ids only, never account ids.
+ */
+export function peopleWithoutGithubId(dir: PeopleDirectory): string[] {
+  return dir.people
+    .filter((p) => p.githubLogins.length > 0 && p.githubIds.length === 0)
+    .map((p) => p.id);
 }
 
 /**

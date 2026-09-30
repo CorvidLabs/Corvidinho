@@ -23,6 +23,8 @@ import {
 } from "./agent/index.ts";
 import { loadLlmEnv } from "./agent/execute.ts";
 import type { InjectionNotice } from "./agent/untrusted.ts";
+import { startWorkspaceDiff } from "./agent/workspace-diff.ts";
+import { delegateDepthFromEnv } from "./autonomous/delegate.ts";
 import { SPAWN_BUN_CONFIG } from "./agent/spawn-argv.ts";
 import { spendDoctorCheck } from "./agent/spend.ts";
 import { attribution } from "./attribution.ts";
@@ -46,11 +48,14 @@ import {
   githubWatchDoctorCheck,
   llmDoctorCheck,
   loadDoctorAllowlist,
+  peopleGithubDoctorCheck,
   projectFilesDoctorChecks,
+  removedVerifyKeyDoctorCheck,
   type DoctorCheck,
 } from "./doctor.ts";
 import { loadAllowlistFile, resolveAllowlistPath } from "./allowlist/load.ts";
 import { formatOwnerDoctorDetail, loadOwnerConfig } from "./identity/owner.ts";
+import { loadDeclaredPeople } from "./identity/people.ts";
 import { loadBuiltins } from "./plugins/builtins.ts";
 import { allowlistFromEnv, isNonInteractive } from "./plugins/env.ts";
 import { forwardedSignals } from "./plugins/proc-group.ts";
@@ -107,13 +112,13 @@ Usage:
                                     Run a typed plugin command (args after -- reach it verbatim)
   corvidinho specsync <list|read|check|brief|coverage|score|change-list|ship-status> [...]
                                     SpecSync agent tools (SPECSYNC-1..6; local binary)
-  corvidinho task run [--task TEXT] [--tier read|tool|code] [--no-verify] [--max-retries N]
+  corvidinho task run [--task TEXT] [--tier read|tool|code] [--max-retries N]
                     [--output text|json|ndjson] [--json]
-                                    LLM tool loop (plugins) when key set; prove-before-done verify gate (AGENT-3/4/5)
+                                    LLM tool loop (plugins) when key set; prove-before-done verify gate (AGENT-3/4/5):
+                                    always on, runs the verify lane when the run's real git diff changed (AGENT-14/15)
                                     --json = --output json (one result); ndjson = live event stream
                                     for bridges, one versioned frame per line (AGENT-8 / CLI-7)
   corvidinho --non-interactive ...  Deny dangerous plugins unless allowlisted (SAFE-1 / CLI-3)
-  corvidinho --no-verify ...        Skip verify gate (local/operator opt-out only)
   corvidinho --project <path> ...   Run as if started in <path>, without cd: its fledge.toml, specs
                                     and .env files, as Bun loads them there (CLI-5)
 
@@ -166,6 +171,9 @@ function envPresent(name: string): boolean {
  * a message like `--tier=code` or `--no-verify` must stay task text, never
  * become a flag (AGENT-5 / SAFE-1). `--task=TEXT` may span lines.
  *
+ * `--no-verify` was removed (AGENT-14): read as a flag it is returned as
+ * `removedFlag`, and `main` refuses the command before anything runs.
+ *
  * `--project <path>` / `--project=<path>` (CLI-5) is read only before a `--`
  * separator, so a plugin argument after `--` is never taken. `project` is ""
  * when the flag has no path (a missing value or one starting with `-`).
@@ -179,7 +187,7 @@ export function parseGlobalFlags(args: string[]): {
   pluginArgs: string[] | undefined;
   nonInteractiveFlag: boolean;
   json: boolean;
-  noVerify: boolean;
+  removedFlag: string | undefined;
   maxRetries: number | undefined;
   taskText: string | undefined;
   tier: CapabilityTier | undefined;
@@ -189,7 +197,7 @@ export function parseGlobalFlags(args: string[]): {
   let pluginArgs: string[] | undefined;
   let nonInteractiveFlag = false;
   let json = false;
-  let noVerify = false;
+  let removedFlag: string | undefined;
   let maxRetries: number | undefined;
   let taskText: string | undefined;
   let tier: CapabilityTier | undefined;
@@ -223,8 +231,8 @@ export function parseGlobalFlags(args: string[]): {
       json = true;
       continue;
     }
-    if (a === "--no-verify") {
-      noVerify = true;
+    if (a === REMOVED_NO_VERIFY_FLAG) {
+      removedFlag = a;
       continue;
     }
     if (a === "--task") {
@@ -267,7 +275,7 @@ export function parseGlobalFlags(args: string[]): {
     }
     rest.push(a);
   }
-  return { rest, pluginArgs, nonInteractiveFlag, json, noVerify, maxRetries, taskText, tier, project };
+  return { rest, pluginArgs, nonInteractiveFlag, json, removedFlag, maxRetries, taskText, tier, project };
 }
 
 /**
@@ -430,6 +438,21 @@ function spawnsInheritProcessEnv(): void {
   bun.spawnSync = withCurrentEnv(bun.spawnSync);
 }
 
+/** The verify skip flag that no longer exists (AGENT-14, REQ-cli-085). */
+export const REMOVED_NO_VERIFY_FLAG = "--no-verify";
+
+/**
+ * A removed flag on the command line (REQ-cli-085): refused before anything
+ * runs, never silently ignored, so nobody believes verification was skipped.
+ */
+export class RemovedFlagError extends Error {
+  readonly hint = "run the command without it; the verify gate runs only when the run changed something";
+  constructor(flag: string) {
+    super(`${flag} was removed: verification can't be skipped (AGENT-14)`);
+    this.name = "RemovedFlagError";
+  }
+}
+
 /** A `--project` path that cannot be used (CLI-5); carries its own hint (REQ-cli-419). */
 export class ProjectDirError extends Error {
   constructor(
@@ -490,6 +513,9 @@ async function doctor(): Promise<number> {
   // CLI-4 — the project files task run's verify gate reads in this dir
   // (fledge.toml, verify lane with spec-check, .specsync/, specs/).
   checks.push(...projectFilesDoctorChecks(process.cwd()));
+  // AGENT-14 — a removed verify switch is ignored; say so ([warn], never fails).
+  const removedKey = removedVerifyKeyDoctorCheck(process.cwd());
+  if (removedKey) checks.push(removedKey);
 
   const pluginCount = size();
   checks.push({
@@ -532,6 +558,15 @@ async function doctor(): Promise<number> {
     mark: ownerLoad.owner && ownerLoad.issues.length === 0 ? "ok" : "info",
     detail: formatOwnerDoctorDetail(ownerLoad),
   });
+  // IDENTITY-7.a — the owner / declared people with a GitHub login but no
+  // numeric GitHub id are not recognised on GitHub ([warn], person ids only).
+  const peopleCheck = peopleGithubDoctorCheck(
+    loadDeclaredPeople({
+      allowlist: { sourcePath: allowPath && existsSync(allowPath) ? allowPath : null },
+      owner: ownerLoad.owner,
+    }),
+  );
+  if (peopleCheck) checks.push(peopleCheck);
   // IDENTITY-2 — ADMIN is owner-only; legacy admin lists are ignored.
   if (
     (process.env.CORVIDINHO_DISCORD_ADMIN_USERS ?? "").trim() ||
@@ -730,7 +765,7 @@ async function pluginsRun(
 }
 
 const TASK_RUN_USAGE =
-  "usage: corvidinho task run [--task TEXT] [--tier read|tool|code] [--no-verify] [--max-retries N] [--output text|json|ndjson] [--json]";
+  "usage: corvidinho task run [--task TEXT] [--tier read|tool|code] [--max-retries N] [--output text|json|ndjson] [--json]";
 
 /**
  * `--output text|json|ndjson` for `task run` (CLI-7). Parsed only here so a
@@ -761,14 +796,13 @@ export function parseTaskOutputMode(
 }
 
 /**
- * Demo task: marks a synthetic file change so the verify gate exercises
- * (unless --no-verify). Bridges MUST NOT pass --no-verify (REQ-cli-085 /
- * REQ-discord-085 / REQ-watch-085 / AGENT-4); the flag is local opt-out only.
+ * One task through the prove-before-done loop (demo stub without an LLM
+ * key). The verify gate is always on (AGENT-14, REQ-cli-085): Discord, WATCH,
+ * schedules, /work, delegate workers and this CLI all reach it here.
  * `ndjson` streams one frame per line (REQ-cli-073 / REQ-agent-073).
  */
 async function taskRun(opts: {
   output: TaskOutputMode;
-  noVerify: boolean;
   maxRetries: number | undefined;
   taskText: string | undefined;
   tier: CapabilityTier | undefined;
@@ -847,8 +881,12 @@ async function taskRun(opts: {
       cwd,
       task: opts.taskText,
       config,
-      verifyBeforeComplete: opts.noVerify ? false : undefined,
       maxRetries: opts.maxRetries,
+      // REQ-agent-015: a delegate or council worker runs in its lead's talk
+      // worktree and leaves the verified marker to the lead's gate.
+      ...(delegateDepthFromEnv() > 0
+        ? { workspaceDiff: (dir: string) => startWorkspaceDiff(dir, {}, { nested: true }) }
+        : {}),
       signal: abort.signal,
       onEvent: handleEvent,
       execute: async (ctx) => {
@@ -1055,12 +1093,17 @@ export async function main(argv: string[]): Promise<number> {
     pluginArgs,
     nonInteractiveFlag,
     json: globalJson,
-    noVerify,
+    removedFlag,
     maxRetries,
     taskText,
     tier,
     project,
   } = parseGlobalFlags(raw);
+  // AGENT-14 (REQ-cli-085): verification can't be skipped; a removed skip
+  // flag stops the command before anything runs.
+  if (removedFlag) {
+    return reportCliError(new RemovedFlagError(removedFlag), { json: wantsJson(raw) });
+  }
   // CLI-5: enter the project before anything reads the cwd or the env.
   if (project !== undefined) {
     const entered = enterProject(project);
@@ -1167,7 +1210,6 @@ export async function main(argv: string[]): Promise<number> {
       }
       return taskRun({
         output,
-        noVerify,
         maxRetries,
         taskText,
         tier,
@@ -1189,7 +1231,7 @@ export function cliErrorHint(err: unknown): string {
   if (err instanceof PluginNotFoundError) {
     return "run `corvidinho plugins list` for the available commands";
   }
-  if (err instanceof ProjectDirError) return err.hint;
+  if (err instanceof ProjectDirError || err instanceof RemovedFlagError) return err.hint;
   const e = err as { code?: unknown; path?: unknown } | null;
   const code = e && typeof e === "object" && typeof e.code === "string" ? e.code : "";
   if (

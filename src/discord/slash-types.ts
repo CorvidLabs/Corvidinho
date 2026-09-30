@@ -18,6 +18,7 @@ import type { WorkPrRunner } from "../work/pr.ts";
 import type { SpendAlertOutbox } from "../agent/spend-outbox.ts";
 import type { ChannelPost } from "./spend-post.ts";
 import type { SendPrivateDm } from "./private-reply.ts";
+import type { GithubUserLookup } from "../identity/github-user.ts";
 
 export type SlashOptionValue = string | number | boolean | null;
 
@@ -124,6 +125,12 @@ export type SlashContext = {
    * inject a fake so no git push or GitHub call happens.
    */
   openWorkPr?: WorkPrRunner;
+  /**
+   * IDENTITY-7.a — looks a GitHub login up to its numeric user id for
+   * `/admin people link github:<login>`. Default `createGithubUserLookup`
+   * (GitHub API); tests inject a fake so no GitHub call happens.
+   */
+  lookupGithubUser?: GithubUserLookup;
 };
 
 export type SlashResult =

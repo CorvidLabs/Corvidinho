@@ -35,7 +35,8 @@ cp allowlist.example.toml ~/.config/corvidinho/allowlist.toml
 # optional DISCORD-6: DISCORD_RATE_LIMIT_WINDOW_MS=60000 DISCORD_RATE_LIMIT_MAX=10
 # optional DISCORD-6 mute seed: DISCORD_MUTED_USER_IDS=
 # owner = the only ADMIN (IDENTITY-1/2/3): CORVIDINHO_OWNER_DISCORD_ID (+ _GITHUB_LOGIN, _DISPLAY)
-#   or allowlist [owner] discord_id / github_login / display (env wins). No owner = nobody ADMIN.
+#   or allowlist [owner] discord_id / github_id / github_login / display (env wins). No owner = nobody ADMIN.
+#   On GitHub the owner is recognised only by [owner] github_id (numeric user id; file only), never the login.
 #   CORVIDINHO_DISCORD_ADMIN_USERS / _ROLES are ignored (bridge + doctor warn if set).
 # optional DISCORD-8 strict: CORVIDINHO_DISCORD_REQUIRE_REQUESTER_CHECK=1
 # optional SAFE-1: CORVIDINHO_ALLOWLIST=…   # dangerous tool names allowed non-interactive (E.3)
@@ -105,18 +106,26 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
 | Source | Keys | Notes |
 |--------|------|-------|
 | Env (wins per field) | `CORVIDINHO_OWNER_DISCORD_ID`, `CORVIDINHO_OWNER_GITHUB_LOGIN`, `CORVIDINHO_OWNER_DISPLAY` | Discord id must be a digits-only snowflake |
-| Allowlist file `[owner]` | `discord_id`, `github_login`, `display` | same file as `CORVIDINHO_ALLOWLIST_FILE` / `~/.config/corvidinho/allowlist.toml`; in a `.json` file, quote `discord_id` (JSON numbers lose snowflake precision) |
+| Allowlist file `[owner]` | `discord_id`, `github_id`, `github_login`, `display` | same file as `CORVIDINHO_ALLOWLIST_FILE` / `~/.config/corvidinho/allowlist.toml`; in a `.json` file, quote `discord_id` (JSON numbers lose snowflake precision). `github_id` (your numeric GitHub user id, `gh api users/<login> --jq .id`) is read from the file only |
 
-- Matching is by Discord snowflake (or lowercased GitHub login) only, never by display name.
+- Matching is by Discord snowflake and, on GitHub, by the numeric user id (`[owner] github_id`)
+  only — never by display name and never by GitHub login (IDENTITY-7.a: a renamed or
+  re-registered login is someone else). Without `github_id` the owner is not recognised on
+  GitHub (WATCH treats the login as an undeclared commenter; `corvidinho doctor` prints
+  `[warn] people-github`); `github_login` is only used to @mention the owner there.
   The display name is shown in `doctor`, `/status` and `/admin config show`; ids are never printed.
 - Declared people (IDENTITY-13/14): add `[people.<id>]` sections to the same file
   (`display`, `nicknames`, `discord_ids`, `github_logins`, `github_ids`; template in
   [`allowlist.example.toml`](../allowlist.example.toml)) or use `/admin people add|link|unlink|remove`
-  (owner-only, SAFE-5 audited). Matched on Discord / GitHub ids only, never names (IDENTITY-7);
-  never changed through chat (IDENTITY-6). Read live, no restart. See [`discord.md`](discord.md) "Declared people".
+  (owner-only, SAFE-5 audited). Matched on Discord ids and GitHub numeric ids only, never names
+  or GitHub logins (IDENTITY-7 / IDENTITY-7.a); an entry with `github_logins` but no `github_ids`
+  still loads but is not recognised on GitHub until `/admin people link person:<id> github:<login>`
+  (looks the numeric id up once and stores it) or `github_ids` in the file. Never changed through
+  chat (IDENTITY-6). Read live, no restart. See [`discord.md`](discord.md) "Declared people".
 - Roles (IDENTITY-8..12): give each declared person `role = "team"` or `role = "community"`
   (no `role` = community), or use `/admin people role` (owner-only, SAFE-5 audited). The owner
-  is always owner; anyone undeclared is community. See E.6.
+  is always owner; anyone undeclared is community. Only the owner and team can start `/work`
+  (IDENTITY-11.a), so with no owner and nobody declared as team nobody can. See E.6.
 - No owner, or a Discord id that is not a snowflake ⇒ **nobody is ADMIN** (IDENTITY-3).
   `doctor` shows `owner: configured: no`.
 - An owner who is muted (`/mute`, `DISCORD_MUTED_USER_IDS`) or on `[discord].deny_users` is not ADMIN.
@@ -192,8 +201,8 @@ project's Fledge plugins; re-check any time with `corvidinho plugins list`). An 
 | `git-push` | true | 2 | true | `/work` should open draft PRs; the remote's OWNER/REPO must also pass the GitHub allowlist (GITHUB-6) |
 | `github-pr-create` | true | 1 | true | `/work` should open draft PRs; needs `GITHUB_TOKEN`/`GH_TOKEN` |
 | `git-branch-create` | true | 2 | true | an operator runs `corvidinho plugins run git-branch-create` non-interactively (`/work` does not need it: the worktree makes the branch) |
-| `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, SAFE-3); never offered to the model from the allowlist until the SAFE-3 decision |
-| `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere), and `plugins list` names any that are not loaded; never offered to the model from the allowlist until the SAFE-3 decision |
+| `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, `env -C` and symlinks included, SAFE-3; refuses `sed -i` / `>` edits, downloads piped into a shell, deletes outside the worktree and secret reads, saying why, SAFE-21; starts without GitHub or git credentials, so pushes, PRs and merges go only through the typed GitHub tools, SAFE-21.a; 10 minute timeout, 64 KiB output cap, output scrubbed); never offered to the model from the allowlist until the SAFE-3 decision |
+| `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere) without GitHub or git credentials (SAFE-21.a), and `plugins list` names any that are not loaded; never offered to the model from the allowlist until the SAFE-3 decision |
 | `memory-forget` | true | 1 | true | the owner's chat should forget memories on request, or an operator runs `corvidinho plugins run memory-forget` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
 | `memory-override` | true | 1 | true | the owner's chat should correct memories on request, or an operator runs `corvidinho plugins run memory-override` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
 | `files-delete` | true | 2 | true | an operator runs `corvidinho plugins run files-delete` non-interactively (SAFE-2 protected paths always refused) |
@@ -216,7 +225,8 @@ What an entry unlocks **today**:
   `github-pr-create`. Without them the reply says
   `not opened — opening a PR from /work needs an explicit allow (GITHUB-5): allowlist … (CORVIDINHO_ALLOWLIST)`
   and the changes stay on the work branch. The PR step also needs verify to pass, the requester
-  to be the owner, and the repo to pass GITHUB-6.
+  to be the owner or a declared team member (only they can start `/work`, IDENTITY-10/11.a),
+  and the repo to pass GITHUB-6.
 - The model's tool catalog in `task run` (CLI-3 / SAFE-1). A dangerous tool is offered to the
   model only when the run's `CORVIDINHO_ALLOWLIST` names it and its `minTier` fits the run's
   tier; an unlisted one stays out, and a call to a tool that is not offered is refused. Role
@@ -306,7 +316,7 @@ Who is who in an allowlisted channel:
   (#102) do not exist yet.
 - Everyone else ⇒ **community**: declared `community`, declared without a role, undeclared,
   muted or deny-listed (IDENTITY-11/12). Muted users are refused (the mute and rate gate runs on
-  chat and on every slash command).
+  chat and on every slash command). Community can't start `/work` (IDENTITY-11.a).
 - WATCH runs, scheduled runs and `delegate` / `council` workers are community whoever triggered
   them.
 - The role is re-read from the people list on every tool call (IDENTITY-12): a
@@ -352,8 +362,9 @@ Community sessions (every non-owner who is not team, plus all WATCH and schedule
   CHANGELOG — `github-docs-read`, or the project files) and the public issues and milestones
   of allowed public repos (`github-issue-list`, `github-milestone-list`). No site URL is a
   source (`web-fetch` is never offered to community).
-- `/session start` and `/work` run for community too, as read-only sessions. `/work` never
-  opens a PR for community.
+- `/session start` runs for community too, as a read-only session. `/work` does not
+  (IDENTITY-11.a): a community member, or anyone undeclared, gets the ephemeral
+  `not authorized` and nothing starts — no worktree, branch, work task, run or PR.
 - The owner keeps the GitHub allowlist (GITHUB-6) and still passes every SAFE gate.
 - A local `corvidinho task run` in a shell has no role session, so these gates do not apply
   there. The bridges always set `CORVIDINHO_ACTING_IS_ADMIN` to `0` or `1` for their runs, and
@@ -380,6 +391,11 @@ text and injection attempts").
   tools and `memory-store` off for the rest of that run and pings the owner on the answer. Each hit is an `injection-suspected` audit row (E.7).
 - Without an owner the refusal still goes out (it says nobody could be told) and the bridge
   logs `[discord] SAFE-13 refusal but no owner is configured`.
+- Schedules: a non-owner's `/schedule create` whose name or prompt looks like an injection
+  attempt stores nothing (private refusal, the owner pinged in the channel). Each tick fences a
+  non-owner's stored name and prompt with the creator's current role, and stored text that
+  looks like an injection is not run: the schedule is paused and the owner pinged once in its
+  channel. The owner's own schedules are unchanged.
 
 ### E.7 Where the logs and the audit trail live
 
@@ -410,7 +426,9 @@ schedules, WATCH, `task run`, delegate and council workers), so the next turn af
 uses the new text; no restart and no setting. It goes into the system prompt first, and
 Corvidinho's rules follow it and win (one message per turn, no spam, no unchecked claims).
 Fixed-text bot posts (the bridge-live note, `/status`, error and spend lines) do not go through
-the model and keep their text.
+the model and keep their text. The bridge-live note in the `/announce` channel is written in the
+persona's voice: one short line with the version and a link to its GitHub Release notes, never a
+changelog bullet list (PERSONA-1.a); editing `persona.md` does not change it.
 
 - Only the copy committed at `HEAD` is loaded. `scripts/corvidinho-update.sh` checks out the
   merged ref, so change the voice with a PR like any other file; a hand edit on the VM is not

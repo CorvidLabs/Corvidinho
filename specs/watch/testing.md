@@ -46,7 +46,8 @@ module: watch
 - `tests/identity.recognise.test.ts` › "GitHub WATCH recognises declared
   people" — `routeEvent` with `people`: the leading `[Corvidinho acting GitHub
   user …]` paragraph (dropped by `planningSelectionText`), renamed login by
-  numeric id, reused login refused, owner by `[owner]` login, strangers
+  numeric id, reused login or a login with no id refused, owner by `[owner]
+  github_id` (the `[owner]` login alone is `declared_person: none`), strangers
   `declared_person: none`, prompt unchanged with nobody declared; fixture
   searcher carries `user_id` to `senderId`; `startWatchPoller` re-reads people
   from its allowlist file per event.
@@ -83,3 +84,32 @@ module: watch
   repo; long rows are clipped at `WATCH_MEMORY_ROW_MAX_CHARS`.
 - `tests/memory.spawn-env.test.ts` › "WATCH spawn clears the acting env" still
   holds (no Discord actor, no confirm tokens, non-ADMIN, non-interactive).
+
+## One verify gate (REQ-watch-006, REQ-watch-073, REQ-watch-085)
+
+- `tests/agent.ndjson-spawn.test.ts`: the WATCH spawn argv has no
+  `--no-verify`; the gate itself (no switch, real diff, "no changes" note) is
+  covered by `tests/agent.loop.test.ts` and `tests/agent.verify-gate.test.ts`.
+## GitHub numeric user id only (REQ-watch-367, IDENTITY-7.a)
+
+- `tests/watch.github-numeric-id.test.ts` — the live Octokit search client
+  (`createOctokitSearchClient`) over a stubbed GitHub transport (no token, no
+  network): issue and comment events carry the API's `user.id` as
+  `senderId`; a comment payload without one has none. On those live events a
+  renamed login with a declared id is that person; the owner's login with no
+  id or another id gets `declared_person: none`, no `role: owner`, no owner or
+  person memory (`enrichWatchPromptWithMemories` `declared: false`) and is
+  flagged by `watchInjectionVerdict`; the owner's own id is the owner and
+  exempt. Through `startWatchPoller` with the live client: an injection comment
+  from the owner's login with another id is refused before any run (one
+  comment @mentioning the owner); an ordinary one runs as undeclared without
+  the owner's memory; the owner's id runs with `role: owner` and the owner's
+  memory.
+- `tests/identity.recognise.test.ts`, `tests/safe.injection.test.ts`,
+  `tests/memory.rank.test.ts` and `tests/memory.recall-github.test.ts` hold the
+  numeric-id rule on the identity block, the SAFE-13 exemption and the memory
+  scope.
+- Fail on base: with the base sources (main 20a0f58) swapped in, the WATCH
+  identity, memory and SAFE-13 cases fail (the owner's re-registered login is
+  treated as the owner); the live mapping case passes on both (it pins the
+  mapping the guard relies on).

@@ -15,6 +15,14 @@ See `tests/plugins.*.test.ts` and `tests/github.*.test.ts`. Prefer fixtures over
   `specs/agent/context.md`, a new `specs/notes.md`), not only `*.spec.md`, for
   files-write / files-edit / files-delete and the git-commit staging of a
   deletion (REQ-plugins-083 / REQ-plugins-182).
+  SAFE-2.a covers every path under `.fledge/` (`.fledge/lanes/verify.toml`,
+  `.fledge/config.toml`, a new lane file, `.fledge` itself) in every spelling
+  (`./`, `src/../`, other case, absolute) and through a symlink to a lane
+  file, a symlink to `.fledge/lanes` and a dangling symlink, for files-write /
+  files-edit / files-delete and the git-commit staging of a deletion, while
+  files-read / files-list of `.fledge/` still work (REQ-plugins-083;
+  `tests/files.plugins.test.ts`, `tests/git.plugins.test.ts`; both fail on
+  main's `isProtectedPath`).
 - web-fetch SAFE-7 guard: every blocked range, DNS answers, redirect/rebinding, caps, content types via injected resolver/transport; loopback-only socket + TLS SNI fixtures (REQ-plugins-111).
 - git-* plugins against temp repos (`git init` in mkdtemp, isolated git config)
   and a local bare remote at `<tmp>/acme/widget.git` gated via
@@ -57,6 +65,30 @@ and a deny-listed channel are refused with exit 3.
 ## discord-user-lookup (REQ-plugins-312)
 
 `tests/discord.user-lookup.test.ts` — see also discord testing companion.
+
+## Shell foot-guns, env -C and symlinked cd (REQ-plugins-087, REQ-plugins-494..495)
+
+`tests/shell.footguns.test.ts` — temp project, temp outside dir and a temp
+`HOME` holding `~/.config/corvidinho/env` and `~/.netrc`; every refused
+command starts with `touch spawned` (and every script writes it first), so a
+refusal that spawned anything is caught. Each SAFE-21 family refuses end to
+end with exit 2, `rule: "SAFE-21"`, its family and a `<why>; <instead>`
+message (edit, download, delete, secret), also from in-root scripts run with
+`sh`; outside victims survive; in-root deletes, reads and redirects to
+`/dev/null` / fd dups still run; downloads used as data are not refused. The
+child env has no LLM / Discord / GitHub keys, askpass or ssh agent, git reads
+no global config and never prompts, gh's config dir is empty, and a
+credential helper in `~/.gitconfig` and in the repo config never runs against
+a local HTTP server answering 401; an aborted run kills `sleep 60` (exit
+130); output is capped and a `ghp_…` token scrubbed.
+`tests/shell.clamp-bypass.test.ts` — `env -C` / `--chdir` / `-iC` / `--ch`
+/ `sudo -D` / `env -S`, `cd` / `pushd` through in-root symlinks that point
+out, and `ln` targets that lead out refuse (unit and end to end, SAFE-3);
+in-root `env -C sub` and a link to an in-root dir still run.
+`tests/shell.clamp-scripts.test.ts` — the written-script case writes through
+`tee`, since a `>` edit is refused first by SAFE-21.
+`tests/runners.plugins.test.ts` — the runners' child env is credential-free
+(SAFE-21.a, REQ-plugins-495).
 
 ## Language runners (REQ-plugins-313..314)
 
@@ -174,12 +206,14 @@ also hold there pass by design).
 Memory on GitHub (MEMORY-8, #67 / REQ-plugins-067, which narrows REQ-plugins-101's
 WATCH `--project` refusal to writes):
 `tests/memory.recall-github.test.ts` › "MEMORY-8 memory in GitHub (WATCH)
-runs" — with GitHub-shaped env a declared commenter (numeric id or login, any
-case) stores into `person:tofu`, recalls with a plain-words `--query` and
-reads `memory-profile`, the same profile Discord reads; the `[owner]`
-GitHub login recalls the owner's Discord-id memory; on GitHub private notes,
+runs" — with GitHub-shaped env a declared commenter (by numeric id, under
+any login — IDENTITY-7.a) stores into `person:tofu`, recalls with a
+plain-words `--query` and reads `memory-profile`, the same profile Discord
+reads; the `[owner] github_id` recalls the owner's Discord-id memory and the
+`[owner]` login alone recalls nothing; on GitHub private notes,
 `memory-forget-me` and `--person` (any ref) are refused and another person's
-rows never show; a login whose numeric id differs saves nothing; an
+rows never show; a login whose numeric id differs, or with no id, saves
+nothing; an
 undeclared commenter saves nothing (own or `--project`), has no personal
 recall and reads only the thread repo's project memory with `--project`; a
 Discord actor always wins over stale GitHub keys.

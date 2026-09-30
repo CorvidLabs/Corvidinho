@@ -350,10 +350,11 @@ type ToolCallPayload = {
 };
 
 function demoExecute(attempt: number): ExecuteResult {
-  // Synthetic file change so the prove-before-done gate exercises when enabled.
+  // Changes nothing, so it claims nothing: the real diff decides what changed
+  // (AGENT-15, REQ-agent-085), and a claim git does not show would run the lane.
   return {
     summary: `demo task attempt ${attempt}`,
-    filesChanged: ["src/cli.ts"],
+    filesChanged: [],
   };
 }
 

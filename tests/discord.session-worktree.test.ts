@@ -301,8 +301,10 @@ describe("soft-TTL purge never parks a busy session (REQ-discord-204)", () => {
       protocolVersion: CORVIDINHO_PROTOCOL_VERSION,
       startedAt: Date.now(),
       channelIds: ["chan-allowed"],
-      // Acting user is not the owner, so /work never runs the PR step here.
-      owner: { discordId: "owner-x" },
+      // The acting user is the owner (IDENTITY-11.a: community can't start
+      // /work); the PR step is a stub, so nothing is committed or pushed.
+      owner: { discordId: "user-1" },
+      openWorkPr: async () => ({ opened: false, reason: "not-allowed", line: "PR: not opened — test stub" }),
     };
   }
 

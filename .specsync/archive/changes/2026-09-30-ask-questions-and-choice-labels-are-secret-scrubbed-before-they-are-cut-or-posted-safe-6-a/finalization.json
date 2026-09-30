@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "ask-questions-and-choice-labels-are-secret-scrubbed-before-they-are-cut-or-posted-safe-6-a",
+  "implementation_commit": "98cf7091e36198eb37c638564524b49299797378",
+  "implementation_tree": "9a2bf4b53b38607c692eec9b4206bc01a760e765",
+  "contract_digest": "35cf2f4d85d2e4cbf75bcd777c853dc509ec8b74adfc8d8ec091681b685f6b98",
+  "workspace_digest": "db60c843675e94fe0d43edc8103e49e768ce73f19e19efd28c1477961af06322",
+  "closing_digest": "282220f64d057a141925978a6a6ad2bc1ff83676b8e9e92e03d2704682ecaeef",
+  "review_digest": "64ae2b2e826038cf4f88703ea147f4fba795b4bf15c2f974200eab43b4da6e68",
+  "finalization_digest": "609a7a66d6d4b043a1241630b9a7cd7567577aac8df9ebc4c04ca12da333b8ed",
+  "timestamp": 1790733328
+}

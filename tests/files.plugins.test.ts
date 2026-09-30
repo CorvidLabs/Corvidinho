@@ -433,6 +433,135 @@ describe("files plugins (REQ-plugins-081..083)", () => {
     }
   });
 
+  // SAFE-2.a: `.fledge/` holds the lane imports the verify gate runs
+  // (`.fledge/lanes/*.toml`), so it is protected like fledge.toml and specs/.
+  test("SAFE-2.a: write/edit/delete refuse every path under .fledge/; reads stay allowed (REQ-plugins-083)", async () => {
+    expect(isProtectedPath(".fledge")).toBe(true);
+    expect(isProtectedPath(".fledge/lanes/verify.toml")).toBe(true);
+    expect(isProtectedPath("./.fledge/lanes/verify.toml")).toBe(true);
+    expect(isProtectedPath(".Fledge/Lanes/verify.toml")).toBe(true);
+    expect(isProtectedPath("src/../.fledge/lanes/verify.toml")).toBe(true);
+    expect(isProtectedPath("pkg/.fledge/config.toml")).toBe(true);
+    expect(isProtectedPath("/home/u/proj/.fledge/lanes/verify.toml", "/home/u/proj")).toBe(true);
+    // Only a `.fledge` component counts.
+    expect(isProtectedPath("docs/fledge.md")).toBe(false);
+    expect(isProtectedPath("fledge/lanes/verify.toml")).toBe(false);
+    expect(isProtectedPath(".fledgerc")).toBe(false);
+    expect(isProtectedPath("src/fledge-lanes.ts")).toBe(false);
+
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-safe2a-fledge-"));
+    try {
+      const lane = ".fledge/lanes/verify.toml";
+      const existing = [lane, ".fledge/config.toml"];
+      mkdirSync(join(dir, ".fledge", "lanes"), { recursive: true });
+      for (const rel of existing) writeFileSync(join(dir, rel), "ORIGINAL\n");
+      mkdirSync(join(dir, "src"));
+      // A link to a lane file, a link to the lanes folder, and a dangling link
+      // to a lane file that does not exist yet.
+      symlinkSync(join(dir, lane), join(dir, "lane-alias.toml"));
+      symlinkSync(join(dir, ".fledge", "lanes"), join(dir, "lanes-link"));
+      symlinkSync(join(dir, ".fledge", "lanes", "planted.toml"), join(dir, "dangling.toml"));
+
+      const refused = (r: { ok: boolean; exitCode?: number; error?: string }) => {
+        expect(r.ok).toBe(false);
+        expect(r.exitCode).toBe(2);
+        expect(r.error).toContain("refused (SAFE-2)");
+        expect(r.error).toContain(".fledge");
+      };
+
+      for (const target of [
+        ...existing,
+        ".fledge/lanes/extra.toml",
+        "./.fledge/lanes/verify.toml",
+        "src/../.fledge/lanes/verify.toml",
+        ".FLEDGE/lanes/verify.toml",
+        join(dir, lane),
+        "lane-alias.toml",
+        "lanes-link/verify.toml",
+        "lanes-link/new.toml",
+        "dangling.toml",
+      ]) {
+        const w = await runPlugin({
+          name: "files-write",
+          args: [target, "HACKED"],
+          cwd: dir,
+          nonInteractive: true,
+        });
+        refused(w);
+      }
+      expect(existsSync(join(dir, ".fledge", "lanes", "extra.toml"))).toBe(false);
+      expect(existsSync(join(dir, ".fledge", "lanes", "new.toml"))).toBe(false);
+      expect(existsSync(join(dir, ".fledge", "lanes", "planted.toml"))).toBe(false);
+      expect(existsSync(join(dir, ".FLEDGE"))).toBe(false);
+
+      for (const target of [
+        ...existing,
+        "./.fledge/lanes/verify.toml",
+        "src/../.fledge/lanes/verify.toml",
+        ".FLEDGE/lanes/verify.toml",
+        join(dir, lane),
+        "lane-alias.toml",
+        "lanes-link/verify.toml",
+      ]) {
+        const e = await runPlugin({
+          name: "files-edit",
+          args: [target, "--old", "ORIGINAL", "--new", "HACKED"],
+          cwd: dir,
+          nonInteractive: true,
+        });
+        refused(e);
+
+        const d = await runPlugin({
+          name: "files-delete",
+          args: [target],
+          cwd: dir,
+          nonInteractive: true,
+          allowlist: ["files-delete"],
+        });
+        refused(d);
+      }
+      for (const rel of existing) {
+        expect(readFileSync(join(dir, rel), "utf8")).toBe("ORIGINAL\n");
+      }
+
+      // Reads stay allowed.
+      const read = await runPlugin({
+        name: "files-read",
+        args: [lane],
+        cwd: dir,
+        nonInteractive: true,
+      });
+      expect(read.error).toBeUndefined();
+      expect(read.ok).toBe(true);
+      expect(read.message).toBe("ORIGINAL\n");
+      const listed = await runPlugin({
+        name: "files-list",
+        args: [".fledge/lanes"],
+        cwd: dir,
+        nonInteractive: true,
+      });
+      expect(listed.ok).toBe(true);
+      expect(JSON.stringify(listed.data)).toContain("verify.toml");
+
+      // A file cannot take the place of the `.fledge` folder itself.
+      const other = mkdtempSync(join(tmpdir(), "corvidinho-safe2a-nofledge-"));
+      try {
+        const w = await runPlugin({
+          name: "files-write",
+          args: [".fledge", "X"],
+          cwd: other,
+          nonInteractive: true,
+        });
+        refused(w);
+        expect(existsSync(join(other, ".fledge"))).toBe(false);
+      } finally {
+        rmSync(other, { recursive: true, force: true });
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("SAFE-2: a project under a keystore-named directory stays writable outside its own keystores", async () => {
     const dir = mkdtempSync(join(tmpdir(), "corvidinho-keystore-tools-"));
     try {

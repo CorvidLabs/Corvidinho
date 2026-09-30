@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "safe-2-a-the-file-tools-refuse-fledge-like-fledge-toml-and-specs-so-a-run-cannot-weaken-the-verify-lane-it-is-judged-by",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "9ba0caa8a98ee760c41608416f053c307ab2b1f0",
+      "contract_digest": "c9dfd9dfd899723de71740928e7748f52284ff7700bbcba4c1fc7a2317f96764",
+      "execution_digest": "2e1e73114303fc5b61f52b7cc3d2156b5f896e1ae0b9b1aa2da96c4f169da09b",
+      "workspace_digest": "6d9f4f02966e3f33a32b460e1bf1e9c58f71224b95df0ac01bfa5c7ad123b29d",
+      "timestamp": 1790729845
+    }
+  ]
+}
