@@ -651,6 +651,12 @@ secret-scrubbed (SAFE-6 `scrubSecrets`) and SHALL be fenced as untrusted data
 with a per-call random marker id; the page title SHALL appear only inside the
 fence. Errors SHALL NOT echo server-chosen text (reason phrase or header
 values) and SHALL be single-line, control-free and length-capped.
+In a scheduled run (`isScheduleRunEnv`, REQ-plugins-496) the per-hop check
+SHALL also refuse, before DNS, a hop to a GitHub host (`github.com`,
+`*.github.com`, `githubusercontent.com`, `*.githubusercontent.com`) that does
+not name a GITHUB-6-allowlisted `OWNER/REPO` (DISCORD-SCHEDULE-3.a); the
+handler SHALL pass the run's env (`deps.env`, default `process.env`) to
+`webFetch`.
 
 Acceptance Criteria
 - `plugins list` shows `web-fetch` with dangerous=true, minTier=1; the default tool catalog leaves it out, it is offered at tool/code tier only when dangerous tools are included and never at read tier; a non-interactive run that has not allowlisted it is denied (SAFE-1); no `web-search` command exists.
@@ -663,6 +669,7 @@ Acceptance Criteria
 - Non-text or malformed content types are refused before the body is read.
 - Output is fenced as untrusted data, control characters are stripped and vendor-key-looking secrets are redacted; a hostile title, Content-Type or status text never appears outside the fence.
 - HTML-to-text tag stripping repeats to a capped fixpoint, so split or nested tags never reassemble into markup and deeply nested hostile markup stays linear.
+- In a scheduled run a direct URL or a redirect into `raw.githubusercontent.com` for a repo off the allowlist is refused on that hop; outside one it is fetched (`tests/github.schedule-repo-gate.test.ts`).
 
 ### REQ-plugins-118
 
@@ -1213,6 +1220,11 @@ allowlisted repo; community reads keep the confirmed-public path
 GITHUB-6 allowlist. Secret-path hiding (REQ-plugins-267) keeps treating team
 like community. No new table, column or schema version; the two env keys are
 internal, set only by the Discord spawn client.
+In a scheduled run (`isScheduleRunEnv`, REQ-plugins-496)
+`checkRepoGateForActingRole` SHALL first refuse, after the deny lists, a repo
+off the GITHUB-6 allowlist for every role with no visibility lookup
+(DISCORD-SCHEDULE-3.a); the role rules above then apply unchanged to what
+passes.
 
 Acceptance Criteria
 - A `role = "team"` person with a team stamp resolves team; the same person with a community stamp, no stamp, muted, deny-listed or demoted in the file resolves community at the next call; an owner stamp for a team person resolves team; undeclared, declared-community and no-role people resolve community even with a team stamp; the owner with the bridge bit resolves owner; no role session resolves null; an unreadable allowlist file resolves community.
@@ -1222,6 +1234,7 @@ Acceptance Criteria
 - In a team `/work` run `files-write` refuses `credentials.json`, `id_rsa`, `*.pem` and `.ssh/…`, and `files-edit` on a secret file refuses without saying whether the old string matched, leaving the file unchanged; the owner edits it.
 - Team reads pass on an allowlisted or confirmed-public repo and are refused on a private non-allowlisted one; team writes on a public non-allowlisted repo are refused; community writes are refused; deny lists win.
 - Every existing ROLES-CHAT test passes unchanged; regression tests in `tests/roles.team.test.ts` fail on the base sources and pass after.
+- In a scheduled run a public repo off the allowlist is refused for every role before any visibility lookup, and the role rules still apply to an allowlisted one (`tests/github.schedule-repo-gate.test.ts`).
 
 ### REQ-plugins-066
 
@@ -1266,12 +1279,17 @@ token) SHALL be refused as unconfirmed (fail closed); in both cases the plugin
 SHALL make no further GitHub call for that repo. ADMIN and non-role sessions
 keep the GITHUB-6 allowlist gate. No env var, flag, config key or command is
 added.
+In a scheduled run and its `delegate` / `council` workers (`isScheduleRunEnv`,
+REQ-plugins-496) a repo off the GITHUB-6 allowlist SHALL be refused before any
+visibility lookup, even when it is public (DISCORD-SCHEDULE-3.a); only an
+allowlisted repo then takes the confirmed-public path above.
 
 Acceptance Criteria
 - A community session with no injected lookup and GitHub answering `private: true` for the repo is refused with "private GitHub repos" by `checkRepoGateForActingRole` and by `github-pr-list` (exit 3), and no pulls request is sent.
 - GitHub answering 404, or no GitHub token (no request sent), is refused with "could not confirm the repo is public".
 - GitHub answering `private: false` passes the gate and `github-pr-list` sends its pulls request.
 - Fixture tests stub `fetch` (Octokit's transport); no live token or network. The private-repo test fails when the lookup always answers public.
+- In a scheduled run a public repo off the allowlist is refused and no visibility request is sent; a community chat (`sess_*`) keeps the public path (`tests/github.schedule-repo-gate.test.ts`).
 
 ### REQ-plugins-071
 
@@ -1407,4 +1425,43 @@ Acceptance Criteria
 - An undeclared commenter saves nothing (own or `--project`), has no personal recall and reads only the thread repo's project memory with `--project`.
 - A Discord actor wins over stale GitHub keys.
 - `tests/memory.recall-github.test.ts` covers each and fails on the stacked base sources.
+
+### REQ-plugins-496
+
+Scheduled runs SHALL read and act only on GitHub-allowlisted repos, even
+public ones (DISCORD-SCHEDULE-3.a). `src/plugins/roles.ts` SHALL export
+`SCHEDULE_SESSION_PREFIX` (`"schedule_"`) and `isScheduleRunEnv(env)`, true
+exactly when `CORVIDINHO_DISCORD_SESSION_ID` starts with the prefix; the
+scheduler SHALL build every run's session id as the prefix plus the schedule
+id, and `delegate` / `council` workers SHALL keep that key (the worker env
+drops only `DISCORD_*`, `CORVIDINHO_ACTING_*` and the token keys), so a
+worker of a scheduled run is one too. In such an env
+`checkRepoGateForActingRole` SHALL, after the deny lists and before the role
+rules, refuse a repo that fails `checkGithubRepo` (the GITHUB-6 allowlist,
+deny wins, empty allow refuses) for every role, with no visibility lookup,
+and the error SHALL name DISCORD-SCHEDULE-3.a; a repo that passes SHALL still
+go through the role rules (a community run's reads need a confirmed-public
+repo, its writes stay refused, ROLES-CHAT-3/8). This one gate SHALL cover
+every `github-*` command, `github-pr-diff` / `github-pr-files` and
+`github-docs-read` / `github-milestone-list`. `web-fetch` in such an env SHALL
+refuse (`blocked`, exit 2), in its shared per-hop URL rule (the first hop and
+every redirect target, before DNS or any connection), a URL whose host is
+`github.com`, a `*.github.com` host, `githubusercontent.com` or a
+`*.githubusercontent.com` host unless it names an `OWNER/REPO` that passes
+`checkGithubRepo`: only `/<owner>/<repo>/…` on `github.com`, `www.github.com`,
+`codeload.github.com` and `raw.githubusercontent.com`, and
+`/repos/<owner>/<repo>/…` on `api.github.com` (segments percent-decoded, a
+trailing `.git` dropped, `[A-Za-z0-9._-]` only, not `.` or `..`) name one; the
+allowlist SHALL be read once per call for the run's env (`tryLoadAllowlist`)
+and an unreadable one SHALL refuse every GitHub hop. The refusal SHALL name
+only the host, never the path. Other hosts, and runs whose session id is not
+`schedule_*` (chat, `/work`, WATCH, the local CLI), SHALL be unchanged. No
+env var, config key, command, table, column or schema version.
+
+Acceptance Criteria
+- `isScheduleRunEnv` is true for a `schedule_*` session id and false for `sess_*`, `work_*`, `wsess_*`, empty and unset; the scheduler's run session id is `SCHEDULE_SESSION_PREFIX` plus the schedule id; `buildDelegateSpawn` from a schedule lead (owner or community stamp, and a council voice env) keeps it.
+- In a schedule env a public repo off the allowlist is refused for the owner and community stamps and for a worker env, naming DISCORD-SCHEDULE-3.a, without calling the visibility lookup; an allowlisted repo passes; a denied repo is refused; a community write on an allowlisted repo is refused (ROLES-CHAT-3) and a community read of an allowlisted private repo is refused (ROLES-CHAT-8), while the owner stamp reads it; a `sess_*` community chat still reads the public repo.
+- `github-pr-list`, `github-issue-list`, `github-pr-diff`, `github-pr-files`, `github-docs-read` and `github-milestone-list` in a schedule env refuse a public off-list repo with exit 3 and send no GitHub request.
+- `web-fetch` in a schedule env refuses GitHub-host URLs of an off-list repo (github.com in any case or with a trailing dot, www, api `/repos/`, codeload, raw.githubusercontent.com), gists, other GitHub hosts, GitHub paths naming no repo and a denied repo, before DNS; allowlisted repos and other hosts fetch; a redirect into raw.githubusercontent.com for an off-list repo, and an allowlisted GitHub URL redirecting off the list, are refused on that hop; an unreadable allowlist refuses GitHub hops only; outside a schedule env the same URLs fetch; the handler passes the run's env (exit 2 in a schedule env).
+- Regression tests in `tests/github.schedule-repo-gate.test.ts` fail on the base sources and pass after.
 

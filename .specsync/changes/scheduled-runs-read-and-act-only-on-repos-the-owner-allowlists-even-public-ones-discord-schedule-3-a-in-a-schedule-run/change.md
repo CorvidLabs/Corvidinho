@@ -1,6 +1,6 @@
 ---
 id: scheduled-runs-read-and-act-only-on-repos-the-owner-allowlists-even-public-ones-discord-schedule-3-a-in-a-schedule-run
-state: draft
+state: implementing
 type: feature
 base_commit: dec7c31a2594673cdc3628302aef22bc05aae827
 ---
