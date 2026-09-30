@@ -953,7 +953,7 @@ describe("Discord: the footer names the model that answered and prices each mode
     expect(edit.content).toBe(FELL.summary);
     const cost = formatUsd(answerSpendFor(FELL_USAGE, "gpt-4.1", FELL.usageByModel).costMicroUsd!);
     expect((edit.embed as DiscordEmbedPayload).footer!.text).toMatch(
-      new RegExp(`^gpt-4\\.1 \\(fell back from gpt-5\\) \\| 3k tokens \\| ${cost.replace(/[.$]/g, "\\$&")} \\| \\d+s`),
+      new RegExp(`^gpt-4\\.1 \\(fell back from gpt-5\\) \\| 3k tokens \\| ${cost.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\| \\d+s`),
     );
   });
 
