@@ -1196,12 +1196,15 @@ refused before `git worktree add`, which would otherwise make an empty orphan
 worktree —, a git error, an unusable base dir) or the start subdirectory is
 missing in it (untracked, ignored or uncommitted), the run SHALL call no
 model, remove what it made (the worktree, and its branch when that has no
-commits of its own), and exit 1 through `reportCliError` with one scrubbed
-line (`task run could not make its worktree: <git's fatal line>` / `task
-run's worktree has no <subdir>: …`) and the hint `pass --here to run in this
-checkout` (`--json`: `{ ok: false, error }` on stdout); it SHALL never fall
-back to the checkout. SIGINT / SIGTERM are hooked before the worktree is
-made (REQ-cli-244): a signal before or while it is made SHALL give exit 130
+commits of its own), including what a failed `git worktree add -b` still
+left under this run's own fresh names (the branch git makes before the
+checkout, and the whole worktree when only a post-checkout hook failed, as
+git-lfs's does without git-lfs), and exit 1 through `reportCliError` with one
+scrubbed line (`task run could not make its worktree: <git's fatal: or
+error: line, else its last line>` / `task run's worktree has no <subdir>: …`)
+and the hint `pass --here to run in this checkout` (`--json`: `{ ok: false,
+error }` on stdout); it SHALL never fall back to the checkout. SIGINT /
+SIGTERM are hooked before the worktree is made (REQ-cli-244): a signal before or while it is made SHALL give exit 130
 with `corvidinho: cancelled while making the task worktree`, no model call
 and nothing left behind.
 
@@ -1210,8 +1213,12 @@ the process SHALL `chdir` back and `finishCliTaskWorkspace` SHALL remove the
 worktree only when `git status --porcelain` there is empty, and delete its
 branch only when it has no commits of its own (`parkWorktree` /
 `branchHasOwnCommits`); a worktree with uncommitted changes, or one git
-cannot read, SHALL be kept with its branch, never force-removed. What is kept
-SHALL be named on stderr in text mode (`Kept worktree <dir> (branch <b>): it
+cannot read, SHALL be kept with its branch, never force-removed. The branch
+meant is the one the worktree is on at the end: its own `talk/cli_…`, or a
+branch the run made and switched to (`git-branch-create`); then the
+`talk/cli_…` branch SHALL be deleted when every commit on it is also on the
+checkout's `HEAD` or that branch, and otherwise kept and named too (`Also kept
+branch <talk>: it has commits of its own.`). What is kept SHALL be named on stderr in text mode (`Kept worktree <dir> (branch <b>): it
 has uncommitted changes.` / `Removed worktree <dir>; kept branch <b>: it has
 commits of its own.`) and, for every run that used its own worktree, on the
 optional additive `TaskResult.workspace` `{ dir, branch, kept, branchKept }`
@@ -1230,5 +1237,7 @@ Acceptance Criteria
 - A run that changes nothing (`--task --here` and `-- --here`, ndjson) ends `done` with `workspace.kept` and `branchKept` false and nothing left.
 - An old-bridge child (`CORVIDINHO_ACTING_IS_ADMIN=0`, no `--here`) makes no worktree.
 - An untracked start subdir, a file as `WORKTREE_BASE_DIR` (`--json`: the error object and the hint on stderr) and an unborn HEAD exit 1 with the `pass --here` hint and no model call.
-- SIGINT while `git worktree add` runs exits 130 with the cancelled line, no model call, and no worktree or branch left.
+- SIGINT while `git worktree add` runs, to the CLI alone or to the whole process group while a post-checkout hook waits (Ctrl-C at a terminal), exits 130 with the cancelled line, no model call, and no worktree or branch left.
+- A post-checkout hook that fails (as git-lfs's does without git-lfs), in-process and through the real CLI: exit 1 with the hook's line and the `pass --here` hint, no model call, and neither the worktree nor its `talk/cli_…` branch left.
+- A run that switched its worktree to a branch of its own: with commits there, the worktree is removed, that branch is named and kept and the empty talk branch is deleted; dirty, the worktree is kept under that branch's name; a talk branch with commits only on it is kept and named (alone, or with `Also kept branch …` when both have commits of their own).
 

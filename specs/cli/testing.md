@@ -162,8 +162,12 @@ test removes the worktrees and branches it made.
   in the same subdir and has neither the checkout's uncommitted edit nor its
   untracked file; `--here`, a non-git dir and every child env stay in place;
   an untracked start subdir and an unborn HEAD fail closed with nothing left;
-  an aborted signal is `cancelled`; a dirty worktree is kept with its branch,
-  a clean one with a commit is removed and its branch kept.
+  a failing post-checkout hook fails closed and leaves neither the worktree
+  nor the branch `git worktree add` made; an aborted signal is `cancelled`; a
+  dirty worktree is kept with its branch, a clean one with a commit is
+  removed and its branch kept; after the run switched to a branch of its own,
+  that branch is the one named and the talk branch goes unless it has commits
+  only on it (then it is named too).
 - The real CLI: the default run's edit lands in the worktree (not the
   checkout), the first event is the start line and `result.workspace` names
   the kept worktree (`--json`), text mode prints the start and kept lines;
@@ -171,8 +175,11 @@ test removes the worktrees and branches it made.
   leaves nothing (`--task --here`, `-- --here`); an old-bridge child
   (`CORVIDINHO_ACTING_IS_ADMIN=0`) makes nothing; an untracked subdir, a file
   as `WORKTREE_BASE_DIR` and an unborn HEAD exit 1 with the `pass --here`
-  hint and no model call; SIGINT during `git worktree add` (a `git` wrapper
-  that pauses there) exits 130 with nothing left.
+  hint and no model call; a failing post-checkout hook exits 1 with the
+  hook's line and leaves no worktree or branch; SIGINT during `git worktree
+  add` (a `git` wrapper that pauses there, or a post-checkout hook that waits
+  while the whole process group gets it, as Ctrl-C at a terminal does) exits
+  130 with nothing left.
 - Existing spawned `task run` tests in git repos pass `--here` (they test
   in-place behaviour).
 - Fail on base: with the base's (9ea4005) six modified sources swapped in
@@ -180,4 +187,9 @@ test removes the worktrees and branches it made.
   load (`parseTaskHere` is missing); with that import stubbed, 8 of 18 fail —
   every real-CLI worktree case, the flag parse and both spawner argv cases —
   and the 10 that pass are the in-process units of the new module plus the
-  `--here` and child cases, which run in place on the base too.
+  `--here` and child cases, which run in place on the base too. The review
+  round added seven cases (the failing hook, in-process and real CLI; SIGINT
+  to the whole process group mid-checkout; the switched branch named, kept
+  dirty, talk branch only, both branches kept): with the first cut of
+  `src/worktree/cli-run.ts` (4c20563) swapped in, 6 fail (the
+  talk-branch-only case passes there too); restored, 25 of 25 pass.

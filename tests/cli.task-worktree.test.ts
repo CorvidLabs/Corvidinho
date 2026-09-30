@@ -14,6 +14,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   symlinkSync,
   writeFileSync,
@@ -117,6 +118,19 @@ function cleanRepo(repo: string): void {
 afterEach(() => {
   while (made.length > 0) cleanRepo(made.pop()!);
 });
+
+/**
+ * A post-checkout hook that fails, as git-lfs's does when git-lfs is not
+ * installed: `git worktree add -b` then exits non-zero after it has made the
+ * branch and the whole worktree.
+ */
+function failingCheckoutHook(base: string, repo: string): void {
+  const hooks = join(base, "hooks");
+  mkdirSync(hooks, { recursive: true });
+  writeFileSync(join(hooks, "post-checkout"), "#!/bin/sh\necho 'git-lfs was not found on your path' >&2\nexit 2\n");
+  chmodSync(join(hooks, "post-checkout"), 0o755);
+  git(repo, "config", "core.hooksPath", hooks);
+}
 
 /** A fake `fledge` whose verify lane passes with a test summary. */
 function fakeFledgeBin(base: string): string {
@@ -273,6 +287,19 @@ describe("enterCliTaskWorkspace (REQ-cli-122)", () => {
     expect(cliBranches(repo)).toEqual([]);
   });
 
+  test("a failing post-checkout hook fails closed and removes the worktree and branch git left", async () => {
+    const { base, repo } = makeRepo();
+    failingCheckoutHook(base, repo);
+    const entered = await enterCliTaskWorkspace({ cwd: repo, here: false, env: {} });
+    expect(entered.ok).toBe(false);
+    if (entered.ok) return;
+    expect(entered.cancelled).toBe(false);
+    expect(entered.error).toBe("task run could not make its worktree: git-lfs was not found on your path");
+    expect(linked(repo)).toEqual([]);
+    expect(cliBranches(repo)).toEqual([]);
+    expect(readdirSync(join(base, ".corvid-worktrees"))).toEqual([]);
+  });
+
   test("a repo with no commit yet fails closed", async () => {
     const { repo } = makeRepo({ commit: false });
     const entered = await enterCliTaskWorkspace({ cwd: repo, here: false, env: {} });
@@ -309,6 +336,64 @@ describe("finishCliTaskWorkspace: only clean worktrees and empty branches go (RE
     expect(done.report).toEqual({ dir: ws.dir, branch: ws.branch, kept: true, branchKept: true });
     expect(done.note).toBe(`Kept worktree ${ws.dir} (branch ${ws.branch}): it has uncommitted changes.`);
     expect(readFileSync(join(ws.dir, "new.txt"), "utf8")).toBe("work\n");
+    expect(cliBranches(repo)).toEqual([ws.branch]);
+  });
+
+  test("a branch the run made and switched to is the one named and kept; the talk branch goes", async () => {
+    const { repo } = makeRepo();
+    const ws = await enter(repo);
+    git(ws.dir, "switch", "-q", "-c", "feat/note");
+    writeFileSync(join(ws.dir, "new.txt"), "work\n");
+    git(ws.dir, "add", "new.txt");
+    git(ws.dir, "commit", "-q", "-m", "work");
+    const done = await finishCliTaskWorkspace(ws);
+    expect(done.report).toEqual({ dir: ws.dir, branch: "feat/note", kept: false, branchKept: true });
+    expect(done.note).toBe(`Removed worktree ${ws.dir}; kept branch feat/note: it has commits of its own.`);
+    expect(existsSync(ws.dir)).toBe(false);
+    expect(cliBranches(repo)).toEqual([]);
+    expect(git(repo, "log", "-1", "--format=%s", "feat/note").trim()).toBe("work");
+  });
+
+  test("a dirty worktree on a branch the run made is kept under that branch's name", async () => {
+    const { repo } = makeRepo();
+    const ws = await enter(repo);
+    git(ws.dir, "switch", "-q", "-c", "feat/wip");
+    writeFileSync(join(ws.dir, "new.txt"), "work\n");
+    const done = await finishCliTaskWorkspace(ws);
+    expect(done.report).toEqual({ dir: ws.dir, branch: "feat/wip", kept: true, branchKept: true });
+    expect(done.note).toBe(`Kept worktree ${ws.dir} (branch feat/wip): it has uncommitted changes.`);
+    expect(cliBranches(repo)).toEqual([]);
+  });
+
+  test("a talk branch with commits only on it stays when the run switched off it", async () => {
+    const { repo } = makeRepo();
+    const ws = await enter(repo);
+    writeFileSync(join(ws.dir, "one.txt"), "1\n");
+    git(ws.dir, "add", "one.txt");
+    git(ws.dir, "commit", "-q", "-m", "on talk");
+    git(ws.dir, "switch", "-q", "-c", "feat/other", "main");
+    const done = await finishCliTaskWorkspace(ws);
+    expect(done.report).toEqual({ dir: ws.dir, branch: ws.branch, kept: false, branchKept: true });
+    expect(done.note).toBe(`Removed worktree ${ws.dir}; kept branch ${ws.branch}: it has commits of its own.`);
+    expect(cliBranches(repo)).toEqual([ws.branch]);
+  });
+
+  test("both branches with commits of their own are kept and named", async () => {
+    const { repo } = makeRepo();
+    const ws = await enter(repo);
+    writeFileSync(join(ws.dir, "one.txt"), "1\n");
+    git(ws.dir, "add", "one.txt");
+    git(ws.dir, "commit", "-q", "-m", "on talk");
+    git(ws.dir, "switch", "-q", "-c", "feat/two", "main");
+    writeFileSync(join(ws.dir, "two.txt"), "2\n");
+    git(ws.dir, "add", "two.txt");
+    git(ws.dir, "commit", "-q", "-m", "on feat");
+    const done = await finishCliTaskWorkspace(ws);
+    expect(done.report).toEqual({ dir: ws.dir, branch: "feat/two", kept: false, branchKept: true });
+    expect(done.note).toBe(
+      `Removed worktree ${ws.dir}; kept branch feat/two: it has commits of its own. ` +
+        `Also kept branch ${ws.branch}: it has commits of its own.`,
+    );
     expect(cliBranches(repo)).toEqual([ws.branch]);
   });
 
@@ -469,6 +554,22 @@ describe("task run CLI in a git repo (SESSION-WORKTREE-1.a, REQ-cli-122)", () =>
     expect(cliBranches(repo)).toEqual([]);
   }, T);
 
+  test("a failed git worktree add leaves no worktree or branch behind: exit 1, git's line, the --here hint", async () => {
+    const { base, repo } = makeRepo();
+    failingCheckoutHook(base, repo);
+    const fake = fakeLlm();
+    const r = await cli(repo, ["task", "run", "--task", "look"], localEnv(fake.env));
+    expect(r.code).toBe(1);
+    expect(r.err.trim().split("\n")).toEqual([
+      "corvidinho: task run could not make its worktree: git-lfs was not found on your path",
+      `hint: ${CLI_HERE_HINT}`,
+    ]);
+    expect(fake.requests).toHaveLength(0);
+    expect(linked(repo)).toEqual([]);
+    expect(cliBranches(repo)).toEqual([]);
+    expect(readdirSync(join(base, ".corvid-worktrees"))).toEqual([]);
+  }, T);
+
   test("SIGINT while the worktree is made: exit 130, nothing left, no model call", async () => {
     const { base, repo } = makeRepo();
     const fake = fakeLlm();
@@ -499,6 +600,39 @@ describe("task run CLI in a git repo (SESSION-WORKTREE-1.a, REQ-cli-122)", () =>
     expect(fake.requests).toHaveLength(0);
     expect(linked(repo)).toEqual([]);
     expect(cliBranches(repo)).toEqual([]);
+  }, T);
+});
+
+describe("Ctrl-C at a terminal while the worktree is made (REQ-cli-122)", () => {
+  test("SIGINT to the whole process group mid-checkout: exit 130 and git's branch and worktree are removed", async () => {
+    const { base, repo } = makeRepo();
+    const fake = fakeLlm();
+    // A post-checkout hook that says it runs and then waits: by then git has
+    // made the branch and the worktree, and the group's SIGINT kills git too.
+    const hooks = join(base, "hooks");
+    mkdirSync(hooks);
+    const marker = join(base, "hooking");
+    writeFileSync(join(hooks, "post-checkout"), `#!/bin/sh\n: > '${marker}'\nsleep 10\n`);
+    chmodSync(join(hooks, "post-checkout"), 0o755);
+    git(repo, "config", "core.hooksPath", hooks);
+    const proc = Bun.spawn(["bun", CLI, "task", "run", "--task", "look"], {
+      cwd: repo,
+      env: localEnv(fake.env),
+      stdout: "pipe",
+      stderr: "pipe",
+      detached: true,
+    });
+    const deadline = Date.now() + 30_000;
+    while (!existsSync(marker) && Date.now() < deadline) await Bun.sleep(25);
+    expect(existsSync(marker)).toBe(true);
+    process.kill(-proc.pid, "SIGINT");
+    const [code, err] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
+    expect(code).toBe(130);
+    expect(err).toContain("corvidinho: cancelled while making the task worktree");
+    expect(fake.requests).toHaveLength(0);
+    expect(linked(repo)).toEqual([]);
+    expect(cliBranches(repo)).toEqual([]);
+    expect(readdirSync(join(base, ".corvid-worktrees"))).toEqual([]);
   }, T);
 });
 

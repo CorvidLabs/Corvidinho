@@ -203,7 +203,10 @@ export type TaskResult = {
 export type TaskWorkspaceReport = {
   /** The linked worktree the run worked in. */
   dir: string;
-  /** Its branch (`talk/cli_…`). */
+  /**
+   * The branch the worktree was on at the end: its own `talk/cli_…`, or a
+   * branch the run made and switched to (`git-branch-create`).
+   */
   branch: string;
   /** The worktree is still there (not clean, or it could not be removed). */
   kept: boolean;

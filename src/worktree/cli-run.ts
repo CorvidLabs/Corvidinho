@@ -33,12 +33,20 @@
 
 import { randomUUID } from "node:crypto";
 import { existsSync, realpathSync, statSync } from "node:fs";
-import { isAbsolute, join, relative } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import type { TaskWorkspaceReport } from "../agent/types.ts";
 import { delegateDepthFromEnv } from "../autonomous/delegate.ts";
 import { roleSessionActive } from "../plugins/roles.ts";
 import { branchExists, branchHasOwnCommits, deleteBranch } from "./cleanup.ts";
-import { ensureTalkWorkspace, isGitRepo, parkWorktree, removeWorktree } from "./manager.ts";
+import {
+  ensureTalkWorkspace,
+  generateTalkBranchName,
+  getWorktreeBaseDir,
+  isGitRepo,
+  parkWorktree,
+  removeWorktree,
+  talkWorktreeId,
+} from "./manager.ts";
 
 /** The hint on every refusal: the opt-out that runs in the user's checkout. */
 export const CLI_HERE_HINT = "pass --here to run in this checkout";
@@ -108,11 +116,18 @@ function hasHeadCommit(dir: string): boolean {
   }
 }
 
-/** The `fatal:` line of a git error, else its first line. */
+/**
+ * The `fatal:` / `error:` line of a git error, else its last line (a failing
+ * checkout hook's own message comes last; git's `Preparing worktree` progress
+ * line comes first).
+ */
 function gitErrorLine(error: string): string {
-  const lines = error.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const lines = error
+    .split(/\r?\n/)
+    .map((l) => l.trim().replace(/^Failed to create worktree:\s*/, ""))
+    .filter(Boolean);
   const fatal = lines.find((l) => /(^|\s)(fatal|error):/.test(l));
-  return (fatal ?? lines[0] ?? "unknown error").replace(/^Failed to create worktree:\s*/, "");
+  return fatal ?? lines[lines.length - 1] ?? "unknown error";
 }
 
 /**
@@ -188,6 +203,16 @@ export async function enterCliTaskWorkspace(opts: {
     made = { ok: false as const, error: err instanceof Error ? err.message : String(err) };
   }
   if (!made.ok) {
+    // A failed `git worktree add -b` can still leave what it made: the branch
+    // (git makes it before the checkout), and the whole worktree when only a
+    // post-checkout hook failed (git-lfs or husky with nothing installed) or
+    // the signal came mid-way. Both names come from this run's fresh random
+    // talk id, so they are only ever this run's; remove them.
+    await discardNewWorktree(
+      repoTop,
+      resolve(getWorktreeBaseDir(repoTop), talkWorktreeId(sessionId)),
+      generateTalkBranchName(sessionId),
+    );
     if (opts.signal?.aborted) return cancelled;
     return {
       ok: false,
@@ -261,37 +286,105 @@ export type FinishedCliTaskWorkspace = {
   note: string | null;
 };
 
+/** The branch checked out in `dir`; null when HEAD is detached or git cannot say. */
+async function checkedOutBranch(dir: string): Promise<string | null> {
+  try {
+    const proc = Bun.spawn(["git", "symbolic-ref", "--quiet", "--short", "HEAD"], {
+      cwd: dir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [out] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    if ((await proc.exited) !== 0) return null;
+    return out.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Delete the run's talk branch after the run switched its worktree to a
+ * branch of its own (`git-branch-create`), when every commit on it is also on
+ * the checkout's HEAD or on that branch; any doubt keeps it.
+ */
+async function dropMovedOffTalkBranch(repoTop: string, talk: string, end: string): Promise<void> {
+  try {
+    if (!(await branchExists(repoTop, talk))) return;
+    const not = ["HEAD"];
+    if (await branchExists(repoTop, end)) not.push(`refs/heads/${end}`);
+    const proc = Bun.spawn(["git", "rev-list", "--count", `refs/heads/${talk}`, "--not", ...not], {
+      cwd: repoTop,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [out] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    if ((await proc.exited) !== 0 || out.trim() !== "0") return;
+    await deleteBranch(repoTop, talk);
+  } catch {
+    // Keep the branch.
+  }
+}
+
 /**
  * At the end of a run (done, failed, blocked or cancelled): remove the
  * worktree only when it is clean, and its branch only when the branch has no
  * commits of its own (`parkWorktree`). A dirty worktree, or one git cannot
- * read, is kept with its branch. Never throws.
+ * read, is kept with its branch. The branch named is the one the worktree is
+ * on at the end: the run's own `talk/cli_…`, or a branch the run made and
+ * switched to (then the talk branch goes when nothing is only on it). Never
+ * throws.
  */
 export async function finishCliTaskWorkspace(
   ws: Extract<CliTaskWorkspace, { kind: "worktree" }>,
 ): Promise<FinishedCliTaskWorkspace> {
-  const kept = (why: string, branchKept = true): FinishedCliTaskWorkspace => ({
-    report: { dir: ws.dir, branch: ws.branch, kept: true, branchKept },
-    note: `Kept worktree ${ws.dir} (branch ${ws.branch}): ${why}.`,
+  let branch = ws.branch;
+  /** The talk branch, when the run switched off it and it still has commits only on it. */
+  const talkAlso = async (): Promise<string> =>
+    branch !== ws.branch && (await branchExists(ws.repoTop, ws.branch).catch(() => true))
+      ? ` Also kept branch ${ws.branch}: it has commits of its own.`
+      : "";
+  const kept = async (why: string, branchKept = true): Promise<FinishedCliTaskWorkspace> => ({
+    report: { dir: ws.dir, branch, kept: true, branchKept },
+    note: `Kept worktree ${ws.dir} (branch ${branch}): ${why}.${await talkAlso()}`,
   });
   try {
     if (existsSync(ws.dir)) {
+      branch = (await checkedOutBranch(ws.dir)) ?? ws.branch;
+      if (branch !== ws.branch) await dropMovedOffTalkBranch(ws.repoTop, ws.branch, branch);
       const clean = await porcelainClean(ws.dir);
-      if (clean === null) return kept("git could not say whether it is clean");
-      if (!clean) return kept("it has uncommitted changes");
-      await parkWorktree(ws.repoTop, ws.dir, { kind: "worktree", branchName: ws.branch });
+      if (clean === null) return await kept("git could not say whether it is clean");
+      if (!clean) return await kept("it has uncommitted changes");
+      await parkWorktree(ws.repoTop, ws.dir, { kind: "worktree", branchName: branch });
       if (existsSync(ws.dir)) {
-        return kept("it could not be removed", await branchExists(ws.repoTop, ws.branch));
+        return await kept("it could not be removed", await branchExists(ws.repoTop, branch));
       }
     }
-    const branchKept = await branchExists(ws.repoTop, ws.branch);
+    // The run's own branch was empty and is gone, but the talk branch it
+    // switched off has commits only on it: that is the branch to name.
+    if (
+      branch !== ws.branch &&
+      !(await branchExists(ws.repoTop, branch)) &&
+      (await branchExists(ws.repoTop, ws.branch))
+    ) {
+      branch = ws.branch;
+    }
+    const branchKept = await branchExists(ws.repoTop, branch);
     return {
-      report: { dir: ws.dir, branch: ws.branch, kept: false, branchKept },
+      report: { dir: ws.dir, branch, kept: false, branchKept },
       note: branchKept
-        ? `Removed worktree ${ws.dir}; kept branch ${ws.branch}: it has commits of its own.`
+        ? `Removed worktree ${ws.dir}; kept branch ${branch}: it has commits of its own.${await talkAlso()}`
         : null,
     };
   } catch {
-    return kept("git could not say whether it is clean");
+    return {
+      report: { dir: ws.dir, branch, kept: true, branchKept: true },
+      note: `Kept worktree ${ws.dir} (branch ${branch}): git could not say whether it is clean.`,
+    };
   }
 }
