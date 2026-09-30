@@ -1,6 +1,6 @@
 ---
 id: one-approve-deny-dm-card-engine-for-everything-that-needs-the-owner-s-ok-exact-action-target-and-amount-one-line-each
-state: implementing
+state: verifying
 type: feature
 base_commit: 13a76f07b272c819e734d1384a46c10471d42f1f
 ---

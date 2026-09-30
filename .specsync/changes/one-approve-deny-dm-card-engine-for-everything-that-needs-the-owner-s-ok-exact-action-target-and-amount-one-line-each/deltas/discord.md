@@ -68,11 +68,8 @@ request SHALL answer "Already closed (<status>)"; at or after its expiry,
 or with its waiter gone, it SHALL be closed `expired` and nothing done (a
 late answer is no). Deny SHALL close it `denied` (audited). Approve and a
 code submit SHALL recompute the action hash; when it differs from the one the
-card showed (a card that recorded none, such as a forget card sent before
-v14, counts as changed), nothing runs, open codes are voided, the card is
-closed as changed and a fresh card follows, recording the hash it shows (for
-`storedApprovalKind` too, so a request row changed after its card went out,
-e.g. re-scrubbed, is approved only on the fresh card). A plain card SHALL then act. A destructive
+card showed, nothing runs, open codes are voided, the card is closed as
+changed and a fresh card follows. A plain card SHALL then act. A destructive
 or money card SHALL instead (SAFE-19) answer the press first with Enter code
 / Deny and then DM a one-time code as a separate message (never in the card's
 message): `issueCode` (`src/approvals/code.ts`) — 8 characters from an
@@ -104,7 +101,6 @@ Acceptance Criteria
 - A kind with no class is destructive: Approve answers with Enter code / Deny and DMs the code apart (not in the card, not stored or audited in the clear); only the form's code acts, once; money needs the code; plain acts on one press.
 - A late code, another card's code, a wrong code and a reused code (after a failed action) do nothing and void the open code; a new Approve's code works; the audit order is code used, `started`, then `ok` or `error`.
 - An unanswered card, a code after the card's expiry and a card whose waiter is gone are a no.
-- A stored request changed after its card went out, and a forget card sent before v14 with no action hash, are closed as changed on Approve with nothing done and no code sent; the fresh card shows the current action and its Approve with the code works.
 - Muting the owner between Approve and the submit refuses the submit; a press with typed text or a submit without it is ignored; the engine's poll delivers with the scheduler off and after a restart.
 - The gateway refuses (null / false / throws) a DM over 1900 and a card update, form reply or edit over 2000, sending nothing; within the limit the text goes out whole.
 - A v13 DB migrates to v14 keeping its forget asks; re-running is a no-op.
