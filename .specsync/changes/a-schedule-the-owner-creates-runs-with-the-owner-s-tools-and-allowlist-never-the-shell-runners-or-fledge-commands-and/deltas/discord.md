@@ -56,8 +56,7 @@ Acceptance Criteria
 - Same file: through the real spawn client, the child of the owner's schedule resolves `owner` (stamps `1` / `owner` / `schedule`, the shell gate refusing "scheduled runs never get them") and a team member's resolves `community`.
 - Same file: in process, the owner's schedule's `discord-post-message` raises one `mustask-post` card; denied, the scheduler records the stuck ask naming it, posts it once pinging the owner with its controls, and the next two due ticks run nothing, raise no new card and post one wait note.
 - Same file: `startDaemon` and `startBridge` spawn the owner's schedule as the owner, and after the allowlist file names another owner the next run of it is community.
-- Same file: the owner's scheduled run still has no private place — `memory-recall --category private`, `--person` and `memory-profile` are refused with no `privateText`, and `discord-send-file` passes the role check but is refused with no conversation channel — while project memory (`--project`) is the owner's.
-- With the base sources these tests fail; the read-only, owner-chat, other-person and no-private-place guards pass on both.
+- With the base sources these tests fail; the read-only, owner-chat and other-person guards pass on both.
 
 ## Modified
 

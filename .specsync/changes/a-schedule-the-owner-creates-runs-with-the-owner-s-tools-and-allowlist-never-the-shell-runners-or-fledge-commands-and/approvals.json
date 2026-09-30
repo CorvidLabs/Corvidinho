@@ -59,6 +59,66 @@
         "discord": "a6e3af4fa9973940d4d9770eb7fd0ca1c508f926303204f1ea87479ef452c339",
         "plugins": "20f20adf57ff3fb90fc788569eebf7580fa24ef3501cf6e396d4c7c7e5616a0f"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790795486,
+      "digest": "9e65512899b0f35f46d1335484b1db7d591cfcb67f5dfc7479c0448381e0ba49",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "a-schedule-the-owner-creates-runs-with-the-owner-s-tools-and-allowlist-never-the-shell-runners-or-fledge-commands-and",
+        "title": "A schedule the owner creates runs with the owner's tools and allowlist (never the shell, runners or Fledge commands) and asks on Approve cards where the must-ask list says so, a denied or lapsed card ending the run with a blocking ask; schedules other people create stay read-only (DISCORD-SCHEDULE-1.a)",
+        "description": "A schedule the owner creates runs with the owner's tools and allowlist (never the shell, runners or Fledge commands) and asks on Approve cards where the must-ask list says so, a denied or lapsed card ending the run with a blocking ask; schedules other people create stay read-only (DISCORD-SCHEDULE-1.a)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "docs/DAEMON.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/cli/cli.spec.md",
+          "specs/cli/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/testing.md",
+          "src/agent/ask.ts",
+          "src/agent/execute.ts",
+          "src/daemon/daemon.ts",
+          "src/discord/agent-client.ts",
+          "src/discord/bridge.ts",
+          "src/plugins/roles.ts",
+          "src/scheduler/service.ts",
+          "tests/agent.allowlisted-dangerous.test.ts",
+          "tests/roles.team.test.ts",
+          "tests/scheduler.owner-role.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "The scheduler reads the owner live at each run (SchedulerServiceOpts.loadOwner, wired by the bridge and the daemon to re-read the owner config; the start-time owner when not wired; a read that throws is no owner) and, after the DISCORD-SCHEDULE-3 creator/channel gate, spawns the run with actingIsAdmin true only when the creator is that live owner and resolves to owner (not muted or deny-listed); every other schedule is spawned community and no schedule passes actingRole, so none is stamped team; the spawned run's tool layer resolves the owner's schedule to owner and any other schedule to community, and resolveActingRole never returns team in a scheduled run (isScheduleRunEnv) whatever the stamp; the owner's schedule run is offered the dangerous tools its allowlist names but never the SAFE-3.a shell, runners or Fledge core runs (the schedule surface stays refused) and createTaskExecute does not discover Fledge plugin commands in a scheduled run; a must-ask call in the owner's schedule run (e.g. discord-post-message) raises the Approve card, and a deny, a lapse or a resent deny ends the run blocked with a stuck ask naming the refused tool, its why, the rule and the card (mustAskRefusedAsk), which the scheduler records so the next due ticks are skipped with one wait note and raise no new card (AUTONOMY-6.a); outside a schedule the refusal still goes back to the model; the schedule's own result/ask/wait posts need no card; an owner schedule on a non-git project keeps its own scoped folder; tests/scheduler.owner-role.test.ts, the schedule-run stamp tests in tests/roles.team.test.ts and tests/agent.allowlisted-dangerous.test.ts fail on the base sources and pass on the branch"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "fb9899d80648e8c84da22828ee5a088a1f26d57767a022c49c21e7afa697f075",
+        "cli": "ccda8abfd7278ce115d3daa58f1eff93db54060a3bb1a16b4e1dbbae4ea1ff4e",
+        "discord": "ccedb21349e23c777269614a11b86f982cdb6241cc39da7756f7c069772ec73f",
+        "plugins": "b7cf0ba24005987418ebafff7cb11b03ec90fdb7075bd965c5f9aaf5e0f79256"
+      }
     }
   ],
   "reopenings": []
