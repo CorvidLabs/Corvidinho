@@ -1,6 +1,6 @@
 ---
 id: verified-requires-that-tests-actually-ran-and-none-were-deleted-agent-15-a-passing-verify-lane-counts-only-when-its
-state: verifying
+state: archived
 type: feature
 base_commit: 156cfa975c6d269b7e3a183cef3c7fdb20cab4f9
 ---
