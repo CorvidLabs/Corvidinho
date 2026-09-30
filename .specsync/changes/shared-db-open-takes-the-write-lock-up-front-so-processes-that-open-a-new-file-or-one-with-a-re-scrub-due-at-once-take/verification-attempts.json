@@ -38,6 +38,25 @@
         "REQ-discord-287",
         "REQ-plugins-287"
       ]
+    },
+    {
+      "timestamp": 1790787194,
+      "commit": "df751257d93f79abc6d36875962fbf970b2144d9",
+      "contract_digest": "b8a9ac16459cd0c520e229bb71cd0d3a8fd46319e5e43740ae0597ea8bc81f24",
+      "execution_digest": "a22415ea36a3183d10fb6cf28b4961db7078920e437b6655727f0a62bbd41d4e",
+      "workspace_digest": "9d8de0634880f3cdbed6533e80511dfef6ddaea66756bb5f363fc576273968f0",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-discord-287",
+        "REQ-plugins-287"
+      ]
     }
   ]
 }
