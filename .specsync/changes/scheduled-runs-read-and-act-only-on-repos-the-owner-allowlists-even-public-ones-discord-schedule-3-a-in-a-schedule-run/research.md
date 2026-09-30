@@ -35,5 +35,8 @@ Existing tests that put a schedule's project in a checkout nested under a
 plain bridge root with no origin: `tests/scheduler.worktree.test.ts`,
 `tests/discord.session-worktree.test.ts` and one case of
 `tests/scheduler.ask-outbox.test.ts`. The verify lane only runs when a run
-changed files, and community schedule runs have no file tools, so the lane
-never runs with the schedule marker today.
+changed files (or git cannot read the diff), and community schedule runs
+have no file tools, so the lane rarely runs with the schedule marker today;
+but it inherits `CORVIDINHO_DISCORD_SESSION_ID`, and the full suite run under
+a `schedule_*` id fails 13 ROLES-CHAT-8 / team gate tests. The test preload
+clears the key (REQ-cli-262), as it clears the other run settings.

@@ -14,4 +14,5 @@ artifact: tasks
 - [x] Fail-on-base proof (base roles / githubPublic / fetch / commands / manager / schedule handler / scheduler swapped in: 13 of the 20 new tests fail; restored: all pass).
 - [x] Docs: `docs/discord.md` (Schedule repos row, nested-checkout scope, upgrade note, roles bullet), `docs/DISCORD-GO-LIVE.md`, `docs/WATCH.md`.
 - [x] Spec: deltas (REQ-plugins-496 Added; REQ-plugins-065 / -493 / -111 and REQ-discord-202 Modified), `plugins.spec.md` / `discord.spec.md` prose, scenarios, error cases, files list; both `testing.md` companions.
+- [x] Test preload clears `CORVIDINHO_DISCORD_SESSION_ID` (REQ-cli-262), pinned in `tests/preload.operator-data-dir.test.ts`.
 - [x] SpecSync approve / check / audit, coverage, `hi check`, tsc, `bun test`, fledge verify.

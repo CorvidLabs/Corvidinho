@@ -15,6 +15,7 @@ Scheduled runs read and act only on repos the owner allowlists, even public ones
 
 - `plugins`
 - `discord`
+- `cli`
 
 ## Acceptance Criteria
 

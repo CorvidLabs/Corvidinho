@@ -29,3 +29,6 @@ Canonical requirements changed (see deltas):
 - Modified **REQ-discord-202** (project scope): for `/schedule create` and
   every tick, a checkout nested inside the bridge root needs an allowlisted
   origin.
+- Modified **REQ-cli-262** (test preload): the preload also clears
+  `CORVIDINHO_DISCORD_SESSION_ID`, so the suite never runs as a scheduled run
+  when a schedule run's verify lane (which inherits the key) runs it.
