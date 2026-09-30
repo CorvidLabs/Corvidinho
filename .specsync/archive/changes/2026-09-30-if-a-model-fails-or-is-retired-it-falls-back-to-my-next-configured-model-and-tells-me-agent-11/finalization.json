@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "if-a-model-fails-or-is-retired-it-falls-back-to-my-next-configured-model-and-tells-me-agent-11",
+  "implementation_commit": "5219269fc6b648b3ec0959ed4452dd12917b7d6e",
+  "implementation_tree": "dcfff7a94b718079ed3783fcd37bcf58f6c4457e",
+  "contract_digest": "bdd76b9844b7f0880f8347ad3020306cbdbca881251731afa9c7f97b57e7642b",
+  "workspace_digest": "ac1bef75d4953249cf57c3278cbb71959c656b5a537f7789c5e0b54d713c47fb",
+  "closing_digest": "72627b4fa5c71f2edcbb26025a7174cf27df710d966edd76a4b573df7efea139",
+  "review_digest": "02b38c18dfe388ac9dd0d3241ba922d87663b91fff98c2fcc2a5b767cbf86727",
+  "finalization_digest": "541c15826c776636999aa509c213771f0e989e66748d46021649c8378252cb0d",
+  "timestamp": 1790789095
+}

@@ -1,6 +1,6 @@
 ---
 id: if-a-model-fails-or-is-retired-it-falls-back-to-my-next-configured-model-and-tells-me-agent-11
-state: implementing
+state: archived
 type: feature
 base_commit: 507d97b75b08ebe86c5e0c5ab19322ea82d683cb
 ---

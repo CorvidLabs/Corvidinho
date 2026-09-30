@@ -7,11 +7,11 @@
   "title": "If a model fails or is retired it falls back to my next configured model and tells me (AGENT-11)",
   "description": "If a model fails or is retired it falls back to my next configured model and tells me (AGENT-11)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "507d97b75b08ebe86c5e0c5ab19322ea82d683cb",
   "created_at": 1790785136,
-  "updated_at": 1790788905,
+  "updated_at": 1790789095,
   "affected_specs": [
     "agent",
     "cli",

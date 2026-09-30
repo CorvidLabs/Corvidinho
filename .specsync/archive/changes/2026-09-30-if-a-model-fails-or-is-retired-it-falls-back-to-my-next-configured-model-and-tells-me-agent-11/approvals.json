@@ -76,6 +76,13 @@
         "plugins": "f51b9852ca9d968b5fcaf6311862d185c7b8f1f2c9ea19d3e89702c4aeb741b0",
         "watch": "627bf44270ee300b0115ce1f6afd0cc956d4f39560ccfd5e46e8463893df1768"
       }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790789095,
+      "digest": "72627b4fa5c71f2edcbb26025a7174cf27df710d966edd76a4b573df7efea139",
+      "note": "Same-PR finalization closing digest"
     }
   ],
   "reopenings": []
