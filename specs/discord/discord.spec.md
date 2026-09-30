@@ -933,6 +933,23 @@ a constant kind, integers and its cap `scope` (`total` / `provider:<id>`,
 SAFE-14; added by an idempotent ALTER, scrubbed on write and in
 `SCRUB_TARGETS`), and a re-scrub skips a listed column an older module-owned
 table does not have yet.
+scrubbed on write and listed in `SCRUB_TARGETS` (SAFE-6); `spend_alerts` has
+no free-text column (a constant kind and integers).
+`openCorvidinhoDb` sets busy_timeout 5000 and foreign_keys on, then runs the
+migration and `ensureScrubbed` in one transaction that takes the write lock
+up front (REQ-discord-287): only its BEGIN IMMEDIATE goes through
+`retryWhileBusy`, tried every millisecond until busy_timeout has passed, so
+an open needs one free moment (not one per statement) and other processes
+committing back to back cannot pass it over for the whole busy_timeout, as
+SQLite's back-off (one try per 100 ms) did. Holding the lock, the body and
+the COMMIT run under busy_timeout and no statement fails part way with
+SQLITE_BUSY. (In a deferred transaction a write after a read fails with it
+at once; the migration's ignored ALTER errors and multi-statement execs,
+where bun reports only the last statement's error, went on past it, and
+opens of a new file or with a re-scrub due failed together.)
+`retryWhileBusy(db, fn)` sets busy_timeout 0 while `fn` runs and restores it
+after; `fn` must be one statement or a BEGIN IMMEDIATE that leaves nothing
+behind when it fails with SQLITE_BUSY; with busy_timeout 0 it runs `fn` once.
 Retained conversations live in `conversation_threads` (schema v13,
 `SCHEMA_VERSION` 13, a forward-only migration after v12's `forget_requests`;
 REQ-discord-472): `summary`
@@ -1360,6 +1377,8 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-30 | verified-requires-that-tests-actually-ran-and-none-were-deleted-agent-15-a-passing-verify-lane-counts-only-when-its: 'Verified' requires that tests actually ran and none were deleted (AGENT-15): a passing verify lane counts only when its output has a recognised test summary (bun test, jest, vitest, cargo test, pytest, go test) with at least one executed test and no test active at the baseline was deleted, retitled or turned off (skip, todo, silenced by only), by name across the repo root; non-git projects walk their test files at run start; /work checks the tree against the merge-base before commit and push |
 | 2026-09-30 | it-asks-me-on-an-approve-card-before-touching-prod-or-deploys-or-making-a-channel-post-anything-else-it-just-does-and: It asks me on an Approve card before touching prod or deploys or making a channel post; anything else it just does and tells me (AUTONOMY-9/9.a, AUTONOMY-10/10.a channel posts, AUTONOMY-11, #97) |
 | 2026-09-30 | i-configure-the-models-openai-compatible-ollama-anthropic-with-no-built-in-default-and-it-says-so-when-none-is-set: I configure the models (OpenAI-compatible, Ollama, Anthropic) with no built-in default, and it says so when none is set (AGENT-13, AGENT-10) |
+| 2026-09-30 | shared-db-open-and-safe-5-audit-append-retry-a-busy-sqlite-lock-every-millisecond-so-other-processes-committing-back-to: Shared DB open and SAFE-5 audit append retry a busy SQLite lock every millisecond, so other processes committing back to back cannot pass them over for the whole busy_timeout and lose audit rows |
+| 2026-09-30 | shared-db-open-takes-the-write-lock-up-front-so-processes-that-open-a-new-file-or-one-with-a-re-scrub-due-at-once-take: Shared DB open takes the write lock up front, so processes that open a new file or one with a re-scrub due at once take turns instead of failing part way |
 | 2026-09-30 | if-a-model-fails-or-is-retired-it-falls-back-to-my-next-configured-model-and-tells-me-agent-11: If a model fails or is retired it falls back to my next configured model and tells me (AGENT-11) |
 | 2026-09-30 | owner-chat-session-start-and-work-may-use-the-allowlisted-shell-runners-and-fledge-runs-only-in-that-talk-s-own: Owner chat, /session start and /work may use the allowlisted shell, runners and Fledge runs only in that talk's own worktree; non-owners, WATCH, schedules, workers and the local CLI never get them (SAFE-3.a) |
 | 2026-09-30 | rolling-24-hour-spend-caps-per-provider-plus-the-total-cap-each-warning-the-owner-at-80-and-stopping-to-ask-at-100-safe: Rolling 24-hour spend caps per provider plus the total cap, each warning the owner at 80% and stopping to ask at 100% (SAFE-14, SAFE-15): CORVIDINHO_PROVIDER_SPEND_CAPS_USD (provider=USD keyed on the configured provider id; a malformed or unknown key stops every call, value never echoed) next to CORVIDINHO_DAILY_SPEND_CAP_USD (the total cap); every provider call is recorded while any cap is set; SpendLedger.window(now, provider?) with a (provider, ts) index; reserve() checks the total and the call's provider cap in one IMMEDIATE transaction and names each tripped scope (total, provider:<id>) in owner-only text; spend_alerts gains a scope column (idempotent ALTER, scrubbed) so each cap warns once per crossing and pings once per episode; a cap stop is never a model failure; doctor and the owner's /status show each cap |

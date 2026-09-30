@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "shared-db-open-and-safe-5-audit-append-retry-a-busy-sqlite-lock-every-millisecond-so-other-processes-committing-back-to",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "b5e4c9a4f2c8f51900eb93576cbe41ff0397b9b3",
+  "contract_digest": "e9c81db2042e2bc6060cb0474ca7648402887c8ce6066462ef107951a8793bc8",
+  "execution_digest": "cf1eeca5c71cee231005315530c21ed27457049d1f5ee8ac4701e24e0f66c571",
+  "workspace_digest": "b46ed325c1ad7dd58dc5fa0f0808a9e878b475c6993b5eacf8024d4cd7ca4c4f",
+  "timestamp": 1790791506
+}
