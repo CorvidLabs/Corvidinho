@@ -185,6 +185,9 @@ export async function handleWorkCommand(
         actingRole,
         // IDENTITY-10: a /work run — team work tools apply in its worktree.
         workTask: true,
+        // SAFE-3.a: /work (the shell gate re-checks the owner and the talk's
+        // own worktree in the run).
+        surface: "work",
         cwd: workCwd,
         // DISCORD-17: files attach in the channel the command ran in.
         replyChannelId: interaction.channelId,

@@ -160,6 +160,7 @@ files:
   - tests/discord.allowed-mentions.test.ts
   - plugins/discord/send-file.ts
   - tests/discord.send-file.test.ts
+  - tests/discord.safe3a-surface.test.ts
 
 db_tables: []
 depends_on:
@@ -660,7 +661,14 @@ always overwrites `CORVIDINHO_ACTING_ROLE` (`owner` when `actingIsAdmin`, else
 `team` only when asked, else `community` — schedules pass none) and
 `CORVIDINHO_ACTING_WORK_TASK` (`1` / `0`). The tool layer re-resolves the role
 on every call (`resolveActingRole`, REQ-plugins-065); the stamp only lowers
-it. Community can't start `/work` (IDENTITY-11.a): right after the SAFE-13
+it. Surface stamp (SAFE-3.a, REQ-discord-735): `AgentRunChatOpts` gains
+`surface?: ActingSurface` (`src/agent/shell-gate.ts`), which the spawn client
+always writes to `CORVIDINHO_ACTING_SURFACE` (empty when omitted): the
+bridge's chat path passes `chat`, its ask continuation (button pick or
+Answer form) `ask`, `/session start` `session`, `/work` `work` and the
+scheduler's `runOne` `schedule`. The agent's shell gate (REQ-agent-503)
+offers the allowlisted shell, runners and Fledge runs only on the first four,
+for the owner, in the talk's own worktree. Community can't start `/work` (IDENTITY-11.a): right after the SAFE-13
 inbound check the handler refuses a community caller (declared community, no
 role, undeclared; muted or deny-listed callers too, though the dispatcher's
 mute and actor gates stop them first) with the ephemeral `not authorized` of

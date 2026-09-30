@@ -980,6 +980,9 @@ export async function startBridge(
               actingUserId: msg.authorId,
               actingIsAdmin,
               actingRole,
+              // SAFE-3.a: a chat message (the shell gate re-checks the role
+              // and the talk's own worktree in the run).
+              surface: "chat",
               cwd: sessionCwd,
               // DISCORD-17: files attach in this conversation's channel only.
               replyChannelId: channelId,
@@ -1651,6 +1654,9 @@ export async function startBridge(
               actingUserId: interaction.userId,
               actingIsAdmin,
               actingRole,
+              // SAFE-3.a: an ask answer continuing this talk, in its own
+              // worktree; the shell gate re-checks the owner and the worktree.
+              surface: "ask",
               cwd: sessionCwd,
               // DISCORD-17: files attach in this conversation's channel only.
               replyChannelId: channelId,

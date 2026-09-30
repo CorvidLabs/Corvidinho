@@ -28,6 +28,7 @@ files:
   - src/agent/untrusted.ts
   - src/agent/recall-guard.ts
   - src/agent/loop-guards.ts
+  - src/agent/shell-gate.ts
   - tests/agent.execute.test.ts
   - tests/agent.tool-loop.test.ts
   - tests/agent.allowlisted-dangerous.test.ts
@@ -58,6 +59,8 @@ files:
   - src/agent/providers.ts
   - tests/agent.providers.test.ts
   - tests/fixtures/fake-llm.ts
+  - tests/agent.safe3a-gate.test.ts
+  - tests/agent.safe3a-owner-shell.test.ts
 
 db_tables: []
 depends_on:
@@ -365,11 +368,14 @@ the LLM execute (tool loop and read-tier chat) caps feedback with it instead
 of a head cut. No flag, env var or config key.
 
 Allowlisted dangerous tools (REQ-agent-501, CLI-3 / SAFE-1): `src/agent/tools.ts`
-exports `SAFE3_PENDING_TOOLS` (`shell-exec`, `node-exec`, `python-exec`,
+exports `SAFE3A_TOOLS` (`shell-exec`, `node-exec`, `python-exec`,
 `cargo-exec`, and the Fledge core runs `fledge-lanes-run` and
-`fledge-run`), `allowlistOffers(allowlist, name)` (named and not SAFE-3
-pending) and `editsFilesUnreported(name)` (a Fledge command or a SAFE-3-pending
-tool, REQ-agent-502). `BuildToolsOpts` gains `allowlist?: ReadonlySet<string>`;
+`fledge-run`; `SAFE3_PENDING_TOOLS` before SAFE-3.a),
+`allowlistOffers(allowlist, name, safe3a = false)` (named, and for a
+`SAFE3A_TOOLS` name only with the attempt's SAFE-3.a grant) and
+`editsFilesUnreported(name)` (a Fledge command or a `SAFE3A_TOOLS` name,
+REQ-agent-502). `BuildToolsOpts` gains `allowlist?: ReadonlySet<string>` and
+`safe3a?: boolean` (default false);
 `createTaskExecute` passes its effective allowlist (the `allowlist` option,
 else `CORVIDINHO_ALLOWLIST`) and loads Fledge plugins when `includeDangerous`
 is set or the allowlist names a Fledge plugin command (a `fledge-*` name that
@@ -378,6 +384,23 @@ non-ADMIN role session (the ADMIN check runs first). `ExecuteResult` gains
 optional `unreportedEditTools?: string[]`; outside a role session, with a
 Fledge plugin command allowlisted, a `delegate` call that started a worker is
 named there too. No env var, config key, flag or slash command.
+
+Owner shell grant (REQ-agent-503, SAFE-3.a): `src/agent/shell-gate.ts` exports
+`shellToolsGate({ env, cwd })` → `ShellToolsVerdict` (`{ granted: true }` or
+`{ granted: false, reason }`), `isOwnTalkWorktree(cwd, sessionId)`,
+`shellToolsRefusedLine(names, reason)`, `ACTING_SURFACE_ENV`
+(`CORVIDINHO_ACTING_SURFACE`), `ACTING_SURFACES` / `ActingSurface` (`chat`,
+`ask`, `session`, `work`, `watch`, `schedule`), `SAFE3A_SURFACES` (the first
+four) and `actingSurface(env)`. `createTaskExecute` calls the gate once per
+tool-loop attempt when its allowlist names a `SAFE3A_TOOLS` name (never with
+`includeDangerous`), passes `safe3a` to `buildOpenAiTools`, and emits the
+refusal line once per run. The gate grants only at delegation depth 0, in a
+role session, with no WATCH or schedule marker, a `chat` / `ask` / `session`
+/ `work` stamp, the owner role resolved now and a cwd that is the top of this
+session's own linked talk worktree. The stamp is internal: each spawning
+client always overwrites it (REQ-discord-735, REQ-watch-735), and delegate
+workers and the verify lane drop it with the `CORVIDINHO_ACTING_` prefix. No
+config key, flag, slash command or schema.
 
 Untrusted text (SAFE-11/12/13, #71, REQ-agent-071): `src/agent/untrusted.ts`
 exports `cleanDisplayName(raw, max?)` / `DISPLAY_NAME_MAX` (32),
@@ -748,6 +771,12 @@ instructions for …" or a browser's developer mode do not count.
 - **When** it makes the same call a second time, then a third after seeing the steer
 - **Then** the 2nd tool result ends with the AGENT-16 harness steer quoting the error, the 3rd call never runs, and the run ends `blocked` with the stuck question `The same files-read call keeps failing with nothing changed in between. How should I proceed?` (REQ-agent-086)
 
+### Scenario: the owner's chat uses the shell in its own talk worktree
+
+- **Given** `CORVIDINHO_ALLOWLIST=shell-exec`, a code-tier run spawned by the bridge for the owner's chat message (`CORVIDINHO_ACTING_SURFACE=chat`) in the talk worktree made for its session
+- **When** the model calls `shell-exec`
+- **Then** the tool is offered and runs in that worktree; a prod command (`kubectl get pods`) still waits for the owner's Approve card and a deny runs nothing; the same run in the main checkout, another talk's worktree, for a team member, on WATCH or a schedule, in a delegate worker or from the local CLI is not offered it, the call is refused and one `[operator] SAFE-3.a` line says why (REQ-agent-503)
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -761,7 +790,8 @@ instructions for …" or a browser's developer mode do not count.
 | Talk worktree whose last run ended blocked / failed / cancelled or died | baseline is the talk branch's merge-base: its edits are verified before done; one carried note; a base git cannot find verifies anyway (REQ-agent-015) |
 | Cwd not in a git work tree, or start snapshot unreadable | tool-reported filesChanged only, as before (REQ-agent-085); if the run called a Fledge command (or the shell / a runner, or a local run's `delegate` with a Fledge plugin command allowlisted, or a `delegate` whose worker left no result frame), verify runs anyway with a `Verify gate: no git working tree to diff` note (REQ-agent-502) |
 | Dangerous plugin the run's allowlist does not name | not in the catalog; a model call to it is refused as not offered (REQ-agent-501 / REQ-agent-128) |
-| `shell-exec`, `node-exec`, `python-exec`, `cargo-exec`, `fledge-lanes-run` or `fledge-run` named in the allowlist | still not in the catalog until the SAFE-3 decision; a model call is refused as not offered (REQ-agent-501) |
+| `shell-exec`, `node-exec`, `python-exec`, `cargo-exec`, `fledge-lanes-run` or `fledge-run` named in the allowlist, and the SAFE-3.a gate refuses the attempt (not the owner, a surface other than chat / ask / session / work, WATCH, a schedule, a delegate or council worker, a local CLI run, or a cwd other than this talk's own linked worktree) | not in that attempt's catalog; a model call is refused as not offered (the role refusal for a non-owner); one `[operator] SAFE-3.a: … allowlisted but not offered: <why>` Text line per run, never in the reply (REQ-agent-501 / REQ-agent-503) |
+| The same, and the gate grants (the owner's own chat, `/session start`, `/work` or ask answer in its own talk worktree) | offered at code tier (never at tool tier); each call still goes through `runPlugin` (role re-check, SAFE-1, the must-ask Approve card for prod, SAFE-5) and the tool's own clamp, SAFE-21 refusals and credential-free env (REQ-agent-503) |
 | Git diff unreadable after a good start snapshot | fail closed: verify runs; one Text note says the diff could not be read (REQ-agent-085) |
 | Verify lane passes but prints no recognised test summary, or no test ran (all skipped / todo) | not verified: a failed verify whose note names the verify lane (or says no test ran); retried, then `failed` (REQ-agent-185) |
 | A test at the baseline was deleted or retitled (even a conditional or skipped one), or a running test was skipped, made todo or conditional, or silenced by `.only`, or a conditional one turned off | not verified: the note names each (up to 10, `"name" (file)`), retried, then `failed`; a renamed file or a moved test keeps its name and passes (REQ-agent-185) |

@@ -102,12 +102,14 @@ import {
   type CapabilityTier,
 } from "./tier.ts";
 import { providerForTier, providerNotice, type ProviderKind } from "./providers.ts";
+import { shellToolsGate, shellToolsRefusedLine } from "./shell-gate.ts";
 import {
   allowlistOffers,
   argvFromToolArguments,
   buildOpenAiTools,
   editsFilesUnreported,
   filesChangedFromToolData,
+  SAFE3A_TOOLS,
   type OpenAiToolDef,
 } from "./tools.ts";
 
@@ -301,7 +303,8 @@ export type CreateTaskExecuteOpts = {
   /**
    * When true, expose every dangerous plugin in the catalog (still SAFE-1
    * gated). Test seam: without it the catalog offers only the dangerous
-   * plugins `allowlist` names, never the SAFE-3-pending ones (CLI-3).
+   * plugins `allowlist` names (CLI-3), the shell, runners and Fledge core
+   * runs only with the attempt's SAFE-3.a grant (`shellToolsGate`).
    */
   includeDangerous?: boolean;
   /**
@@ -600,6 +603,10 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   let injection: InjectionNotice | null = null;
   // AGENT-16: failing-call counts for the whole run (verify retries included).
   const repeatGuard = createRepeatFailureGuard();
+  // SAFE-3.a: the allowlisted shell, runners and Fledge core runs, and whether
+  // this run already said once why the gate held them back.
+  const safe3aNamed = [...SAFE3A_TOOLS].filter((name) => allowlist.has(name));
+  let safe3aNoted = false;
 
   const run: ExecuteFn = async ({ attempt, verifyFeedback, signal, specBriefing }) => {
     if (personaNote) {
@@ -651,6 +658,19 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       // names one and the session is not a non-ADMIN one (ROLES-CHAT-2).
       await loadFledgePlugins({ cwd, env });
     }
+    // SAFE-3.a: the allowlisted shell, runners and Fledge core runs only in
+    // the owner's own chat, /session start, /work or ask answer, inside that
+    // talk's own worktree; role, surface and cwd re-read for every attempt.
+    // A refusal is one operator Text line per run, never reply text.
+    let safe3a = false;
+    if (safe3aNamed.length > 0 && !includeDangerous) {
+      const verdict = await shellToolsGate({ env, cwd });
+      safe3a = verdict.granted;
+      if (!verdict.granted && !safe3aNoted) {
+        safe3aNoted = true;
+        emit(onEvent, { type: "Text", text: shellToolsRefusedLine(safe3aNamed, verdict.reason) });
+      }
+    }
     const autonomous =
       opts.autonomous ?? autonomousSessionAllowed({ cwd, env });
     // AUTONOMY-1: ask-human rides along with the plugin catalog.
@@ -662,6 +682,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
         // dangerous tool; role (ROLES-CHAT-2 / IDENTITY-9..11) and tier
         // filters still apply.
         allowlist,
+        safe3a,
         actingRole,
         workTask: actingWorkTask(env),
         autonomous,

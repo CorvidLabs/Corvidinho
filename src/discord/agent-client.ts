@@ -11,6 +11,7 @@
 
 import { askFromUnknown } from "../agent/ask.ts";
 import { collectTaskRunStream } from "../agent/events-ndjson.ts";
+import { ACTING_SURFACE_ENV, type ActingSurface } from "../agent/shell-gate.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
 import { spendWarningFromUnknown } from "../agent/spend-notice.ts";
 import { injectionNoticeFromUnknown } from "../agent/untrusted.ts";
@@ -62,6 +63,14 @@ export type AgentRunChatOpts = {
   /** A `/work` run: team work tools apply (IDENTITY-10). */
   workTask?: boolean;
   /**
+   * SAFE-3.a: the surface this run was started from — `chat` (a chat
+   * message), `ask` (an ask-button pick or Answer form continuing a talk),
+   * `session` (`/session start`), `work` (`/work`) or `schedule` (a schedule
+   * tick). Always written to `CORVIDINHO_ACTING_SURFACE` (empty when omitted,
+   * which the shell gate refuses), never inherited.
+   */
+  surface?: ActingSurface;
+  /**
    * Per-call working directory (SESSION-WORKTREE-1). When set, overrides the
    * client default cwd so talks/schedules do not share a mutable checkout.
    */
@@ -108,6 +117,8 @@ export type SpawnAgentClientOpts = {
  * CORVIDINHO_ACTING_IS_ADMIN for memory plugins (REQ-discord-021 / REQ-plugins-011),
  * CORVIDINHO_ACTING_ROLE (owner | team | community) and
  * CORVIDINHO_ACTING_WORK_TASK (1 for /work) for the role gate (IDENTITY-8..12),
+ * CORVIDINHO_ACTING_SURFACE (chat | ask | session | work | schedule, empty
+ * when the caller named none) for the SAFE-3.a shell gate,
  * and the conversation's reply channel for `discord-send-file`
  * (CORVIDINHO_DISCORD_REPLY_CHANNEL_ID / _PARENT_CHANNEL_ID, empty when none;
  * REQ-discord-476). The GitHub commenter keys (CORVIDINHO_ACTING_GITHUB_*,
@@ -124,6 +135,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       actingIsAdmin,
       actingRole,
       workTask,
+      surface,
       cwd,
       onStatus,
       signal,
@@ -177,6 +189,9 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
             ? "team"
             : "community",
           CORVIDINHO_ACTING_WORK_TASK: workTask ? "1" : "0",
+          // SAFE-3.a: the surface this run came from; always overwritten,
+          // never inherited (none ⇒ empty, which the shell gate refuses).
+          [ACTING_SURFACE_ENV]: surface ?? "",
         },
         // Own process group, so a stop reaches its tools and workers too.
         detached: true,

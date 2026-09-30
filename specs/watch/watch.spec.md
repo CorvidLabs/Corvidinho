@@ -164,7 +164,9 @@ back off via Retry-After/reset (default 60s) before the next poll cycle without
 tight loop;
 WATCH agent spawn clears `CORVIDINHO_ACTING_DISCORD_USER_ID` and sets
 `CORVIDINHO_ACTING_IS_ADMIN=0` so GitHub runs never act as a Discord memory
-user (REQ-watch-008). With a DB, WATCH sessions reload on restart; a session
+user (REQ-watch-008), and always sets `CORVIDINHO_ACTING_SURFACE=watch`, so a
+WATCH run is never offered the shell, runners or Fledge runs (SAFE-3.a,
+REQ-watch-735). With a DB, WATCH sessions reload on restart; a session
 idle past the soft TTL (`resolveSessionTtlMs`, 30–60m, default 45m) is dropped
 and the next event on that issue starts fresh; one session per
 `owner/repo#number`; stored topic is SAFE-6 scrubbed; dry-run without
