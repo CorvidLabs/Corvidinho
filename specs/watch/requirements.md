@@ -334,16 +334,19 @@ resolved commenter the run prompt SHALL open with a separate paragraph headed
 still gets no ADMIN tools), before the `[WATCH …]` header; Planning ignores
 that paragraph like the Discord identity block. Once anyone is declared, an
 unresolved commenter SHALL get the block with `declared_person: none`; with
-nobody declared (only the owner) and an unresolved commenter, or without
-`people`, the prompt SHALL be exactly as before, apart from the SAFE-12 fence
-around the title and body (REQ-watch-071). Allowlist gates, sessions,
+nobody declared (only the owner), an unresolved commenter whose login is the
+owner's `[owner] github_login` SHALL get it too (REQ-watch-367), and for any
+other unresolved commenter, or without `people`, the prompt SHALL be exactly
+as before, apart from the SAFE-12 fence around the title and body
+(REQ-watch-071). Allowlist gates, sessions,
 acks and the spawn env (no Discord actor, non-ADMIN) are unchanged.
 
 Acceptance Criteria
 - A declared commenter's start prompt begins with the identity paragraph (`github_login`, `declared_person`, `display_name`, `nicknames`), then a blank line and `[WATCH issue_comment] …`; `planningSelectionText` drops it.
 - A renamed login with the declared numeric id resolves; the declared login with a different numeric id, or with none, does not (`declared_person: none`).
 - The owner is recognised by `[owner] github_id` with `role: owner`, never by the `[owner]` / env GitHub login; a commenter whose login equals a declared display name is not that person.
-- With nobody declared, or without `people`, an unresolved commenter's prompt starts with `[WATCH`.
+- With nobody declared, or without `people`, an unresolved commenter's prompt starts with `[WATCH`, unless (nobody declared) the commenter's login is the owner's, which gets `declared_person: none`.
+- With only the owner configured, live events from the owner's login with no id or another id get `declared_person: none` and no `role: owner`, the owner's id gets `role: owner`, and another undeclared login gets no block (`tests/watch.github-numeric-id.test.ts`).
 - The fixture search client carries `user_id` to `senderId` on comment events.
 - `startWatchPoller` with an allowlist file recognises a declared commenter, and a person added to the file after start is recognised on the next event.
 - Regression tests in `tests/identity.recognise.test.ts` fail on the base sources and pass after.
