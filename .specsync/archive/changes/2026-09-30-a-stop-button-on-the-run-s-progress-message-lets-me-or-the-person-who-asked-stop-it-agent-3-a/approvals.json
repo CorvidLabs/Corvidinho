@@ -1,0 +1,58 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790808092,
+      "digest": "f32c0c208047835d1f9c240359a54cd36a335ded8afac5be133192941e6f34eb",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "a-stop-button-on-the-run-s-progress-message-lets-me-or-the-person-who-asked-stop-it-agent-3-a",
+        "title": "A Stop button on the run's progress message lets me or the person who asked stop it (AGENT-3.a)",
+        "description": "A Stop button on the run's progress message lets me or the person who asked stop it (AGENT-3.a)",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "src/discord/gateway.ts",
+          "src/discord/inflight-replies.ts",
+          "src/discord/run-control.ts",
+          "src/discord/thinking-status.ts",
+          "tests/discord.ask-answer-modal.test.ts",
+          "tests/discord.stop-run.test.ts",
+          "tests/discord.thinking-status.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "AGENT-3.a (captured on main from Leif's 2026-09-28 interview): 'In Discord I can stop a run with a Stop button or by saying stop or cancel, and so can the person who asked; a message sent while a run is going waits for it instead of starting a second run.' AGENT-3.b (captured in #332, Leif 2026-09-30): 'After I stop a run, messages that were waiting still run, in order.' Nothing new is captured. This change builds the Stop button, completing AGENT-3.a for chat, ask pick / Answer resume, /session start and /work runs; stopping a schedule's run from Discord (Leif round 13: the owner or the schedule's creator can) is a separate later slice. Observable outcomes: (1) the progress message of each of those runs carries one danger-style (red) Stop button, custom id cvstop:<runId>, while the run goes (on a reused Choose / Answer stub it takes that button's place); working edits leave it. (2) A press, past the channel gate (the pressed message's session: the run it shows, else the session its finished answer is tracked on, else the press channel alone), the actor gate and the mute/rate gate (the same gates, replies and order as an ask press), from the run's requester or the configured owner stops that run through the same run-control stop path as the stop words (its signal aborted once, the process tree killed) with the ephemeral ack '⏹ Stopping the run.'; the progress message then becomes '⏹ Stopped' with the DISCORD-15/15.a footer and the button gone; a second press while it winds down aborts nothing more. (3) Anyone else's press gets the ephemeral 'This Stop button isn't for you.' and the run goes on; a press whose run is not the one that message shows running in that channel (a finished run's button, another run id, another channel, a button from before a restart) gets the ephemeral 'Nothing is running.' and stops nothing. (4) The button is cleared when the run is done (the collapsed answer), failed (the answer, or the failure status when the run throws or the fallback status edit) or stopped, and by the restart's interrupted notice for a run a dead process left. (5) After a Stop press the messages that were waiting still run, in order, each with its own button (AGENT-3.b). (6) The cvstop branch is its own branch in onComponent, apart from the Approve cards (cvok), the asks (cvask) and any later cvstop-... id; a forged form submit with a Stop id is ignored. No new env var, config key, slash command, table or schema change. Tests: tests/discord.stop-run.test.ts and tests/discord.thinking-status.test.ts (stub agents, dry-run bridge, in-memory outbound, fake LLM fixture model; no network), failing on the base (9ea4005) and passing on the branch."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "4daeba26eb249cc6259207199961fa64ad518d28bbaac88fe294de1e3a9ef7ad"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790811874,
+      "digest": "6744441da3530eb00e9d47eb0785d3d75b6c7cee970750649b0a7f4bd50f7886",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

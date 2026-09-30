@@ -151,16 +151,19 @@ export type GatewayHandlers = {
     /** Discord ActionRow components (DISCORD-ASK stub buttons). */
     components?: unknown[];
   }) => Promise<{ messageId: string } | null>;
-  /** Progress embeds (DISCORD-3). */
+  /** Progress embeds (DISCORD-3), with the run's Stop button (AGENT-3.a). */
   sendEmbed?: (opts: {
     channelId: string;
     embed: DiscordEmbedPayload;
     replyToMessageId?: string;
+    components?: unknown[];
   }) => Promise<{ messageId: string } | null>;
+  /** `components: null` clears the message's buttons; omitted leaves them. */
   editEmbed?: (opts: {
     channelId: string;
     messageId: string;
     embed: DiscordEmbedPayload;
+    components?: unknown[] | null;
   }) => Promise<boolean>;
   /** Richer in-place edit (DISCORD-ASK-6/7 collapse). */
   editMessage?: (opts: {
@@ -669,7 +672,7 @@ export async function createLiveGateway(
     }
   };
 
-  handlers.sendEmbed = async ({ channelId, embed, replyToMessageId }) => {
+  handlers.sendEmbed = async ({ channelId, embed, replyToMessageId, components }) => {
     try {
       const channel = await client.channels.fetch(channelId);
       if (!channel || !("send" in channel) || typeof channel.send !== "function") {
@@ -686,6 +689,8 @@ export async function createLiveGateway(
         reply: replyToMessageId
           ? { messageReference: replyToMessageId, failIfNotExists: false }
           : undefined,
+        // AGENT-3.a: the run's Stop button.
+        ...(components?.length ? { components: components as never } : {}),
         allowedMentions: outboundAllowedMentions({ repliedUser: true }),
       });
       return { messageId: sent.id };
@@ -695,7 +700,7 @@ export async function createLiveGateway(
     }
   };
 
-  handlers.editEmbed = async ({ channelId, messageId, embed }) => {
+  handlers.editEmbed = async ({ channelId, messageId, embed, components }) => {
     try {
       const channel = await client.channels.fetch(channelId);
       if (!channel || !("messages" in channel)) return false;
@@ -709,6 +714,9 @@ export async function createLiveGateway(
             footer: embed.footer,
           },
         ],
+        // AGENT-3.a: `null` clears the Stop button (an empty array); omitted
+        // leaves the message's components as they are.
+        ...(components === null ? { components: [] } : components ? { components } : {}),
         allowedMentions: outboundAllowedMentions({ repliedUser: true }),
       });
       return true;

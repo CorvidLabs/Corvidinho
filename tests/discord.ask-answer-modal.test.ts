@@ -394,10 +394,14 @@ describe("Answer form submit resumes the requester's session like a reply", () =
     // Ephemeral "Got it" only; dropped once the resume finished (DISCORD-ASK-8).
     expect(rec.eph).toEqual([{ content: ASK_ANSWER_ACK, ephemeral: true }]);
     expect(rec.deleted).toBe(1);
-    // DISCORD-ASK-7: the stub is the progress surface (content and button
-    // cleared) and becomes the answer; no extra public reply with the answer.
+    // DISCORD-ASK-7: the stub is the progress surface (content cleared, the
+    // Answer button replaced by the run's Stop button, AGENT-3.a) and becomes
+    // the answer; no extra public reply with the answer.
     const stubEdits = b.outbound.contentEdits.filter((e) => e.messageId === b.stubId);
-    expect(stubEdits.some((e) => e.content === null && e.components === null)).toBe(true);
+    expect(
+      stubEdits.some((e) => e.content === null && /^\[\{"type":1,"components":\[\{"type":2,"style":4,"label":"Stop","custom_id":"cvstop:run_\d+"\}\]\}\]$/.test(JSON.stringify(e.components))),
+    ).toBe(true);
+    expect(stubEdits.at(-1)!.components).toBeNull();
     expect(stubEdits.at(-1)!.content).toContain("DONE: 2");
     expect(b.replies.some((r) => r.content.includes("DONE: 2"))).toBe(false);
     // The typed answer is never posted publicly.
