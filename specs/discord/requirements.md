@@ -951,7 +951,12 @@ The shared SQLite store SHALL treat the module-owned `spend_ledger` and
 version bump) like every other persisted table under SAFE-6: the free-text
 `provider` and `model` columns of `spend_ledger` SHALL be written through
 `scrubSecrets` and SHALL be listed in `SCRUB_TARGETS`, so a scrub-rules
-re-scrub also covers them; `spend_alerts` SHALL hold no free text.
+re-scrub also covers them; `spend_alerts` SHALL hold no free text but its
+cap `scope` (`total` or `provider:<id>`, SAFE-14; added in place by an
+idempotent ALTER, older rows `total`), which SHALL be written through
+`scrubSecrets` and listed in `SCRUB_TARGETS`. A re-scrub SHALL skip a listed
+column a module-owned table does not have yet (a `spend_alerts` created by an
+older build, before its module adds `scope`) instead of failing the open.
 
 On Discord (SAFE-8 as amended on #98, AUTONOMOUS-8, SAFE-14.a), a run that stopped at
 the spend cap (`ask.reason` `spend-cap`) SHALL be posted through the
@@ -961,7 +966,13 @@ without the "reply to answer" hint (a reply cannot lift the cap). Like a
 stuck ask (AUTONOMY-2/4), a spend-cap ask SHALL ping the configured owner,
 once per cap episode across those surfaces (the bridge's spend alert outbox
 `claimCapPing`; a schedule also keeps its per-schedule ping key); later
-spend-cap asks in the same episode SHALL post without a ping. A spend-cap
+spend-cap asks in the same episode SHALL post without a ping. Episodes SHALL
+be kept per cap (SAFE-15, REQ-agent-114): a stop pings once per episode of
+each cap it stopped at (`spendScopesOf`: the ask's `spendScopes`, else the
+"Stopped at cap" marker of a question stored as text), so a stop at another
+provider's cap or at the total cap pings again, and a schedule's ping key for
+a spend-cap ask SHALL follow the provider caps it stopped at (the total cap
+alone keys as before). A spend-cap
 stop SHALL NOT be kept as the session's pending ask (AUTONOMY-5/6; a reply
 cannot lift the cap): a later thin reply runs the agent like any other
 message, a substantive reply carries no cap text into the prompt, and a
@@ -990,13 +1001,15 @@ whose channel left the allowlist): after each chat, button-pick, `/work` and
 pending warning from the outbox over the bridge's shared DB (the run's own
 `spendWarning`, validated by `spendWarningFromUnknown`, only when the bridge
 has no DB) and send the warning line built from integer amounts to the
-configured owner by DM only (SAFE-14.a); a DM that did not go out SHALL hand
-the warning back for the next pass. A post that did not go out (a chat
+configured owner by DM only (SAFE-14.a), one line per cap that crossed 80%
+(the total cap, and each provider cap named by its scope); a DM that did not
+go out SHALL hand the warning(s) back for the next pass. A post that did not go out (a chat
 reply, a schedule post, or a slash run's owner notice that went out neither
 as a channel post nor in the reply) SHALL hand back the cap episode's owner
 ping for the next post, and a schedule SHALL keep no ping key for a ping that
 was never posted. `/status` SHALL show the owner the rolling 24-hour spend
-against the cap with the percent, or that no cap is set, from the bridge's
+against the cap with the percent, or that no cap is set, and one line per
+provider cap (that provider's spend against its cap), from the bridge's
 shared DB, with no new slash command.
 
 Only the owner SHALL see spend amounts and cap settings; everyone else SHALL
@@ -1030,12 +1043,14 @@ only see that work is paused for budget (SAFE-14.a):
 - `/status` SHALL show the spend line only to the owner (ADMIN, IDENTITY-2,
   re-checked by the handler), with a note while a spend DM waits; anyone else
   SHALL see no spend line, and "Spend: Work is paused for budget." while runs
-  stop at the spend check (cap reached, unpriced model, invalid value,
-  unreadable ledger).
+  stop at the spend check (any cap reached, the total or a provider's,
+  unpriced model, invalid value, unreadable ledger) — never which cap.
 - The owner's answer footers keep tokens and cost and everyone else's show
   model and time (DISCORD-15.a, REQ-discord-457, unchanged). `corvidinho
   doctor`, `task run` output and the daemon's logs stay the operator's.
-- No new env var, config key, table, column or schema version.
+- No new table, slash command or schema version; the env var
+  (`CORVIDINHO_PROVIDER_SPEND_CAPS_USD`) is REQ-agent-114's and the
+  `spend_alerts.scope` column is added in place.
 
 Acceptance Criteria
 - A ledger row written with a vendor-key-looking provider or model persists redacted.
@@ -1062,6 +1077,7 @@ Acceptance Criteria
 - SAFE-14.a `createSpendDm`: a DM that returns null or throws keeps its claim (the warning pending in `spend_alerts`, the stop held) and is sent on the next pass, once; the failure is logged once per streak with no amounts; a newer stop replaces a held one; no owner or no DM path claims nothing; concurrent passes send a held stop once.
 - DISCORD-15.a unchanged: someone else's answer footer shows model and time only; the owner's shows tokens and cost.
 - These SAFE-14.a tests fail on the base sources.
+- SAFE-14 / SAFE-15 per cap: `SCRUB_TARGETS` lists `spend_alerts.scope`, a secret-shaped provider id is stored and re-scrubbed redacted, and a re-scrub over a `spend_alerts` without `scope` does not throw; `askPingOwner` pings once per episode of each cap (another provider's stop and the total's each ping; a released claim pings again; a stored question-only stop claims its own caps); the owner's DM carries one warning line per cap; the owner's `/status` lines list each provider cap; the public spend-cap post names no scope, provider, amount or setting.
 
 ### REQ-discord-088
 
@@ -1774,13 +1790,29 @@ Acceptance Criteria
 
 `rescrubDatabase` (the SAFE-6 re-scrub run by `ensureScrubbed` on DB open when
 `SCRUB_RULES_VERSION` increases, REQ-discord-066) SHALL take the shared DB
-write lock before it reads rows (BEGIN IMMEDIATE), so a concurrent writer or
-opener in another process is waited for under the DB busy_timeout instead of
-failing at once with "database is locked". No new env var, config key,
-pragma, CLI or slash surface.
+write lock before it reads rows (BEGIN IMMEDIATE) when it is called on its
+own, so a concurrent writer or opener in another process is waited for under
+the DB busy_timeout instead of failing at once with "database is locked".
+`openCorvidinhoDb` SHALL run the migration and `ensureScrubbed` in one
+transaction that takes the shared DB write lock up front (BEGIN IMMEDIATE;
+an on-open re-scrub is a savepoint in it) and, while the lock is taken,
+SHALL try that BEGIN again every millisecond until busy_timeout has passed,
+so an open (such as a dangerous plugin run's before its SAFE-5 append,
+REQ-plugins-287) waits for the lock once, not once per statement, and other
+processes that commit back to back cannot pass it over for the whole
+busy_timeout, as SQLite's busy-handler back-off (one try per 100 ms) did.
+Holding the lock, no statement of the migration or re-scrub fails part way
+with SQLITE_BUSY, and the COMMIT waits under busy_timeout for current
+readers only, so several processes that open the file at once (a new file,
+a schema migration or a re-scrub due) take turns instead of failing. The
+opened connection keeps busy_timeout 5000 and foreign_keys on. No new env
+var, config key, pragma, CLI or slash surface.
 
 Acceptance Criteria
 - While another process holds the write lock and then commits, `rescrubDatabase` waits, re-scrubs the pending rows and returns their count.
+- While another process holds the shared DB file exclusively for about a second, frees it for 50 ms and then holds it past busy_timeout, `openCorvidinhoDb` opens while it is free; the connection keeps busy_timeout 5000 and foreign_keys on, and an audit row appended on it links to the other process's row and the chain verifies.
+- Several processes that open a new shared DB file at once all get in, and the file ends at the current schema version.
+- Several processes that open a shared DB file with a re-scrub due at once all get in; the stored secret is redacted and the current scrub rules version is recorded.
 
 ### REQ-discord-312
 

@@ -1,0 +1,92 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790784124,
+      "digest": "e9c81db2042e2bc6060cb0474ca7648402887c8ce6066462ef107951a8793bc8",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "shared-db-open-and-safe-5-audit-append-retry-a-busy-sqlite-lock-every-millisecond-so-other-processes-committing-back-to",
+        "title": "Shared DB open and SAFE-5 audit append retry a busy SQLite lock every millisecond, so other processes committing back to back cannot pass them over for the whole busy_timeout and lose audit rows",
+        "description": "Shared DB open and SAFE-5 audit append retry a busy SQLite lock every millisecond, so other processes committing back to back cannot pass them over for the whole busy_timeout and lose audit rows",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "src/audit/log.ts",
+          "src/store/db.ts",
+          "tests/store.busy-lock.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Four processes that each open the shared DB and append one SAFE-5 row 40 times at once lose no rows and keep one chain when every fsync takes 10 ms longer (before the fix 5 of 20 runs lost a row)",
+          "While another process holds the shared DB file exclusively for about a second then frees it for 50 ms and keeps it past busy_timeout openCorvidinhoDb opens while it is free and keeps busy_timeout 5000 and foreign_keys on (before the fix it failed with database is locked)",
+          "While another process holds the shared DB write lock for about a second then frees it for 50 ms and keeps it past busy_timeout appendAudit takes the lock while it is free and the chain verifies (before the fix it failed with database is locked)"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "de452bf50563ca97ed628d19cf3e9a7920c2112033c70f1044ccd0bb053e3aa6",
+        "plugins": "99989efed46f8948446098ea0c804a28a70c0575a46bca3adfb132be84485c09"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790787125,
+      "digest": "e9c81db2042e2bc6060cb0474ca7648402887c8ce6066462ef107951a8793bc8",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "shared-db-open-and-safe-5-audit-append-retry-a-busy-sqlite-lock-every-millisecond-so-other-processes-committing-back-to",
+        "title": "Shared DB open and SAFE-5 audit append retry a busy SQLite lock every millisecond, so other processes committing back to back cannot pass them over for the whole busy_timeout and lose audit rows",
+        "description": "Shared DB open and SAFE-5 audit append retry a busy SQLite lock every millisecond, so other processes committing back to back cannot pass them over for the whole busy_timeout and lose audit rows",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "src/audit/log.ts",
+          "src/store/db.ts",
+          "tests/store.busy-lock.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Four processes that each open the shared DB and append one SAFE-5 row 40 times at once lose no rows and keep one chain when every fsync takes 10 ms longer (before the fix 5 of 20 runs lost a row)",
+          "While another process holds the shared DB file exclusively for about a second then frees it for 50 ms and keeps it past busy_timeout openCorvidinhoDb opens while it is free and keeps busy_timeout 5000 and foreign_keys on (before the fix it failed with database is locked)",
+          "While another process holds the shared DB write lock for about a second then frees it for 50 ms and keeps it past busy_timeout appendAudit takes the lock while it is free and the chain verifies (before the fix it failed with database is locked)"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "b817172ae53bf82c8e211566701dfae0861c06cf46a3284abae5b5d86504156d",
+        "plugins": "a857c4feaa9afca29d9a71d8ae2fd90ddd2f205417803ecdb4ccae5648da6d58"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790791525,
+      "digest": "76a7fd2a8d8bb72f4c44eaa299f3406675e762ef94e831793478dfedacfdba52",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

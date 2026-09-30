@@ -41,6 +41,7 @@ files:
   - tests/agent.ndjson-spawn.test.ts
   - tests/agent.spend.test.ts
   - tests/agent.spend-ask.test.ts
+  - tests/agent.spend-caps.test.ts
   - tests/agent.ask.test.ts
   - tests/agent.verify-env.test.ts
   - tests/agent.verify-feedback.test.ts
@@ -292,6 +293,42 @@ back under 80%, leaving the warning pending) / `releaseSpendWarnings` and
 null when the episode already pinged), the delivery side the Discord bridge
 uses (its owner DM pass, `src/discord/spend-dm.ts`, takes the warning;
 SAFE-14.a).
+
+Per-provider caps (REQ-agent-114, SAFE-14 / SAFE-15): `src/agent/spend.ts`
+also exports `PROVIDER_SPEND_CAPS_ENV` (`CORVIDINHO_PROVIDER_SPEND_CAPS_USD`,
+a comma list of `provider=USD` keyed on the configured provider id, the
+endpoint host `providerId` gives), `parseProviderCapList` (syntax only),
+`configuredProviderIds` (every entry of `CORVIDINHO_LLM_MODEL` and the
+per-tier keys), `parseSpendCaps` (`SpendCaps`: `off`, `invalid` with the bad
+setting names, or `caps` with a nullable total and a provider map; a
+malformed entry or a key no configured model uses makes the provider setting
+invalid, which stops every call and is never echoed) and `spendDoctorChecks`
+(the `spend` line plus one `spend provider:<id>` line per cap).
+`SpendLedger.window(now, provider?)` reads one provider's spend (index
+`idx_spend_ledger_provider_ts` on `(provider, ts)`), `reserve` takes an
+optional total `capMicroUsd` and `providerCapMicroUsd` and refuses with
+`trips` (every tripped `SpendTrip`: scope `total` / `provider:<id>`, spend,
+cap) in the same IMMEDIATE transaction, and `noteWarning({ …, provider })`
+checks a provider cap against its own spend. `createSpendGuard` reads every
+cap: while any cap is set it records every priced call, stops a call past
+its provider's cap or the total with a `spend-cap` ask naming each tripped
+scope (`spendCapReachedAsk({ estimateMicroUsd, trips })`, the
+`Stopped at cap: …` marker, `HumanAsk.spendScopes`), notes the 80% warning of
+each cap the call counts against (a provider's `SpendWarning.scope`), and
+sends an unpriced model's call unrecorded only when no cap covers it. The
+stop is a `SpendCapRefusal`, which the AGENT-11 model chain treats as no
+model failure, so it never falls back. `spend-alerts.ts` keeps every row's
+`scope` (idempotent ALTER, scrubbed) and all arming per scope and cap value;
+`claimSpendWarnings` returns one warning per scope; the outbox's
+`takeWarning` returns `warnings` (one per cap) and `claimCapPing(scopes?)`
+claims each tripped scope's episode. `src/agent/spend-notice.ts` adds
+`TOTAL_SPEND_SCOPE`, `providerSpendScope`, `providerOfSpendScope`,
+`isSpendScope`, `spendScopesOf` (an ask's scopes, else its question's
+marker), `formatProviderSpendDoctorLine`, `formatSpendDoctorLines`, the
+`ProviderSpend` / `SpendTrip` / `NamedSpendDoctorLine` types, per-provider
+`/status` lines in `formatSpendStatusLine`, and a `SpendSnapshot` of kind
+`cap` with an optional total `capMicroUsd` and `providers`. `askFromUnknown`
+keeps well-formed `spendScopes` of a `spend-cap` ask.
 
 Autonomous gate + delegation core (REQ-agent-117, issue #117):
 `src/autonomous/enabled.ts` exports `parseAutonomousConfig`,
@@ -600,9 +637,12 @@ ToolResult detail and VerifyResult output are SAFE-6 scrubbed and capped.
 AgentEvent stays frozen (usage is a separate callback), so `task run --json`
 events are unchanged.
 
-No spend cap set means no spend behavior: the fetch is untouched and the DB is
-not opened. With a cap, a provider call is never sent unless its estimate was
-reserved under the cap in one IMMEDIATE transaction. A call that would pass
+No spend cap set (neither the total nor a provider cap) means no spend
+behavior: the fetch is untouched and the DB is not opened. With a cap, a
+provider call is never sent unless its estimate was reserved under the total
+cap and its provider's cap in one IMMEDIATE transaction; each cap warns and
+stops on its own (SAFE-15), and a cap stop never falls back to another model
+(AGENT-11). A call that would pass
 the cap, and every call while the model is unpriced, the cap value is invalid
 or the ledger is unavailable, is not sent: the attempt ends with a
 `spend-cap` ask and the run is `blocked` (never `done`, never retried, verify
@@ -949,6 +989,7 @@ A change the run did not open is never touched.
 | SpecSync registry missing | Planning lists modules from `specs/<name>/<name>.spec.md` instead (REQ-plugins-008); none there → soft-fails; execute continues |
 | Dangerous plugin + non-interactive + not allowlisted | ToolResult success=false (SAFE-1); loop may continue |
 | Spend cap set and 24h spend + estimate over it, unpriced model, invalid cap value, or ledger unavailable | provider call not sent; run ends `blocked` with a `spend-cap` ask stating spend vs cap and the operator action (no yes/no question); summary is the generic `SPEND_CAP_SUMMARY` (SAFE-8) |
+| `CORVIDINHO_PROVIDER_SPEND_CAPS_USD` set and a provider's 24h spend + estimate over its cap (or a bad entry / unknown provider) | provider call not sent (none to any other model either); run ends `blocked` with a `spend-cap` ask naming `provider:<id>` (or the bad setting, never its value) and `spendScopes`; generic summary (SAFE-14 / SAFE-15) |
 | Settled call brings 24h spend to ≥80% of the cap while the warning is armed | one `Text` warning + `TaskResult.spendWarning` + a pending `warn` row; later calls stay quiet until spend is seen under 70% (or 24 h pass) (SAFE-8) |
 | Autonomous tool named while not offered | Refused like any non-offered tool (REQ-agent-128) |
 | Non-ADMIN caller (checked at the call) names a mutating / dangerous plugin it was not offered (or `runPlugin` refuses an offered one for the role) | ToolResult success=false with the role refusal `not allowed for your role`, nothing runs; the run summary ends with `(not allowed for your role)` once, and the result frame / chat body caps keep it (ROLES-CHAT-3, REQ-agent-333) |
@@ -1055,3 +1096,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-30 | if-a-model-fails-or-is-retired-it-falls-back-to-my-next-configured-model-and-tells-me-agent-11: If a model fails or is retired it falls back to my next configured model and tells me (AGENT-11) |
 | 2026-09-30 | owner-chat-session-start-and-work-may-use-the-allowlisted-shell-runners-and-fledge-runs-only-in-that-talk-s-own: Owner chat, /session start and /work may use the allowlisted shell, runners and Fledge runs only in that talk's own worktree; non-owners, WATCH, schedules, workers and the local CLI never get them (SAFE-3.a) |
 | 2026-09-30 | in-a-specsync-repo-it-opens-and-works-a-specsync-change-for-its-edits-and-on-corvidinho-it-approves-and-archives-its: In a SpecSync repo it opens and works a SpecSync change for its edits, and on Corvidinho it approves and archives its own change once verify is green (AGENT-18 SpecSync clause, AGENT-18.a) |
+| 2026-09-30 | rolling-24-hour-spend-caps-per-provider-plus-the-total-cap-each-warning-the-owner-at-80-and-stopping-to-ask-at-100-safe: Rolling 24-hour spend caps per provider plus the total cap, each warning the owner at 80% and stopping to ask at 100% (SAFE-14, SAFE-15): CORVIDINHO_PROVIDER_SPEND_CAPS_USD (provider=USD keyed on the configured provider id; a malformed or unknown key stops every call, value never echoed) next to CORVIDINHO_DAILY_SPEND_CAP_USD (the total cap); every provider call is recorded while any cap is set; SpendLedger.window(now, provider?) with a (provider, ts) index; reserve() checks the total and the call's provider cap in one IMMEDIATE transaction and names each tripped scope (total, provider:<id>) in owner-only text; spend_alerts gains a scope column (idempotent ALTER, scrubbed) so each cap warns once per crossing and pings once per episode; a cap stop is never a model failure; doctor and the owner's /status show each cap |
