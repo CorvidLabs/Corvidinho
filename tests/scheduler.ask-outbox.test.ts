@@ -13,7 +13,12 @@ import { Database as SqliteDatabase, type Database } from "bun:sqlite";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { formatAskSummary, stuckAfterVerifyAsk } from "../src/agent/ask.ts";
+import {
+  ASK_QUESTION_MAX,
+  askFromUnknown,
+  formatAskSummary,
+  stuckAfterVerifyAsk,
+} from "../src/agent/ask.ts";
 import { SPEND_CAP_ENV, SpendLedger } from "../src/agent/spend.ts";
 import { SPEND_CAP_SUMMARY, spendCapReachedAsk } from "../src/agent/spend-notice.ts";
 import { createSpendAlertOutbox, type SpendAlertOutbox } from "../src/agent/spend-outbox.ts";
@@ -1013,6 +1018,31 @@ describe("schema v11 schedule_runs ask columns (REQ-discord-347, SAFE-6)", () =>
     const res = rescrubDatabase(h.db);
     expect(res.byTable.schedule_runs).toBe(1);
     expect(h.lastRun().ask_question).toBe("token [redacted:github-token]");
+  });
+
+  test("SAFE-6.a: a question whose secret straddles the ASK_QUESTION_MAX cut is [redacted:<kind>] in the run row and the posts", async () => {
+    const token = "gh" + "p_" + "a1B2c3D4e5".repeat(4).slice(0, 36);
+    const mark = "[redacted:github-token]";
+    // The whole marker fits before the cut; a cut before the scrub kept
+    // `ghp_` plus 19 raw characters, one short of the scrub pattern.
+    const pad = ASK_QUESTION_MAX - mark.length - 1;
+    const question = `${"q".repeat(pad - 1)} ${token} — retry the push?`;
+    // As the spawn client reads the child's result frame (agent-client.ts).
+    const ask = askFromUnknown({ reason: "stuck", question })!;
+    const shown = `${"q".repeat(pad - 1)} ${mark}…`;
+    expect(ask.question).toBe(shown);
+
+    const h = pair();
+    await h.daemonRun(ask);
+    const run = h.lastRun();
+    expect(run.ask_question).toBe(shown);
+    expect(`${run.summary}`).not.toContain(token.slice(0, 4));
+    await h.bridgeTick();
+    // The bridge claims the next run itself and posts it in-process.
+    await h.bridgeRun(askFromUnknown({ reason: "clarify", question })!);
+    expect(h.lastRun().ask_question).toBe(shown);
+    expect(h.posts).toHaveLength(2);
+    expect(JSON.stringify(h.posts)).not.toContain(token.slice(0, 4));
   });
 });
 

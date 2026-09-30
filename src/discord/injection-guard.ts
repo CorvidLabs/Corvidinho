@@ -47,14 +47,17 @@ export const INJECTION_NO_OWNER_WARNING =
  * Where the speaker's words came from (fence source; no module names).
  * `ask-answer` is an answer typed in an ask's private Answer form
  * (DISCORD-ASK-4.a); `ask-pick` is the label of the Choose option they
- * picked (DISCORD-ASK-3, SAFE-12.a).
+ * picked (DISCORD-ASK-3, SAFE-12.a). `schedule-prompt` is a schedule's
+ * name / description / prompt, written by its creator at `/schedule create`
+ * and replayed on every tick.
  */
 export type SpeakerSurface =
   | "chat-message"
   | "session-topic"
   | "work-task"
   | "ask-answer"
-  | "ask-pick";
+  | "ask-pick"
+  | "schedule-prompt";
 
 /** Header line of a non-owner speaker's fenced message (SAFE-12). */
 export function speakerFenceHeader(role: PersonRole): string {

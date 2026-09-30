@@ -1869,6 +1869,10 @@ export async function startBridge(
       // MEMORY-ACL-6: every tick delivers forget cards, expiries and notices.
       ...(forgetCards ? { onTick: () => void forgetCards.deliver() } : {}),
       backup,
+      // SAFE-12/13 (#71): a tick resolves the creator's role with the live
+      // mute set, and its injection refusal lands on the bridge's trail.
+      mutedUsers,
+      ...(recordAudit ? { recordAudit } : {}),
       outbound: {
         post: async ({ channelId, content, mentionUserIds }) => {
           if (!replyRef.fn) return false;

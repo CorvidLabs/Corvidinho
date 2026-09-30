@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "a-non-owner-s-schedule-text-is-scanned-at-schedule-create-and-fenced-at-every-tick-a-non-owner-s-create-whose-name-or",
+  "implementation_commit": "a304870b88a2bdf48ee14b9689c28774cd24a1f1",
+  "implementation_tree": "2c90a051ea2517d13ead9518d9d121518a29020c",
+  "contract_digest": "7428ca578f85efae98e0124a2ab006bcd5a00bb28681299c1ce9d0c565ba998c",
+  "workspace_digest": "8a2489648c07ba5bd42be7a9167bd6e597a3566416ce898b6583ba5663134ffa",
+  "closing_digest": "85697869e7ba08a3f661f8752d79498ac6dcef7102959ec3ffdfebe392f44847",
+  "review_digest": "59761ebd8c889dec7b4e66f4d6b89bbb3afd0aa420e09677cd2e1748674c19b2",
+  "finalization_digest": "f3ce106a08d21e22f5414f1a71599ac56b1a7274259d9083a12ef74d2786b28c",
+  "timestamp": 1790732494
+}

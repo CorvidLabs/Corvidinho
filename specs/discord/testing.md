@@ -458,6 +458,44 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   `ok row not recorded (see bridge log)`; a non-ADMIN delete while the trail
   throws still gets only `not authorized` and deletes nothing. No live Discord.
 
+## Schedule text is data (REQ-discord-713, SAFE-12/13)
+
+`tests/scheduler.injection.test.ts` (slash dispatcher with an in-memory
+context; `SchedulerService` with a memory store, a recording agent and no
+worktrees; `startBridge` with a null gateway and a memory DB; an allowlist
+file that declares one team member):
+
+- `/schedule create` by a stranger (community) and by a declared team member
+  with an injection prompt, and by a stranger with an injection name alone:
+  nothing stored; one ephemeral refusal that never quotes the text; one post
+  in the channel pinging only the owner ("a /schedule request here");
+  one `injection-suspected` / `denied` row (actor the user, surface
+  `discord:/schedule`). An ordinary stranger create: only the ephemeral
+  `NOT_AUTHORIZED`, no post, no row. The owner's create with the same words
+  is stored unscanned.
+- Tick, benign stranger schedule: the prompt starts `Scheduled work on
+  project: proj-a`, carries `role: community` and the name and prompt inside
+  the fence (`source=schedule-prompt`), the name nowhere else; the run is not
+  ADMIN; the result post is unchanged. A declared team member's schedule is
+  fenced as `role: team`, and as `role: community` when the creator is muted.
+  The owner's schedule (injection-like words included) keeps its old prompt,
+  unfenced, stays active, no row.
+- Tick, stored stranger injection prompt (and a team member's injection
+  name): no agent run; the schedule paused; one ask post with the schedule
+  title pinging only the owner ("I didn't run this schedule"), never the
+  text (for the injected name, the title is `Schedule (<id>) on <project>`
+  and the name appears nowhere in the post); one `denied` row (surface `scheduler:<id>`); a later tick posts
+  nothing more. A ticker with no outbound (the daemon) leaves the ask pending
+  on the run row and a bridge-like ticker posts it once. Through
+  `startBridge` the row lands in the bridge's `audit_log` and the schedule is
+  paused.
+
+Fail-on-base: with `src/scheduler/service.ts`,
+`src/discord/command-handlers/schedule.ts`, `src/discord/injection-guard.ts`
+and `src/discord/bridge.ts` from `origin/main` (5aaf7f0), 9 of the 12 tests
+fail; the ordinary-create, owner-create and owner-schedule guards pass on
+both.
+
 ## Slash answer reply continuity (REQ-discord-002, DISCORD-2 / SESSION-MULTI-1)
 
 - `tests/discord.slash-reply-continuity.test.ts` — through `startBridge` with a
@@ -566,6 +604,22 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   `normalizeAskOptions` stores the id redacted; an older row's secret-looking
   option id is redacted on the next open with askId, expiresAt and
   stubMessageId byte-identical.
+- Scrub before cut (REQ-discord-066 modified, SAFE-6.a):
+  `tests/discord.ask-scrub-first.test.ts` (bridge on temp SQLite, the ask as
+  the spawn client parses it): a choice label whose fake key straddles the
+  80-char cut is `…[redacted:github-token]…` on the Choose-pick buttons, in
+  the stored `pending_ask` row and in the pick's human text; a free-text
+  question straddling the 1500 cut is stored that way and nothing the Answer
+  stub, its form or a restated ask posts carries a raw `ghp_` piece; after a
+  restart the reloaded ask posts the same labels, and a stored label past the
+  cut loads scrubbed before it is cut (ids unchanged).
+  `tests/discord.ask-buttons.test.ts` › "SAFE-6.a: choice labels are scrubbed
+  before they are cut or posted": `buildChoiceComponents` posts a whole or
+  straddling key as `[redacted:<kind>]` (≤80, custom_ids unchanged).
+  `tests/scheduler.ask-outbox.test.ts` › "SAFE-6.a: a question whose secret
+  straddles the ASK_QUESTION_MAX cut…": `schedule_runs.ask_question` holds
+  the marker for a daemon-claimed and a bridge-claimed run, and neither the
+  run summary nor the posts carry a raw piece. All fail on the base sources.
 - `tests/discord.send-file.test.ts` (REQ-discord-476, DISCORD-17): stubbed
   fetch (records the multipart `payload_json` and `files[0]`) and an injected
   requester checker, no live Discord. `discord-send-file` is dangerous,
