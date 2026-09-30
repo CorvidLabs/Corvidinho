@@ -6,8 +6,11 @@
  * type 5, MODAL_SUBMIT) passes the same channel, actor (deny lists),
  * mute/rate, not-yours and expiry gates as a button press, is scrubbed
  * (SAFE-6) and resumes the requester's session exactly as a reply that
- * answers the ask would, in the stub (DISCORD-ASK-7/8). A reply in the
- * channel still answers it. Refusals are ephemeral only (DISCORD-DENY).
+ * answers the ask would, in the stub (DISCORD-ASK-7/8): a non-owner's typed
+ * answer reaches the model inside the untrusted-data fence, as their reply
+ * would (SAFE-12; the SAFE-13 refusal is in tests/safe.injection.test.ts). A
+ * reply in the channel still answers it. Refusals are ephemeral only
+ * (DISCORD-DENY).
  * Fixture only: fake gateway, injected agent, memory outbound, no token.
  */
 import { describe, expect, test } from "bun:test";
@@ -65,6 +68,25 @@ const FREE_TEXT: HumanAsk = { reason: "clarify", question: QUESTION };
 const PRIOR_BLOCK = `[Prior clarifying question you asked (the human is answering it now):\n${QUESTION}]`;
 
 type Ephemeral = { content?: string; ephemeral?: boolean; update?: boolean; components?: unknown[] };
+
+function escapeRe(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * SAFE-12 (REQ-discord-071): the requester here is community, so the typed
+ * answer reaches the resumed run inside the untrusted-data fence, as the
+ * same words in a reply would, after the prior-question block.
+ */
+function expectFencedAnswer(prompt: string, text: string, prior: string | null = PRIOR_BLOCK): void {
+  expect(prompt).toMatch(
+    new RegExp(
+      `${prior === null ? "" : `${escapeRe(prior)}\\n\\n`}Human answer:\\n` +
+        "\\[untrusted message from the acting user \\(role: community\\)[^\\n]*\\n" +
+        `<<<UNTRUSTED_DATA id=[0-9a-f]{12} source=ask-answer>>>\\n${escapeRe(text)}\\n<<<END_UNTRUSTED_DATA id=[0-9a-f]{12}>>>`,
+    ),
+  );
+}
 
 /**
  * Run n asks `askFor(n)` when given; else the first run asks `ask` (default
@@ -360,7 +382,7 @@ describe("Answer form submit resumes the requester's session like a reply", () =
     expect(run.resume).toBe(true);
     expect(run.actingUserId).toBe(USER_ID);
     expect(run.humanText).toBe("eu-west-1, close to users");
-    expect(run.prompt).toContain(`${PRIOR_BLOCK}\n\nHuman answer:\neu-west-1, close to users`);
+    expectFencedAnswer(run.prompt, "eu-west-1, close to users");
     // Ephemeral "Got it" only; dropped once the resume finished (DISCORD-ASK-8).
     expect(rec.eph).toEqual([{ content: ASK_ANSWER_ACK, ephemeral: true }]);
     expect(rec.deleted).toBe(1);
@@ -433,7 +455,7 @@ describe("Answer form submit resumes the requester's session like a reply", () =
     // A real answer afterwards still resumes the session.
     await b.handlers.onComponent!(submit(b.askId, USER_ID, "eu-west-1", recorder(), { messageId: b.stubId }));
     expect(b.calls).toHaveLength(2);
-    expect(b.calls[1]!.prompt).toContain(`${PRIOR_BLOCK}\n\nHuman answer:\neu-west-1`);
+    expectFencedAnswer(b.calls[1]!.prompt, "eu-west-1");
     await b.result.stop();
   });
 
@@ -490,7 +512,7 @@ describe("Answer form submit resumes the requester's session like a reply", () =
     const first = b.result.store.list()[0]!.pendingAsk!;
     await b.handlers.onComponent!(submit(first.askId, USER_ID, "answer one", recorder(), { messageId: first.stubMessageId }));
     expect(b.calls).toHaveLength(2);
-    expect(b.calls[1]!.prompt).toContain("Human answer:\nanswer one");
+    expectFencedAnswer(b.calls[1]!.prompt, "answer one", null);
     const next = b.result.store.list()[0]!.pendingAsk!;
     expect(next.askId).not.toBe(first.askId);
     expect(next.question).toBe("Q2?");
@@ -530,7 +552,7 @@ describe("Answer press and submit pass the same gates as a button press (DISCORD
     b.result.unmuteUser(USER_ID);
     await b.handlers.onComponent!(submit(b.askId, USER_ID, "eu-west-1", recorder()));
     expect(b.calls).toHaveLength(2);
-    expect(b.calls[1]!.prompt).toContain("Human answer:\neu-west-1");
+    expectFencedAnswer(b.calls[1]!.prompt, "eu-west-1");
     await b.result.stop();
   });
 
@@ -697,7 +719,7 @@ describe("/work free-text answer: Answer form resumes the slash session", () => 
     await b.handlers.onComponent!(submit(pending.askId, USER_ID, "eu-west-1", rec, { messageId: answer.messageId }));
     expect(b.calls).toHaveLength(2);
     expect(b.calls[1]!.sessionId).toBe(b.calls[0]!.sessionId);
-    expect(b.calls[1]!.prompt).toContain(`${PRIOR_BLOCK}\n\nHuman answer:\neu-west-1`);
+    expectFencedAnswer(b.calls[1]!.prompt, "eu-west-1");
     expect(b.outbound.contentEdits.filter((e) => e.messageId === answer.messageId).at(-1)!.content).toContain("DONE: 2");
     await b.result.stop();
   });
