@@ -1,0 +1,27 @@
+---
+id: gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins
+state: draft
+type: feature
+base_commit: 6917920bb1a7cebe9422fd8db3c0f89f18571ea1
+---
+
+# GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap
+
+## Intent
+
+GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap
+
+## Affected Canonical Specs
+
+- `plugins`
+- `agent`
+- `discord`
+- `cli`
+
+## Acceptance Criteria
+
+- PLUGIN-8 (the GIPHY text Leif re-confirmed on 2026-09-30) is captured verbatim in hi/plugin.md with the hi CLI. In tests/gif.search.test.ts (no network: fake resolver and fake transport answering like GIPHY's Tenor-compatible search, fake key test-key-not-real): gif-search is registered from plugins/gif with dangerous=true, minTier=1 and no must-ask entry, offered at tool/code tier only when CORVIDINHO_ALLOWLIST names it and never at read tier, denied non-interactively without the entry (SAFE-1, denied audit row) and audited started/outcome when allowlisted (SAFE-5); owner, no role session and team (chat and /work) are offered it, community never, and team still gets neither web-fetch nor discord-send-file (PLUGIN-9, TEAM_SEARCH_TOOLS = web-search and gif-search); a community role session is refused at runPlugin while a team one reaches the handler; with a key exactly one GET goes to the pinned public address of api.giphy.com /v2/search with exactly q, key, client_key=corvidinho, limit (5 by default, whole numbers 1-10), media_filter=gif,tinygif and contentfilter=medium, and no header beyond the fixed API headers, and no GIF is ever downloaded; query text such as cats&contentfilter=off&rating=r is only the q value and --rating, --contentfilter and every other unknown flag are usage errors, so nothing can change the filter; no key or a malformed key is a clear not-configured error with no DNS or request (never an empty success); a query carrying a secret-looking value or a set secret env value (also split by a joiner) is refused with exit 2 before anything is sent; titles and https GIPHY media links (media.giphy.com, media0-4.giphy.com, i.giphy.com, exact hosts) reach the model only inside the untrusted web fence in GIPHY's order, a link off those hosts, over http, with credentials or another port is dropped and a result with no valid link is dropped (nothing else filtered or reordered), no results is an ok (no results), and data and the summary carry postAs link, the link-only guidance and Powered By GIPHY; a 2xx error body is api-error and a body without results bad-response, and 401/403/400/429/5xx map to fixed codes without GIPHY's text; a hostile GIF title trips SAFE-13 in the tool loop, drops gif-search, web-search, web-fetch and files-write for the rest of the run and refuses the later files-write, while an ordinary result trips nothing; the key and the request URL (which carries it) never appear in any result, error, data field or audit row even when GIPHY, a transport error, a redirect or a DNS error echoes them or an invisible or control character splits the key, and GIPHY_API_KEY is on the SAFE-6 secret env list, dropped from delegate workers, the verify lane (shell and runners) and Fledge children and redacted by formatErrorLine; a non-public answer for api.giphy.com and every redirect are refused (exit 2), the run's abort and the deadline stop a pending search and a run already stopped sends nothing; with CORVIDINHO_DAILY_SPEND_CAP_USD set each search reserves and records a 0 USD row (api.giphy.com / giphy-gif-search) before the request, settling actual / failed / estimated at 0 and leaving 24-hour spend unchanged, no cap opens no database, and with the window already past the cap or an unavailable ledger nothing is sent and the tool loop ends the attempt with the spend-cap ask. tests/roles.team.test.ts and tests/web.search.test.ts pin TEAM_SEARCH_TOOLS as web-search and gif-search; tests/preload.operator-data-dir.test.ts shows a child bun test never sees GIPHY_API_KEY; tests/fledge.plugins.test.ts keeps every builtin plus a small Fledge plugin under the default tool-surface budget, now 8500 tokens (REQ-plugins-114); docs (.env.example, docs/DISCORD-GO-LIVE.md E.3.b, docs/discord.md) document the key, the allowlist name, link-only posting and Powered By GIPHY. The new tests fail on the base sources (slice A head d768396) and pass after; one new env var (GIPHY_API_KEY), no table, column or schema version.
+
+## No-spec Rationale
+
+Not applicable
