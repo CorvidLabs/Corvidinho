@@ -1,6 +1,6 @@
 ---
 id: forget-from-github-and-from-admin-approved-on-the-card-a-declared-person-matched-by-github-numeric-id-who-comments
-state: approved
+state: implementing
 type: feature
 base_commit: 93ddc31a142f4da106a3c29ca78737734cfbd77b
 ---
