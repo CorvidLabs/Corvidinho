@@ -108,6 +108,7 @@ import {
 import { isOwnerDiscord } from "../identity/owner.ts";
 import { formatTaskPlumbing } from "../agent/task-summary.ts";
 import { loadLlmEnv } from "../agent/execute.ts";
+import { providerNotice } from "../agent/providers.ts";
 import {
   componentChannelAllowlisted,
   promptBodyForAskGate,
@@ -491,6 +492,10 @@ export async function startBridge(
     ? () => formatAuditLine(verifyAudit(db, auditKeyFromEnv(env)))
     : undefined;
   if (auditLine) console.log(`[discord] ${auditLine()}`);
+  // AGENT-10: with no usable model provider every run fails with the notice;
+  // say so at startup (and in /status) instead of quietly picking one.
+  const llmNotice = providerNotice(env);
+  if (llmNotice) console.warn(`[discord] ${llmNotice}`);
   // SAFE-8: the owner is pinged once per spend-cap episode; pending 80%
   // warnings (recorded by any run on this data dir) are claimed here too.
   const spendAlerts = createSpendAlertOutbox({ db, env });

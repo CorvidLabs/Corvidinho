@@ -3,7 +3,7 @@
  * `task run --output ndjson` stream (issue #73; AGENT-8 / DISCORD-3 / DISCORD-10).
  * Fake bins are sh scripts in mkdtemp dirs; no live tokens, no network, no git worktrees.
  */
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -25,6 +25,12 @@ import {
   checkProtocolVersion,
 } from "../src/discord/protocol-version.ts";
 import { createSpawnAgentClient as createWatchClient } from "../src/watch/agent-client.ts";
+import { startFakeLlm } from "./fixtures/fake-llm.ts";
+
+// AGENT-13: there is no built-in default model or stub, so spawned runs
+// call this localhost fake provider (a keyless ollama: model).
+const fakeLlm = startFakeLlm();
+afterAll(() => fakeLlm.stop());
 
 const root = import.meta.dir + "/..";
 const SPAWN_TIMEOUT_MS = 30_000;
@@ -230,11 +236,12 @@ describe("DISCORD-10 lockstep on protocol 2", () => {
 });
 
 describe("real CLI: task run --output ndjson (REQ-cli-073)", () => {
-  // Demo path only: clear LLM keys so nothing reaches a provider.
+  // The fake provider only: clear LLM keys so nothing reaches a real one.
   const env = {
     ...process.env,
     CORVIDINHO_LLM_API_KEY: "",
     OPENAI_API_KEY: "",
+    ...fakeLlm.env,
   };
 
   // A scratch non-git project: never the repo's own snapshot or verify lane.

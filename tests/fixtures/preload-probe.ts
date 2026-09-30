@@ -22,6 +22,14 @@ const RUN_ENV_KEYS = [
   "CORVIDINHO_DAILY_SPEND_CAP_USD",
   "CORVIDINHO_LLM_API_KEY",
   "OPENAI_API_KEY",
+  "ANTHROPIC_API_KEY",
+  "OLLAMA_HOST",
+  "CORVIDINHO_LLM_MODEL",
+  "CORVIDINHO_LLM_MODEL_READ",
+  "CORVIDINHO_LLM_MODEL_TOOL",
+  "CORVIDINHO_LLM_MODEL_CODE",
+  "CORVIDINHO_LLM_BASE_URL",
+  "CORVIDINHO_LLM_TIER",
   "CORVIDINHO_DISCORD_SESSION_ID",
 ] as const;
 const SHOW_ENV =
@@ -84,6 +92,7 @@ test("preload probe writes audit rows only to the test data dir", async () => {
       runEnvSet: RUN_ENV_KEYS.filter((k) => process.env[k] !== undefined),
       nonInteractive: isNonInteractive({}),
       llmKeySet: loadLlmEnv().apiKey !== undefined,
+      llmProviderSet: loadLlmEnv().notice === null,
       rows: row.n,
       keyed: row.keyed,
       cliExit,

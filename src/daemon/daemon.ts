@@ -22,6 +22,7 @@
  */
 
 import type { Database } from "bun:sqlite";
+import { defaultProviderLabel, providerNotice } from "../agent/providers.ts";
 import { formatSpendWarningLine, SPEND_CAP_SUMMARY } from "../agent/spend-notice.ts";
 import { loadAllowlist, tryLoadAllowlist } from "../allowlist/load.ts";
 import type { AllowlistConfig } from "../allowlist/types.ts";
@@ -285,7 +286,12 @@ export async function startDaemon(
     schedulesPaused: all.filter((s) => s.status === "paused").length,
     // OPS-1: where the nightly backup goes, or why there is none.
     backup: backupCfg.kind === "on" ? backupCfg.dir : backupCfg.kind === "off" ? "off" : backupCfg.error,
+    // AGENT-13: the model scheduled runs call at the default tier, or none.
+    llm: defaultProviderLabel(env) ?? "none",
   });
+  // AGENT-10: with no usable provider scheduled runs fail; say so at startup.
+  const llmNotice = providerNotice(env);
+  if (llmNotice) log("warn", "llm.no_provider", { notice: llmNotice });
   if (recovered.runs.length > 0 || recovered.worktrees.length > 0) {
     log("warn", "daemon.recovered", {
       runs: recovered.runs.map((r) => r.id),

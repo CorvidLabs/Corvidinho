@@ -267,8 +267,8 @@ model gets the "sent privately" placeholder; the prompt names the rule.
   project whose `fledge.toml` sets the removed key still verifies and fails.
 - `tests/agent.config.test.ts`: `parseCorvidinhoSection` reads only
   `max_retries`; `removedVerifyKeys` names the key only under `[corvidinho]`.
-- `tests/agent.execute.test.ts`, `tests/agent.tool-loop.test.ts`: the demo
-  execute reports no files.
+- `tests/agent.execute.test.ts`, `tests/agent.tool-loop.test.ts`: a run with
+  no usable provider reports no files and calls nothing (REQ-agent-179).
 ## SAFE-13 WATCH owner exemption by numeric id (REQ-agent-071, REQ-watch-367)
 
 `tests/safe.injection.test.ts` › "the verdict skips the owner (by [owner]
@@ -310,3 +310,22 @@ flips exactly at the cap; the owner's `formatSpendStatusLine` keeps the
 amounts. `tests/agent.spend-ask.test.ts` and `tests/agent.spend.test.ts` keep
 asserting that a stopped run's summary is `SPEND_CAP_SUMMARY` (no `$`, no
 `CORVIDINHO_`) and that the question carries the details.
+
+## Model providers, no built-in default (REQ-agent-179, REQ-agent-007, REQ-agent-079; AGENT-13 / AGENT-10)
+
+`tests/agent.providers.test.ts` — entry parsing (`kind:model`, bare and
+unknown prefixes are OpenAI-compatible, comma lists), per-tier resolution with
+no default, each kind's endpoint and key (`resolveEntry`, `OLLAMA_HOST`
+forms, `providerId`), the transport per kind over a mock fetch (ollama: no
+authorization header; anthropic: its own key; only a list's head is called),
+the no-provider notice per case, `runTask` ending `failed` with the notice and
+no provider call, the real `task run` against a localhost keyless `ollama:`
+fake, and the `ANTHROPIC_API_KEY` SAFE-6 redaction.
+`tests/agent.execute.test.ts` / `tests/agent.tool-loop.test.ts`: a key alone
+picks no model; an attempt with no provider fails with the notice.
+- Fail on base: with the base's (156cfa9) sources swapped in (the new module
+  kept), 15 of 18 fail (the 3 pure units of the new module pass).
+- Tests that used the demo stub or the default model now use
+  `tests/fixtures/fake-llm.ts` (a localhost fake, an injected fetch, or a
+  configured model for bridge footers).
+

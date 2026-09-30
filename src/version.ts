@@ -5,7 +5,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadLlmEnv } from "./agent/execute.ts";
+import { defaultProviderLabel, NO_PROVIDER_NOTICE, providerNotice } from "./agent/providers.ts";
 
 /** Read semver from a package.json path; returns "0.0.0" if missing/invalid. */
 export function readPackageVersion(
@@ -58,16 +58,32 @@ export function llmBaseHost(baseUrl: string): string {
 }
 
 /**
- * LLM dogfood line for `/status`.
- * With API key: "LLM: <model> @ <host>"; else "LLM: demo stub".
- * NEVER includes the API key.
+ * LLM line for `/status` (AGENT-10 / AGENT-13): the default tier's model
+ * (`CORVIDINHO_LLM_TIER`, default tool) as "LLM: <model> @ <host>" (non-openai
+ * kinds as `kind:model`), followed by the no-provider notice when any tier has
+ * no usable provider; "LLM: none — <notice>" when the default tier has none.
+ * The notice's details (which tier, the setting names to set) are for the
+ * owner (`ownerView`, default true); anyone else sees only that no provider
+ * is configured, like the owner-only spend line (SAFE-14.a).
+ * NEVER includes an API key.
  */
 export function formatLlmStatusLine(
   env: NodeJS.ProcessEnv = process.env,
+  opts: { ownerView?: boolean } = {},
 ): string {
-  const llm = loadLlmEnv(env);
-  if (!llm.apiKey) return "LLM: demo stub";
-  return `LLM: ${llm.model} @ ${llmBaseHost(llm.baseUrl)}`;
+  const ownerView = opts.ownerView ?? true;
+  const provider = defaultProviderLabel(env);
+  const full = providerNotice(env);
+  const notice =
+    full === null
+      ? null
+      : ownerView
+        ? full
+        : provider
+          ? `${NO_PROVIDER_NOTICE} for some runs.`
+          : `${NO_PROVIDER_NOTICE}.`;
+  if (!provider) return `LLM: none — ${notice}`;
+  return notice ? `LLM: ${provider} — ${notice}` : `LLM: ${provider}`;
 }
 
 /**

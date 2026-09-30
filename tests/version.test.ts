@@ -28,11 +28,19 @@ describe("readPackageVersion / VERSION", () => {
 });
 
 describe("formatLlmStatusLine", () => {
-  test("demo stub when no API key", () => {
-    expect(formatLlmStatusLine({})).toBe("LLM: demo stub");
-    expect(formatLlmStatusLine({ CORVIDINHO_LLM_MODEL: "x" })).toBe(
-      "LLM: demo stub",
+  test("no provider: says so (AGENT-10), never a stub or a default model", () => {
+    expect(formatLlmStatusLine({})).toBe(
+      "LLM: none — No model provider is configured: CORVIDINHO_LLM_MODEL is not set. Set CORVIDINHO_LLM_MODEL (or CORVIDINHO_LLM_MODEL_READ / _TOOL / _CODE per tier) to openai:<model>, ollama:<model> or anthropic:<model>; there is no built-in default.",
     );
+    // A model whose kind needs a key it does not have is no provider either.
+    expect(formatLlmStatusLine({ CORVIDINHO_LLM_MODEL: "x" })).toBe(
+      "LLM: none — No model provider is configured: x needs CORVIDINHO_LLM_API_KEY or OPENAI_API_KEY, which is not set.",
+    );
+    // A key alone picks no model (AGENT-13).
+    const keyOnly = formatLlmStatusLine({ OPENAI_API_KEY: "sk-openai-secret" });
+    expect(keyOnly).toStartWith("LLM: none — No model provider is configured");
+    expect(keyOnly).not.toContain("gpt-4o-mini");
+    expect(keyOnly).not.toContain("sk-openai");
   });
 
   test("model @ host when key set; never includes key", () => {
@@ -49,6 +57,7 @@ describe("formatLlmStatusLine", () => {
   test("OPENAI_API_KEY fallback still never prints key", () => {
     const line = formatLlmStatusLine({
       OPENAI_API_KEY: "sk-openai-secret",
+      CORVIDINHO_LLM_MODEL: "local",
       CORVIDINHO_LLM_BASE_URL: "http://127.0.0.1:8080/v1",
     });
     expect(line).toContain("LLM:");

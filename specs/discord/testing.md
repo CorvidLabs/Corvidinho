@@ -1159,3 +1159,17 @@ thinking outbound; no live Discord, no network):
   `src/discord/spend-dm.ts` removed), 29 tests in the six existing files fail
   on their assertions and `tests/discord.spend-dm.test.ts` cannot load; with
   the branch restored all 154 tests in the seven files pass.
+
+## No provider at start and in /status (REQ-discord-079, REQ-discord-015; AGENT-10)
+
+`tests/agent.providers.test.ts` — a dry-run bridge with no model warns
+`[discord] <notice>` once at start (none with a model); `/status` gives the
+owner the full notice and anyone else only "No model provider is
+configured." with no setting name; configured and partly configured lines.
+`tests/discord.slash.test.ts` ("/status reports metrics"), `tests/version.test.ts`
+and `tests/discord.spend.test.ts` (the non-owner body still has no
+`CORVIDINHO_`). Bridge footer tests configure a model for the file
+(`useConfiguredModel`, `tests/fixtures/fake-llm.ts`); the stub agent calls
+no model.
+- Fail on base: the startup and `/status` cases fail (no line; "demo stub").
+

@@ -74,6 +74,7 @@ import {
 import { enrichWatchPromptWithMemories } from "./memory-inject.ts";
 import { gateEvent, routeEvent, watchInjectionVerdict } from "./router.ts";
 import { INJECTION_AUDIT_ACTION, type InjectionReason } from "../agent/untrusted.ts";
+import { providerNotice } from "../agent/providers.ts";
 import { appendAudit, argsDigest, auditKeyFromEnv } from "../audit/index.ts";
 import {
   createOctokitSearchClient,
@@ -314,6 +315,11 @@ export async function startWatchPoller(
     opts.sleep ??
     ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
 
+  // AGENT-10: with no usable model provider every WATCH run fails with the
+  // notice; say so at startup instead of quietly picking one (a dry run
+  // echoes and calls no model).
+  const llmNotice = config.dryRun ? null : providerNotice(env);
+  if (llmNotice) log(`[watch] ${llmNotice}`);
   if (!opts.sessionStore) {
     log(
       `[watch] sessions: ${store.list().length} restored (soft TTL ${Math.round(store.ttlMs / 60000)}m)`,

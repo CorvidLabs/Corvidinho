@@ -27,6 +27,12 @@ import {
 import { WorkStore } from "../src/discord/work-store.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 import { declareTeam } from "./fixtures/team-people.ts";
+import { useConfiguredModel } from "./fixtures/fake-llm.ts";
+
+// The footer names the configured model; there is no built-in default
+// (AGENT-13), so this file configures one (a priced id; the stub agent calls
+// no model).
+useConfiguredModel();
 
 /** A declared team member (IDENTITY-11.a: community can't start /work). */
 const TEAM_MEMBER = "700000000000000007";

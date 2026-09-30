@@ -215,7 +215,8 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         untrack();
       });
       // Provider-reported total when a usage frame arrived; else a rough
-      // stand-in from summary length (demo stub / providers without usage).
+      // stand-in from summary length (providers without usage, or a run that
+      // called no model, e.g. with no provider configured).
       const finalTok =
         totalTokens ?? Math.max(1, Math.ceil(summary.length / 4));
       onStatus?.({

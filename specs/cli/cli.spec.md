@@ -37,7 +37,7 @@ depends_on:
 
 ## Purpose
 
-Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daemon, attribution, and task run with optional LLM plugin tool loop.
+Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daemon, attribution, and task run with its LLM plugin tool loop on the model the operator configures (AGENT-13: no built-in default; with none, `task run`, the daemon, doctor and `init` say so, AGENT-10, REQ-cli-079).
 
 ## Public API
 
@@ -67,7 +67,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `githubRepoUsage` | `allow` | `AllowlistUsage` | WATCH repo set (`expandWatchRepos`) minus deny-listed repos / orgs and entries the gate cannot use: listed / usable / denied count and sources |
 | `discordDoctorCheck` | `allow, env?` | `DoctorCheck` | Doctor `discord` line (token + usable channels, source named) |
 | `githubWatchDoctorCheck` | `allow, env?` | `DoctorCheck` | Doctor `github-watch` line (token + username + usable repos, source named) |
-| `llmDoctorCheck` | `env?` | `DoctorCheck` | Doctor `llm` line; `warn` (demo stub) without a key, never fails |
+| `llmDoctorCheck` | `env?` | `DoctorCheck` | Doctor / `init` `llm` line (AGENT-13 / AGENT-10, REQ-cli-003): `[ok]` key env present (never the value) or `no key needed` (ollama), model and host of the default tier, per-tier models; `[warn]` with the no-provider notice when a tier has no usable provider; never fails |
 | `dataDirDoctorCheck` | `env?, home?` | `DoctorCheck` | Doctor `data-dir` line: exists + writable / creatable / `fail` |
 | `projectFilesDoctorChecks` | `cwd?` | `DoctorCheck[]` | Doctor / `init` project-file lines for `cwd` (CLI-4, REQ-cli-430): `fledge.toml`, `verify-lane` (runs spec-check), `.specsync`, `specs`; each missing one `[missing]` in plain language; reads only |
 | `removedVerifyKeyDoctorCheck` | `cwd?` | `DoctorCheck \| null` | Doctor `[warn] verify-gate` line when `cwd`'s `fledge.toml` still sets `[corvidinho] verify_before_complete` (ignored, AGENT-14); null otherwise; never fails doctor (REQ-cli-085) |
@@ -217,7 +217,9 @@ Nightly backup (OPS-1/2, REQ-cli-680, `src/store/backup.ts`): with `CORVIDINHO_B
 | Doctor missing tools/env | Print per-check status; exit 1 (no secrets) |
 | Doctor: allowlists only in the allowlist file | `[ok] discord` / `[ok] github-watch` naming source `file` (values not shown) |
 | Doctor: every allowlisted channel / repo also deny-listed, or allowlist file does not load | `[missing] discord` / `[missing] github-watch`; exit 1 |
-| Doctor: no LLM key | `[warn] llm` (task run uses the demo stub); exit code unchanged |
+| Doctor / `init`: no usable model provider (no `CORVIDINHO_LLM_MODEL`, or its kind's key unset) | `[warn] llm: No model provider is configured …` naming what to set; exit code unchanged (REQ-cli-003) |
+| `task run` with no usable provider for its tier | the notice on stderr first (text output); the run calls nothing and ends `failed` with the notice as its summary; exit 1 (REQ-cli-079) |
+| Daemon start with no usable provider | `llm.no_provider` warn line with the notice; `daemon.started` carries `llm: "none"` (REQ-cli-079) |
 | Doctor: the owner or a declared person has a GitHub login but no GitHub numeric id | `[warn] people-github` naming person ids only (on GitHub they read as undeclared until an id is linked); exit code unchanged (REQ-cli-367) |
 | Doctor: data dir not a directory, a symlink to nothing, not creatable or not writable | `[fail] data-dir`; exit 1 |
 | Doctor: blank (whitespace-only) Discord / GitHub token or watch login | `[missing] discord` / `[missing] github` / `[missing] github-watch` (bridge / WATCH / Octokit trim them); exit 1 |

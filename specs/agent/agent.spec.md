@@ -52,6 +52,9 @@ files:
   - tests/agent.verify-gate.test.ts
   - tests/fixtures/talk-worktree.ts
   - tests/agent.loop-guards.test.ts
+  - src/agent/providers.ts
+  - tests/agent.providers.test.ts
+  - tests/fixtures/fake-llm.ts
 
 db_tables: []
 depends_on:
@@ -62,7 +65,17 @@ depends_on:
 
 ## Purpose
 
-Root guidance-only `agent.3md` + `@corvidlabs/agent3md` packaging (REQ-agent-260): validate/route/get smoke only; agent loop does not load planes for progressive disclosure until AGENT-13 is HI'd.
+Root guidance-only `agent.3md` + `@corvidlabs/agent3md` packaging (REQ-agent-260): validate/route/get smoke only; agent loop does not load planes for progressive disclosure until that is HI'd separately (the captured AGENT-13 is model providers, not this).
+
+Model providers (AGENT-13 / AGENT-10, REQ-agent-179; `src/agent/providers.ts`):
+the operator configures every model, and none is built in as a default.
+`CORVIDINHO_LLM_MODEL` and the per-tier keys hold `kind:model` entries
+(`openai`, `ollama`, `anthropic`; a bare or unknown prefix is
+OpenAI-compatible), each with its vendor endpoint and key, all over the one
+OpenAI-compatible chat transport and the SAFE-8 guard. Only a tier's first
+entry is called (the AGENT-11 fallback is a later change; no headless-CLI kind
+yet). With no usable provider for the run's tier the attempt calls nothing and
+fails with the no-provider notice; there is no demo stub.
 
 Agent execute tool-loop also carries MEMORY instructions (AGENT-7 / MEMORY-2/4)
 so Discord/CLI chats trust injected facts and call memory-store/recall
@@ -129,12 +142,27 @@ it, DISCORD-15) and takes an optional `bodyMax` for the result-frame chat body
 and splits the answer itself, DISCORD-16).
 
 Per-tier model (REQ-agent-079, AGENT-5): `src/agent/tier.ts` exports
-`TIER_MODEL_ENV` (`CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`),
-`DEFAULT_LLM_MODEL` (`gpt-4o-mini`) and `modelForTier(env, tier)` (tier key,
-else `CORVIDINHO_LLM_MODEL`, else the default). `loadLlmEnv(env, tier?)` takes
-an explicit tier over `CORVIDINHO_LLM_TIER` and returns that tier's model;
-`createTaskExecute` passes its `tier` so `--tier` picks the model. Endpoint and
-key stay shared. `modelKeyForTier(env, tier)` names the key that set a tier's
+`TIER_MODEL_ENV` (`CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`) and
+`modelForTier(env, tier)` (the first entry of the tier key, else of
+`CORVIDINHO_LLM_MODEL`, without its `kind:` prefix; `""` when none — there is
+no default model, AGENT-13). `loadLlmEnv(env, tier?)` takes an explicit tier
+over `CORVIDINHO_LLM_TIER` and returns that tier's provider (`kind`,
+`baseUrl`, `apiKey`, `model`) and its no-provider `notice` (null when usable);
+`createTaskExecute` passes its `tier` so `--tier` picks the model.
+
+Providers (REQ-agent-179, AGENT-13 / AGENT-10): `src/agent/providers.ts`
+exports `PROVIDER_KINDS`, `parseModelEntry` / `parseModelChain` (comma list;
+split on the first `:` only for a known kind), `modelChainForTier` (`[]` when
+nothing is set), `resolveEntry` (openai: `CORVIDINHO_LLM_BASE_URL`, default
+`https://api.openai.com/v1`, key `CORVIDINHO_LLM_API_KEY` or
+`OPENAI_API_KEY`; ollama: `ollamaHostUrl` from `OLLAMA_HOST`, default
+`http://127.0.0.1:11434`, `/v1`, no key; anthropic: `ANTHROPIC_BASE_URL`,
+key `ANTHROPIC_API_KEY`; `usable` false when the kind's key is missing),
+`providerId` (the endpoint host, as the SAFE-8 ledger records it),
+`providerForTier`, `entryLabel`, `defaultProviderLabel`, `providerNotice(env,
+tiers?)` (starts with `NO_PROVIDER_NOTICE`, names the tiers and the missing
+setting or key, never a value), and `providerStatus`. The chat transport sends
+`authorization: Bearer <key>` only when the kind has a key. `modelKeyForTier(env, tier)` names the key that set a tier's
 model (the SAFE-8 unpriced ask names it via `createSpendGuard({ modelKey })`),
 and `perTierModels(env)` lists each tier's model when any per-tier key is set
 (doctor `[ok] llm`; `readSpendSnapshot` flags an unpriced tier model with its
@@ -663,6 +691,12 @@ instructions for …" or a browser's developer mode do not count.
 - **When** an issue title reads like an instruction to set aside the previous instructions
 - **Then** the tool message starts with the SAFE-13 note and holds the result inside an `UNTRUSTED_DATA` fence, the next request offers no mutating tool, a `files-write` call is refused and writes nothing, `onInjection` gets `{ source: "github-issue-list", reasons: ["ignore-rules"] }`, an `injection-suspected` row is audited, and the summary ends with the "didn't act on it" note (REQ-agent-071)
 
+### Scenario: no model is configured
+
+- **Given** `task run` with an LLM key but no `CORVIDINHO_LLM_MODEL` (an old key-only setup)
+- **When** the run starts
+- **Then** the no-provider notice is the first stderr line (text output), no provider is called, and the run ends `failed` with that notice as its summary and no files; there is no `gpt-4o-mini` default and no demo answer (REQ-agent-179)
+
 ### Scenario: the model repeats a failing call
 
 - **Given** a tool-tier run whose model calls `files-read` on a missing file
@@ -686,6 +720,7 @@ instructions for …" or a browser's developer mode do not count.
 | Git diff unreadable after a good start snapshot | fail closed: verify runs; one Text note says the diff could not be read (REQ-agent-085) |
 | Real diff of thousands of paths (an install, a branch switch) | at most `WORKSPACE_DIFF_MAX_FILES` join filesChanged, the note counts them all, verify runs; the NDJSON result line stays under the parser cap (REQ-agent-085) |
 | Retry after a failed verify changes no files | filesChanged is the union across attempts, so verify runs again; never done unless it passes (REQ-agent-242) |
+| No usable provider for the run's tier (no entry, or the kind's key unset) | no provider call; `ExecuteResult.error` with the no-provider notice as summary; state failed, no files, no verify; `task run` exits 1 (REQ-agent-179) |
 | Provider / HTTP / network failure in execute | `ExecuteResult.error`; state failed, verified=false, summary is the provider error (then the earlier verify output when a verify already failed), `task run` exits 1 (REQ-agent-242) |
 | Model calls ask-human | state blocked, verifySkipped=true, `ask` reason clarify, summary `Needs your input: …` |
 | ask-human with empty question | ToolResult success=false fed back to the model; loop continues |

@@ -68,7 +68,10 @@ through the shared DB so the owner is pinged on Discord like other stuck asks
 loadWatchConfig, startWatchPoller, routeEvent, SessionStore, goLiveChecklist,
 NOT_AUTHORIZED, filterNewEvents, containsMention, DetectedEvent types,
 SessionStore options (`db`, `ttlMs`, `now`; `durable`), startWatchPoller
-`db` / `sessionStore` / `sessionTtlMs` injection,
+`db` / `sessionStore` / `sessionTtlMs` injection; outside a dry run
+`startWatchPoller` logs `[watch] <notice>` once at start when any tier has no
+usable model provider (AGENT-10, REQ-watch-079; `providerNotice` from
+`src/agent/providers.ts`),
 ProcessedIdStore / AckedIdStore / SummarizedIdStore options (`db`, `maxSize`;
 `durable`), agent helpers, createFixtureSearchClient / createOctokitSearchClient,
 ack helpers (shouldAckEvent, buildAckBody, AckClient, AckedIdStore),

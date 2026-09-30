@@ -473,6 +473,15 @@ reason only, so a schedule pings once per cap episode. `ask-ping.ts` also
 exports `appendPostLine` (a SAFE-13 line or a slash owner notice on a post).
 `AgentSpawnResult` gains optional `spendWarning` (amounts validated from the
 `result` frame by `spendWarningFromUnknown`); no channel post carries it.
+`/status`'s LLM line (AGENT-10 / AGENT-13, REQ-discord-015): `formatLlmStatusLine(env,
+{ ownerView })` (`src/version.ts`) shows the default tier's `<model> @ <host>`
+(non-openai kinds as `kind:model`) or `LLM: none — …` when it has no usable
+provider, plus the no-provider notice when any tier has none;
+`StatusReportInput.ownerView` (the handler passes `isOwnerViewer`; default
+false) decides whether the notice names the tiers and settings (owner) or says
+only `No model provider is configured.` (anyone else, like the spend line). At
+start the bridge logs `[discord] <notice>` once with `console.warn` when any
+tier has no usable provider (REQ-discord-079).
 `SlashContext.spendLine(ownerView)` / `StatusReportInput.spendLine` carry
 `/status`'s spend line: for the owner (ADMIN, re-checked by the handler) the
 24 h spend vs cap line (`formatSpendStatusLine` over `readSpendSnapshot` on

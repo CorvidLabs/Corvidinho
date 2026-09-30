@@ -49,6 +49,12 @@ import type { BridgeConfig } from "../src/discord/types.ts";
 import { WorkStore } from "../src/discord/work-store.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 import { createSpawnAgentClient as createWatchClient } from "../src/watch/agent-client.ts";
+import { useConfiguredModel } from "./fixtures/fake-llm.ts";
+
+// The footer names the configured model; there is no built-in default
+// (AGENT-13), so this file configures one (a priced id; the stub agent calls
+// no model).
+useConfiguredModel();
 
 const MAX = 2000;
 const OWNER_ID = "111122223333444455";

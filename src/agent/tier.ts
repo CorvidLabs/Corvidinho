@@ -4,6 +4,8 @@
  * Numeric plugin minTier: 0 = read floor, 1 = tool, 2+ = code.
  */
 
+import { modelChainForTier, parseModelChain } from "./providers.ts";
+
 export type CapabilityTier = "read" | "tool" | "code";
 
 const RANK: Record<CapabilityTier, number> = {
@@ -34,8 +36,8 @@ export function tierAllowsPlugin(
 
 /**
  * Optional per-tier model keys (AGENT-5): a tier's key wins, else
- * `CORVIDINHO_LLM_MODEL`, else {@link DEFAULT_LLM_MODEL}. Endpoint and API key
- * stay shared across tiers.
+ * `CORVIDINHO_LLM_MODEL`. Each holds provider entries (`kind:model`, AGENT-13,
+ * src/agent/providers.ts); there is no built-in default model.
  */
 export const TIER_MODEL_ENV: Readonly<Record<CapabilityTier, string>> = {
   read: "CORVIDINHO_LLM_MODEL_READ",
@@ -43,42 +45,41 @@ export const TIER_MODEL_ENV: Readonly<Record<CapabilityTier, string>> = {
   code: "CORVIDINHO_LLM_MODEL_CODE",
 };
 
-/** Model used when neither the tier's key nor `CORVIDINHO_LLM_MODEL` is set. */
-export const DEFAULT_LLM_MODEL = "gpt-4o-mini";
-
-/** The model a run at `tier` calls (AGENT-5). */
+/**
+ * The model id a run at `tier` sends as `body.model` (AGENT-5 / AGENT-13):
+ * the first entry of the tier's key, else of `CORVIDINHO_LLM_MODEL`, without
+ * its `kind:` prefix. "" when no model is configured (no default).
+ */
 export function modelForTier(
   env: NodeJS.ProcessEnv,
   tier: CapabilityTier,
 ): string {
-  return (
-    env[TIER_MODEL_ENV[tier]]?.trim() ||
-    env.CORVIDINHO_LLM_MODEL?.trim() ||
-    DEFAULT_LLM_MODEL
-  );
+  return modelChainForTier(env, tier)[0]?.model ?? "";
 }
 
 /**
  * The env key that sets a `tier` run's model (AGENT-5): the tier's key when
- * set, else `CORVIDINHO_LLM_MODEL`. Named in the SAFE-8 unpriced-model ask.
+ * it lists an entry, else `CORVIDINHO_LLM_MODEL`. Named in the SAFE-8
+ * unpriced-model ask.
  */
 export function modelKeyForTier(
   env: NodeJS.ProcessEnv,
   tier: CapabilityTier,
 ): string {
   const key = TIER_MODEL_ENV[tier];
-  return env[key]?.trim() ? key : "CORVIDINHO_LLM_MODEL";
+  return parseModelChain(env[key]).length > 0 ? key : "CORVIDINHO_LLM_MODEL";
 }
 
 /**
- * Each tier's model when any per-tier model key is set (AGENT-5), else null
- * (every tier calls the one configured model).
+ * Each tier's model when any per-tier model key lists an entry (AGENT-5),
+ * else null (every tier calls the one configured model). A tier with no
+ * model is "".
  */
 export function perTierModels(
   env: NodeJS.ProcessEnv,
 ): Readonly<Record<CapabilityTier, string>> | null {
   const tiers = Object.keys(TIER_MODEL_ENV) as CapabilityTier[];
-  if (!tiers.some((t) => env[TIER_MODEL_ENV[t]]?.trim())) return null;
+  if (!tiers.some((t) => parseModelChain(env[TIER_MODEL_ENV[t]]).length > 0)) return null;
   return {
     read: modelForTier(env, "read"),
     tool: modelForTier(env, "tool"),
