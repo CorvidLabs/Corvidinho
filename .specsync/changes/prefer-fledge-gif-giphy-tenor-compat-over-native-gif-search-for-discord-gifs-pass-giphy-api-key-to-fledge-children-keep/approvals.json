@@ -1,0 +1,50 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790871944,
+      "digest": "d888c19da894842b9fb6a1eeeba58d01f260df6eda15d98b1cc0781b5755dd4a",
+      "note": "Owner prefer-fledge decision; no new HI; wiring/docs only",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "prefer-fledge-gif-giphy-tenor-compat-over-native-gif-search-for-discord-gifs-pass-giphy-api-key-to-fledge-children-keep",
+        "title": "Prefer fledge-gif (GIPHY Tenor-compat) over native gif-search for Discord GIFs; pass GIPHY_API_KEY to Fledge children; keep gif-search secondary",
+        "description": "prefer fledge-gif (GIPHY Tenor-compat) over native gif-search for Discord GIFs; pass GIPHY_API_KEY to Fledge children; keep gif-search secondary",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "docs/DISCORD-GO-LIVE.md",
+          "persona.md",
+          "plugins/fledge/commands.ts",
+          "plugins/fledge/spawn.ts",
+          "plugins/gif/commands.ts",
+          "src/autonomous/delegate.ts",
+          "src/store/scrub.ts",
+          "tests/fixtures/preload-probe.ts",
+          "tests/gif.search.test.ts",
+          "tests/preload.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Owner already chose prefer fledge-plugin-gif over GIPHY gif-search; Tenor API shutdown forces GIPHY Tenor-compat behind the Fledge CLI. No new PLUGIN HI — wiring, docs, and env pass-through only; gif-search stays for team/tool-tier (#331).",
+        "acceptance_criteria": [
+          "fledge gif search without GIPHY_API_KEY prints not-configured (no hardcoded Tenor key); with the key set, fledgeChildEnv passes GIPHY_API_KEY through so discovered fledge-gif can search while workers and verify still drop it; gif-search stays registered with a Secondary / Prefer fledge-gif description; docs/DISCORD-GO-LIVE.md E.3.b prefers fledge-gif and keeps gif-search as secondary without removing #331; allowlisting fledge-gif at CORVIDINHO_LLM_TIER=code offers the preferred tool and the persona tip prefers fledge-gif for Discord GIF asks."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    }
+  ],
+  "reopenings": []
+}
