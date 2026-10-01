@@ -64,6 +64,16 @@ max_retries = 3
 # [corvidinho.autonomous]
 # enabled = true
 
+# Extras you can turn off (PLUGIN-5 / PLUGIN-5.a): /work, and /schedule with
+# the scheduler's runs. Unset = on (existing installs stay on). This file is
+# the install root's (the bridge's / daemon's working directory); the box
+# updater's `git checkout --force` resets edits here, so put an off in the
+# owner's allowlist file instead (same table; off in either means off). Read
+# on every command and tick: no restart. Not tied to [corvidinho.autonomous].
+# [corvidinho.plugins]
+# work = false
+# schedule = false
+
 # Discord HEAR — local smoke without live token (CI uses bun test fixtures).
 [tasks.bridge-smoke]
 cmd = "bun src/cli.ts --protocol-version"

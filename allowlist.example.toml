@@ -88,3 +88,17 @@ deny_users = []
 # discord_ids = ["000000000000000000"]
 # github_logins = ["tofu-dev"]
 # github_ids = ["0"]
+
+# Optional extras switch (PLUGIN-5 / PLUGIN-5.a). Both are on unless set here
+# or in the install root's fledge.toml (off in either means off). This file is
+# the update-proof place: the box updater never touches it. `work = false`
+# turns off /work (and a reply or button press that would resume a /work talk);
+# `schedule = false` turns off every /schedule subcommand and the scheduler's
+# runs (bridge and daemon), while backups, Approve / forget cards and schedule
+# questions keep going. Read on every command and tick: no restart. Runs in
+# flight are not stopped. When schedules come back on, each overdue schedule
+# runs at most once, so pause or delete ones you no longer want right away.
+# Not changeable with /admin.
+# [corvidinho.plugins]
+# work = false
+# schedule = false

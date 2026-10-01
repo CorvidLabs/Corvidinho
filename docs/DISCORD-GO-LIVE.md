@@ -675,3 +675,49 @@ bridge/daemon after changing them.
 
 There is no value that turns either off; a value that is not a positive whole number is
 ignored, with one `[operator] AGENT-12: …` line, and the default is used.
+
+### E.11 Turning `/work` and `/schedule` off (PLUGIN-5, PLUGIN-5.a)
+
+`/work` and `/schedule` (with the scheduler's runs) are extras you can turn off. Both are
+**on** unless you set them off, so an existing install keeps them until you do:
+
+```toml
+[corvidinho.plugins]
+work = false       # /work, and a reply or button press that would resume a /work talk
+schedule = false   # every /schedule subcommand, and schedule runs in the bridge and the daemon
+```
+
+(`plugins.work = false` or `plugins = { work = false }` under `[corvidinho]` is the same key.)
+Only the literal `true` or a missing key means on; `false` or any other value means off.
+
+- **Where:** in the **allowlist file** (`CORVIDINHO_ALLOWLIST_FILE`, else
+  `~/.config/corvidinho/allowlist.toml`; a `.json` file takes `{"corvidinho": {"plugins":
+  {"work": false}}}`) and/or in the **install's `fledge.toml`** (the Corvidinho checkout the
+  bridge and the daemon run from). Off in either means off. Put it in the allowlist file: the
+  box updater's `git checkout --force` resets edits to the checkout's `fledge.toml` (see
+  [`BOX-UPDATE.md`](BOX-UPDATE.md)), and the bridge and the daemon share the allowlist file.
+  A target project's own `fledge.toml` is not read. There is no `/admin` knob.
+- **No restart:** both files are read again for every slash command, every reply or press that
+  would resume a `/work` talk, and every scheduler tick.
+- **While `/work` is off:** `/work` answers only the ephemeral `/work is turned off on this
+  install.` (you, the owner, also see why and how to turn it back on) and creates nothing. A
+  message that would resume a `/work` talk — a reply to its answer, or an @mention in that
+  channel while the talk is still your active session there — gets the same line in the
+  channel; a button press on its question gets it privately; nothing runs and the question
+  stays open. A `/work` run already going is not stopped, and `stop` or its Stop button still
+  stop it.
+- **While `/schedule` is off:** every subcommand (list, create, pause, resume, delete) gets
+  `/schedule is turned off on this install.`, and the bridge's and the daemon's ticks start no
+  schedule run. Runs already going finish. The tick's other jobs keep going: the nightly
+  backup (OPS-1/2), Approve / forget cards, stuck WATCH asks, the owner's spend DMs and
+  posting schedule questions. The daemon logs `schedules` on `daemon.started` and
+  `schedules.off` / `schedules.on` when it changes ([`DAEMON.md`](DAEMON.md)).
+- **Turning schedules back on:** schedules are not paused while off, so on the next tick each
+  overdue schedule runs **once** (no catch-up). Pause or delete the ones you no longer want
+  right after turning it back on.
+- **Unreadable settings:** a settings file that exists but cannot be read (or a `.json`
+  allowlist file that does not parse) turns both extras off and is logged as
+  `config-unreadable`; your ephemeral reply names which file. Fix the file; the next command
+  or tick reads it again.
+- `[corvidinho.autonomous]` (E.5) has no say here: `/work` and `/schedule` stay on with
+  autonomous mode off.

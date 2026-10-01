@@ -127,6 +127,7 @@ files:
   - tests/discord.schedule.test.ts
   - tests/scheduler.cron.test.ts
   - tests/scheduler.service.test.ts
+  - tests/plugins.extras-toggle.test.ts
   - tests/scheduler.worktree.test.ts
   - tests/scheduler.tick-errors.test.ts
   - tests/scheduler.never-stuck.test.ts
@@ -957,8 +958,44 @@ writes `CORVIDINHO_DISCORD_REPLY_PUBLIC_THREAD`: `1` or empty);
 exports `holdSlashReply(opts)`; `SchedulerOutbound.post` takes
 `modelText?: boolean`; `plugins/discord/send-file.ts` exports
 `sendFileMustAsk(ctx)` (the command's `mustAsk`).
+Extras switch (PLUGIN-5 / PLUGIN-5.a, REQ-discord-157): `src/discord/slash-dispatch.ts`
+exports `extraOffText(name)` (`/<name> is turned off on this install.`) and
+`extraOffReply(name, state, ownerView)` (that line, plus for the owner why and
+how to turn it back on, never a path); its command map tags `work` and
+`schedule` with `extra`. `SlashContext` gains optional `extraState?: (name:
+ExtraName) => ExtraState` (unset ⇒ on). `WorkStore.isWorkSession(sessionId)`
+says whether a session is a `/work` talk. `SchedulerServiceOpts` gains optional
+`schedulesEnabled?: () => boolean` (unset ⇒ on; a throw is off, logged
+`[scheduler] tick hook failed: …`). The bridge wires both from
+`loadExtrasToggles({ installRoot: config.projectRoot, env })` (REQ-agent-157),
+read fresh on every call.
 
 ## Invariants
+
+`/work` and `/schedule` are extras the owner can turn off (PLUGIN-5 /
+PLUGIN-5.a, REQ-discord-157). `handleSlashInteraction` checks the command's
+extra after the channel, actor and mute/rate gates and before the
+minPermission floor and the handler: while it is off, `/work` and every
+`/schedule` subcommand get only the ephemeral turned-off line (the owner also
+gets why and how to turn it back on) and `{ ok: false, reason:
+"extra_disabled" }`; no session, worktree, work task, run, PR or schedule
+change happens. While `work` is off, a chat message that would continue a
+`/work` talk (a reply to its answer, or an @mention routed to it as the
+author's active session in that channel) gets the fixed line in the channel
+(never the owner hint) and runs nothing, read when it would run (after any
+wait in the session's queue), its open asks left as they were; the
+requester's press on a `/work` talk's ask (open, pick, Answer form) gets the
+reply privately and resumes nothing. A run in flight is never aborted by the
+switch: `stop` / `cancel` and the Stop button reach it before the gate. While
+`schedule` is off, `SchedulerService.tick` skips only the schedules part
+(re-read, due scan, open-ask skip, claim) — no run row is claimed and nothing
+spawns — while the `onTick` hook (Approve / forget cards, stuck WATCH asks),
+the pending-ask delivery pass, the owner's spend DMs and the backup tick still
+run each tick; runs in flight finish; back on, the no-catch-up claim fires
+each overdue schedule at most once. The bridge logs one line per extra that
+is off at start, one `[discord] scheduler schedule: …` line per change, and
+each refusal while the settings are unreadable (`config-unreadable`). There
+is no `/admin` knob; `[corvidinho.autonomous]` has no say.
 
 A run a limit I set stopped (AGENT-12, REQ-discord-125) shows it only as
 `stopped=turn-cap` / `stopped=idle-timeout` at the end of the answer's footer

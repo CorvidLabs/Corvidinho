@@ -438,6 +438,15 @@ Autonomous gate + delegation core (REQ-agent-117, issue #117):
 `MAX_DELEGATES_PER_RUN` 4, `DELEGATE_MIN_TIER` 2). `buildOpenAiTools` takes
 `autonomous?: boolean`; `createTaskExecute` takes `autonomous?: boolean`
 (default: `autonomousSessionAllowed({ cwd, env })`).
+Extras switch (PLUGIN-5 / PLUGIN-5.a, REQ-agent-157): `src/autonomous/enabled.ts`
+also exports `scanTomlKeys` (the one-line dotted-key scrape `parseAutonomousConfig`
+now uses), `parseExtrasSettings` / `parseExtrasSettingsJson` (`[corvidinho.plugins]`
+`work` / `schedule` → `ExtrasSettings`), `combineExtrasReads`, `loadExtrasToggles({
+installRoot, env?, home? })` → `ExtrasToggles` (`{ work, schedule }`, each an
+`ExtraState`: `{ on: true }`, `{ on: false, reason: "off", offIn }` or `{ on: false,
+reason: "config-unreadable", error }`), `extraStateLabel`, `formatExtraStateLog`,
+`extrasSourcePhrase`, `trackExtraState` and `EXTRA_NAMES`; types `ExtraName`,
+`ExtrasSource`, `ExtraState`, `ExtrasToggles`, `ExtrasSettings`, `LoadExtrasOptions`.
 GITHUB-9 (REQ-agent-117, REQ-agent-092): `src/autonomous/delegate.ts` also
 exports `DELEGATE_AUTHORS_ENV` (`CORVIDINHO_DELEGATE_AUTHORS`, internal: set
 only on a worker spawn), `DELEGATE_AUTHORS_MAX` (32),
@@ -911,6 +920,22 @@ body>` (org or account names, request ids, the provider's host) that a lead
 could quote into a public reply or comment; the lead keeps no other copy of
 it. A successful worker's summary, an ask's question and the worker's
 `models` / `stopReason` / `injection` fields are unchanged.
+
+`/work` and `/schedule` (with the scheduler's runs) are extras the owner can
+turn off (PLUGIN-5 / PLUGIN-5.a, REQ-agent-157): `loadExtrasToggles` reads
+`[corvidinho.plugins]` `work` / `schedule` from the install root's
+`fledge.toml` (the bridge's / daemon's cwd) and the owner's allowlist file
+(`resolveAllowlistPath`; a `corvidinho.plugins` object in a `.json` file),
+fresh on every call and never cached. Off in either is off; a missing file,
+table or key is on, so an existing install stays on until the owner turns an
+extra off; only the literal `true` is on otherwise (dotted and inline-table
+spellings under `[corvidinho]` are the same key; a key under a later table
+does not count; a key written twice is off unless every copy is `true`). A
+file that exists but cannot be read (any error but ENOENT), or a `.json`
+allowlist file that does not parse, makes both extras off with reason
+`config-unreadable` and a source-named error (no path, no contents). Target
+projects' `fledge.toml` files are not read, and `[corvidinho.autonomous]` has
+no say: the two switches are independent.
 
 A council (AUTONOMOUS-6) deliberates in three phases in order — propose,
 critique, decide — and every voice and the chair is a delegate-core worker
