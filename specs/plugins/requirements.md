@@ -1939,7 +1939,11 @@ first. It SHALL open a PR only for a tree with a finished review cycle:
   tracked files at the handler cwd (the repository top level, `gitRoot`)
   into a copy of the index (`git add --update`; `runGit`'s `indexFile` sets a
   temporary `GIT_INDEX_FILE`; the inherited one is still stripped) and write
-  its tree (`reviewTree`): tracked edits, deletions and files already staged
+  its tree (`reviewTree`). The copy SHALL keep the real index's modification
+  time: git re-reads a file whose size and times match its index entry only
+  when the entry is not older than the index file, so a copy stamped later
+  would miss a same-size edit made in the same second as the last index
+  write. Tracked edits, deletions and files already staged
   count; untracked files do not (they are not what the PR carries, so a
   scratch file never holds the PR back and its content never reaches the
   reviewer); the real index and status do not change. When the latest cycle for (repo, head) ended on this
@@ -2022,6 +2026,7 @@ card or ask (REQ-agent-092), never "unavailable".
 Acceptance Criteria
 - `resolveReviewer` lists configured models in `CORVIDINHO_LLM_MODEL`, `_READ`, `_TOOL`, `_CODE` order, each label once; skips authors by model id across kinds and entries without their key; returns null when only authors remain; no other env key names a reviewer.
 - `reviewTree` of a work tree with an edit, a staged new file, an untracked file and a deletion equals the tree a commit of the tracked files then has (the untracked file left out), and leaves `git status` and the staged list unchanged; an untracked scratch file beside the pushed branch neither blocks the PR nor reaches the reviewer.
+- A tracked file rewritten with the same size in the same second as the last index write (its entry's whole-second ctime and mtime and its size equal the file's) is in `reviewTree`'s tree when the review runs in a later second; the real index is unchanged.
 - A committed `.env.local` and `config/credentials.json` are named to the reviewer but their content is never sent; a change to secret-looking paths only is still reviewed by name.
 - Findings parse from JSON, a fenced JSON block, bullets; an explicit clean reply is none; other text is one finding; capped at 10 with the rest counted; scrubbed before the cut. The review call's user message is the scrubbed title and diff in an untrusted fence the diff cannot close.
 - With a run model (dry run, temp repos with a bare origin): round 1 findings refuse with `reviewHold: findings`, round 1 of 3, the reviewer, the fenced findings; after a change is committed and pushed, a clean round 2 opens the PR whose body has the section (2 of 3 rounds, round 1's finding, `M  src/app.ts` changed after round 1, round 2 raised nothing, no amounts) before the attribution.
@@ -2032,6 +2037,7 @@ Acceptance Criteria
 - A review completion with no model failure (a spend-cap stop) makes `runPlugin` reject with `ReviewSpendStop` and records nothing.
 - Without a run model: no finished cycle, a finished cycle for another tree, or an open cycle refuse in one line; a finished cycle for the pushed tree opens with its findings listed. Live mode without a token fails before any review call.
 - `githubBranchTree` returns the head commit's tree, reads an `owner:branch` head on that owner's repo, and is null on a 404. `SCRUB_TARGETS` lists `pr_review_rounds` (`reviewer`; JSON `authors`, `findings`, `changed`) and `pr_change_authors` (`model`).
+
 ### REQ-plugins-125
 
 AGENT-12: `spawnCapped` (`plugins/fledge/spawn.ts`, the bounded spawn of the

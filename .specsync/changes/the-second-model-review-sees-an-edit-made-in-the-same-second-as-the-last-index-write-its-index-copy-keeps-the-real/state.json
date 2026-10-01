@@ -7,10 +7,11 @@
   "title": "The second-model review sees an edit made in the same second as the last index write: its index copy keeps the real index's time (GITHUB-9)",
   "description": "The second-model review sees an edit made in the same second as the last index write: its index copy keeps the real index's time (GITHUB-9)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "5ea21feedeecd51e4058d2892d86ce30ec573959",
   "created_at": 1790823279,
-  "updated_at": 1790823396,
+  "updated_at": 1790823407,
   "affected_specs": [
     "plugins"
   ],
