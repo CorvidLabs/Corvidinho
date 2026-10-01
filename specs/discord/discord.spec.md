@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 97
+version: 98
 status: draft
 files:
   - src/discord/types.ts
@@ -1650,3 +1650,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |
 | 2026-10-01 | its-first-20-replies-in-public-threads-each-wait-for-my-ok-on-an-approve-card-even-text-i-dictated-and-replies-to-me: Its first 20 replies in public threads each wait for my OK on an Approve card, even text I dictated and replies to me (AUTONOMY-10, AUTONOMY-10.a) |
 | 2026-10-01 | a-team-member-s-failed-session-or-work-reply-and-someone-else-s-failed-schedule-post-is-checked-for-the-reason-s-401: A team member's failed /session or /work reply, and someone else's failed schedule post, is checked for the reason's 401 with the run's own random ids masked, so an id that happens to contain 401 no longer fails the DISCORD-3.b test |
+| 2026-10-01 | work-schedule-and-the-scheduler-can-be-turned-off-in-corvidinho-plugins-and-existing-installs-stay-on-plugin-5-5-a: /work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a) |

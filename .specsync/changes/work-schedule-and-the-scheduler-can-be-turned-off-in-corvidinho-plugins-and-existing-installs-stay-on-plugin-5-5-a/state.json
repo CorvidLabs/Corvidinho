@@ -7,10 +7,11 @@
   "title": "/work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a)",
   "description": "/work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a)",
   "kind": "feature",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "cf7f61b2d624fd9b26f4b21f74fd691185f4284d",
   "created_at": 1790830571,
-  "updated_at": 1790830585,
+  "updated_at": 1790830813,
   "affected_specs": [
     "agent",
     "discord",
