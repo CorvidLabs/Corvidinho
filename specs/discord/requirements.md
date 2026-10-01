@@ -1129,6 +1129,15 @@ frame's `verified` / `verifySkipped` / `state` through as
 SHALL say plainly why and SHALL NOT claim a PR. No new slash command, option,
 env var, table or column.
 
+`github-pr-create` itself SHALL hold the PR unless a second-model review
+finished for the exact tree of the branch on GitHub (GITHUB-9,
+REQ-plugins-092). This step has no run model, so it starts no review round
+(the /work round driver is a later change): when the call is held
+(`reviewHold`), the outcome SHALL be `opened: false` with reason
+`not-reviewed` and the line `PR: not opened — <the gate's reason> The
+changes stay on branch <branch>.` (the branch stays pushed), never a
+claimed PR.
+
 Acceptance Criteria
 - A dirty verified worktree with the three plugins allowlisted is committed, pushed and opened as a draft PR whose body lists the changed files, diffstat, commits and verify result.
 - Missing allowlist entries are named in the reply and nothing is committed, pushed or verified.
@@ -1139,6 +1148,7 @@ Acceptance Criteria
 - A /work by anyone other than ADMIN (the owner) or a declared team member (IDENTITY-10, re-resolved from the people list after the run) never runs the PR step (ROLES-CHAT-3): a community /work never runs at all (IDENTITY-11.a; the reply is the ephemeral `not authorized`), and a team member demoted during the run gets a reply that says the changes stay on the work branch.
 - A team member's /work reaches the PR step with the same gates as the owner's; a team member demoted during the run does not.
 - Nothing is committed or pushed unless the worktree HEAD is the work branch and not the base; a switched or detached HEAD opens no PR.
+- With no finished second-model review for the pushed tree, the PR step ends `not-reviewed` with `PR: not opened — no second-model review has finished for this branch's tree on GitHub, and only an agent run can start one (GITHUB-9). The changes stay on branch …` and the branch pushed; with one finished for that tree it opens, and the PR body carries the `## Second-model review` section.
 
 ### REQ-discord-085
 

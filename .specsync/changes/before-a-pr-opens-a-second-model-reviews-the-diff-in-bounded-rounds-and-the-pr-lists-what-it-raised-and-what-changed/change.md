@@ -1,6 +1,6 @@
 ---
 id: before-a-pr-opens-a-second-model-reviews-the-diff-in-bounded-rounds-and-the-pr-lists-what-it-raised-and-what-changed
-state: approved
+state: implementing
 type: feature
 base_commit: 3799e4ebd1cd3a3d7f72a97fd42184ac0a10a28d
 ---

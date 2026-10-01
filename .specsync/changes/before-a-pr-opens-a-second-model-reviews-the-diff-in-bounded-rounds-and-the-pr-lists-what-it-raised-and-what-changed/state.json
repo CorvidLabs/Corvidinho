@@ -7,10 +7,11 @@
   "title": "Before a PR opens, a second model reviews the diff in bounded rounds, and the PR lists what it raised and what changed (GITHUB-9, GITHUB-9.a)",
   "description": "Before a PR opens, a second model reviews the diff in bounded rounds, and the PR lists what it raised and what changed (GITHUB-9, GITHUB-9.a)",
   "kind": "feature",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "3799e4ebd1cd3a3d7f72a97fd42184ac0a10a28d",
   "created_at": 1790815754,
-  "updated_at": 1790816224,
+  "updated_at": 1790816251,
   "affected_specs": [
     "plugins",
     "agent",
