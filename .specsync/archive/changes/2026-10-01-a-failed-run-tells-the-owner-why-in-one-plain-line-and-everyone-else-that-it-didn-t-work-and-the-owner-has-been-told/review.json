@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "a-failed-run-tells-the-owner-why-in-one-plain-line-and-everyone-else-that-it-didn-t-work-and-the-owner-has-been-told",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "a6bd22a79f0fdc9738ad2536e5a8f255b8062c19",
+  "contract_digest": "0cb71d0bcc5891005c4b43c3916aa84e87ea6835f59b2b734feca902c9bfef32",
+  "execution_digest": "8449a0e31452ffa4612cb5af144dfe7e1b668a0126b6649e972cdd039db267e5",
+  "workspace_digest": "c1863ad5f489ca9bd7c0f76433edf5afa0e6ca34c65bca984e5084627c0b36db",
+  "timestamp": 1790814967
+}

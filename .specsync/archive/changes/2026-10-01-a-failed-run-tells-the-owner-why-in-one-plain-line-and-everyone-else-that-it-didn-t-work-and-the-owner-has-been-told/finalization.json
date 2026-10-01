@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "a-failed-run-tells-the-owner-why-in-one-plain-line-and-everyone-else-that-it-didn-t-work-and-the-owner-has-been-told",
+  "implementation_commit": "a6bd22a79f0fdc9738ad2536e5a8f255b8062c19",
+  "implementation_tree": "1f681ac764a36d83d09b88aafbfadef1b98f18f2",
+  "contract_digest": "0cb71d0bcc5891005c4b43c3916aa84e87ea6835f59b2b734feca902c9bfef32",
+  "workspace_digest": "c1863ad5f489ca9bd7c0f76433edf5afa0e6ca34c65bca984e5084627c0b36db",
+  "closing_digest": "33fba162a9cd39424326ee723767602cf2706901dc6c8f69bba29777af76e6c3",
+  "review_digest": "d15407d923265adcb69d4c30495da67ed162796042f890e38189879b1dff1647",
+  "finalization_digest": "dd3512121ebf8d84b885cc5b26139fe69a3f79c27f475312046c7c1b59092781",
+  "timestamp": 1790814983
+}

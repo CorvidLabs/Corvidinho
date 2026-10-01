@@ -7,11 +7,11 @@
   "title": "Stop-button test: a non-owner's thrown run shows DISCORD-3.b's failure line, not the raw error",
   "description": "Stop-button test: a non-owner's thrown run shows DISCORD-3.b's failure line, not the raw error",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "7f46a09de7c9133a10a2b8d07e5afd0dd888b1b8",
   "created_at": 1790814699,
-  "updated_at": 1790814809,
+  "updated_at": 1790815646,
   "affected_specs": [
     "discord"
   ],

@@ -1,6 +1,6 @@
 ---
 id: stop-button-test-a-non-owner-s-thrown-run-shows-discord-3-b-s-failure-line-not-the-raw-error
-state: implementing
+state: archived
 type: bug_fix
 base_commit: 7f46a09de7c9133a10a2b8d07e5afd0dd888b1b8
 ---

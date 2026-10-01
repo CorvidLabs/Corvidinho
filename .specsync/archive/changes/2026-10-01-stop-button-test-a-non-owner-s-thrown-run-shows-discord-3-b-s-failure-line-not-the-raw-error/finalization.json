@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "stop-button-test-a-non-owner-s-thrown-run-shows-discord-3-b-s-failure-line-not-the-raw-error",
+  "implementation_commit": "a6bd22a79f0fdc9738ad2536e5a8f255b8062c19",
+  "implementation_tree": "1f681ac764a36d83d09b88aafbfadef1b98f18f2",
+  "contract_digest": "9260a780bd1d00c0d41c7324183194f2292e8ca1b715c84ff7be93818199a645",
+  "workspace_digest": "c1863ad5f489ca9bd7c0f76433edf5afa0e6ca34c65bca984e5084627c0b36db",
+  "closing_digest": "306a007a04b903c9363040c83900348b835cb1d2fdf23c46c1d116f8ac1a23e7",
+  "review_digest": "4f435673df0b2884dbcfe2a965fe61584ccfc4f5824e58baaffa67c8429e7e81",
+  "finalization_digest": "863d03b8bc78e5d30bbdfbb648a5dab4179fe4f86e10b5adb32c9cbefd45273a",
+  "timestamp": 1790815325
+}
