@@ -255,33 +255,20 @@ for a model call stopped at the cap: a `ToolResult` with success false and
 no further model call. The 80% warning for such a row is noted by the next
 model call's settle.
 
-At 100%, a call whose estimate would exceed the cap SHALL NOT be sent as
-is. With an owner configured and the guard given `approval` (as
-`createTaskExecute` does), the call SHALL first wait for the owner's spend
-Approve card (REQ-agent-198) and SHALL be sent only on an approval used
-once. Otherwise — no owner configured (nobody can approve), no `approval`
-given, or that card came to no — the attempt SHALL end with
-`ask: {reason: "spend-cap", question}` whose question states the 24-hour
-spend, the call estimate and the cap, names the operator action that
-continues (raise or unset the cap where Corvidinho runs and restart, or wait
-for earlier spend to leave the window, then ask again) and, with no card,
-says a reply cannot lift the cap, without a yes/no question (after a card it
-names the card and what it came to and adds asking again for a new card and
-code, REQ-agent-198); the attempt's summary SHALL be the generic `SPEND_CAP_SUMMARY`,
+At 100%, a call whose estimate would exceed the cap SHALL NOT be sent.
+Instead the attempt SHALL end with `ask: {reason: "spend-cap", question}`
+whose question states the 24-hour spend, the call estimate and the cap,
+names the operator action that continues (raise or unset the cap where
+Corvidinho runs and restart, or wait for earlier spend to leave the window,
+then ask again) and says a reply cannot lift the cap, without a yes/no
+question; the attempt's summary SHALL be the generic `SPEND_CAP_SUMMARY`,
 which is `SPEND_PAUSED_TEXT` "Work is paused for budget." (SAFE-14.a), with no
 amounts, no cap and no env names (safe for a public reply such as a WATCH
 comment), and `runTask` SHALL return state `blocked` (never `done`, verify
-not run, no retry) through the AUTONOMY-1/2 ask path. A cap value that is not
-a plain USD amount (never echoed) or an unavailable ledger SHALL end the
-attempt the same way (fail closed; no card is raised for them). A model with
-no known price SHALL never be counted as free: under a cap that covers its
-call it SHALL, with an owner configured and `approval` given, ask on the
-owner's spend card with the amount shown as unknown (SAFE-16.a,
-REQ-agent-199), and otherwise end the attempt the same way; with no cap
-covering it, it runs unrecorded. The runner SHALL NOT send a provider call
-past the cap, except the one call an owner's spend card approved
-(REQ-agent-198, SAFE-8.a), nor a covered call at an unknown price except the
-one call an owner's unknown-price card approved (REQ-agent-199).
+not run, no retry) through the AUTONOMY-1/2 ask path. A model with no known
+price, a cap value that is not a plain USD amount (never echoed), or an
+unavailable ledger SHALL end the attempt the same way (never counted as
+free, fail closed). The runner SHALL NOT send a provider call past the cap.
 
 At 80%, after a call settles, when 24-hour spend is at or above 80% of the
 cap and the warning for that cap value is armed, the module SHALL record one
@@ -314,8 +301,8 @@ The bridge delivers the claimed warning to the owner by DM only
 (REQ-discord-098). This cap is the total cap (scope `total`) of SAFE-14:
 the per-provider caps next to it, and SAFE-15's 80% warning and 100% stop
 for each cap, are REQ-agent-114, and a call is checked against this cap and
-its provider's cap in the same reservation. The Approve card that
-continues past a cap (#96, SAFE-18..20) is REQ-agent-198.
+its provider's cap in the same reservation. The Approve card (#96,
+SAFE-18..20) is not part of this requirement.
 
 Acceptance Criteria
 - No cap: the capped fetch is the same fetch and no database file is created.
@@ -332,9 +319,6 @@ Acceptance Criteria
 - `claimCapPing` returns a claim once per cap episode and again after spend is seen under 70% or 24 hours pass; a released claim lets the next claim in the same episode succeed.
 - An invalid total cap reads as the snapshot `{ kind: "invalid", keys: ["CORVIDINHO_DAILY_SPEND_CAP_USD"] }`; a reservation refused at the total cap names it (`trips: [{ scope: "total", spentMicroUsd, capMicroUsd }]`), and its ask question says `Stopped at cap: total.` (REQ-agent-114).
 - `SPEND_PAUSED_TEXT` is "Work is paused for budget." and `SPEND_CAP_SUMMARY` equals it; `formatSpendPublicStatusLine` is undefined with no cap and under the cap, and "Spend: Work is paused for budget." at the cap, for an unpriced model, an invalid value and an unreadable ledger; `spendPaused` flips exactly at the cap; the owner's `formatSpendStatusLine` keeps the amounts.
-- With an owner configured and `approval` given, a call over the cap is held for the owner's spend card (REQ-agent-198); with no owner, or through `withSpendCap` (no `approval`), the ask above comes at once with no card and still ends with "Replying can't lift the cap — this needs the operator."
-- After a spend card came to no, the ask keeps the amounts and the `Stopped at cap: …` marker, names the card and what it came to, adds "ask again — the next call past the cap raises a new card and code", and has no reply note and no question mark.
-- An unpriced model under a cap with an owner configured and `approval` given asks on the owner's card with the amount shown as unknown (REQ-agent-199); with no owner, or through `withSpendCap`, it stops at once with the unpriced operator ask as above.
 
 ### REQ-agent-117
 
@@ -355,9 +339,8 @@ cap) is below 2. Otherwise they SHALL be absent from the catalog at every tier
 loop SHALL pass its capability tier and abort signal to `runPlugin`.
 
 The delegation core (`src/autonomous/delegate.ts`) SHALL run a worker as
-`task run --here --non-interactive --tier <t> --output ndjson --task <text>`
-through `buildCorvidinhoArgv` (`--here`: the worker works in its lead's cwd
-and never makes a worktree of its own, REQ-cli-122) (so a `.ts` bin runs as `bun --no-env-file`), with
+`task run --non-interactive --tier <t> --output ndjson --task <text>`
+through `buildCorvidinhoArgv` (so a `.ts` bin runs as `bun --no-env-file`), with
 the `--task` value last and never `--no-verify` (REQ-cli-085): a worker keeps
 the project's prove-before-done gate (AGENT-4) and reports its `verified` /
 `verifySkipped` outcome. The worker bin SHALL be `CORVIDINHO_BIN` when set,
@@ -370,12 +353,7 @@ PLUGIN-7) and every `CORVIDINHO_ACTING_*` key (SAFE-6; LLM
 provider keys stay), and SHALL force the depth to the lead's depth + 1,
 `CORVIDINHO_LLM_TIER` to the worker tier, `CORVIDINHO_NON_INTERACTIVE=1` and
 `CORVIDINHO_ALLOWLIST` to the lead's effective allowlist, overriding inherited
-values, so a worker never inherits ADMIN or human SAFE-4 confirm tokens. It
-SHALL set `CORVIDINHO_DELEGATE_AUTHORS` to the lead's change authors (GITHUB-9:
-validated entry labels, comma-joined, at most 32) when the lead gives any,
-and drop an inherited value otherwise; a worker (depth above 0) SHALL count
-them as authors of its own change (`delegateAuthorsFromEnv`), so a PR it
-opens is never reviewed by a model that wrote part of it. When
+values, so a worker never inherits ADMIN or human SAFE-4 confirm tokens. When
 the lead runs in a ROLES-CHAT role session (`CORVIDINHO_ACTING_IS_ADMIN` set)
 the worker env SHALL set `CORVIDINHO_ACTING_IS_ADMIN=0`, making the worker a
 non-ADMIN session with read/chat tools only (ROLES-CHAT-2/3); a lead outside a
@@ -423,6 +401,7 @@ answering `model`, each `usageByModel` row and both ends of each
 `modelFallback` hop; validated, scrubbed, bounded) SHALL come back as
 `DelegateChildOutcome.models` (`workerModelsFromResult`), which the lead
 counts as authors of its change (REQ-agent-092). The depth, tier and fan-out limits are safety
+SAFE-6 scrubbed and capped. The depth, tier and fan-out limits are safety
 defaults; draft AUTONOMOUS-10 is not an acceptance criterion and stays left
 for HI capture.
 
@@ -442,6 +421,7 @@ Acceptance Criteria
 - A worker whose result `error` is a 429 from `acme-prod.openai.azure.com:8443` and whose summary and stderr are `LLM HTTP 429: <body>` (an org name, a request id, the host) comes back with `data.summary` `The model call failed (429 Too Many Requests)` and `error` `worker (tier code, depth 1) did not finish (state failed, exit 1):` plus that line, its `models` kept, and no provider detail anywhere in the tool result; an idle-timed-out worker keeps `stopReason: "idle-timeout"` and its line; a worker with no result frame hands over the no-provider notice, else `the worker failed (exit N)`, never its stdout or stderr; a successful worker and one that stopped on an ask of its own are unchanged; a failed worker that reported an injection is still fenced for the lead with the line inside.
 - A worker that streamed another protocol comes back with the protocol-mismatch notice (`protocol mismatch: binary 3, bridge 2 — restart the bridge`), never `the worker failed (exit 0)` or its frames; a worker bin that does not exist comes back with exit 127 and `worker failed to start: ENOENT: no such file or directory, posix_spawn '…/corvidinho'`, its host path cut; a worker stopped by the spend cap comes back `blocked` with `Work is paused for budget.` and no amounts.
 - Through a lead tool loop and the real `task run` against the localhost fake provider answering 429 with an org name, a request id and its own host, the lead model's tool message has the plain line and none of them; with a 200 reply the worker's answer comes back as before (`tests/autonomous.worker-failure.test.ts`, which fails on main's `src/autonomous/delegate.ts`).
+
 
 ### REQ-agent-118
 
