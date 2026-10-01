@@ -367,7 +367,28 @@ group as it exited SHALL still be stopped by an abort or timeout during the
 pipe drain, or by the lead exiting. The
 lead SHALL NOT wait on a worker pipe held open by a grandchild beyond a short
 drain after the worker exits. The worker summary returned to the lead SHALL be
-SAFE-6 scrubbed and capped. The models the worker's result frame names (its
+SAFE-6 scrubbed and capped. A worker that failed — not `done` with exit 0,
+and not stopped on an ask of its own (a valid result `ask`) — SHALL come back
+to its lead as one plain line of harness text, `workerFailureLine` (both the
+tool's `data.summary` and the end of its `error`): the timeout line (`worker
+timed out and was stopped`) or the interrupt line (`worker stopped: lead run
+was interrupted`); else the worker's result `error` (which model call failed
+and how, which verify failed, the idle-timeout line) as one plain line
+(`plainFailureLine`: SAFE-6 scrubbed, stack frames and host paths dropped, at
+most 200 characters) without the provider's host (`withoutProviderHost`,
+`src/agent/providers.ts`, the helper WATCH's public comment uses,
+REQ-watch-009: `The model call failed (429 Too Many Requests)`); else the
+no-provider notice for the worker's tier in its env (AGENT-10); else `the
+worker failed (exit N)`. It SHALL NOT hand over the worker's summary, its
+result's summary (`resultText` is set only for a worker that did not fail)
+or its stdout / stderr, which for a model failure is `LLM HTTP <status>:
+<provider body>` — org or account names, request ids, the provider's host —
+that a lead could quote into a public reply or GitHub comment. The lead
+SHALL keep no other copy of that detail (nothing is written to its stderr,
+whose end a bridge reads as a failed lead's fallback reason). A successful
+worker's summary, an ask's question and the worker's `models`,
+`stopReason`, `modelFallback` and `injection` fields (and so the SAFE-12/13
+fence of a worker that reported a hit) are unchanged. The models the worker's result frame names (its
 answering `model`, each `usageByModel` row and both ends of each
 `modelFallback` hop; validated, scrubbed, bounded) SHALL come back as
 `DelegateChildOutcome.models` (`workerModelsFromResult`), which the lead
@@ -388,6 +409,8 @@ Acceptance Criteria
 - A lead abort after the worker exited, while its background grandchild still holds the pipe, kills that grandchild.
 - Spawn argv has `--here` right after `task run` (REQ-cli-122): a worker never makes a worktree of its own.
 - GITHUB-9: `buildDelegateSpawn` sets `CORVIDINHO_DELEGATE_AUTHORS` from `authors` and drops an inherited value when none is given; `delegateAuthorsFromEnv` trims, dedupes and bounds; `workerModelsFromResult` lists the answering model, usage models and failover ends, scrubbed, and nothing for an empty frame.
+- A worker whose result `error` is a 429 from `acme-prod.openai.azure.com:8443` and whose summary and stderr are `LLM HTTP 429: <body>` (an org name, a request id, the host) comes back with `data.summary` `The model call failed (429 Too Many Requests)` and `error` `worker (tier code, depth 1) did not finish (state failed, exit 1):` plus that line, its `models` kept, and no provider detail anywhere in the tool result; an idle-timed-out worker keeps `stopReason: "idle-timeout"` and its line; a worker with no result frame hands over the no-provider notice, else `the worker failed (exit N)`, never its stdout or stderr; a successful worker and one that stopped on an ask of its own are unchanged; a failed worker that reported an injection is still fenced for the lead with the line inside.
+- Through a lead tool loop and the real `task run` against the localhost fake provider answering 429 with an org name, a request id and its own host, the lead model's tool message has the plain line and none of them; with a 200 reply the worker's answer comes back as before (`tests/autonomous.worker-failure.test.ts`, which fails on main's `src/autonomous/delegate.ts`).
 
 ### REQ-agent-118
 
@@ -406,7 +429,10 @@ decision.
 Every voice and the chair SHALL run through the delegation core
 (`runDelegateChild`, REQ-agent-117) one level deeper than the lead, so each
 keeps its argv, worker env stripping, timeout / abort / exit cleanup and
-scrubbed summary. Voices SHALL run at the `read` tier by default, never above
+scrubbed summary. A voice or chair run that failed SHALL be quoted in the
+transcript by the delegate core's one plain failure line
+(`workerFailureLine`, REQ-agent-117) — never its summary or stderr, so no
+provider's raw error body or host reaches the transcript the lead reads. Voices SHALL run at the `read` tier by default, never above
 `tool` and never above the lead's tier (an unknown tier is refused). They
 SHALL run as non-ADMIN role sessions (`CORVIDINHO_ACTING_IS_ADMIN=0`), so
 mutating tools are absent and refused (ROLES-CHAT-2/3), and SHALL get an
@@ -434,6 +460,7 @@ Acceptance Criteria
 - Entries and the decision are scrubbed and capped. The per-voice timeout never exceeds the voice cap or the time left. The council time cap and a lead abort stop running voices, skip later phases and give state cancelled.
 - The voice tier defaults to read, `code` is clamped to tool, a read lead clamps to read, and an unknown tier is refused.
 - The tool loop offers `council` only for an autonomous-enabled project at code tier below the depth cap, and a lead that calls it gets the decision in the tool message.
+- A 3-voice council whose voice 3's model answers 429 with an org name, a request id and its own host (the real `task run`, the localhost fake provider): that voice's propose entry is `ok: false`, `state: failed`, exit 1, text `The model call failed (429 Too Many Requests)`; the other voices' entries and the chair's decision are their own replies; neither the tool result nor any later phase's prompt holds the provider detail.
 
 ### REQ-agent-084
 

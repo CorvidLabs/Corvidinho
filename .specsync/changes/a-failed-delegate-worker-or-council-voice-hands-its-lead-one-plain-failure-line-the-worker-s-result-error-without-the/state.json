@@ -7,10 +7,11 @@
   "title": "A failed delegate worker or council voice hands its lead one plain failure line (the worker's result error without the provider's host, the no-provider notice, or the exit code), never the worker's summary or stderr, which for a model failure is the provider's raw error body",
   "description": "A failed delegate worker or council voice hands its lead one plain failure line (the worker's result error without the provider's host, the no-provider notice, or the exit code), never the worker's summary or stderr, which for a model failure is the provider's raw error body",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "cf7f61b2d624fd9b26f4b21f74fd691185f4284d",
   "created_at": 1790827637,
-  "updated_at": 1790828161,
+  "updated_at": 1790828199,
   "affected_specs": [
     "agent",
     "watch"
