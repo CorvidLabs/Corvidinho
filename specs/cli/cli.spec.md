@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 75
+version: 76
 status: draft
 files:
   - src/cli.ts
@@ -359,3 +359,4 @@ Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), 
 | 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |
 | 2026-10-01 | a-failed-github-watch-run-s-comment-says-why-in-one-plain-line-which-model-call-failed-status-and-host-never-the: A failed GitHub WATCH run's comment says why in one plain line (which model call failed: status and host), never the provider's raw error body; REQ-cli-079 matches what a daemon no-provider schedule run now records |
 | 2026-10-01 | release-0-0-38-spend-approve-cards-unknown-price-cards-stall-nudge-stop-button-cli-task-worktree-failed-runs-say-why: Release 0.0.38: spend approve cards, unknown-price cards, stall nudge, stop button, CLI task worktree, failed runs say why |
+| 2026-10-01 | my-local-cli-task-run-may-use-the-allowlisted-shell-and-runners-inside-its-own-worktree-safe-3-a-local-cli-half: My local CLI task run may use the allowlisted shell and runners inside its own worktree (SAFE-3.a, local CLI half) |
