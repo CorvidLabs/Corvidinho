@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "3f760e0b5bb1722b885ab8a4ea40fe1ada9f1829",
   "created_at": 1790871909,
-  "updated_at": 1790871968,
+  "updated_at": 1790871969,
   "affected_specs": [
     "plugins",
     "agent",
