@@ -20,12 +20,28 @@ export const GIPHY_MEDIA_HOSTS: ReadonlySet<string> = new Set([
   "i.giphy.com",
 ]);
 
-const GIPHY_MEDIA_LINK = new RegExp(
-  `https://(?:${[...GIPHY_MEDIA_HOSTS].map((h) => h.replace(/\./g, "\\.")).join("|")})/`,
-  "i",
-);
-
-/** Whether `text` holds an https link on a GIPHY media host (a GIF a run posts as a link). */
+/**
+ * Whether `text` holds an https link on a GIPHY media host (a GIF a run posts
+ * as a link). Exact host match via URL parse — no hostname regex (CodeQL
+ * js/incomplete-hostname-regexp).
+ */
 export function hasGiphyMediaLink(text: string): boolean {
-  return GIPHY_MEDIA_LINK.test(text);
+  // Walk every https://… candidate; URL parse + Set.has keeps host matching exact.
+  const re = /https:\/\/[^\s<>"')\]]+/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    try {
+      const u = new URL(m[0]);
+      if (
+        u.protocol === "https:" &&
+        (u.port === "" || u.port === "443") &&
+        GIPHY_MEDIA_HOSTS.has(u.hostname.toLowerCase())
+      ) {
+        return true;
+      }
+    } catch {
+      // not a URL — keep scanning
+    }
+  }
+  return false;
 }
