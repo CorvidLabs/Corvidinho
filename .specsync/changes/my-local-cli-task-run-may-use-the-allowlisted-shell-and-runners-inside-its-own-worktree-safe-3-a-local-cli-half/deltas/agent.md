@@ -31,7 +31,10 @@ SHALL grant only when all of these hold, each read again at that call:
   half (REQ-cli-681) — no `CORVIDINHO_DISCORD_SESSION_ID` and no
   `CORVIDINHO_ACTING_SURFACE` stamp (refused: `a run with no role session
   gets them only as a local CLI run, and this one carries a Discord session
-  or surface stamp`), a `talkWorktree` (the worktree `task run` made for
+  or surface stamp`), no `CORVIDINHO_PROJECT_ROOT` (`TOOL_CHILD_ENV`, which
+  every tool child's env carries; refused: `a run started from inside a tool
+  (the shell, a runner or a Fledge run) never gets them`), a `talkWorktree`
+  (the worktree `task run` made for
   this run, REQ-cli-122, passed only by `taskRun`; refused without one: `a
   local CLI run gets them only in the new worktree it made for itself, not
   with --here or outside a git repo`), and a cwd that, resolved through
@@ -74,4 +77,4 @@ Acceptance Criteria
 - The prod command in those tests runs a stand-in `kubectl` the test puts first on PATH, which records each call in the directory it ran in; it never runs the host's real `kubectl` (whose run time the test can't bound: ubuntu-latest CI runners ship one, and with an operator's KUBECONFIG it would contact a real cluster). An approval records exactly one call (`get pods`) in the talk worktree and none in the main checkout; a deny records none. A `kubectl` elsewhere on the host PATH, however slow, does not change the test's time.
 - With the base's sources, the gate test cannot load and 8 of 9 end-to-end tests fail; they pass on the branch.
 - A run with no role session carrying a Discord session id or surface stamp is refused with `a run with no role session gets them only as a local CLI run, and this one carries a Discord session or surface stamp`; a plain local CLI run with no worktree of its own with `a local CLI run gets them only in the new worktree it made for itself, not with --here or outside a git repo` (the local CLI half, REQ-cli-681, replaced `a local CLI run has no role session (the CLI half of SAFE-3.a is not built yet)`).
-- The CLI rows (granted at the top of the run's own worktree; refused in place, in a subdirectory and elsewhere) are `tests/cli.safe3a-shell.test.ts` (REQ-cli-681).
+- The CLI rows (granted at the top of the run's own worktree; refused in place, in a subdirectory, elsewhere and for a run a tool started) are `tests/cli.safe3a-shell.test.ts` (REQ-cli-681).

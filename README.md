@@ -57,7 +57,8 @@ The shell, the language runners and the Fledge lane/task runs (`shell-exec`, `no
 local run only inside that new worktree, and only when `CORVIDINHO_ALLOWLIST` names them at code
 tier (SAFE-3.a). With `--here`, outside a git repo or from a subdirectory of the repo they are
 not offered, and the run prints one `[operator] SAFE-3.a: … allowlisted but not offered: <why>`
-line. A prod or deploy command still waits for the owner's Approve card; with no Discord bridge
+line. A `task run` the model starts from its own shell, a runner or a Fledge run is not offered
+them either. A prod or deploy command still waits for the owner's Approve card; with no Discord bridge
 running nobody answers it, so it lapses as a no and the run says so.
 
 ### Turn cap and idle timeout (AGENT-12)

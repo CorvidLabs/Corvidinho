@@ -34,13 +34,15 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTaskExecute, type AgentEvent } from "../src/agent/index.ts";
-import { ACTING_SURFACE_ENV, isCliRunWorktree, shellToolsGate } from "../src/agent/shell-gate.ts";
+import { ACTING_SURFACE_ENV, isCliRunWorktree, shellToolsGate, TOOL_CHILD_ENV } from "../src/agent/shell-gate.ts";
 import type { TaskResult } from "../src/agent/types.ts";
 import { DELEGATE_DEPTH_ENV } from "../src/autonomous/delegate.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { MUST_ASK_PROD_KIND, setMustAskNotifier } from "../src/plugins/must-ask.ts";
 import { clearRegistry } from "../src/plugins/registry.ts";
 import { enterCliTaskWorkspace, type CliTaskWorkspace } from "../src/worktree/cli-run.ts";
+import { fledgeCoreChildEnv } from "../plugins/fledge/core.ts";
+import { runnerChildEnv } from "../plugins/runners/commands.ts";
 import { ensureTalkWorkspace } from "../src/worktree/manager.ts";
 import { FAKE_LLM_ENV, startFakeLlm, type FakeReply } from "./fixtures/fake-llm.ts";
 import { LANE_PASS_OUTPUT } from "./fixtures/lane-output.ts";
@@ -57,6 +59,7 @@ const IN_PLACE =
 const NOT_TOP = "the run is not at the top of the worktree this CLI run made for itself";
 const SPAWNED =
   "a run with no role session gets them only as a local CLI run, and this one carries a Discord session or surface stamp";
+const TOOL_CHILD = "a run started from inside a tool (the shell, a runner or a Fledge run) never gets them";
 
 /** Env keys that make a run a product child; a local CLI run has none of them. */
 const CHILD_KEYS = [
@@ -68,6 +71,8 @@ const CHILD_KEYS = [
   "CORVIDINHO_WATCH_SESSION_ID",
   "CORVIDINHO_DISCORD_SESSION_ID",
   DELEGATE_DEPTH_ENV,
+  // Set by every tool child (the shell, runners, Fledge runs): a task run started there is the model's.
+  TOOL_CHILD_ENV,
   "WORKTREE_BASE_DIR",
 ];
 
@@ -269,6 +274,24 @@ describe("SAFE-3.a gate, local CLI rows (REQ-cli-681)", () => {
     ];
     for (const extra of spawns) {
       expect({ extra, v: await verdict(extra) }).toEqual({ extra, v: { granted: false, reason: SPAWNED } });
+    }
+    for (const root of [l.ws.dir, ""]) {
+      expect(await verdict({ [TOOL_CHILD_ENV]: root })).toEqual({ granted: false, reason: TOOL_CHILD });
+    }
+  });
+
+  test("refused: a task run the model starts from its granted shell, a runner or a Fledge run (a nested run's own worktree)", async () => {
+    const l = await localRun();
+    // The env a tool child gets from this run (shell-exec and the runners, the Fledge core runs).
+    for (const childEnv of [runnerChildEnv(localEnv(l.base), l.ws.dir), fledgeCoreChildEnv(localEnv(l.base), l.ws.dir)]) {
+      const nested = await enterCliTaskWorkspace({ cwd: l.ws.dir, here: false, env: childEnv });
+      if (!nested.ok || nested.workspace.kind !== "worktree") throw new Error("no nested worktree");
+      expect(await shellToolsGate({ env: childEnv, cwd: nested.workspace.dir, talkWorktree: nested.workspace.dir })).toEqual({
+        granted: false,
+        reason: TOOL_CHILD,
+      });
+      // Its worktree sits outside the parent run's worktree (the parent's repo cleanup removes it).
+      expect(nested.workspace.dir.startsWith(`${l.ws.dir}/`)).toBe(false);
     }
   });
 

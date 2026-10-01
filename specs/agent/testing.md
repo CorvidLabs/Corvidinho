@@ -533,9 +533,10 @@ removes the shell from attempt 2; an allowlist without the six runs no gate.
   gate (granted at the top of the run's own worktree, through a symlink too;
   refused in place, in a subdirectory, the main checkout, another worktree, a
   non-git folder, a look-alike, a missing dir, for workers, WATCH, schedules,
-  a spawn without a role session, and for a role session whatever
-  `talkWorktree` says), `createTaskExecute` with `talkWorktree`, and the real
-  CLI.
+  a spawn without a role session, a run a tool started (`CORVIDINHO_PROJECT_ROOT`,
+  `TOOL_CHILD_ENV`, and a nested run with a tool child's env), and for a role
+  session whatever `talkWorktree` says), `createTaskExecute` with
+  `talkWorktree`, and the real CLI.
 - Fail on base: with the base's (b84c75f) `src/agent/shell-gate.ts`,
   `src/agent/execute.ts` and `src/cli.ts` swapped in, both adjusted cases
   fail (the old reason) and `tests/cli.safe3a-shell.test.ts` cannot load

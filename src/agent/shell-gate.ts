@@ -13,7 +13,8 @@
  * - a WATCH run (`CORVIDINHO_WATCH_SESSION_ID`) or a scheduled run
  *   (`isScheduleRunEnv`) is refused whatever its stamp says;
  * - a run with no role session is the local CLI (REQ-cli-681): it gets them
- *   only when nothing spawned it (no Discord session id, no surface stamp)
+ *   only when nothing spawned it (no Discord session id, no surface stamp,
+ *   not started from inside a tool: no {@link TOOL_CHILD_ENV})
  *   and its cwd is the top of the linked worktree `task run` made for this
  *   run (`talkWorktree`, SESSION-WORKTREE-1.a / REQ-cli-122), which only
  *   `taskRun` passes, in-process, never from the env; `--here`, a non-git
@@ -174,10 +175,23 @@ export async function shellToolsGate(opts: {
 }
 
 /**
+ * Env key every tool child carries: `shell-exec` and the runners
+ * (`runnerChildEnv`), the Fledge core runs (`fledgeCoreChildEnv`) and Fledge
+ * plugin commands (plugins/fledge/spawn.ts) set it to the project root for
+ * nested tools. The local CLI half reads it as "a tool started this process".
+ */
+export const TOOL_CHILD_ENV = "CORVIDINHO_PROJECT_ROOT";
+
+/**
  * SAFE-3.a, local CLI half (REQ-cli-681): a run with no role session gets
  * them only as a local `task run` nothing spawned, in the worktree it made
  * for itself. Every product spawn sets a role session, so a Discord session
- * id or a surface stamp here means a spawn without one: refused.
+ * id or a surface stamp here means a spawn without one: refused. A `task run`
+ * the model starts from a granted shell, a runner or a Fledge run (its env
+ * carries {@link TOOL_CHILD_ENV}) is the model's run, not my own interactive
+ * one, so it is refused too (its worktree would sit outside the parent talk's
+ * worktree). A tool child that strips that key itself is the SAFE-3 residual
+ * of the runners' own code (they run as the operator's user).
  */
 function localCliVerdict(
   env: NodeJS.ProcessEnv,
@@ -189,6 +203,12 @@ function localCliVerdict(
       granted: false,
       reason:
         "a run with no role session gets them only as a local CLI run, and this one carries a Discord session or surface stamp",
+    };
+  }
+  if (env[TOOL_CHILD_ENV] !== undefined) {
+    return {
+      granted: false,
+      reason: "a run started from inside a tool (the shell, a runner or a Fledge run) never gets them",
     };
   }
   if (!talkWorktree?.trim()) {

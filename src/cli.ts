@@ -142,7 +142,8 @@ Usage:
                                     untracked files are not in it); a clean one is removed at the end, one with
                                     changes is kept and named. --here runs it in this checkout (SESSION-WORKTREE-1.a)
                                     shell-exec, the runners and fledge-run / fledge-lanes-run, when allowlisted at code
-                                    tier, are offered only in that new worktree, never with --here (SAFE-3.a)
+                                    tier, are offered only in that new worktree when started at the repo's top level;
+                                    never with --here, outside a git repo or from a subdirectory (SAFE-3.a)
                                     A turn cap and an idle timeout stop endless or stalled runs and say so
                                     (CORVIDINHO_MAX_TURNS / CORVIDINHO_IDLE_TIMEOUT_MS below, AGENT-12)
   corvidinho --non-interactive ...  Deny dangerous plugins unless allowlisted (SAFE-1 / CLI-3)

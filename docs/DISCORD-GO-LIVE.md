@@ -317,7 +317,8 @@ What an entry unlocks **today**:
   - the run is the owner's own chat message, `/session start`, `/work`, or an ask-button pick
     or Answer form that continues one of those talks (the spawn stamps an internal
     `CORVIDINHO_ACTING_SURFACE` that you never set yourself), or a local `corvidinho task run`
-    you start in a shell (no role session, no Discord session id and no surface stamp); WATCH
+    you start in a shell (no role session, no Discord session id and no surface stamp; a
+    `task run` the model starts from its own shell, a runner or a Fledge run is refused); WATCH
     runs, schedules, non-owner runs (team included), a muted or deny-listed owner and
     `delegate` / `council` workers never get them;
   - the run's directory is that talk's own linked git worktree (`talk-…` under the worktree

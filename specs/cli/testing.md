@@ -219,9 +219,15 @@ removes the worktrees and `talk/*` branches it made.
   `.git` file and a missing worktree path; refused in its own worktree for
   delegation depth 1 / 2 / junk, a WATCH marker, a `schedule_` session id,
   and a Discord session id or any stamp (`chat`, `watch`, `schedule`, `cli`)
-  without a role session; the owner's chat (a role session) in the CLI
-  worktree is refused as not its own talk worktree whatever `talkWorktree`
-  says.
+  without a role session, and a `CORVIDINHO_PROJECT_ROOT` (`TOOL_CHILD_ENV`,
+  set or empty: refused as started from inside a tool); the owner's chat (a
+  role session) in the CLI worktree is refused as not its own talk worktree
+  whatever `talkWorktree` says.
+- A nested run: with the env `runnerChildEnv` (the shell and the runners) and
+  `fledgeCoreChildEnv` (the Fledge core runs) give a tool child of the run,
+  `enterCliTaskWorkspace` from the run's worktree makes a nested worktree
+  outside it, and the gate there refuses it with `a run started from inside a
+  tool (the shell, a runner or a Fledge run) never gets them`.
 - `createTaskExecute` with `talkWorktree` (fake provider, code tier,
   allowlist `shell-exec`, `fledge-run`): both offered, `shell-exec` runs in
   the worktree (marker there, not in the checkout), no SAFE-3.a line,
@@ -247,10 +253,12 @@ removes the worktrees and `talk/*` branches it made.
   `workspace`, no marker.
 - Fail on base: with the base's (b84c75f) `src/agent/shell-gate.ts`,
   `src/agent/execute.ts` and `src/cli.ts` swapped in, the file cannot load
-  (`isCliRunWorktree` is missing); with that export stubbed to false, 10 of
-  11 fail (every grant, every refusal reason, the must-ask lapse through the
-  granted shell and all three real-CLI cases); the role-session guard passes
-  on the base too. Restored, 11 of 11 pass.
+  (`isCliRunWorktree` is missing); with that export and `TOOL_CHILD_ENV`
+  stubbed in, 11 of 12 fail (every grant, every refusal reason, the nested
+  run, the must-ask lapse through the granted shell and all three real-CLI
+  cases); the role-session guard passes on the base too. With the gate as it
+  was before the tool-child refusal (`TOOL_CHILD_ENV` stubbed in), the two
+  cases holding tool-child rows fail (granted). Restored, 12 of 12 pass.
 
 ## Turn cap and idle timeout in task run (REQ-cli-125, AGENT-12)
 

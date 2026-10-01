@@ -20,8 +20,13 @@ artifact: research
 - The shell, runners and Fledge core runs' child env is `runnerChildEnv` →
   `buildVerifyEnv`, which drops every `CORVIDINHO_ACTING_*` key but keeps
   `CORVIDINHO_DISCORD_SESSION_ID`, so a `task run` started from an owner's
-  Discord shell stays in place (Discord session id) and is refused; from a
-  local run's shell a nested `task run` is another local run (same operator).
+  Discord shell stays in place (Discord session id) and is refused. From a
+  local run's shell a nested `task run` would otherwise count as another local
+  run (it makes a worktree outside the parent's, from the parent's worktree):
+  every tool child's env (`runnerChildEnv`, `fledgeCoreChildEnv`, the Fledge
+  plugin spawn) carries `CORVIDINHO_PROJECT_ROOT`, so the gate refuses a run
+  that has it (`TOOL_CHILD_ENV`). A tool child that strips it itself is the
+  runners' SAFE-3 residual.
 - The must-ask gate (`src/plugins/must-ask.ts`) records the card on the
   shared approvals store and waits `MUST_ASK_CARD_TTL_MS`; only the bridge
   DMs it, so a CLI-only box lapses (SAFE-20) and the refusal says "with no

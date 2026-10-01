@@ -11,7 +11,9 @@ artifact: design
   `localCliVerdict` → the unchanged role-session rules (stamp, owner role,
   own talk worktree). `localCliVerdict` refuses a Discord session id or any
   stamp (every product spawn sets a role session, so either means a spawn
-  without one), refuses a missing / blank `talkWorktree` (in place:
+  without one), refuses a run a tool started (`CORVIDINHO_PROJECT_ROOT`,
+  `TOOL_CHILD_ENV`, set in every tool child's env), refuses a missing / blank
+  `talkWorktree` (in place:
   `--here`, non-git), refuses unless `isCliRunWorktree(cwd, talkWorktree)`,
   else grants. `isCliRunWorktree` = realpath(cwd) equals realpath(worktree)
   and the shared `isLinkedTalkTop` check (a `worktrees/talk-*` admin dir via
