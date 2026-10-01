@@ -88,7 +88,7 @@ export function createGifCommands(deps: GifSearchDeps = {}): PluginCommand[] {
   return [
     {
       name: "gif-search",
-      description: `Find GIFs on GIPHY (rated G/PG) only when someone asks; post one as a link. Args: <query…> [--limit 1-${GIF_SEARCH_MAX_LIMIT}]`,
+      description: `Secondary GIF search (native GIPHY). Prefer fledge-gif when allowlisted. only when someone asks; post one as a link. Args: <query…> [--limit 1-${GIF_SEARCH_MAX_LIMIT}]`,
       dangerous: true,
       minTier: 1,
       // No mustAsk: it never posts (AUTONOMY-11).

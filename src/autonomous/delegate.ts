@@ -310,6 +310,7 @@ const WORKER_ENV_DROP = new Set([
   "CORVIDINHO_AUDIT_HMAC_KEY",
   "BRAVE_SEARCH_API_KEY",
   "GIPHY_API_KEY",
+  "TENOR_API_KEY",
 ]);
 /** Inherited env key prefixes a worker never gets: Discord bot config, acting identity. */
 const WORKER_ENV_DROP_PREFIXES = ["DISCORD_", "CORVIDINHO_ACTING_"];
