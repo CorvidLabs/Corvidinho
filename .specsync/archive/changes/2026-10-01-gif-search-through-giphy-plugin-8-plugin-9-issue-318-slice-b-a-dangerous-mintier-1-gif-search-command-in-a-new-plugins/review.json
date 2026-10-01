@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "a2a5899f6c06c124c9f62068a6abb9fd442bdf3f",
+  "contract_digest": "180940964911a60f50f9652bf285e4214b76942f61713ca3bad8984dd4059078",
+  "execution_digest": "417323aa78e3fe0a287260a71edbf89362c37669433d56d83ef07e093ef1d91c",
+  "workspace_digest": "5498d44f7c03c65ebe472f84beca8fc5af4ff8dc2b64f53334dc9847b6710765",
+  "timestamp": 1790870185
+}
