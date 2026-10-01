@@ -35,8 +35,9 @@
  * any request, which is not a model failure: no model fallback (AGENT-11) may
  * route around a cap.
  *
- * Tool calls with a flat price per call (a Brave `web-search`, #318) count
- * toward the same total cap and are recorded while any cap is set:
+ * Tool calls with a flat price per call (a Brave `web-search`, #318; a
+ * free-tier GIPHY `gif-search`, recorded at $0) count toward the same total
+ * cap and are recorded while any cap is set:
  * `reserveFlatSpend` reserves the price in the same ledger before the call,
  * and a stopped call hands the tool loop the same `spend-cap` ask
  * (`PluginHandlerResult.spendAsk`, src/agent/execute.ts).
@@ -1243,6 +1244,9 @@ export type FlatSpendHold =
  * or an HTTP error reply) counts 0, `unknown` (network error, timeout, abort,
  * unreadable reply) keeps it counted at the estimate. The 80% warning is
  * noted by the next model call's settle, which sees this row in the window.
+ * A free call (a GIPHY `gif-search`, #318) passes a price of 0: its row is
+ * recorded at $0, and it is stopped only when the window is already past the
+ * cap (spend + 0 > cap).
  */
 export function reserveFlatSpend(opts: {
   env?: NodeJS.ProcessEnv;

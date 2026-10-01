@@ -101,7 +101,7 @@ export type PluginHandlerResult = {
    */
   reviewHold?: "findings" | "refused";
   /**
-   * SAFE-8 (REQ-agent-098): a flat-priced call (`web-search`) stopped at the
+   * SAFE-8 (REQ-agent-098): a flat-priced call (`web-search`, `gif-search`) stopped at the
    * daily spend cap before it was sent. The tool loop ends the attempt with
    * this `spend-cap` ask, as for a model call stopped at the cap; kept off
    * `data` and `message` so amounts and cap settings never reach the model

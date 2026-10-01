@@ -121,11 +121,13 @@ function usage(message: string): WebSearchError {
  * `web-search <query words…> | --query <text> [--count N] [--freshness f] [--json]`.
  * `--count` must be a whole number 1–20 (default 5); `--freshness` one of
  * pd, pw, pm, py; any other `--flag` is a usage error, so a term that starts
- * with `--` goes in `--query`. Query words and `--query` together are a usage
- * error (never a silently dropped part of the query).
+ * with `--` goes in `--query`. Query words and `--query` together, or
+ * `--query` / `--count` / `--freshness` given twice, are usage errors (never a
+ * silently dropped part of the request).
  */
 export function parseWebSearchArgs(argv: readonly string[]): WebSearchArgs {
   const words: string[] = [];
+  const seen = new Set<string>();
   let query: string | undefined;
   let countRaw: string | undefined;
   let freshness: string | undefined;
@@ -135,6 +137,8 @@ export function parseWebSearchArgs(argv: readonly string[]): WebSearchArgs {
     if (a === "--query" || a === "--count" || a === "--freshness") {
       const v = argv[i + 1];
       if (v === undefined) throw usage(`${a} needs a value`);
+      if (seen.has(a)) throw usage(`${a} given twice`);
+      seen.add(a);
       i++;
       if (a === "--query") query = v;
       else if (a === "--count") countRaw = v;

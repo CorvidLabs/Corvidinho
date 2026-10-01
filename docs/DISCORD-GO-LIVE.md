@@ -254,8 +254,8 @@ in the owner's tool catalog, see below). The allowlist file
 Dangerous tools on `main` (printed from the registry after loading the builtins and the
 project's Fledge plugins; re-check any time with `corvidinho plugins list`). An entry lets
 `corvidinho plugins run` run the tool and offers it to the model in the owner's runs, plus
-declared team members' Discord runs for `github-issue-comment`, `github-pr-review` and
-`web-search` (IDENTITY-10, PLUGIN-9), never community, WATCH, schedules other people created or
+declared team members' Discord runs for `github-issue-comment`, `github-pr-review`,
+`web-search` and `gif-search` (IDENTITY-10, PLUGIN-9), never community, WATCH, schedules other people created or
 council voices; `shell-exec`, the runners and the Fledge core runs `fledge-lanes-run` /
 `fledge-run` only in the owner's own chat, `/session start`, `/work` and their ask answers,
 inside that talk's own worktree, and in a local `corvidinho task run` inside the worktree it made for itself
@@ -265,6 +265,7 @@ inside that talk's own worktree, and in a local `corvidinho task run` inside the
 |------|-----------|---------|----------|-------------------|
 | `web-fetch` | true | 1 | true | an operator runs `corvidinho plugins run web-fetch` non-interactively (GET-only, SSRF-guarded, SAFE-7) |
 | `web-search` | true | 1 | true | the owner's and declared team members' runs should search the web through Brave (PLUGIN-7/9); also needs `BRAVE_SEARCH_API_KEY`, see E.3.a |
+| `gif-search` | true | 1 | true | the owner's and declared team members' runs should find GIFs through GIPHY and post them as links (PLUGIN-8/9); also needs `GIPHY_API_KEY`, see E.3.b |
 | `fledge-<command>` | true | 2 (native) / 1 (wasm without `exec`) | true | an operator runs `corvidinho plugins run fledge-<command>` non-interactively; one entry per Fledge command you trust, names from `plugins list` (a Fledge plugin command named `run`, `lanes-list`, `lanes-validate` or `lanes-run` is skipped: the Fledge core builtins `fledge-run`, `fledge-lanes-list`, `fledge-lanes-validate` and `fledge-lanes-run` hold those names) |
 | `fledge-lanes-run` / `fledge-run` | true | 2 | true | an operator runs `corvidinho plugins run fledge-lanes-run -- <lane>` or `fledge-run -- <task> [args…]` non-interactively; builtins that run fledge's own `lanes run` / `run` in the project dir (PLUGIN-1), so they run whatever that lane or task's commands do, starting without the owner's GitHub or git credentials like `shell-exec` and the runners (SAFE-21.a), so pushes, PRs and merges go through the checked GitHub tools; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
 | `git-commit` | true | 2 | true | `/work` should open draft PRs (needed when the work tree has changes) |
@@ -313,7 +314,7 @@ What an entry unlocks **today**:
   gates still apply: ADMIN runs (the owner's Discord chat, `/session start`, `/work` and the
   schedules the owner created, DISCORD-SCHEDULE-1.a) and a local `corvidinho task run` get
   them, plus declared team members' Discord runs for `github-issue-comment`,
-  `github-pr-review` and `web-search` (IDENTITY-10, PLUGIN-9); community chats, WATCH,
+  `github-pr-review`, `web-search` and `gif-search` (IDENTITY-10, PLUGIN-9); community chats, WATCH,
   schedules other people created and council voices never do (E.6). A `delegate` worker gets the lead's effective allowlist (never a wider
   one), so a worker of a local run is offered the same tools, and a worker of a role session is
   non-ADMIN and offered none.
@@ -415,6 +416,71 @@ What one search does:
 - Still open for you: whether a reply that quotes search results is fine to keep in chat history
   and condensed summaries, given Brave's terms against storing results beyond transient use.
 
+### E.3.b GIF search through GIPHY: `gif-search` (PLUGIN-8, PLUGIN-9)
+
+`gif-search` finds GIFs through GIPHY so a run can post one as a link. Powered By GIPHY. It stays
+off until you turn it on in two places, like `web-search`:
+
+1. `GIPHY_API_KEY` in the environment Corvidinho runs with (the bridge's `EnvironmentFile`;
+   spawned runs inherit it). It is read from the environment only, with no default. Without it
+   the tool answers
+   `gif-search not-configured: GIF search is not configured: set GIPHY_API_KEY …` and sends
+   nothing. Get a key from the GIPHY developer dashboard; a new key starts as a beta key limited
+   to 100 calls an hour.
+2. `gif-search` in `CORVIDINHO_ALLOWLIST` (SAFE-1, E.3). Then it is offered at the tool and code
+   tiers to the owner's runs and to declared team members' Discord runs (chat, button picks,
+   `/session start`, `/work`). Community, WATCH and schedules never get it, and `delegate` /
+   `council` workers never get the key.
+
+What one search does:
+
+- It sends one request to GIPHY's Tenor-compatible search, `https://api.giphy.com/v2/search`,
+  with `contentfilter=medium` every time. GIPHY documents `medium` as GIFs rated G and PG. The
+  filter is fixed: no flag changes it (`--rating` and `--contentfilter` are refused), and query
+  text is only ever the search words. `--limit` is a whole number from 1 to 10 (default 5), and
+  the query is at most 50 characters (GIPHY's limit). A flag given twice is refused rather than
+  half used.
+- GIPHY takes the key in the request URL. That URL is never shown in a reply, an error, an audit
+  row or a log line, and the key is scrubbed from everything the tool returns. Delegate workers,
+  the verify lane, the shell, the language runners and Fledge plugins never get the key.
+- Requests go out over https to `api.giphy.com` only. Every redirect is refused, and the host's
+  addresses must be public (SAFE-7), as for `web-fetch`.
+- It returns each GIF's title and its GIPHY media links (`GIF:` and `Small GIF:`), in GIPHY's
+  order. A link is kept only when it is https on a GIPHY media host (`media.giphy.com`,
+  `media0.giphy.com` to `media4.giphy.com`, `i.giphy.com`) and its path and query are plain URL
+  characters, so a pasted link cannot turn into Discord markdown pointing somewhere else; a
+  fragment is cut off. A result without such a link is left out, and the tool result says how
+  many were, so a search where every result was left out never looks like an empty one. Nothing
+  else is filtered or reordered. These media hosts come from GIPHY's usual CDN names; the live
+  smoke below confirms them.
+- Titles and links reach the model only inside the untrusted web fence. A title that looks like
+  a prompt-injection attempt turns off every mutating tool for the rest of the run,
+  `gif-search`, `web-search` and `web-fetch` included, and the owner is told (SAFE-13, E.6.a).
+- Posting: only when someone asks for a GIF, the run puts its link in the reply, and Discord
+  shows it from GIPHY. The link stays in the message text: a long reply that holds a GIPHY link is
+  split into messages rather than sent as one embed, because Discord never unfurls a link inside
+  an embed. The GIF is never downloaded, re-hosted or attached with `discord-send-file` (GIPHY's
+  terms forbid caching or re-hosting its media). `gif-search` itself never posts, so it has no must-ask entry
+  (AUTONOMY-11); a `discord-post-message` a GIF run makes still waits for your OK like any post
+  (AUTONOMY-10.a).
+- Spend (SAFE-8): GIPHY's API is free-tier, so with `CORVIDINHO_DAILY_SPEND_CAP_USD` set each
+  search is recorded at $0 in the same ledger as the model calls. It adds nothing to the
+  24-hour spend; when earlier spend has already gone past the cap it is not sent, and the run
+  stops with the spend-cap ask, as a model call does.
+- Each call is on the audit trail like any dangerous tool (SAFE-5).
+- Attribution: GIPHY's standard terms require "Powered By GIPHY". It is in this guide, in
+  `.env.example` and in the tool result the model reads (its summary line and
+  `data.attribution`). Nothing adds it to the reply people see yet; whether replies should show
+  it is still open for you.
+- Live smoke (not done yet): with a real key on the VPS, ask for a GIF in an allowlisted channel,
+  and check that the link unfurls beside the reply footer, that its host is one of the media
+  hosts above, and that a $0 `spend_ledger` row appears when a spend cap is set.
+
+`fledge-plugin-gif` (`corvid-agent/fledge-plugin-gif`) is not a working path for GIFs: it calls
+Tenor's v2 API, which is shut down (no new keys since 2026-01-13, every API agreement ended
+2026-06-30), and it ships a hardcoded API key its owner should revoke or restrict. Use
+`gif-search` instead.
+
 ### E.4 `corvidinho daemon` under systemd (CLI-8, AUTONOMOUS-4)
 
 Run the daemon when schedules should tick without the bridge. Full guide and unit file:
@@ -490,9 +556,10 @@ Who is who in an allowlisted channel:
   run's own worktree (never on a secret-looking path); their `/work` can open the draft PR
   like the owner's. Memory stays their
   own (`memory-store` / `-recall` / `-profile`; forget/override stay owner-only), plus the
-  project's memory (`--project`, MEMORY-6), and `web-search` when it is allowlisted
-  (PLUGIN-9, E.3.a). No shell, runners, git
-  writes, other GitHub writes, Discord posts, `web-fetch`, `delegate` or `council`. Briefings
+  project's memory (`--project`, MEMORY-6), and `web-search` and `gif-search` when they are
+  allowlisted (PLUGIN-9, E.3.a / E.3.b). No shell, runners, git
+  writes, other GitHub writes, Discord posts or file attachments, `web-fetch`, `delegate` or
+  `council`. Briefings
   (#102) do not exist yet.
 - Everyone else ⇒ **community**: declared `community`, declared without a role, undeclared,
   muted or deny-listed (IDENTITY-11/12). Muted users are refused (the mute and rate gate runs on
@@ -516,7 +583,8 @@ the owner did not create):
 
 - **Catalog:** only read/chat tools. No dangerous or mutating tool is offered, so no file
   write/edit/delete, no shell, no git/GitHub writes, no Discord posts, no memory
-  forget/override, no `delegate`/`council`, no `web-fetch` or `web-search` (dangerous counts as mutating).
+  forget/override, no `delegate`/`council`, no `web-fetch`, `web-search` or `gif-search`
+  (dangerous counts as mutating).
   Read tools stay, including `files-read`/`-list`/`-glob`, `search-grep`,
   `git-status`/`-diff`/`-log`/`-branch-list`, GitHub reads, `specsync-*` reads,
   `fledge-lanes-list`/`-validate`,

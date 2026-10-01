@@ -8,7 +8,8 @@
  * The role is resolved here, in the tool layer, on every call (IDENTITY-12):
  * - owner: the ADMIN re-check below (owner match + bridge bit, not muted or
  *   deny-listed) — everything, as ROLES-CHAT-4 (IDENTITY-9);
- * - team (read tools, reviews, `web-search` (PLUGIN-9) and `/work` edits):
+ * - team (read tools, reviews, `web-search` and `gif-search` (PLUGIN-9) and
+ *   `/work` edits):
  *   the spawning surface allowed team (`CORVIDINHO_ACTING_ROLE=team`,
  *   Discord chat / slash / buttons only) AND the acting Discord user id
  *   resolves, in the owner's people list re-read now, to a person whose
@@ -106,10 +107,12 @@ export const TEAM_WORK_TOOLS: ReadonlySet<string> = new Set([
  * team only, and stay off until I allow them, like web-fetch." Dangerous
  * (SAFE-1: offered and run only when `CORVIDINHO_ALLOWLIST` names them;
  * SAFE-5 audited), on every team session, not only `/work`. These tools
- * only: `web-fetch` itself stays owner-only. Community never gets them.
+ * only (`web-search`, PLUGIN-7; `gif-search`, PLUGIN-8): `web-fetch` itself
+ * stays owner-only. Community never gets them.
  */
 export const TEAM_SEARCH_TOOLS: ReadonlySet<string> = new Set([
   "web-search",
+  "gif-search",
 ]);
 
 function truthy(raw: string | undefined): boolean {

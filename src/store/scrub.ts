@@ -88,6 +88,8 @@ const SECRET_ENV_NAMES = [
   "CORVIDINHO_AUDIT_HMAC_KEY",
   // Brave Search key (PLUGIN-7, #318): no known vendor shape, so its value is redacted by name.
   "BRAVE_SEARCH_API_KEY",
+  // GIPHY key (PLUGIN-8, #318): no known vendor shape, and it sits in the request URL.
+  "GIPHY_API_KEY",
 ] as const;
 
 /** Shorter values are too likely to be ordinary words to redact safely. */

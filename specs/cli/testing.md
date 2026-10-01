@@ -275,3 +275,7 @@ REQ-cli-262 (#318): `tests/preload.operator-data-dir.test.ts` also starts the
 child `bun test` of `tests/fixtures/preload-probe.ts` with
 `BRAVE_SEARCH_API_KEY` set; the probe's run-settings list includes it and the
 child sees none of them, so the suite never sends a real, paid web search.
+
+REQ-cli-262 (#318 slice B): the same child `bun test` also starts with
+`GIPHY_API_KEY` set; the probe's run-settings list includes it and the child
+sees none of them, so the suite never sends a real GIF search.

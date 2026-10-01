@@ -1,7 +1,8 @@
 /**
  * Keyed JSON API GET (REQ-plugins-3181 / SAFE-7 / SAFE-6) — the one request
  * path for commands that call a fixed third-party JSON API with a secret key:
- * `web-search` (Brave, PLUGIN-7) and, next, `gif-search` (GIPHY, PLUGIN-8).
+ * `web-search` (Brave, PLUGIN-7) and `gif-search` (GIPHY, PLUGIN-8,
+ * `plugins/gif/giphy.ts`, whose key sits in the URL's query).
  *
  * Stricter than `web-fetch` (which stays as it is for any public host):
  *  - https only, no URL credentials, and the host must be on the calling

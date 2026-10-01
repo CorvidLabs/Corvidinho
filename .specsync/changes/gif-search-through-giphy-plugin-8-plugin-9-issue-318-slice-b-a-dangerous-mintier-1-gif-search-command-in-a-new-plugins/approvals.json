@@ -1,0 +1,88 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790869529,
+      "digest": "180940964911a60f50f9652bf285e4214b76942f61713ca3bad8984dd4059078",
+      "note": "Leif's go 2026-09-30 on #318: approve SpecSync definitions for #331 (GIPHY gif-search, PLUGIN-8/9) as corvid-agent per PROCESS-3. https://github.com/CorvidLabs/Corvidinho/issues/318",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins",
+        "title": "GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap",
+        "description": "GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "INTENT.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "hi/plugin.md",
+          "plugins/fledge/spawn.ts",
+          "plugins/gif/commands.ts",
+          "plugins/gif/giphy.ts",
+          "plugins/gif/hosts.ts",
+          "plugins/gif/index.ts",
+          "plugins/web/api.ts",
+          "plugins/web/commands.ts",
+          "plugins/web/search.ts",
+          "specs/agent/agent.spec.md",
+          "specs/agent/requirements.md",
+          "specs/agent/testing.md",
+          "specs/cli/cli.spec.md",
+          "specs/cli/requirements.md",
+          "specs/cli/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/requirements.md",
+          "specs/discord/testing.md",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/requirements.md",
+          "specs/plugins/testing.md",
+          "src/agent/execute.ts",
+          "src/agent/loop-guards.ts",
+          "src/agent/spend.ts",
+          "src/agent/untrusted.ts",
+          "src/autonomous/delegate.ts",
+          "src/discord/rich-reply.ts",
+          "src/plugins/builtins.ts",
+          "src/plugins/roles.ts",
+          "src/plugins/types.ts",
+          "src/store/scrub.ts",
+          "tests/discord.rich-reply.unit.test.ts",
+          "tests/fixtures/preload-probe.ts",
+          "tests/gif.search.test.ts",
+          "tests/preload.operator-data-dir.test.ts",
+          "tests/preload.ts",
+          "tests/roles.team.test.ts",
+          "tests/web.search.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "PLUGIN-8 (the GIPHY text Leif re-confirmed on 2026-09-30) is captured verbatim in hi/plugin.md with the hi CLI. In tests/gif.search.test.ts (no network: fake resolver and fake transport answering like GIPHY's Tenor-compatible search, fake key test-key-not-real): gif-search is registered from plugins/gif with dangerous=true, minTier=1 and no must-ask entry, offered at tool/code tier only when CORVIDINHO_ALLOWLIST names it and never at read tier, denied non-interactively without the entry (SAFE-1, denied audit row) and audited started/outcome when allowlisted (SAFE-5); owner, no role session and team (chat and /work) are offered it, community never, and team still gets neither web-fetch nor discord-send-file (PLUGIN-9, TEAM_SEARCH_TOOLS = web-search and gif-search); a community role session is refused at runPlugin while a team one reaches the handler; with a key exactly one GET goes to the pinned public address of api.giphy.com /v2/search with exactly q, key, client_key=corvidinho, limit (5 by default, whole numbers 1-10), media_filter=gif,tinygif and contentfilter=medium, and no header beyond the fixed API headers, and no GIF is ever downloaded; query text such as cats&contentfilter=off&rating=r is only the q value and --rating, --contentfilter and every other unknown flag are usage errors, so nothing can change the filter, and --query or --limit given twice is a usage error too; no key or a malformed key is a clear not-configured error with no DNS or request (never an empty success); a query carrying a secret-looking value or a set secret env value (also split by a joiner) is refused with exit 2 before anything is sent; titles and https GIPHY media links (media.giphy.com, media0-4.giphy.com, i.giphy.com, exact hosts) reach the model only inside the untrusted web fence in GIPHY's order, a link off those hosts, over http, with credentials, on another port or with Discord markdown or a mention after the host is dropped (a fragment is cut off) and a result with no valid link is dropped and counted in data.dropped and the summary, so results that all fail the check read as left out rather than empty (nothing else filtered or reordered), no results is an ok (no results), the description and the summary say to post one only when someone asks, as a link, and data and the summary carry postAs link and Powered By GIPHY; a 2xx error body is api-error and a body without results bad-response, and 401/403/400/422/429/5xx, an oversized body and a failed connection map to fixed codes without GIPHY's or the transport's text; a hostile GIF title trips SAFE-13 in the tool loop, drops gif-search, web-search, web-fetch and files-write for the rest of the run and refuses the later files-write, while an ordinary result trips nothing; the key and the request URL (which carries it) never appear in any result, error, data field or audit row even when GIPHY, a transport error, a redirect or a DNS error echoes them or an invisible or control character splits the key, and GIPHY_API_KEY is on the SAFE-6 secret env list, dropped from delegate workers, the verify lane (shell and runners) and Fledge children and redacted by formatErrorLine; a non-public answer for api.giphy.com and every redirect are refused (exit 2), the run's abort and the deadline stop a pending search and a run already stopped sends nothing; with CORVIDINHO_DAILY_SPEND_CAP_USD set each search reserves and records a 0 USD row (api.giphy.com / giphy-gif-search) before the request, settling actual / failed / estimated at 0 and leaving 24-hour spend unchanged, no cap opens no database, and with the window already past the cap, an invalid cap value or an unavailable ledger nothing is sent and the tool loop ends the attempt with the spend-cap ask. tests/roles.team.test.ts and tests/web.search.test.ts pin TEAM_SEARCH_TOOLS as web-search and gif-search; tests/preload.operator-data-dir.test.ts shows a child bun test never sees GIPHY_API_KEY; tests/fledge.plugins.test.ts keeps every builtin plus a small Fledge plugin under the unchanged 8000-token default tool-surface budget (REQ-plugins-114), with shorter web-fetch and web-search descriptions; tests/web.search.test.ts refuses --query, --count or --freshness given twice (REQ-plugins-318); tests/discord.rich-reply.unit.test.ts shows an answer holding a GIPHY media link is never sent as one embed, so Discord can unfurl it (REQ-discord-075); docs (.env.example, docs/DISCORD-GO-LIVE.md E.3.b, docs/discord.md) document the key, the allowlist name, link-only posting and Powered By GIPHY. The new tests fail on the base sources (slice A head d768396) and pass after; one new env var (GIPHY_API_KEY), no table, column or schema version."
+        ],
+        "dependencies": [
+          "web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered"
+        ],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "9141ba232e7b438cec902fa88b8af2e32b71ba783be752a7697e8666a561a3a3",
+        "cli": "a547a0342ecff7a1dd136a37667ff0e3bf4509bc1189d09c54f0bfdd29b78bd8",
+        "discord": "264d24ac90201e941949fbec272a4a067de7a37eb12cc30a08a0c436707623f2",
+        "plugins": "f1905cc64db7e07cb699f7c707c447064f21d9d643b07861470f58cb559c3c16"
+      }
+    }
+  ],
+  "reopenings": []
+}
