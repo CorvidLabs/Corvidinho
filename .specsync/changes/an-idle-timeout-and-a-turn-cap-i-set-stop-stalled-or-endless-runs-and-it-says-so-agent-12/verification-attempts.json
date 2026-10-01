@@ -23,6 +23,29 @@
         "REQ-plugins-125",
         "REQ-watch-125"
       ]
+    },
+    {
+      "timestamp": 1790816542,
+      "commit": "5fa34fc39ea58b0c2b317b2ee6dd355f024fb50f",
+      "contract_digest": "b79d6a9a1b96d55afee2b1c6967c0069b8f28d103dc9bd6c7ddddaa40156c2e3",
+      "execution_digest": "18f3dadd02d5a0fa88a8770f5e43c9f6a844bc03a8266ddbaebc27bde3ee987d",
+      "workspace_digest": "3a9947e612cb36b4682652ca0af382363629cfb4c3953791fc45ae73841e5be3",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec discord --spec plugins --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-244",
+        "REQ-agent-312",
+        "REQ-cli-125",
+        "REQ-discord-125",
+        "REQ-plugins-125",
+        "REQ-watch-125"
+      ]
     }
   ]
 }
