@@ -312,7 +312,16 @@ overwritten or deleted via file tools (SAFE-2); no in-band override. Inside
 an active change folder the file tools fill the `.md` artifacts but refuse
 SpecSync's own `*.json` records there (state, approvals, review,
 verification; `isSddRecordPath`), which only `specsync change` writes
-(AGENT-18 / AGENT-18.a, REQ-plugins-083). Memory plugins take the acting user and ADMIN
+(AGENT-18 / AGENT-18.a, REQ-plugins-083). In a repo that uses hi (a
+`hi/*.md` with `hi:` front matter in the run's session base, HEAD or the
+working tree, `repoWaysNow`), `files-write`, `files-edit` and `files-delete`
+also refuse every path under `hi/` (`isHiPath`, judged where the write lands
+with symlinks resolved and as given), exit 2 with one line
+(`hiRefuseMessage`: `refused (AGENT-18): '<path>' is under hi/, …`): the
+agent never changes a repo's criteria itself, since they change only through
+a capture the owner approves and no run can make one yet. Reads, and hi/ in a
+repo that does not use hi, are unaffected (AGENT-18 hi guard,
+REQ-plugins-520). Memory plugins take the acting user and ADMIN
 only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID` /
 `CORVIDINHO_ACTING_IS_ADMIN`), never argv — `--user` / `--admin` / `--db` are
 refused; ADMIN is re-checked in the handler (empty admin lists ⇒ nobody);
@@ -1045,6 +1054,12 @@ command line.
 - **When** `files-read` runs on that path
 - **Then** it returns `data.image` true with `mediaType` `image/png` and no `content`, and the file's bytes only on `result.image` (base64) for the tool loop
 
+### Scenario: file tools leave hi/ alone in a hi repo (AGENT-18)
+
+- **Given** a repo whose `hi/agent.md` has `hi:` front matter
+- **When** `files-write`, `files-edit` or `files-delete` targets `hi/agent.md`, a new file under `hi/`, or a symlink that lands there
+- **Then** each refuses with `refused (AGENT-18): '<path>' is under hi/, …` and the file is unchanged; `files-read hi/agent.md` still works, and in a repo whose `hi/` has no hi front matter the write goes through
+
 ### Scenario: non-ADMIN refused files-write (ROLES-CHAT-3)
 
 - **Given** builtins loaded and `CORVIDINHO_ACTING_IS_ADMIN=0` with an acting Discord user
@@ -1089,6 +1104,7 @@ command line.
 | specsync-check, fledge on PATH but the project defines no `spec-check` task | Run local `specsync check` (no `Unknown task` failure) |
 | specsync-check, project `fledge.toml` unparsable | Keep `fledge run spec-check` (fail closed; Fledge reports the error) |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
+| Write/edit/delete under `hi/` in a repo that uses hi (as given, absolute, or through a symlink that lands there) | Refuse (exit 2, `refused (AGENT-18): '<path>' is under hi/, …`); file unchanged; reads unaffected (REQ-plugins-520) |
 | shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, redirections, quoting incl. bash `$'…'`, `\`-newline, comments, here-docs, expanded command words, command substitutions, `eval` and shell `-c` strings, DIRSTACK) | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec cd/pushd left open by an unterminated quote or trailing `\`, or a command nested too deeply to check | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec runs a script (sourced, `BASH_ENV` / `--rcfile`, shell operand or input, here-doc / here-string, run by path) whose cd/pushd escapes, or a `trap` action that does, or defines an alias | Refuse (exit 2, SAFE-3) naming the script; no spawn |

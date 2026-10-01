@@ -1,6 +1,7 @@
 /**
  * AGENT-18 / AGENT-18.a (#89): it works each repo's own way. This module
- * covers the SpecSync clause; the hi-drafting and Trust clauses come later.
+ * covers the SpecSync clause and the guard half of the hi clause; hi
+ * drafting with the capture card and the Trust clause come later.
  *
  * - {@link detectRepoWays} finds the ways a repo uses: a SpecSync change
  *   workflow (`.specsync/sdd.json` with `enabled: true`), hi criteria (a
@@ -19,6 +20,18 @@
  *   in any tree counts, meaningful paths are the union and ignored paths the
  *   intersection. The verify gate (src/agent/loop.ts) and `/work` before
  *   commit and push (src/work/pr.ts) use it.
+ * - The hi clause's guard half ("never inventing them"): in a hi repo the
+ *   agent never changes the criteria itself. {@link hiChangesSince} lists
+ *   what differs under hi/ between the session base and the working tree
+ *   (criteria and retired entries parsed from each changed `hi/*.md`, any
+ *   other hi/ file by path; {@link hiChangesFromSnapshot} for a run with no
+ *   git base), and {@link hiGuardNote} is the one line that blocks done (the
+ *   verify gate, src/agent/loop.ts) and the PR (`/work` before commit and
+ *   push, src/work/pr.ts). No run can make an approved capture yet (drafting
+ *   and the capture card come later), so any hi/ change blocks. The file
+ *   tools refuse writes, edits and deletes under hi/ in hi repos
+ *   (plugins/files). Commits made outside a Corvidinho run are never
+ *   checked: the guard lives only in the run's gate and the `/work` PR step.
  * - AGENT-18.a: on Corvidinho itself it may approve and archive its own
  *   change once verify is green; elsewhere a human approves, reviews and
  *   finalizes. {@link isCorvidinhoProject} is a fixed fact (the project is
@@ -32,7 +45,16 @@
  *   after a verified lane.
  */
 
-import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  lstatSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+  realpathSync,
+  statSync,
+  type Stats,
+} from "node:fs";
 import { join, resolve } from "node:path";
 import { runGit, type GitRun } from "../../plugins/git/exec.ts";
 import { delegateDepthFromEnv } from "../autonomous/delegate.ts";
@@ -471,7 +493,11 @@ export function renderRepoWaysBlock(ways: RepoWays | undefined): string {
   if (ways.hi) {
     out +=
       "\n\nThis repo keeps its acceptance criteria in hi/ (AGENT-18). Never invent criteria: " +
-      "an acceptance_criteria answer cites the captured hi ids it meets (as hi export lists them).";
+      "an acceptance_criteria answer cites the captured hi ids it meets (as hi export lists them). " +
+      "Never change hi/ yourself: the file tools refuse every write, edit and delete under hi/, and any change there " +
+      "since the session base (a criterion, a retired entry, intent prose or any other hi/ file, however it was made) " +
+      "keeps the run from being verified and /work from opening a PR. Criteria change only through a capture the owner " +
+      "approves, and no run can make one yet; if a criterion seems missing or wrong, say so in your reply.";
   }
   return out ? `${out}\n\n` : "";
 }
@@ -489,6 +515,12 @@ export type SddRun = {
   opened: string[];
   /** True only while `runTask` settles its own changes right after a verified lane. */
   verified: boolean;
+  /**
+   * hi/ as it was at planning, for the hi guard of a run with no git session
+   * base (`base` null: not a git work tree top, or an unborn HEAD); null
+   * otherwise or when hi/ could not be read.
+   */
+  hiStart: HiSnapshot | null;
 };
 
 const runs = new Map<string, SddRun>();
@@ -509,6 +541,7 @@ export function beginSddRun(cwd: string): SddRun {
     base: null,
     opened: [],
     verified: false,
+    hiStart: null,
   };
   runs.set(run.key, run);
   return run;
@@ -778,3 +811,277 @@ export function citedHiIds(text: string, families: ReadonlySet<string>): string[
   return [...out];
 }
 
+
+// ------------------------------------------------------------------ hi guard
+
+/**
+ * AGENT-18, the hi clause's guard half ("never inventing them"): what
+ * differs under hi/ between the session base and now. Criteria and retired
+ * entries come from a parse of each changed `hi/*.md`
+ * ({@link parseHiEntries}); every other changed hi/ path is a file. Any
+ * entry in any list blocks done and the PR: no run can make an approved
+ * capture yet.
+ */
+export type HiChanges = {
+  /** Criteria added, removed or reworded. */
+  criteria: string[];
+  /** Retired entries added, removed or changed (retiring a criterion included). */
+  retired: string[];
+  /** Other hi/ paths changed: intent prose, notes, a non-criteria edit, any non-`.md` file. */
+  files: string[];
+};
+
+/** A hi/ tree read from the working tree: path → fingerprint (and a `hi/*.md` text). */
+export type HiSnapshot = Map<string, { fp: string; text: string | null }>;
+
+/** hi/ entries a snapshot walk records before it gives up (fail closed). */
+const HI_SNAPSHOT_MAX_ENTRIES = 2000;
+/** Cap on one git listing of hi/ paths; a longer one is unreadable. */
+const HI_LIST_MAX_BYTES = 1024 * 1024;
+/** Ids or paths a guard note names per kind before "…". */
+const HI_PREVIEW = 5;
+
+/** A hi criterion bullet: `- **FAMILY-N**  text` (`FAMILY-PART-N.a` too). */
+const HI_ENTRY_RE =
+  /^([ \t]*)[-*][ \t]+\*\*([A-Z][A-Z0-9]*(?:-[A-Z][A-Z0-9]*)*-\d+(?:\.[a-z0-9]+)*)\*\*(.*)$/;
+
+/**
+ * The criteria and retired entries of one hi file: id → its section
+ * (`criteria`, or `retired` under a `## Retired` heading) and text, the
+ * continuation lines (indented deeper, e.g. `retired: <why>`) included and
+ * whitespace collapsed. Front matter is skipped. Never throws.
+ */
+export function parseHiEntries(text: string): Map<string, string> {
+  const out = new Map<string, string>();
+  const body = text.replace(/^﻿?---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "");
+  let section = "criteria";
+  let cur: { id: string; indent: number; parts: string[]; section: string } | null = null;
+  const flush = () => {
+    if (!cur) return;
+    const v = `${cur.section}: ${cur.parts.join(" ").replace(/\s+/g, " ").trim()}`;
+    const prev = out.get(cur.id);
+    out.set(cur.id, prev === undefined ? v : `${prev}\n${v}`);
+    cur = null;
+  };
+  for (const line of body.split(/\r?\n/)) {
+    if (/^#{1,6}[ \t]/.test(line)) {
+      flush();
+      if (/^##[ \t]/.test(line)) section = /^##[ \t]+retired\b/i.test(line) ? "retired" : "criteria";
+      continue;
+    }
+    const m = line.match(HI_ENTRY_RE);
+    if (m) {
+      flush();
+      cur = { id: m[2]!, indent: m[1]!.length, parts: [m[3]!], section };
+      continue;
+    }
+    if (cur) {
+      const indent = line.length - line.trimStart().length;
+      if (line.trim() !== "" && indent > cur.indent) {
+        cur.parts.push(line.trim());
+        continue;
+      }
+      flush();
+    }
+  }
+  flush();
+  return out;
+}
+
+/** True when `path` is a hi family file (`hi/<name>.md`, not nested). */
+function isHiMarkdown(path: string): boolean {
+  return path.startsWith(`${HI_DIR}/`) && path.endsWith(".md") && !path.slice(HI_DIR.length + 1).includes("/");
+}
+
+/** A regular file's text (no symlink followed, bounded); null otherwise. */
+function readHiText(abs: string): string | null {
+  try {
+    const st = lstatSync(abs);
+    if (!st.isFile() || st.size > READ_MAX_BYTES) return null;
+    return readFileSync(abs, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Sort changed hi/ paths into criteria, retired entries and other files.
+ * `before` / `after` give a changed `hi/*.md` file's text on each side
+ * (null when absent or unreadable: no entries). A changed file whose entries
+ * did not change is an other-file change, so every path counts somewhere.
+ */
+async function classifyHiChanges(
+  paths: readonly string[],
+  before: (path: string) => Promise<string | null> | string | null,
+  after: (path: string) => string | null,
+): Promise<HiChanges> {
+  const criteria = new Set<string>();
+  const retired = new Set<string>();
+  const files = new Set<string>();
+  for (const path of [...new Set(paths)].sort()) {
+    if (!isHiMarkdown(path)) {
+      files.add(path);
+      continue;
+    }
+    const a = parseHiEntries((await before(path)) ?? "");
+    const b = parseHiEntries(after(path) ?? "");
+    let entries = 0;
+    for (const id of new Set([...a.keys(), ...b.keys()])) {
+      const x = a.get(id);
+      const y = b.get(id);
+      if (x === y) continue;
+      entries += 1;
+      if (`${x ?? ""}\n${y ?? ""}`.split("\n").some((s) => s.startsWith("retired:"))) retired.add(id);
+      else criteria.add(id);
+    }
+    if (entries === 0) files.add(path);
+  }
+  return { criteria: [...criteria].sort(), retired: [...retired].sort(), files: [...files].sort() };
+}
+
+function zList(out: string): string[] {
+  return out.split("\0").filter(Boolean);
+}
+
+/**
+ * AGENT-18 hi guard: what changed under hi/ between commit `base` and the
+ * working tree of `root` (a git work tree top): tracked paths that differ
+ * (`git diff --name-only base -- hi`, committed or not) and untracked ones,
+ * ignored files included (`git ls-files --others -- hi`). Null when git
+ * can't tell (the caller fails closed). Never throws.
+ */
+export async function hiChangesSince(root: string, base: string): Promise<HiChanges | null> {
+  try {
+    const diff = await runGit(
+      root,
+      ["diff", "--name-only", "-z", "--no-renames", "--no-ext-diff", "--no-textconv", base, "--", HI_DIR],
+      { maxStdoutBytes: HI_LIST_MAX_BYTES },
+    );
+    if (!ok(diff)) return null;
+    const others = await runGit(root, ["ls-files", "--others", "-z", "--", HI_DIR], {
+      maxStdoutBytes: HI_LIST_MAX_BYTES,
+    });
+    if (!ok(others)) return null;
+    const paths = [...zList(diff.stdout), ...zList(others.stdout)];
+    return await classifyHiChanges(
+      paths,
+      (p) => blob(root, base, p),
+      (p) => readHiText(join(root, p)),
+    );
+  } catch {
+    return null;
+  }
+}
+
+function hiFingerprint(abs: string, st: Stats): { fp: string; text: string | null } {
+  if (st.isSymbolicLink()) {
+    try {
+      return { fp: `link:${readlinkSync(abs)}`, text: null };
+    } catch {
+      return { fp: `link?:${st.ino}:${st.mtimeMs}`, text: null };
+    }
+  }
+  if (!st.isFile()) return { fp: `other:${st.mode}:${st.ino}`, text: null };
+  if (st.size > READ_MAX_BYTES) return { fp: `stat:${st.size}:${st.mtimeMs}:${st.ino}:${st.mode}`, text: null };
+  const bytes = readFileSync(abs);
+  return {
+    fp: `file:${st.mode & 0o111 ? "x" : "-"}:${createHash("sha256").update(bytes).digest("hex")}`,
+    text: bytes.toString("utf8"),
+  };
+}
+
+/**
+ * hi/ in `root`'s working tree as it is now, for a run with no git session
+ * base: every entry under hi/ (symlinks not followed; `hi` itself when it is
+ * not a directory), fingerprinted by content (by stat past the read cap).
+ * Null when it can't be read whole (the guard fails closed). Never throws.
+ */
+export function hiSnapshot(root: string): HiSnapshot | null {
+  const out: HiSnapshot = new Map();
+  const walk = (rel: string): boolean => {
+    const abs = join(root, rel);
+    let st: Stats;
+    try {
+      st = lstatSync(abs);
+    } catch (e) {
+      return (e as NodeJS.ErrnoException)?.code === "ENOENT";
+    }
+    if (st.isDirectory()) {
+      let names: string[];
+      try {
+        names = readdirSync(abs).sort();
+      } catch {
+        return false;
+      }
+      return names.every((n) => walk(`${rel}/${n}`));
+    }
+    if (out.size >= HI_SNAPSHOT_MAX_ENTRIES) return false;
+    try {
+      out.set(rel, hiFingerprint(abs, st));
+    } catch {
+      return false;
+    }
+    return true;
+  };
+  try {
+    return walk(HI_DIR) ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+/** AGENT-18 hi guard for a run with no git base: hi/ now vs `start`. Null when unreadable. */
+export async function hiChangesFromSnapshot(root: string, start: HiSnapshot): Promise<HiChanges | null> {
+  const now = hiSnapshot(root);
+  if (!now) return null;
+  const changed: string[] = [];
+  for (const p of new Set([...start.keys(), ...now.keys()])) {
+    if (start.get(p)?.fp !== now.get(p)?.fp) changed.push(p);
+  }
+  return classifyHiChanges(
+    changed,
+    (p) => start.get(p)?.text ?? null,
+    (p) => now.get(p)?.text ?? null,
+  );
+}
+
+/** Number of changed criteria, retired entries and other hi/ files. */
+export function hiChangeCount(c: HiChanges): number {
+  return c.criteria.length + c.retired.length + c.files.length;
+}
+
+function previewList(items: readonly string[]): string {
+  const shown = items.slice(0, HI_PREVIEW).join(", ");
+  return items.length > HI_PREVIEW ? `${shown}, …` : shown;
+}
+
+/** `criteria A, B; retired entries C; other hi/ files hi/x.md` for a guard line. */
+export function hiChangeSummary(c: HiChanges): string {
+  const parts: string[] = [];
+  if (c.criteria.length) parts.push(`criteria ${previewList(c.criteria)}`);
+  if (c.retired.length) parts.push(`retired entries ${previewList(c.retired)}`);
+  if (c.files.length) parts.push(`other hi/ files ${previewList(c.files)}`);
+  return parts.join("; ");
+}
+
+/** Why any hi/ change blocks today (said by the gate note and the /work line). */
+export const HI_NO_CAPTURE_YET =
+  "the agent never changes a repo's criteria itself: they change only through a capture the owner approves, " +
+  "and no run can make one yet (drafting criteria and the capture card come later)";
+
+/**
+ * The one line the verify gate and the model get when hi/ changed since the
+ * session base; null when nothing did.
+ */
+export function hiGuardNote(c: HiChanges): string | null {
+  if (hiChangeCount(c) === 0) return null;
+  return (
+    `hi guard: this repo's hi/ changed since the session base (${hiChangeSummary(c)}) ` +
+    `and no approved capture made the change, so the run is not verified and /work opens no PR; ` +
+    `${HI_NO_CAPTURE_YET}. Undo the hi/ change and leave criteria to the owner (AGENT-18).`
+  );
+}
+
+/** The gate's line when what changed under hi/ can't be read (fail closed). */
+export const HI_GUARD_UNREADABLE_NOTE =
+  "hi guard: could not read what changed under hi/ since the session base, so the run is not verified (AGENT-18).";

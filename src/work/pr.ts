@@ -13,6 +13,11 @@
  * - in a repo whose SpecSync workflow requires a change for meaningful files,
  *   every such path changed since the merge-base is covered by an open
  *   change or one archived on the branch (AGENT-18, REQ-discord-518);
+ * - in a repo that uses hi, nothing under hi/ differs from the merge-base,
+ *   committed on the branch or left in the tree: no run can make an approved
+ *   capture yet, so any criterion, retired-entry or other hi/ change keeps
+ *   the PR from opening, whether the run's verify is trusted or re-run here
+ *   (AGENT-18 hi guard, REQ-discord-520);
  * - the operator allowed the PR path: `git-commit` (only when the tree is
  *   dirty), `git-push` and `github-pr-create` are allowlisted for
  *   non-interactive use (GITHUB-5 / SAFE-1). Nothing is committed or pushed
@@ -34,6 +39,10 @@ import {
   repoSlugFromRemoteUrl,
 } from "../../plugins/git/parse.ts";
 import {
+  HI_NO_CAPTURE_YET,
+  hiChangeCount,
+  hiChangesSince,
+  hiChangeSummary,
   scanRepoWays,
   sddRequiresChange,
   sddUncovered,
@@ -88,6 +97,7 @@ export type WorkPrSkipReason =
   | "verify-failed"
   | "tests-deleted"
   | "sdd-uncovered"
+  | "hi-changed"
   | "no-worktree"
   | "no-changes"
   | "conflicts"
@@ -284,6 +294,27 @@ async function ship(input: OpenWorkPrInput, deps: OpenWorkPrDeps): Promise<WorkP
       return skip(
         "sdd-uncovered",
         `not opened — ${uncovered.length} changed path(s) this repo's SpecSync workflow needs a change for are not covered by a SpecSync change (${shown}); open one with specsync change new … --path <each path> (AGENT-18). The changes stay on branch \`${branch}\`.`,
+      );
+    }
+  }
+
+  // AGENT-18 hi guard (REQ-discord-520): in a hi repo (read from the
+  // merge-base, HEAD and the work tree) nothing under hi/ may differ from the
+  // merge-base, committed on the branch or left in the tree. Checked before
+  // the fallback re-verify below, so a trusted and a re-run verify both hold
+  // to it. Unreadable fails closed.
+  if (ways.ways.hi) {
+    const hi = await hiChangesSince(cwd, mergeBase);
+    if (hi === null) {
+      return skip(
+        "hi-changed",
+        `not opened — could not read what changed under hi/ since the branch left \`${base}\`, so the hi guard can't be checked (AGENT-18). The changes stay on branch \`${branch}\`.`,
+      );
+    }
+    if (hiChangeCount(hi) > 0) {
+      return skip(
+        "hi-changed",
+        `not opened — this repo's hi/ changed since the branch left \`${base}\` (${hiChangeSummary(hi)}) and no approved capture made the change; ${HI_NO_CAPTURE_YET} (AGENT-18). The changes stay on branch \`${branch}\`.`,
       );
     }
   }

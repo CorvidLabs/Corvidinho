@@ -466,3 +466,18 @@ the four files 82 of 82.
 prints every 0.1 s for 1.5 s keeps a 500 ms idle watchdog from firing; a
 silent 1.2 s child lets it fire. Fail on base: the printing child lets it
 fire.
+
+## File tools leave hi/ alone in hi repos (REQ-plugins-520, AGENT-18 hi guard)
+
+`tests/agent.hi-guard.test.ts` through `runPlugin`: in a temp hi repo,
+`files-write` (relative, `./`, absolute, a new file), `files-edit` and an
+allowlisted `files-delete` under `hi/` all refuse with
+`refused (AGENT-18): 'hi/…' is under hi/, …` (exit 2) and leave the file
+and `hiChangesSince` unchanged; `files-read hi/agent.md` and a write to
+`src/app.ts` still work; a write through `docs/criteria -> ../hi` is refused
+where it lands; in a repo whose `hi/` has no front matter the write goes
+through; a non-git hi project refuses too; inside a `/work` talk worktree the
+refusal holds mid-run.
+- Fail on base (b84c75f's `plugins/files/commands.ts` and
+  `protectedPaths.ts` swapped in): the three file-tool cases fail (the writes
+  go through); restored they pass.

@@ -1,0 +1,35 @@
+---
+change: in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent
+artifact: testing
+---
+
+# Testing
+
+`tests/agent.hi-guard.test.ts` (17 tests): temp git repos, temp non-git dirs
+and a talk worktree from `ensureTalkWorkspace` with a bare `origin`, never
+this checkout; stub verify runners; the real file tools through `runPlugin`;
+`openWorkPr` with stub plugin calls. Imports come only from modules the base
+has, plus `src/agent/repo-ways.ts`.
+
+Fail-on-base proof: with b84c75f's `src/agent/loop.ts`, `src/work/pr.ts`,
+`plugins/files/commands.ts` and `plugins/files/protectedPaths.ts` swapped in
+(the new `src/agent/repo-ways.ts` kept so the file loads),
+`bun test tests/agent.hi-guard.test.ts` gave 6 pass, 11 fail: all three
+file-tool cases (the writes go through), all five gate cases (the run is
+verified and the lane runs) and all three /work cases (the PR opens or the
+run is verified). The 6 that pass are the repo-ways units, the prompt block
+and the no-false-block case. With b84c75f's `repo-ways.ts` too, the file
+does not load (`hiChangesFromSnapshot` not exported). Restored: 17 of 17
+pass. `tests/agent.repo-ways.test.ts`, `tests/files.plugins.test.ts`,
+`tests/work.pr.test.ts` and `tests/agent.verify-gate.test.ts` still pass
+(82 of 82).
+
+## Requirement evidence
+
+| Requirement | Test | Evidence |
+|---|---|---|
+| `REQ-agent-520` | `tests/agent.hi-guard.test.ts` "what changed under hi/ since the session base" (4 tests) | criteria / retired / files sorting for dirty, committed, untracked, ignored and deleted paths; the non-git snapshot; the note text. |
+| `REQ-agent-520` | `tests/agent.hi-guard.test.ts` "the verify gate blocks done on any hi/ change since the session base" (7 tests) | `hi guard:` note, no lane call, retry feedback, verified once undone; stuck ask when it stays; leftover dirty; committed mid-run; non-git; no false block (untouched, no front matter, capture already on the base); prompt block. Fail on base: the five blocking cases. |
+| `REQ-plugins-520` | `tests/agent.hi-guard.test.ts` "file tools refuse writes, edits and deletes under hi/ in hi repos" (3 tests) | write / edit / delete refused with `refused (AGENT-18)`, file unchanged, reads work, symlink judged where it lands, non-hi repo writable, non-git hi refused. Fail on base: all three. |
+| `REQ-discord-520` | `tests/agent.hi-guard.test.ts` "/work opens no PR while hi/ differs from the merge-base" (3 tests) | `hi-changed` with no plugin call for a leftover dirty edit and a committed note (fallback re-verify never runs the lane); a /work run that edits hi/ fails and opens no PR; restored, the PR opens. Fail on base: all three. |
+| all | full `bun test`, `fledge lanes run verify --non-interactive` | Run on this branch before push. |

@@ -921,3 +921,30 @@ a status and the provider's own raw body; temp dirs only):
   `LLM HTTP 429: {"error":{"message":"Rate limit reached … organization
   org-acme-widgets-7731 … https://127.0.0.1:<port>/account/limits."},
   "request_id":"req_7f3c9a1b2d4e5f60"}`; restored, all pass.
+## hi guard: any hi/ change since the session base blocks done (REQ-agent-520, AGENT-18 hi clause, guard half)
+
+`tests/agent.hi-guard.test.ts` (temp git repos and temp non-git dirs only,
+stub verify runners): `parseHiEntries` reads criteria, sub-criteria and
+retired entries (continuation lines included) and skips front matter and
+prose; `hiChangesSince` sorts a reworded criterion, a retired one, an
+intent-prose edit, a committed new criterion, an untracked note and an
+ignored swap file, and a deleted file into criteria / retired / files;
+`hiChangesFromSnapshot` does the same for a non-git project; `hiGuardNote`
+names them and says no run can make an approved capture yet. Through
+`runTask`: a shell-style hi/ edit fails verify with the `hi guard:` note and
+no lane call, the retry's feedback carries it, and once hi/ is put back the
+lane runs once and the run is verified; a hi/ change that stays ends
+`failed` with the stuck ask; a leftover dirty hi/ edit from an earlier run
+blocks a run that only touched `src/`; a criterion committed mid-run is still
+seen; a non-git hi project is blocked the same way. No false block: hi/
+untouched, a repo whose `hi/` has no front matter, and a capture committed on
+main outside any run before the talk branched all end verified. The hi block
+of `renderRepoWaysBlock` says the file tools refuse hi/ and any hi/ change
+blocks done and the PR.
+- Fail on base (b84c75f's `src/agent/loop.ts`, `src/work/pr.ts`,
+  `plugins/files/commands.ts` and `plugins/files/protectedPaths.ts` swapped
+  in, the new `src/agent/repo-ways.ts` kept so the file loads): 11 of 17 fail
+  (every gate, file-tool and /work case); the 6 that pass are the
+  repo-ways units, the prompt block and the no-false-block case. With
+  b84c75f's `repo-ways.ts` too, the file does not load (the hi guard exports
+  are missing). Restored: 17 of 17 pass.
