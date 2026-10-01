@@ -2164,6 +2164,17 @@ and delegate workers — and SHALL hand each `runPlugin` call a `PrReviewRun`
   while the answering model (`onModel`, `TaskResult.model`) stays the run's
   own.
 
+After each offered tool call that changed, or may have changed, the
+checkout (a `changedState` result, a tool whose edits no result reports, or
+`delegate`), the loop SHALL record the run's current `authors()` for it
+(`recordChangeAuthors`: the git top level of the run's cwd and the branch
+checked out then, `""` when detached; the `pr_change_authors` table, created
+on first use with no schema version bump, each (checkout, branch, model)
+once, labels scrubbed on write and listed in `SCRUB_TARGETS`; best effort,
+never failing the call), so a later run that opens the PR from that
+checkout — the next message, a resumed run — counts them as authors
+(GITHUB-9.a, REQ-plugins-092).
+
 When `github-pr-create` throws `ReviewSpendStop` (its review call stopped at
 a spend cap) the attempt SHALL end at once with a `ToolResult` failure, and
 the spend guard's `finish` SHALL turn it into the run's spend-cap ask
@@ -2184,5 +2195,6 @@ Acceptance Criteria
 - With no second model three identical `github-pr-create` calls all run and refuse, none gets the AGENT-16 steer or the stuck ask, no reviewer is called, and the summary ends with `PR not opened: there is no second model …` (GITHUB-9.a).
 - A reviewer on its own provider whose cap covers it (no owner configured) ends the run with the `spend-cap` ask, no review request is sent, nothing is recorded and the summary has no `PR not opened` line.
 - A `delegate` result whose `data.models` names the worker's model makes that model an author: the reviewer is the next configured model.
+- Run 1, whose head model fails over to the next one, which writes a file; run 2 (a new `createTaskExecute`), whose head model answers and opens the PR from the same checkout: the reviewer is the third configured model, never the one that wrote the change. `recordChangeAuthors` keeps each model once per checkout and branch, scrubbed, and records nothing below a git top level.
 - Two `github-pr-create` calls in one batch: the first gets round 1's findings, the second is not run, one review call is made and the cycle stays open (not declined).
 
