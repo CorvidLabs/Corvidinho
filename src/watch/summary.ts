@@ -6,11 +6,17 @@
  * the comment is public on public repos, so it is secret-scrubbed first.
  * REQ-watch-734 / ROLES-CHAT-3 — the 1200-char clip keeps a closing
  * "(not allowed for your role)" note.
+ * REQ-watch-009 / DISCORD-3.b on GitHub — a failed run without an ask of its
+ * own shows one plain reason line (`watchFailureReason`: which model call
+ * failed as status and host, the no-provider notice, which verify failed),
+ * never the run's summary, so a provider's reply body (account or org names,
+ * request ids, quota details) never lands on a public thread.
  */
 
 import { clipKeepingRoleNote } from "../agent/task-summary.ts";
 import { describeInjectionReasons } from "../agent/untrusted.ts";
 import { attribution } from "../attribution.ts";
+import { failureReasonFor } from "../discord/failure-reason.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import type { AckClient, AckCommentResult } from "./ack.ts";
 import { isAckableEventType } from "./ack.ts";
@@ -126,18 +132,57 @@ export async function maybePostWatchInjectionNotice(opts: {
   return true;
 }
 
-export function buildSummaryBody(spawn: AgentSpawnResult, ownerLogin?: string): string {
+/**
+ * REQ-watch-009 / DISCORD-3.b on GitHub: why a WATCH run failed, as the one
+ * plain line its summary comment shows in place of the run's summary — the
+ * same reason the Discord surfaces give (`failureReasonFor`): the result
+ * frame's `error` (which model call failed and how — status and host, never
+ * the provider's reply body; the no-provider notice; which verify failed),
+ * else the no-provider notice for the run's tier in `env`, else the last
+ * meaningful line of the run's stderr, else the exit code; SAFE-6 scrubbed,
+ * host paths and stack frames dropped, at most 200 characters. Null for a
+ * run that did not fail and for a failed run that stopped on an ask of its
+ * own (its summary carries `Needs your input: …`, REQ-watch-086).
+ */
+export function watchFailureReason(
+  spawn: Pick<AgentSpawnResult, "ok" | "exitCode" | "ask" | "failureReason" | "stderrTail">,
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  if (spawn.ok || spawn.ask) return null;
+  return failureReasonFor(
+    {
+      exitCode: spawn.exitCode,
+      ...(spawn.failureReason ? { failureReason: spawn.failureReason } : {}),
+      ...(spawn.stderrTail ? { stderrTail: spawn.stderrTail } : {}),
+    },
+    env,
+  );
+}
+
+/**
+ * The run-summary comment: the status line, then the run's summary (SAFE-6
+ * scrubbed, clipped to 1200) — or, for a failed run without an ask of its
+ * own, its one plain reason line (`watchFailureReason`, read with `env`) —
+ * then the SAFE-13 owner line when the run reports one, then the footer.
+ */
+export function buildSummaryBody(
+  spawn: AgentSpawnResult,
+  ownerLogin?: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
   const status = spawn.ok
     ? `Done (exit ${spawn.exitCode}).`
     : `Failed (exit ${spawn.exitCode}).`;
   // Scrub before clipping so a token cut at the cap leaks no prefix. The clip
   // keeps a closing "(not allowed for your role)" note (ROLES-CHAT-3,
   // REQ-watch-734).
-  const preview = clipKeepingRoleNote(
-    scrubSecrets(spawn.summary || "").trim(),
-    1200,
-    (head, max) => head.slice(0, max),
-  );
+  const preview =
+    watchFailureReason(spawn, env) ??
+    clipKeepingRoleNote(
+      scrubSecrets(spawn.summary || "").trim(),
+      1200,
+      (head, max) => head.slice(0, max),
+    );
   const body = preview
     ? `Corvidinho WATCH run summary — ${status}\n\n${preview}`
     : `Corvidinho WATCH run summary — ${status}`;
@@ -166,6 +211,8 @@ export async function maybePostWatchSummary(opts: {
   summarized: SummarizedIdStore;
   /** SAFE-13: the owner's GitHub login, @mentioned when the run reports an injection. */
   ownerLogin?: string;
+  /** The watcher's env, for a failed run's no-provider reason (default process.env). */
+  env?: NodeJS.ProcessEnv;
   log?: (msg: string) => void;
   /**
    * Called with the failed post result after the `summary failed` line; the
@@ -192,7 +239,7 @@ export async function maybePostWatchSummary(opts: {
     return false;
   }
 
-  const body = buildSummaryBody(spawn, opts.ownerLogin);
+  const body = buildSummaryBody(spawn, opts.ownerLogin, opts.env);
   const res = await ackClient.createIssueComment({
     owner: parts.owner,
     repo: parts.name,

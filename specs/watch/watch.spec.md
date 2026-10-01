@@ -25,6 +25,7 @@ files:
   - tests/watch.request-actor.test.ts
   - tests/watch.conversation.test.ts
   - tests/watch.github-numeric-id.test.ts
+  - tests/watch.failed-comment.test.ts
 
 db_tables: []
 depends_on:
@@ -151,6 +152,15 @@ A run whose result frame reports model failovers (AGENT-11,
 comment keeps the run's closing `(model fallback: …)` note when it clips
 (REQ-watch-080).
 
+A failed run's reason (DISCORD-3.b's reason on GitHub, REQ-watch-009):
+`AgentSpawnResult` gains `failureReason?` (the result frame's `error`,
+`failureReasonFromUnknown`) and `stderrTail?` (a failed run's stderr end);
+`summary.ts` exports `watchFailureReason(spawn, env?)` → the one plain line
+(`failureReasonFor` from `src/discord/failure-reason.ts`), or null for a run
+that did not fail or stopped on an ask of its own; `buildSummaryBody(spawn,
+ownerLogin?, env?)` and `maybePostWatchSummary({ env })` take the watcher's
+env for its no-provider fallback.
+
 ## Invariants
 
 The spawn client runs `task run --here --task <prompt> --output ndjson`
@@ -247,6 +257,15 @@ nothing is recorded and one line says it could not be sent. Any other outcome
 (done, failed without an ask, a clarify ask) drops the thread's pending ask. The run summary comment is unchanged (it still carries
 `Needs your input: …` where WATCH posts one); nothing new is posted on GitHub
 (REQ-watch-086).
+A failed run without an ask of its own (a non-zero exit, or a spawn that
+threw) never posts its run summary: its comment carries only
+`watchFailureReason` — the result's `error` (which model call failed: status
+and host, never the provider's reply body; the no-provider notice; which
+verify failed), else the tier's no-provider notice, else the stderr end, else
+the exit code; SAFE-6 scrubbed, one line of at most 200 characters — the
+poller logs `[watch] run failed (<repo>#<n> id=<id>, exit N): <reason>`, and
+the thread's kept agent turn is that line; only the operator-only spawn JSONL
+keeps the scrubbed summary (REQ-watch-009).
 
 ## Behavioral Examples
 
@@ -275,6 +294,11 @@ An assignment whose run ends stuck on a repeated failing call → no GitHub
 comment, one `watch_owner_asks` row for the thread, and the bridge DMs the
 owner the question with the thread link; with no bridge running, one log line
 says the Discord ping could not be sent (REQ-watch-086).
+An issue comment whose run's model call answers 429 with the provider's org
+name and request id in its body → the summary comment is `Failed (exit 1).`
+and `The model call failed (429 Too Many Requests from <host>)`, with neither
+the org name nor the request id, and the watcher logs `[watch] run failed
+(…, exit 1): …` with that line (REQ-watch-009).
 An issue comment whose run stops at a spend cap → the summary comment says
 only "Work is paused for budget.", one `spend-cap` row for the thread, one
 log line with no amount, and the bridge DMs the owner the stop's details once
@@ -290,7 +314,10 @@ that trips the SAFE-13 detector is refused with one comment and no run
 `[watch] conversation … failed` and the run goes on without the replay or the
 record (REQ-watch-472); a stuck run with no owner Discord id, no DB or no live
 bridge logs that the owner's Discord ping could not be sent, and a failure to
-record it is logged (scrubbed) and never stops the cycle (REQ-watch-086).
+record it is logged (scrubbed) and never stops the cycle (REQ-watch-086); a
+failed run (a model call that failed, no provider, a failed verify, a crash or
+a spawn that threw) posts one plain reason line, never the run's summary or a
+provider's reply body (REQ-watch-009).
 
 ## Dependencies
 

@@ -20,6 +20,10 @@
  * AGENT-16.a (REQ-watch-086): a run that ends with a "stuck" ask, on any
  * event type, is handed to the Discord bridge through the shared DB so the
  * owner is pinged on Discord like other stuck asks (src/watch/owner-ask.ts).
+ * REQ-watch-009 (DISCORD-3.b on GitHub): a failed run without an ask of its
+ * own logs `[watch] run failed (<repo>#<n> id=<id>, exit N): <reason>`, and
+ * its summary comment and its kept conversation turn are that one plain
+ * reason line, never the run's summary (a provider's reply body).
  */
 
 import type { Database } from "bun:sqlite";
@@ -81,6 +85,7 @@ import {
   fetchWatchEvents,
   type SearchClient,
 } from "./searcher.ts";
+import { failureReasonFromUnknown, formatFailureLog } from "../discord/failure-reason.ts";
 import { noteWatchRunAsk } from "./owner-ask.ts";
 import { SessionStore } from "./session-store.ts";
 import {
@@ -97,6 +102,7 @@ import {
   maybePostWatchSummary,
   SuccessfulAckStore,
   SummarizedIdStore,
+  watchFailureReason,
 } from "./summary.ts";
 import type { AgentSpawnResult, DetectedEvent, WatchConfig } from "./types.ts";
 
@@ -661,6 +667,8 @@ export async function startWatchPoller(
         let spawnSummary = "";
         let spawnInjection: AgentSpawnResult["injection"];
         let spawnAsk: AgentSpawnResult["ask"];
+        let spawnFailureReason: string | undefined;
+        let spawnStderrTail: string | undefined;
         let threw = false;
         try {
           const spawn = await agent.runChat({
@@ -677,6 +685,8 @@ export async function startWatchPoller(
           spawnSummary = spawn.summary;
           spawnInjection = spawn.injection;
           spawnAsk = spawn.ask;
+          spawnFailureReason = spawn.failureReason;
+          spawnStderrTail = spawn.stderrTail;
           opts.onAction?.({
             kind: action.kind,
             event,
@@ -688,7 +698,34 @@ export async function startWatchPoller(
           spawnOk = false;
           spawnExit = 1;
           spawnSummary = err instanceof Error ? err.message : String(err);
+          // DISCORD-3.b: a run that threw says why from its message (scrubbed, one line).
+          spawnFailureReason = failureReasonFromUnknown(spawnSummary);
           logError("[watch] spawn error", err);
+        }
+
+        // REQ-watch-009 (DISCORD-3.b on GitHub): what a failed run without an
+        // ask of its own shows — one plain reason line, never its summary
+        // (for a model failure `LLM HTTP <status>: <provider body>`).
+        const runFacts: Pick<
+          AgentSpawnResult,
+          "ok" | "exitCode" | "ask" | "failureReason" | "stderrTail"
+        > = {
+          ok: spawnOk,
+          exitCode: spawnExit,
+          ...(spawnAsk ? { ask: spawnAsk } : {}),
+          ...(spawnFailureReason ? { failureReason: spawnFailureReason } : {}),
+          ...(spawnStderrTail ? { stderrTail: spawnStderrTail } : {}),
+        };
+        const failedReason = watchFailureReason(runFacts, env);
+        if (failedReason !== null) {
+          log(
+            formatFailureLog(
+              "[watch]",
+              `${event.repo}#${event.number} id=${event.id}`,
+              threw ? undefined : spawnExit,
+              failedReason,
+            ),
+          );
         }
 
         const finishedAtMs = now();
@@ -704,6 +741,8 @@ export async function startWatchPoller(
           errorClass: classifySpawnError(spawnOk, spawnExit, threw),
           durationMs: Math.max(0, finishedAtMs - startedAtMs),
           // SAFE-6 (REQ-watch-231): scrub before clipping and persisting.
+          // Operator-only: a failed run keeps its scrubbed summary here
+          // (REQ-watch-009), never on the thread.
           summaryPreview: scrubSecrets(spawnSummary).slice(0, 240),
         };
         spawnOutcomes.append(outcome);
@@ -722,7 +761,9 @@ export async function startWatchPoller(
             turns: [
               ...conversation.turns,
               { role: "human", content: action.prompt, createdAt: startedAtMs },
-              { role: "agent", content: spawnSummary, createdAt: finishedAtMs },
+              // REQ-watch-009: a failed run's turn is the reason its comment
+              // shows, so a later run never replays a provider's reply body.
+              { role: "agent", content: failedReason ?? spawnSummary, createdAt: finishedAtMs },
             ],
             participants: [
               ...(retained?.participants ?? []),
@@ -741,16 +782,16 @@ export async function startWatchPoller(
         const summaryPosted = await maybePostWatchSummary({
           event,
           spawn: {
-            ok: spawnOk,
+            ...runFacts,
             sessionId: action.session.id,
             summary: spawnSummary,
-            exitCode: spawnExit,
             ...(spawnInjection ? { injection: spawnInjection } : {}),
           },
           ackClient,
           successfulAcks,
           summarized,
           ownerLogin: owner?.githubLogin,
+          env,
           log,
           onPostFailed: backoffOnCommentFailure,
         });

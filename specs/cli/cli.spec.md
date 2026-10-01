@@ -13,6 +13,7 @@ files:
   - src/daemon/log.ts
   - src/daemon/index.ts
   - tests/daemon.restart-recovery.test.ts
+  - tests/daemon.no-provider-run.test.ts
   - .env.example
   - STATUS.md
   - tests/preload.ts
