@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "my-local-cli-task-run-may-use-the-allowlisted-shell-and-runners-inside-its-own-worktree-safe-3-a-local-cli-half",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "c9c7f9d20fab0a9a1dd43fac74c91a65633a6190",
+      "contract_digest": "e7a63bff893cc3635dd96c1f7e786811776f04d0314fe9af32a4c5446e5fb58c",
+      "execution_digest": "4e52549bccc994e158fe545d4c51fdcd8356a3234e460568d880a769bf9f70a3",
+      "workspace_digest": "cec981336ea9142cae3dd7cfacdd6e902c0f014c9f53700b111138928d780cc6",
+      "timestamp": 1790830003
+    }
+  ]
+}

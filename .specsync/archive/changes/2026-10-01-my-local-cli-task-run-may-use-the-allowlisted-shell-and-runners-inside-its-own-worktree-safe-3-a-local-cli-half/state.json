@@ -7,11 +7,11 @@
   "title": "My local CLI task run may use the allowlisted shell and runners inside its own worktree (SAFE-3.a, local CLI half)",
   "description": "My local CLI task run may use the allowlisted shell and runners inside its own worktree (SAFE-3.a, local CLI half)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "b84c75fc3e98ce9d51c30ea215f538d53c18ded8",
   "created_at": 1790825258,
-  "updated_at": 1790829654,
+  "updated_at": 1790830381,
   "affected_specs": [
     "cli",
     "agent"

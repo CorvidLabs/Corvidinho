@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "my-local-cli-task-run-may-use-the-allowlisted-shell-and-runners-inside-its-own-worktree-safe-3-a-local-cli-half",
+  "implementation_commit": "c9c7f9d20fab0a9a1dd43fac74c91a65633a6190",
+  "implementation_tree": "8f79e678db20d19a5214424d0bab7c7baa169db8",
+  "contract_digest": "e7a63bff893cc3635dd96c1f7e786811776f04d0314fe9af32a4c5446e5fb58c",
+  "workspace_digest": "cec981336ea9142cae3dd7cfacdd6e902c0f014c9f53700b111138928d780cc6",
+  "closing_digest": "d02f21a10acf35f621f3739713ef4f43e6b3ef22e675a52949b1c2e4656807ed",
+  "review_digest": "e31effd45dd2bf15ba3cd0358263fbf5b033eb9afeca8bd34cfe3cde6f3a830c",
+  "finalization_digest": "5addff3cbdf4ded4ff5baf23cad6f7218f46578a9b19d0c28bd946cf02d3aad7",
+  "timestamp": 1790830019
+}

@@ -1,6 +1,6 @@
 ---
 id: my-local-cli-task-run-may-use-the-allowlisted-shell-and-runners-inside-its-own-worktree-safe-3-a-local-cli-half
-state: verifying
+state: archived
 type: feature
 base_commit: b84c75fc3e98ce9d51c30ea215f538d53c18ded8
 ---

@@ -99,6 +99,13 @@
         "agent": "382c14de68f4e8cb8460f4479de8fee9c073e817c84699b30748ea06e92aecc6",
         "cli": "d384655a9bd85a7f95534ae370ab90589c2f5ca7211ea3405ddc1997ce6ae3ab"
       }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790830019,
+      "digest": "d02f21a10acf35f621f3739713ef4f43e6b3ef22e675a52949b1c2e4656807ed",
+      "note": "Same-PR finalization closing digest"
     }
   ],
   "reopenings": []
