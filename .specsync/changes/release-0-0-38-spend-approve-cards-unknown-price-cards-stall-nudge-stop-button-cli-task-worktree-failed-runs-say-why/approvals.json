@@ -1,4 +1,43 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790818050,
+      "digest": "74ca2ab32b40262d96ff68ecac042fbad23ea1531615a7debe98759dd215c565",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "release-0-0-38-spend-approve-cards-unknown-price-cards-stall-nudge-stop-button-cli-task-worktree-failed-runs-say-why",
+        "title": "Release 0.0.38: spend approve cards, unknown-price cards, stall nudge, stop button, CLI task worktree, failed runs say why",
+        "description": "Release 0.0.38: spend approve cards, unknown-price cards, stall nudge, stop button, CLI task worktree, failed runs say why",
+        "kind": "operations",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "package.json 0.0.38; version prints 0.0.38; CHANGELOG 0.0.38 extractable; STATUS rows"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "d03f22385b76fbf73bb59eb7a9ca0b98c7183f52bbc192c05bcc04dde627502d"
+      }
+    }
+  ],
   "reopenings": []
 }

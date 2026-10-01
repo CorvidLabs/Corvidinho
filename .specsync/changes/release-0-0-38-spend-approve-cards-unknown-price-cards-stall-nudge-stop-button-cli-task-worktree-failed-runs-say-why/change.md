@@ -1,6 +1,6 @@
 ---
 id: release-0-0-38-spend-approve-cards-unknown-price-cards-stall-nudge-stop-button-cli-task-worktree-failed-runs-say-why
-state: draft
+state: implementing
 type: operations
 base_commit: aeb2de3407acd0990897121ac68caf1553be0118
 ---
