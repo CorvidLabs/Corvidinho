@@ -1587,7 +1587,8 @@ stamp, one real `task run` against the fake model; no network):
   owner, no card; on the engine the text DM (fence-safe) precedes the card
   and one owner press approves it.
 - The surfaces: a chat answer (even the owner's), an ask pick's answer, a
-  thin ack's restatement, `/session start` and `/work` answers and a
+  thin ack's restatement, `/session start` and `/work` answers (their
+  progress message never echoing the typed topic or description) and a
   schedule's result in a public thread wait; a clarify question is pending
   only once posted; Deny leaves the fixed `Not posted — …` line and no
   question; a plain channel, a private thread or 20 approved never wait;

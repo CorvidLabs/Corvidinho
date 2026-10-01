@@ -53,6 +53,7 @@ import {
   findOptionLabel,
   formatAskEphemeralContent,
   formatAskStub,
+  askExpiresAt,
   isAskExpired,
   normalizeAskAnswer,
   parseAskCustomId,
@@ -1533,6 +1534,9 @@ export async function startBridge(
           out = { content: notPosted };
         } else if (held.held) {
           out = { ...out, content: held.text };
+          // DISCORD-ASK-5: a held question's buttons last ~30 minutes from
+          // when it goes out, not from before the owner's OK.
+          if (pendingToStore) pendingToStore.expiresAt = askExpiresAt();
         }
         const failedLook = stopped || notPosted !== null || (askBody ? askBody.failed : !result.ok);
 
@@ -2278,6 +2282,9 @@ export async function startBridge(
           out = { content: notPosted };
         } else if (held.held) {
           out = { ...out, content: held.text };
+          // DISCORD-ASK-5: a held question's buttons last ~30 minutes from
+          // when it goes out, not from before the owner's OK.
+          if (pendingToStore) pendingToStore.expiresAt = askExpiresAt();
         }
         const failedLook = stopped || notPosted !== null || (askBody ? askBody.failed : !result.ok);
 

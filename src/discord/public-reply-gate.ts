@@ -75,6 +75,14 @@ export const PUBLIC_REPLY_HOLD_TEXT = "waiting for the owner's OK before replyin
 /** The hold line as posted (progress message or note). */
 export const PUBLIC_REPLY_HOLD_LINE = `⏳ ${PUBLIC_REPLY_HOLD_TEXT}`;
 
+/**
+ * The `/session start` and `/work` progress message's first line in a public
+ * thread whose replies still wait: fixed text, so the topic or description
+ * typed there is not shown before the owner's OK (it waits on the card with
+ * the answer). Elsewhere the progress message names it as before.
+ */
+export const PUBLIC_REPLY_PROGRESS_TEXT = "Working on your request...";
+
 /** How long a reply card stays open; no answer by then is a no (SAFE-20). */
 export const PUBLIC_REPLY_CARD_TTL_MS = 5 * 60 * 1000;
 /** How often the waiting bridge reads the decision. */

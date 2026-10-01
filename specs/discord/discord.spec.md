@@ -932,6 +932,8 @@ Public-thread replies (AUTONOMY-10 / 10.a, REQ-discord-099):
 `schema_meta` key; no schema change), `PUBLIC_REPLY_KIND` (`reply`) and
 `PUBLIC_REPLY_CLASS` (`plain`), `PUBLIC_REPLY_HOLD_TEXT` ("waiting for the
 owner's OK before replying here") and `PUBLIC_REPLY_HOLD_LINE` (`⏳ ` + it),
+`PUBLIC_REPLY_PROGRESS_TEXT` (the `/session start` / `/work` progress line
+in such a thread, in place of the typed topic or description),
 `PUBLIC_REPLY_CARD_TTL_MS` (5 min), `PUBLIC_REPLY_POLL_MS`,
 `PUBLIC_REPLY_NOTHING_DONE`, `PUBLIC_REPLY_APPROVED`,
 `REPLY_PUBLIC_THREAD_ENV` (`CORVIDINHO_DISCORD_REPLY_PUBLIC_THREAD`),

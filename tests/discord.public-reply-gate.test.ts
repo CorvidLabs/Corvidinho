@@ -31,7 +31,7 @@ import {
   type AgentClient,
   type AgentRunChatOpts,
 } from "../src/discord/agent-client.ts";
-import { pickCustomId } from "../src/discord/ask-buttons.ts";
+import { ASK_BUTTON_TTL_MS, pickCustomId } from "../src/discord/ask-buttons.ts";
 import { createApprovalCards } from "../src/discord/approval-cards.ts";
 import { approveCardCustomId } from "../src/discord/approve-card.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
@@ -45,6 +45,7 @@ import {
   PUBLIC_REPLIES_APPROVED_KEY,
   PUBLIC_REPLY_HOLD_LINE,
   PUBLIC_REPLY_KIND,
+  PUBLIC_REPLY_PROGRESS_TEXT,
   PUBLIC_THREAD_REPLY_LIMIT,
   REPLY_PUBLIC_THREAD_ENV,
   approvedPublicReplies,
@@ -505,12 +506,17 @@ describe("a chat answer in a public thread (AUTONOMY-10.a)", () => {
       expect(await until(() => requests.length === 1)).toBe(true);
       expect(requests[0]!.text).toContain("Postgres or SQLite?");
       expect(e.result.store.list()[0]!.pendingAsk).toBeUndefined();
+      await Bun.sleep(25);
+      const decidedAt = Date.now();
       decide(e.db, requests[0]!, answer);
       await handled;
       const pending = e.result.store.list()[0]!.pendingAsk;
       if (answer === "approved") {
         expect(pending?.question).toBe("Postgres or SQLite?");
         expect(e.outbound.contentEdits.at(-1)!.content).toBe(requests[0]!.text);
+        // DISCORD-ASK-5: its ~30 minutes run from when it went out, not from
+        // before the owner's OK.
+        expect(pending!.expiresAt).toBeGreaterThanOrEqual(decidedAt + ASK_BUTTON_TTL_MS);
       } else {
         expect(pending).toBeUndefined();
         expect(e.everything()).not.toContain("Postgres or SQLite?");
@@ -703,6 +709,10 @@ describe("/session start and /work in a public thread", () => {
       await handled;
       expect(e.outbound.contentEdits.at(-1)!.content).toBe(publicReplyNotPostedText("denied"));
       expect(e.everything()).not.toContain("Which branch?");
+      // The typed topic or description waits on the card too: the progress
+      // message never echoed it (REQ-discord-099).
+      expect(e.everything()).not.toContain("plan the release");
+      expect(JSON.stringify(e.outbound.sends)).toContain(PUBLIC_REPLY_PROGRESS_TEXT);
       expect(e.result.store.list()[0]?.pendingAsk).toBeUndefined();
       await restores.pop()?.();
     }
@@ -717,10 +727,14 @@ describe("/session start and /work in a public thread", () => {
       const { ix } = slash(command, TEAM_ID);
       const handled = e.handlers.onSlash!(ix);
       expect(await until(() => requests.length === 1)).toBe(true);
+      await Bun.sleep(25);
+      const decidedAt = Date.now();
       decide(e.db, requests[0]!, "approved");
       await handled;
       expect(e.outbound.contentEdits.at(-1)!.content).toBe(requests[0]!.text);
       expect(e.result.store.list()[0]!.pendingAsk?.question).toBe("Which branch?");
+      // DISCORD-ASK-5: counted from when it went out.
+      expect(e.result.store.list()[0]!.pendingAsk!.expiresAt).toBeGreaterThanOrEqual(decidedAt + ASK_BUTTON_TTL_MS);
       await restores.pop()?.();
     }
   });
@@ -731,6 +745,8 @@ describe("/session start and /work in a public thread", () => {
     await e.handlers.onSlash!(slash("session", TEAM_ID, CHANNEL).ix);
     expect(requests).toEqual([]);
     expect(String(e.outbound.contentEdits.at(-1)!.content)).toContain(ANSWER);
+    // Elsewhere the progress message still names the topic.
+    expect(JSON.stringify(e.outbound.sends)).toContain("Session: plan the release");
   });
 });
 

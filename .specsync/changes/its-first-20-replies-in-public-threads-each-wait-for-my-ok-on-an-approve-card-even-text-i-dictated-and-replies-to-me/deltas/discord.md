@@ -40,7 +40,11 @@ model text in a public thread SHALL wait for the owner's OK:
   progress embed, `⏹ Stopped`, a failed run's DISCORD-3.b lines (the
   owner's reason line and the generic lines are harness text,
   REQ-discord-032), the spend-cap "Work is paused for budget." line, ping
-  lines that only point at a post, acks, notices and wait notes.
+  lines that only point at a post, acks, notices and wait notes. While a
+  public thread still waits, the `/session start` and `/work` progress
+  message SHALL start with the fixed `PUBLIC_REPLY_PROGRESS_TEXT`
+  (`Working on your request...`) instead of echoing the typed topic or
+  description, which waits on the card with the answer.
 - The hold: `createPublicReplyGate(...).hold` SHALL record a `reply` request
   (class plain) in `approval_requests` — the reply text verbatim (SAFE-6
   scrubbed) as its text, `Discord thread <#id> (id)` as target, `1 reply (N
@@ -57,7 +61,9 @@ model text in a public thread SHALL wait for the owner's OK:
   transaction, then post exactly the text the card showed (the note
   removed). A question the reply asks SHALL be set pending only then (chat,
   ask pick, `/session start`, `/work`), so a reply or a thin ack never
-  answers or restates a question nobody can see yet.
+  answers or restates a question nobody can see yet, and its DISCORD-ASK-5
+  expiry SHALL count from then (`askExpiresAt()` at approval), not from
+  before the wait.
 - No: a deny, no answer before the card lapses, a stop of the run (the Stop
   button or a stop word ends the wait) or the bridge closing SHALL post none
   of it (SAFE-20): the waiting message becomes `publicReplyNotPostedText(
@@ -86,10 +92,10 @@ Acceptance Criteria
 - `isPublicThreadType` is true for 11 and 10 only; the count starts at 0, goes up by one per used approval, reads garbage as 0, and stops the waiting at 20; `mustHold` asks the gateway per post (a throwing lookup is public) and not at all once 20 were approved.
 - `hold` in a public thread records a plain `reply` card with the text verbatim, posts the hold note, and on Approve removes it and returns exactly the card's text (a secret shown and posted as `[redacted:…]`), counting one; Deny, a lapse, a stop and `close()` return a no and count nothing; with no owner there is no card.
 - On the engine the reply goes to the owner first as quoted data (its fences cannot break out, `@everyone` defanged), then a card with Approve / Deny; one owner press approves it, no code.
-- A chat answer in a public thread — even the owner's own — waits on its progress message (Stop button kept, nothing of the answer out) and is posted exactly on Approve; a denied one ends as the not-posted line with nothing of it out and the turn recording the line; a held clarify question is pending only after Approve and never after Deny.
+- A chat answer in a public thread — even the owner's own — waits on its progress message (Stop button kept, nothing of the answer out) and is posted exactly on Approve; a denied one ends as the not-posted line with nothing of it out and the turn recording the line; a held clarify question is pending only after Approve (its ~30 minutes counted from then) and never after Deny.
 - A plain channel, a private thread, or 20 approved: no card, posted at once. A failed run's line, a spend-cap stop and `⏹ Stopped` never wait. The Stop button stops a waiting run: `⏹ Stopped`, nothing posted, the card closed as a no.
 - A thin ack's restatement waits behind a note that is removed on Approve (the restatement keeps its Answer button) or becomes the not-posted line on Deny; an ask pick's answer waits on the stub.
-- `/session start` and `/work` answers in a public thread wait (the typed topic or description on the card); Deny posts only the not-posted line with no pending question; Approve posts exactly the card's text and sets the question pending; outside a public thread nothing waits.
+- `/session start` and `/work` answers in a public thread wait (the typed topic or description on the card, never on the progress message, which shows `PUBLIC_REPLY_PROGRESS_TEXT`); Deny posts only the not-posted line with no pending question; Approve posts exactly the card's text and sets the question pending; outside a public thread nothing waits.
 - The run is stamped `replyPublicThread` true in a waiting public thread and false elsewhere or once 20 were approved; the spawn client writes `1` or empty, never the inherited value; `discord-send-file` asks only with the stamp, under 20, not dry-run, and a denied card attaches nothing.
 - A real `task run` against the fake model answering in a public thread waits for the card and then posts exactly its answer.
 - `tests/discord.public-reply-gate.test.ts` fails on the base sources (17 of 28) and passes on the branch.

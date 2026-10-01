@@ -16,14 +16,14 @@ import { isOwnerDiscord } from "../../identity/owner.ts";
 import { NOT_AUTHORIZED } from "../types.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
 import { finishSlashWithThinking, holdSlashReply, recordSlashStub } from "../slash-finish.ts";
-import { publicReplyNotPostedText } from "../public-reply-gate.ts";
+import { PUBLIC_REPLY_PROGRESS_TEXT, publicReplyNotPostedText } from "../public-reply-gate.ts";
 import { formatTaskPlumbing } from "../../agent/task-summary.ts";
 import { loadLlmEnv } from "../../agent/execute.ts";
 import { SPEND_PAUSED_TEXT } from "../../agent/spend-notice.ts";
 import { openWorkPr, type OpenWorkPrInput } from "../../work/pr.ts";
 import { scrubSecrets } from "../../store/scrub.ts";
 import { ASK_NO_OWNER_WARNING, formatAskReply } from "../ask-ping.ts";
-import { answerAskFor, buttonAskFor, toPendingAsk } from "../ask-buttons.ts";
+import { answerAskFor, askExpiresAt, buttonAskFor, toPendingAsk } from "../ask-buttons.ts";
 import { answerTurnText } from "../session-thread.ts";
 import {
   askNeedsOwner,
@@ -189,9 +189,15 @@ async function runWork(
       })
     : null;
 
+  // AUTONOMY-10 / 10.a (REQ-discord-099): while replies in this public thread
+  // wait for the owner's OK, the typed description waits on the card with
+  // the answer, so the progress message does not echo it;
+  // `discord-send-file` asks there too.
+  const replyPublicThread = (await ctx.publicReplies?.mustHold(interaction.channelId)) ?? false;
+
   if (thinking) {
     await thinking.start({
-      description: `Work: ${description.slice(0, 80)}`,
+      description: replyPublicThread ? PUBLIC_REPLY_PROGRESS_TEXT : `Work: ${description.slice(0, 80)}`,
     });
     // AGENT-3.a: a reply 'stop' / 'cancel' to this progress message, or its
     // Stop button, stops the run.
@@ -226,8 +232,6 @@ async function runWork(
   ctx.store.recordTurn(session, "human", description);
   let result;
   try {
-    // AUTONOMY-10.a: replies in a public thread still wait for the owner's OK.
-    const replyPublicThread = (await ctx.publicReplies?.mustHold(interaction.channelId)) ?? false;
     // Busy while the agent runs: the soft-TTL purge must not park this
     // worktree mid-run (REQ-discord-204).
     result = await ctx.store.runActive(session, () =>
@@ -500,7 +504,13 @@ async function runWork(
     }
     return;
   }
-  if (pendingToSet) ctx.store.setPendingAsk(session, pendingToSet);
+  // DISCORD-ASK-5: a held question's buttons last ~30 minutes from when it
+  // goes out, not from before the owner's OK.
+  if (pendingToSet) {
+    // The same object a stub records later (recordSlashStub), so stamp it in place.
+    if (held.held) pendingToSet.expiresAt = askExpiresAt();
+    ctx.store.setPendingAsk(session, pendingToSet);
+  }
   // AGENT-6 (REQ-discord-072): the answer joins the thread (a button ask as
   // its question and choices); a spend-cap stop records no answer
   // (REQ-discord-098).
