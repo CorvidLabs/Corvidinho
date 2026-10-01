@@ -522,13 +522,9 @@ exists as its own command), `tests/roles.team.test.ts` (REQ-plugins-065:
 `roleAllowsPlugin` over every plugin with the team search rule; the team
 catalog offers `web-search`, the community catalog does not).
 `tests/fledge.plugins.test.ts` keeps the whole tool surface (builtins plus a
-<<<<<<< HEAD
 fake Fledge plugin) under `TOOL_SURFACE_BUDGET_TOKENS` (9000 on main since
 AGENT-18) with `web-search`'s short description (builtins alone: 8078 tokens,
 7951 on main 0aeb345; the reply line adds nothing to any tool schema).
-=======
-fake Fledge plugin) under `TOOL_SURFACE_BUDGET_TOKENS` with `web-search`'s
-short description (builtins alone: 7569 tokens, 7442 on main 507d97b).
 
 ## GIF search through GIPHY (REQ-plugins-3182 added, REQ-plugins-318 / -3181 / -065 / -113 modified, PLUGIN-8 / PLUGIN-9)
 
@@ -600,19 +596,10 @@ that answers like GIPHY's Tenor-compatible search, the fake key
 
 Updated: `tests/roles.team.test.ts` and `tests/web.search.test.ts`
 (REQ-plugins-065: `TEAM_SEARCH_TOOLS` is `gif-search` and `web-search`; the
-<<<<<<< HEAD
-team catalog offers `gif-search`, the community catalog does not).
-`tests/fledge.plugins.test.ts` (REQ-plugins-114, unchanged test) keeps the
-whole tool surface (builtins plus a fake Fledge plugin) under the default
-budget, now 8500: 8076 tokens with `gif-search` on a machine with all three
-language runners (7973 on the slice A base, where 8000 still held).
->>>>>>> 7ae58923 (Add: gif-search through GIPHY for the owner and team (PLUGIN-8, PLUGIN-9))
-=======
 team catalog offers `gif-search`, the community catalog does not;
 REQ-plugins-318: `--query`, `--count` or `--freshness` given twice is a
 usage error). `tests/fledge.plugins.test.ts` (REQ-plugins-114, unchanged
-test and unchanged 8000-token default budget) keeps the whole tool surface
-(builtins plus a fake Fledge plugin) under the budget: `gif-search` adds
-about 92 tokens, and shorter `web-fetch` and `web-search` descriptions (the
-same rules, less wording) make room for it.
->>>>>>> 5cfc3de6 (Fix: gif-search keeps its links plain, says what it left out, posts only when asked, and fits the 8000-token budget)
+test) keeps the whole tool surface (builtins plus a fake Fledge plugin)
+under the default budget of 9000: `gif-search` adds about 92 tokens, and
+shorter `web-fetch` and `web-search` descriptions (the same rules, less
+wording) make room for it.
