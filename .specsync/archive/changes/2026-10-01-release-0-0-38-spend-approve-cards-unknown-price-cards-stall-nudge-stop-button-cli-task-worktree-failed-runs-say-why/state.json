@@ -7,11 +7,11 @@
   "title": "Release 0.0.38: spend approve cards, unknown-price cards, stall nudge, stop button, CLI task worktree, failed runs say why",
   "description": "Release 0.0.38: spend approve cards, unknown-price cards, stall nudge, stop button, CLI task worktree, failed runs say why",
   "kind": "operations",
-  "state": "verifying",
+  "state": "archived",
   "canonical_applied": true,
   "base_commit": "aeb2de3407acd0990897121ac68caf1553be0118",
   "created_at": 1790818044,
-  "updated_at": 1790818058,
+  "updated_at": 1790818398,
   "affected_specs": [
     "cli"
   ],
