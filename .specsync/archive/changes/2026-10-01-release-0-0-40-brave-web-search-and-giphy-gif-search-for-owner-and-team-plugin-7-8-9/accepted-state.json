@@ -7,11 +7,11 @@
   "title": "Release 0.0.40: Brave web-search and GIPHY gif-search for owner and team (PLUGIN-7/8/9)",
   "description": "Release 0.0.40: Brave web-search and GIPHY gif-search for owner and team (PLUGIN-7/8/9)",
   "kind": "operations",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "def494bec1d7969cd494e1576dca67bb3809ca06",
   "created_at": 1790870369,
-  "updated_at": 1790870985,
+  "updated_at": 1790870996,
   "affected_specs": [
     "cli"
   ],
