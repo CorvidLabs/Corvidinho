@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.0.39
+
+### Real dev teammate (M3)
+
+- **Before every PR opens, a second model reviews the diff in bounded rounds, and the PR body lists what it raised and what changed** — [#341](https://github.com/CorvidLabs/Corvidinho/pull/341) (GITHUB-9, GITHUB-9.a; REQ-plugins / work review gate): `github-pr-create` now runs a second-model review gate after the repo gate. The reviewer is the first other configured model (GITHUB-9.a). Bounded rounds; the PR lists findings and what changed. `/work` that is held for review gets reason `not-reviewed` and keeps the branch pushed. Reviewer tokens ride `usageByModel` for the owner's DISCORD-15.a spend footer.
+- **An idle timeout and a turn cap I set stop stalled or endless runs, and it says so** — [#342](https://github.com/CorvidLabs/Corvidinho/pull/342) (AGENT-12; REQ-agent-244, REQ-agent-312, REQ-cli-125, REQ-discord-125, REQ-watch-125, REQ-plugins-125): optional `CORVIDINHO_MAX_TURNS` caps model/tool rounds per execute attempt (default stays 8). Optional `CORVIDINHO_IDLE_TIMEOUT_MS` (default 600000) runs a per-run idle watchdog in `src/agent/limits.ts`. Soft-land stop reasons name idle vs turn-cap; workers and schedules honour the same limits. Docs: `--help`, `.env.example`, DISCORD-GO-LIVE E.10, discord/WATCH/DAEMON.
+- **My local CLI `task run` may use the allowlisted shell, language runners and Fledge lane/task runs inside the worktree it made for itself** — [#346](https://github.com/CorvidLabs/Corvidinho/pull/346) (SAFE-3.a CLI half; REQ-cli-681, REQ-agent-503): completes SAFE-3.a for local CLI. `taskRun` passes the worktree top as `talkWorktree` only when it made its own worktree and there is no role session; `shellToolsGate` grants allowlisted `SAFE3A_TOOLS` there. `--here`, non-git folders and spawned children stay refused. Must-ask (#319) still applies. In-place local runs keep the prior SAFE-3.a refusal line.
+
+### Talk anywhere (M2)
+
+- **Its first 20 replies in a public thread each wait for my OK on an Approve card** — [#347](https://github.com/CorvidLabs/Corvidinho/pull/347) (AUTONOMY-10, AUTONOMY-10.a): public threads (`PublicThread`, `AnnouncementThread`, forum/media posts) hold each of the first 20 replies for the owner's must-ask Approve card — even dictated text and replies to the owner. Clarify asks go pending only after they are posted. `discord-send-file` gets `CORVIDINHO_DISCORD_REPLY_PUBLIC_THREAD` while replies still wait. Stop button, failed-run lines and spend paths do not wait.
+
+### Fixes
+
+- **A failed GitHub (WATCH) run's comment says the model call failed in one plain line, never the provider's raw error body** — [#343](https://github.com/CorvidLabs/Corvidinho/pull/343): spawn client returns `failureReason` / `stderrTail`; summary uses `watchPublicFailureLine` (host stripped). Aligns WATCH with Discord's DISCORD-3.b reason line from 0.0.38.
+- **A failed delegate or council worker hands the lead model one plain failure line, never the model provider's raw error body** — [#349](https://github.com/CorvidLabs/Corvidinho/pull/349) (REQ-agent-117, REQ-agent-118, REQ-watch-009): `workerFailureLine` builds harness text only (timeout / interrupt, result error without provider host via shared `withoutProviderHost`, protocol-mismatch notice, no-provider notice, or `the worker failed (exit N)` / spawn scrub). Lead tool results and council voice transcript entries never carry provider bodies, org names or request ids from a failed worker.
+- **The DISCORD-3.b 401 check masks the run's own random ids, so an id holding `401` no longer fails the test** — [#345](https://github.com/CorvidLabs/Corvidinho/pull/345) (REQ-discord-032): test-only flake fix in `tests/discord.failed-reply.test.ts`.
+
+### Ops
+
+- Package version **0.0.39** — restart the Discord bridge, `corvidinho daemon` and `github watch` after update so presence (DISCORD-12) and spawners pick up the new version and the AGENT-12 / SAFE-3.a / AUTONOMY-10 / GITHUB-9 / plain-failure behaviour. No schema bump; no new slash command; NDJSON protocol stays 2. New optional env: `CORVIDINHO_MAX_TURNS`, `CORVIDINHO_IDLE_TIMEOUT_MS` (#342). Internal stamp `CORVIDINHO_DISCORD_REPLY_PUBLIC_THREAD` is set by the bridge for `discord-send-file` only (#347) — do not export it. v0.0.39 gets its tag and Release from CI when this bump lands on main.
+- Needs operator action: (1) Restart bridge, daemon and `github watch`. (2) Optionally set `CORVIDINHO_MAX_TURNS` / `CORVIDINHO_IDLE_TIMEOUT_MS` if the defaults (8 turns / 10 min idle) are wrong for your box. (3) Local CLI shell (#346): only runs that made their own worktree get `SAFE3A_TOOLS` when allowlisted; `--here` still has no shell.
+- Rollback to 0.0.38: schema unchanged. 0.0.38 ignores the new env knobs and the public-thread reply gate; failed workers / WATCH comments may again surface provider bodies; local CLI has no SAFE-3.a shell; PRs open without the second-model review gate.
+
 ## 0.0.38
 
 ### Talk anywhere (M2)

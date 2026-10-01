@@ -180,6 +180,16 @@ describe("update-helpers.sh", () => {
     }
   });
 
+  test("extract_changelog_section finds 0.0.39", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.39`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("GITHUB-9");
+    expect(r.stdout).toContain("AGENT-12");
+    expect(r.stdout).not.toContain("## 0.0.38");
+  });
+
   test("extract_changelog_section finds 0.0.38", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.38`,

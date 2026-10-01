@@ -1,0 +1,43 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790866812,
+      "digest": "6a3eeca97bd6c3036250665e24de42a631bf1f3cfcc6937e4f25f9789118096a",
+      "note": "keep-drive eager release 0.0.39 for ships #341–#349",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "release-0-0-39-pr-second-model-review-idle-and-turn-caps-cli-shell-in-worktree-public-thread-approve-cards-plain-worker",
+        "title": "Release 0.0.39: PR second-model review, idle and turn caps, CLI shell in worktree, public-thread approve cards, plain worker and WATCH failure lines",
+        "description": "Release 0.0.39: PR second-model review, idle and turn caps, CLI shell in worktree, public-thread approve cards, plain worker and WATCH failure lines",
+        "kind": "operations",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "package.json 0.0.39; version prints 0.0.39; CHANGELOG 0.0.39 extractable; STATUS rows"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "e7f8a592e2f0a4e572878fa46d5566d4962d37e3272513455cc1f3acde05f035"
+      }
+    }
+  ],
+  "reopenings": []
+}
