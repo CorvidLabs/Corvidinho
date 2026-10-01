@@ -516,6 +516,32 @@ removes the shell from attempt 2; an allowlist without the six runs no gate.
   `agent.safe3a-owner-shell` tests fail (the no-gate guard passes) and the
   renamed `SAFE3A_TOOLS` test fails; all pass on the branch.
 
+## The local CLI half of the shell grant (REQ-agent-503 modified, REQ-cli-681; SAFE-3.a)
+
+- `tests/agent.safe3a-gate.test.ts` › "refused: delegate and council workers
+  (depth > 0) and a run with no role session outside its own CLI worktree" —
+  no role session with a Discord session id and stamp is refused as a spawn
+  (`… this one carries a Discord session or surface stamp`); a plain local
+  run with no worktree of its own is refused with `a local CLI run gets them
+  only in the new worktree it made for itself, not with --here or outside a
+  git repo`.
+- `tests/agent.safe3a-owner-shell.test.ts` › "WATCH, a schedule, a delegate
+  worker and a local CLI run: refused" — the local run (no role session, no
+  session id, no stamp, no `talkWorktree`) is not offered `shell-exec` and
+  gets that line.
+- `tests/cli.safe3a-shell.test.ts` (REQ-cli-681) holds the CLI rows of the
+  gate (granted at the top of the run's own worktree, through a symlink too;
+  refused in place, in a subdirectory, the main checkout, another worktree, a
+  non-git folder, a look-alike, a missing dir, for workers, WATCH, schedules,
+  a spawn without a role session, and for a role session whatever
+  `talkWorktree` says), `createTaskExecute` with `talkWorktree`, and the real
+  CLI.
+- Fail on base: with the base's (b84c75f) `src/agent/shell-gate.ts`,
+  `src/agent/execute.ts` and `src/cli.ts` swapped in, both adjusted cases
+  fail (the old reason) and `tests/cli.safe3a-shell.test.ts` cannot load
+  (`isCliRunWorktree` is missing); with that export stubbed, 10 of its 11
+  fail (the role-session guard passes on the base too). Restored, all pass.
+
 ## The owner's own schedule: no Fledge discovery, a no ends the run with an ask (REQ-agent-741; DISCORD-SCHEDULE-1.a)
 
 `tests/agent.allowlisted-dangerous.test.ts` ("the owner's own scheduled run
@@ -707,8 +733,9 @@ Unchanged suites that cover the touched files pass: `tests/agent.spend.test.ts`,
   task run --here, --task last" — `buildDelegateSpawn` argv is `task run
   --here --non-interactive --tier <t> --output ndjson --task <text>`.
 - `tests/agent.safe3a-gate.test.ts` / `tests/agent.safe3a-owner-shell.test.ts`
-  — a run with no role session is refused with `a local CLI run has no role
-  session (the CLI half of SAFE-3.a is not built yet)`.
+  — a run with no role session was refused with `a local CLI run has no role
+  session (the CLI half of SAFE-3.a is not built yet)`; the local CLI half
+  (REQ-cli-681, below) replaced that reason.
 - Spawned `task run` tests that run in a talk worktree or temp repo pass
   `--here` (`agent.cli`, `agent.verify-gate`, `agent.test-evidence`,
   `agent.ndjson-spawn`, `agent.stall-nudge`, `agent.spend-ask`,

@@ -35,7 +35,8 @@ export type OpenAiToolDef = {
  * cwd is a start dir, not a clamp: a lane or task runs whatever commands the
  * project gives it). The allowlist offers them only to an attempt that
  * `shellToolsGate` (src/agent/shell-gate.ts) granted: the owner's own chat,
- * `/session start`, `/work` or ask answer, inside that talk's own worktree.
+ * `/session start`, `/work` or ask answer, inside that talk's own worktree,
+ * or a local `task run` at the top of the worktree it made for itself.
  * `includeDangerous` (a test seam) still offers them.
  */
 export const SAFE3A_TOOLS: ReadonlySet<string> = new Set([

@@ -52,6 +52,14 @@ has commits of its own; one with changes is kept and named (stderr, and `result.
 `--here`, which runs it in the current checkout as before. Outside a git repo it works in the
 folder itself.
 
+The shell, the language runners and the Fledge lane/task runs (`shell-exec`, `node-exec` /
+`python-exec` / `cargo-exec`, `fledge-lanes-run`, `fledge-run`) are offered to the model in a
+local run only inside that new worktree, and only when `CORVIDINHO_ALLOWLIST` names them at code
+tier (SAFE-3.a). With `--here`, outside a git repo or from a subdirectory of the repo they are
+not offered, and the run prints one `[operator] SAFE-3.a: … allowlisted but not offered: <why>`
+line. A prod or deploy command still waits for the owner's Approve card; with no Discord bridge
+running nobody answers it, so it lapses as a no and the run says so.
+
 ### Turn cap and idle timeout (AGENT-12)
 
 Two optional limits stop endless or stalled runs on every surface (CLI, Discord, WATCH,

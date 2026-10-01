@@ -367,6 +367,15 @@ export type CreateTaskExecuteOpts = {
    */
   includeDangerous?: boolean;
   /**
+   * SAFE-3.a, local CLI half (REQ-cli-681): the top of the linked worktree a
+   * local `task run` made for this run (SESSION-WORKTREE-1.a, REQ-cli-122).
+   * Only `taskRun` sets it, for a run with no role session; the gate then
+   * offers the allowlisted shell, runners and Fledge core runs when the cwd
+   * is exactly that worktree. Unset, a local run (`--here`, a non-git folder)
+   * is refused.
+   */
+  talkWorktree?: string;
+  /**
    * SAFE-9: offer autonomous extras (`delegate`). Default: the project enabled
    * autonomous mode (AUTONOMOUS-1) and the delegation depth cap is not reached.
    */
@@ -850,11 +859,12 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
     }
     // SAFE-3.a: the allowlisted shell, runners and Fledge core runs only in
     // the owner's own chat, /session start, /work or ask answer, inside that
-    // talk's own worktree; role, surface and cwd re-read for every attempt.
+    // talk's own worktree, or a local CLI run in the worktree it made for
+    // itself (REQ-cli-681); role, surface and cwd re-read for every attempt.
     // A refusal is one operator Text line per run, never reply text.
     let safe3a = false;
     if (safe3aNamed.length > 0 && !includeDangerous) {
-      const verdict = await shellToolsGate({ env, cwd });
+      const verdict = await shellToolsGate({ env, cwd, talkWorktree: opts.talkWorktree });
       safe3a = verdict.granted;
       if (!verdict.granted && !safe3aNoted) {
         safe3aNoted = true;

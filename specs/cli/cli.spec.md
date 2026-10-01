@@ -29,6 +29,7 @@ files:
   - tests/ops.backup-wiring.test.ts
   - src/worktree/cli-run.ts
   - tests/cli.task-worktree.test.ts
+  - tests/cli.safe3a-shell.test.ts
 
 db_tables: []
 depends_on:
@@ -175,6 +176,8 @@ Nightly backup (OPS-1/2, REQ-cli-680, `src/store/backup.ts`): with `CORVIDINHO_B
 
 `task run` in a git repo works in its own worktree by default and `--here` runs it in the current checkout (SESSION-WORKTREE-1.a, REQ-cli-122): `enterCliTaskWorkspace` keeps a `--here` run (the flag read only from `task run`'s own args before `--`, never `--task` text), a non-git directory (AGENT-1.a) and a child a product surface spawned (role session, WATCH or Discord session id, delegation depth > 0; never a nested worktree) in place, and otherwise makes a linked worktree from `HEAD` with `ensureTalkWorkspace` from the realpath repo top (`WORKTREE_BASE_DIR` or `dirname(repoTop)/.corvid-worktrees`, `talk-cli_<uuid prefix>-<digest>`, branch `talk/cli_…`) and runs (and `chdir`s) in the same subdirectory. Nothing is copied or installed there; the first event says so and names `--here`. Creation fails closed (exit 1, one scrubbed line, hint `pass --here to run in this checkout`; never the checkout) and a signal while it is made gives 130 with nothing left. At run end a clean worktree is removed and its branch deleted only when it has no own commits; anything kept is named on stderr and in the optional additive `TaskResult.workspace` (`--json` / ndjson; protocol unchanged). The Discord, WATCH, delegate and council spawners pass `--here`.
 
+A local `task run` gets the allowlisted shell, language runners and Fledge lane/task runs only in the worktree it made for itself (SAFE-3.a, local CLI half, REQ-cli-681): `taskRun` passes `talkWorktree` (the worktree's top, `ws.dir`) to `createTaskExecute` only when `enterCliTaskWorkspace` made this run's own worktree and the process has no role session, never from the env; the agent's `shellToolsGate` then grants a run with no role session only when it carries no Discord session id and no `CORVIDINHO_ACTING_SURFACE` stamp and its cwd, through symlinks, is exactly that worktree and a linked talk worktree whose admin dir points back at it (`isCliRunWorktree`). `--here`, a non-git folder (no worktree is made), a start in a repo subdirectory (the run's cwd is that subdirectory of the worktree), WATCH, schedules and delegate or council workers stay withheld with one `[operator] SAFE-3.a: … allowlisted but not offered: <why>` line per run (stderr in text mode, a `Text` event / frame in `--json` / ndjson). The local operator is the owner (no role session); the allowlist (`CORVIDINHO_ALLOWLIST`) and code tier still decide, and every call still goes through `runPlugin` (SAFE-1, the must-ask card for prod and deploy commands, SAFE-5 audit) and the tools' own clamp, foot-gun refusals and credential-free env. With no bridge running nobody answers the card, so it lapses as a no and the run's output says why. No new env var, flag, config key, table or protocol change.
+
 ## Behavioral Examples
 
 ### Scenario: A task run in a git repo
@@ -182,6 +185,12 @@ Nightly backup (OPS-1/2, REQ-cli-680, `src/store/backup.ts`): with `CORVIDINHO_B
 - **Given** a git checkout with an uncommitted edit, started in its `sub` directory
 - **When** the operator runs `corvidinho task run --task "…"` (no `--here`)
 - **Then** it says it works in a new worktree made from HEAD without the checkout's uncommitted and untracked files, the run's edits land there and not in the checkout, and at the end a worktree with changes is kept and named (a clean one is removed with its branch); `--here` runs it in the checkout instead
+
+### Scenario: A local task run uses the allowlisted shell in its own worktree
+
+- **Given** `CORVIDINHO_ALLOWLIST=shell-exec`, `CORVIDINHO_LLM_TIER=code` and a git checkout
+- **When** the operator runs `corvidinho task run --task "…"` (no `--here`) at the repo top and the model calls `shell-exec`
+- **Then** it is offered and runs in the run's own new worktree, not the checkout; with `--here`, outside a git repo or from a subdirectory it is not offered, the call is refused and one `[operator] SAFE-3.a` line says why; a prod command still raises the must-ask card, which lapses as a no with no bridge running (REQ-cli-681)
 
 ### Scenario: Github watch missing token
 
@@ -259,6 +268,7 @@ Nightly backup (OPS-1/2, REQ-cli-680, `src/store/backup.ts`): with `CORVIDINHO_B
 | Task verify exhausted | Exit 1; JSON verified false |
 | `task run` in a git repo whose worktree can't be made (unborn HEAD, git error such as a failing post-checkout hook, unusable `WORKTREE_BASE_DIR`) or lacks the start subdir | `corvidinho: task run could not make its worktree: …` / `task run's worktree has no <subdir>: …` + `hint: pass --here to run in this checkout`; exit 1; no model call; nothing left; `--json` → `{ok:false,error}` (REQ-cli-122) |
 | `task run` gets SIGINT / SIGTERM while its worktree is made | `corvidinho: cancelled while making the task worktree`; exit 130; no model call; the worktree and branch removed (REQ-cli-122) |
+| `task run` with `shell-exec`, a runner, `fledge-lanes-run` or `fledge-run` allowlisted, run with `--here`, outside a git repo, from a repo subdirectory, or with a Discord session id or surface stamp but no role session | Not offered to the model; its call is refused as not offered; one `[operator] SAFE-3.a: … allowlisted but not offered: <why>` line per run, never in the reply (REQ-cli-681) |
 | `task run`'s own worktree has uncommitted changes (or git can't read it) at the end | Kept with its branch, never force-removed; `Kept worktree <dir> (branch <b>): …` on stderr; `result.workspace.kept` true (REQ-cli-122) |
 | Task run gets SIGINT / SIGTERM | Run aborted (verify lane and tool loop stopped); cancelled result printed (ndjson `result` frame); exit 130 |
 | Task run started with SIGINT ignored (background job) | SIGINT stays ignored; SIGTERM still cancels (exit 130) |
@@ -279,7 +289,7 @@ Nightly backup (OPS-1/2, REQ-cli-680, `src/store/backup.ts`): with `CORVIDINHO_B
 
 Consumes plugins module for loadBuiltins/list/size/runPlugin/helpers.
 Consumes agent module for runTask / loadAgentConfig.
-`src/worktree/cli-run.ts` (REQ-cli-122) uses the discord module's worktree helpers (`ensureTalkWorkspace`, `isGitRepo`, `parkWorktree`, `removeWorktree`, `branchExists`, `branchHasOwnCommits`, `deleteBranch`), `roleSessionActive` (plugins) and `delegateDepthFromEnv` (agent).
+`src/worktree/cli-run.ts` (REQ-cli-122) uses the discord module's worktree helpers (`ensureTalkWorkspace`, `isGitRepo`, `parkWorktree`, `removeWorktree`, `branchExists`, `branchHasOwnCommits`, `deleteBranch`), `roleSessionActive` (plugins) and `delegateDepthFromEnv` (agent). `taskRun` hands that worktree to the agent's SAFE-3.a gate as `createTaskExecute`'s `talkWorktree` (REQ-cli-681).
 Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), allowlist/config helpers, spawn agent client and protocol check, plus the shared store (`openCorvidinhoDb`, `resolveDataDir`, `scrubSecrets`).
 `src/store/backup.ts` uses the shared store (`migrateCorvidinhoDb`, `SCHEMA_VERSION`, `ensureScrubbed`, `formatErrorLine`, `scrubSecrets`) and the daemon lock helpers (`daemonLockPath`, `isHolderAlive`); the scheduler (`SchedulerServiceOpts.backup`) runs its ticker in the daemon and the bridge.
 

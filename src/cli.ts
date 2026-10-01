@@ -79,6 +79,7 @@ import { allowlistFromEnv, isNonInteractive } from "./plugins/env.ts";
 import { forwardedSignals } from "./plugins/proc-group.ts";
 import { get, list, size } from "./plugins/registry.ts";
 import { setMustAskNotifier } from "./plugins/must-ask.ts";
+import { roleSessionActive } from "./plugins/roles.ts";
 import { PluginNotFoundError, runPlugin } from "./plugins/run.ts";
 import {
   formatPluginsListText,
@@ -140,6 +141,8 @@ Usage:
                                     In a git repo it works in its own new worktree made from HEAD (uncommitted and
                                     untracked files are not in it); a clean one is removed at the end, one with
                                     changes is kept and named. --here runs it in this checkout (SESSION-WORKTREE-1.a)
+                                    shell-exec, the runners and fledge-run / fledge-lanes-run, when allowlisted at code
+                                    tier, are offered only in that new worktree, never with --here (SAFE-3.a)
                                     A turn cap and an idle timeout stop endless or stalled runs and say so
                                     (CORVIDINHO_MAX_TURNS / CORVIDINHO_IDLE_TIMEOUT_MS below, AGENT-12)
   corvidinho --non-interactive ...  Deny dangerous plugins unless allowlisted (SAFE-1 / CLI-3)
@@ -961,6 +964,11 @@ async function taskRun(opts: {
         ndjson,
         signal: abort.signal,
         beforeReport: finish,
+        // SAFE-3.a, local CLI half (REQ-cli-681): the worktree this run made
+        // for itself, so the gate may offer the allowlisted shell, runners
+        // and Fledge runs there; never for a role session (a spawned child
+        // never gets here, it stays in place).
+        ...(roleSessionActive(process.env) ? {} : { talkWorktree: ws.dir }),
       });
     } finally {
       await finish();
@@ -988,6 +996,11 @@ async function taskRunIn(
     signal: AbortSignal;
     /** Runs after the run ends and before the result is printed (REQ-cli-122). */
     beforeReport?: () => Promise<TaskWorkspaceReport | undefined>;
+    /**
+     * SAFE-3.a (REQ-cli-681): the top of the worktree `taskRun` made for this
+     * run; unset in place (`--here`, not a git repo, a spawned child).
+     */
+    talkWorktree?: string;
   },
 ): Promise<number> {
   const { events, handleEvent, quiet, json, ndjson } = io;
@@ -1016,6 +1029,7 @@ async function taskRunIn(
     tier: opts.tier,
     nonInteractive: opts.nonInteractive,
     allowlist: allowlistFromEnv(),
+    ...(io.talkWorktree ? { talkWorktree: io.talkWorktree } : {}),
     onEvent: handleEvent,
     // AGENT-11: usage per model rides the usage frames and the result, so
     // each model is priced at its own price.
