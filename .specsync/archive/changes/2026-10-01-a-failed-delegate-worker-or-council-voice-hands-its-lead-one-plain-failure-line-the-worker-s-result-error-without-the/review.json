@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "a-failed-delegate-worker-or-council-voice-hands-its-lead-one-plain-failure-line-the-worker-s-result-error-without-the",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "fdee0d8c0fa80d98e1fd71e8b2983cf0eb0715f3",
+  "contract_digest": "14d6d570302ff5ca4bd5c3b294d9195ee5cf6e53ad5832dbc574cc9ec5a93a6a",
+  "execution_digest": "1795dc99f370df9499b0d1776bb306b55caf2783bbad11dd43430eca25c6bdbe",
+  "workspace_digest": "db372a4322bde668b7062706da037174e0069c3a20584a42b2ef851bb511c502",
+  "timestamp": 1790866031
+}

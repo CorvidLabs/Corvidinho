@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "a-failed-delegate-worker-or-council-voice-hands-its-lead-one-plain-failure-line-the-worker-s-result-error-without-the",
+  "implementation_commit": "fdee0d8c0fa80d98e1fd71e8b2983cf0eb0715f3",
+  "implementation_tree": "4f8846d2e026d641be3f928c852c8650f09ed811",
+  "contract_digest": "14d6d570302ff5ca4bd5c3b294d9195ee5cf6e53ad5832dbc574cc9ec5a93a6a",
+  "workspace_digest": "db372a4322bde668b7062706da037174e0069c3a20584a42b2ef851bb511c502",
+  "closing_digest": "ac34e33ed043a045886b0598cf6699c994e66fdc177462a248fdc5a243f9071d",
+  "review_digest": "09a4f986ee55ba98b406d93f338dd3dd66d48ad4d66482cd028e577c43b9a4ff",
+  "finalization_digest": "c3d5a01cc63cc7c41ac74aa8563c8ea923975c9ff932f321474faadfe795a92e",
+  "timestamp": 1790866044
+}
