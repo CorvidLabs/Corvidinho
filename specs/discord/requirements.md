@@ -4029,6 +4029,7 @@ Acceptance Criteria
 - A team member's failed run answers `That didn't work — the owner has been told.` and the owner gets exactly one DM per reason per hour naming the surface and channel; with the DM failing, no owner or no DM path the answer is `That didn't work.`.
 - A key and a multi-line stack in stderr reach the owner as one scrubbed line with no host path; with no provider the owner sees the AGENT-10 notice.
 - Every failure logs `[discord] run failed (<surface>, exit N): <reason>` (`[scheduler] run failed (schedule <id>, exit N): …`).
+- `tests/discord.failed-reply.test.ts` checks that a team member's failed `/session start` and `/work` reply, and someone else's failed schedule post, never show the reason's `401` with the run's own random ids (session, work-task and schedule ids, and the worktree path made from the session id) masked: those ids are random hex from `crypto.randomUUID` and contain `401` by chance in about 1 run in 100 (a v4 UUID's 13th hex digit is always `4`), which is not the reason reaching the reply. Those tests make every `crypto.randomUUID` start with `401`, so the ids carry it every run.
 
 ### REQ-discord-125
 

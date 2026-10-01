@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "a-team-member-s-failed-session-or-work-reply-and-someone-else-s-failed-schedule-post-is-checked-for-the-reason-s-401",
+  "implementation_commit": "dc4d4a5e1813c88497a81f8d26d1fa85cc6b0f9d",
+  "implementation_tree": "f06393eb562b61cebd52462063fb5a0416f55e5b",
+  "contract_digest": "5d428723843ca83dd02cf24ae7db7ead936916fdc340448112da077bba06314d",
+  "workspace_digest": "90cf2a0dacbeb2a241fd6a759c84b66d37a980328f4a35cb8eabf0ca1d9bc1cc",
+  "closing_digest": "abf31577c29625a035c2bb9660fa36764ad6a7dde5a60a91b7e33aded91329c5",
+  "review_digest": "5597808525c564190361355aeb840b3de1c08cae32e0731ef4502cb5f2618099",
+  "finalization_digest": "41fe3ed2b92c99f93fd194978b2757d340b7255af7e84a0c14c0298910b623e9",
+  "timestamp": 1790826584
+}
