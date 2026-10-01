@@ -315,13 +315,16 @@ describe("SAFE-3.a: everywhere else the shell stays out, with one operator line"
     await refused((t) => t.work, { [SURFACE]: "watch" }, "only the owner's chat, /session start, /work and their ask answers get them (this run: watch)");
     await refused((t) => t.work, { [SURFACE]: "schedule", CORVIDINHO_DISCORD_SESSION_ID: `schedule_${SID}` }, "scheduled runs never get them");
     await refused((t) => t.work, { CORVIDINHO_DELEGATE_DEPTH: "1" }, "a delegate or council worker never gets them");
+    // A local CLI run (no role session, nothing spawned it) given no worktree
+    // of its own (--here): the CLI half only offers them in that worktree
+    // (REQ-cli-681, tests/cli.safe3a-shell.test.ts).
     const talk = await ownerTalk();
-    delete process.env.CORVIDINHO_ACTING_IS_ADMIN;
+    for (const k of ["CORVIDINHO_ACTING_IS_ADMIN", "CORVIDINHO_DISCORD_SESSION_ID", SURFACE]) delete process.env[k];
     const run = execute(talk.work, [RUN_IT]);
     await run.attempt(1);
     expect(run.seen.offered[0]).not.toContain("shell-exec");
     expect(texts(run.events)).toContain(
-      "[operator] SAFE-3.a: shell-exec allowlisted but not offered: a local CLI run has no role session (the CLI half of SAFE-3.a is not built yet)",
+      "[operator] SAFE-3.a: shell-exec allowlisted but not offered: a local CLI run gets them only in the new worktree it made for itself, not with --here or outside a git repo",
     );
   });
 

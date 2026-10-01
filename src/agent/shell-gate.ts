@@ -2,22 +2,28 @@
  * SAFE-3.a (#83, #124): who is offered the shell, the language runners and
  * the Fledge core runs ({@link SAFE3A_TOOLS}).
  *
- * The model gets them only in the owner's own interactive runs, only when the
- * run's allowlist names them (SAFE-1 / CLI-3; the tier still filters, so they
- * need code tier), and only inside that talk's own worktree. Non-owners, WATCH
- * and schedules never get them. {@link shellToolsGate} decides this for one
- * execute attempt and re-reads everything on each attempt:
+ * The model gets them only in the owner's own interactive runs (chat,
+ * `/session start`, `/work`, the local CLI), only when the run's allowlist
+ * names them (SAFE-1 / CLI-3; the tier still filters, so they need code tier),
+ * and only inside that talk's own worktree. Non-owners, WATCH and schedules
+ * never get them. {@link shellToolsGate} decides this for one execute attempt
+ * and re-reads everything on each attempt:
  *
  * - a delegate or council worker (delegation depth > 0) never gets them;
- * - a run with no role session (the local CLI) is refused, whether it works
- *   in its own worktree (REQ-cli-122) or with `--here` in the checkout (the
- *   CLI half of SAFE-3.a comes later);
  * - a WATCH run (`CORVIDINHO_WATCH_SESSION_ID`) or a scheduled run
  *   (`isScheduleRunEnv`) is refused whatever its stamp says;
- * - the surface stamp ({@link ACTING_SURFACE_ENV}, always overwritten by the
- *   spawning client) must be `chat`, `ask`, `session` or `work`
- *   ({@link SAFE3A_SURFACES}); `watch`, `schedule`, an unknown value and no
- *   stamp are refused;
+ * - a run with no role session is the local CLI (REQ-cli-681): it gets them
+ *   only when nothing spawned it (no Discord session id, no surface stamp,
+ *   not started from inside a tool: no {@link TOOL_CHILD_ENV})
+ *   and its cwd is the top of the linked worktree `task run` made for this
+ *   run (`talkWorktree`, SESSION-WORKTREE-1.a / REQ-cli-122), which only
+ *   `taskRun` passes, in-process, never from the env; `--here`, a non-git
+ *   folder and a subdirectory are refused. The local operator is the owner
+ *   (no role session to check);
+ * - otherwise (a role session) the surface stamp ({@link ACTING_SURFACE_ENV},
+ *   always overwritten by the spawning client) must be `chat`, `ask`,
+ *   `session` or `work` ({@link SAFE3A_SURFACES}); `watch`, `schedule`, an
+ *   unknown value and no stamp are refused;
  * - the acting role, re-resolved now in the tool layer the way `runPlugin`
  *   resolves it (IDENTITY-12: owner match, bridge bit, not muted or
  *   deny-listed), must be the owner;
@@ -84,11 +90,36 @@ export function isOwnTalkWorktree(cwd: string, sessionId: string): boolean {
   if (!id) return false;
   try {
     const top = realpathSync(cwd);
-    if (basename(top) !== talkWorktreeId(id)) return false;
-    const gitDir = talkWorktreeGitDir(top);
-    if (!gitDir) return false;
-    const back = readFileSync(join(gitDir, "gitdir"), "utf8").trim();
-    return Boolean(back) && realpathSync(resolve(gitDir, back)) === join(top, ".git");
+    return basename(top) === talkWorktreeId(id) && isLinkedTalkTop(top);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * True when `top` (a realpath) is the top of a linked talk worktree: its git
+ * admin dir is a `worktrees/talk-*` dir and that dir's `gitdir` file points
+ * back at this directory. Throws on an unreadable admin dir (callers catch).
+ */
+function isLinkedTalkTop(top: string): boolean {
+  const gitDir = talkWorktreeGitDir(top);
+  if (!gitDir) return false;
+  const back = readFileSync(join(gitDir, "gitdir"), "utf8").trim();
+  return Boolean(back) && realpathSync(resolve(gitDir, back)) === join(top, ".git");
+}
+
+/**
+ * SAFE-3.a, local CLI half (REQ-cli-681): true when `cwd`, resolved through
+ * symlinks, is exactly `worktree` (the linked worktree `task run` made for
+ * this run, REQ-cli-122) and that is a linked talk worktree whose admin dir
+ * points back at it. A subdirectory, the main checkout, a non-git folder or
+ * any other worktree is false. Never throws.
+ */
+export function isCliRunWorktree(cwd: string, worktree: string): boolean {
+  if (!worktree.trim()) return false;
+  try {
+    const top = realpathSync(cwd);
+    return top === realpathSync(worktree) && isLinkedTalkTop(top);
   } catch {
     return false;
   }
@@ -96,19 +127,23 @@ export function isOwnTalkWorktree(cwd: string, sessionId: string): boolean {
 
 /**
  * SAFE-3.a: may this attempt offer the allowlisted {@link SAFE3A_TOOLS}?
- * Re-reads the delegation depth, the surface stamp, the run markers, the
- * acting role and the cwd on every call. Never throws; any doubt refuses.
+ * Re-reads the delegation depth, the run markers, the role session, the
+ * surface stamp, the acting role and the cwd on every call. Never throws; any
+ * doubt refuses.
  */
 export async function shellToolsGate(opts: {
   env: NodeJS.ProcessEnv;
   cwd: string;
+  /**
+   * The top of the linked worktree a local `task run` made for this run
+   * (REQ-cli-681). Read only for a run with no role session; only `taskRun`
+   * sets it, in-process.
+   */
+  talkWorktree?: string;
 }): Promise<ShellToolsVerdict> {
   const { env, cwd } = opts;
   if (delegateDepthFromEnv(env) > 0) {
     return { granted: false, reason: "a delegate or council worker never gets them" };
-  }
-  if (!roleSessionActive(env)) {
-    return { granted: false, reason: "a local CLI run has no role session (the CLI half of SAFE-3.a is not built yet)" };
   }
   if ((env.CORVIDINHO_WATCH_SESSION_ID ?? "").trim()) {
     return { granted: false, reason: "WATCH runs never get them" };
@@ -116,6 +151,7 @@ export async function shellToolsGate(opts: {
   if (isScheduleRunEnv(env)) {
     return { granted: false, reason: "scheduled runs never get them" };
   }
+  if (!roleSessionActive(env)) return localCliVerdict(env, cwd, opts.talkWorktree);
   const surface = actingSurface(env);
   if (!surface || !SAFE3A_SURFACES.has(surface)) {
     return {
@@ -134,6 +170,56 @@ export async function shellToolsGate(opts: {
   }
   if (!isOwnTalkWorktree(cwd, env.CORVIDINHO_DISCORD_SESSION_ID ?? "")) {
     return { granted: false, reason: "the run is not in this talk's own worktree" };
+  }
+  return { granted: true };
+}
+
+/**
+ * Env key every tool child carries: `shell-exec` and the runners
+ * (`runnerChildEnv`), the Fledge core runs (`fledgeCoreChildEnv`) and Fledge
+ * plugin commands (plugins/fledge/spawn.ts) set it to the project root for
+ * nested tools. The local CLI half reads it as "a tool started this process".
+ */
+export const TOOL_CHILD_ENV = "CORVIDINHO_PROJECT_ROOT";
+
+/**
+ * SAFE-3.a, local CLI half (REQ-cli-681): a run with no role session gets
+ * them only as a local `task run` nothing spawned, in the worktree it made
+ * for itself. Every product spawn sets a role session, so a Discord session
+ * id or a surface stamp here means a spawn without one: refused. A `task run`
+ * the model starts from a granted shell, a runner or a Fledge run (its env
+ * carries {@link TOOL_CHILD_ENV}) is the model's run, not my own interactive
+ * one, so it is refused too (its worktree would sit outside the parent talk's
+ * worktree). A tool child that strips that key itself is the SAFE-3 residual
+ * of the runners' own code (they run as the operator's user).
+ */
+function localCliVerdict(
+  env: NodeJS.ProcessEnv,
+  cwd: string,
+  talkWorktree: string | undefined,
+): ShellToolsVerdict {
+  if ((env.CORVIDINHO_DISCORD_SESSION_ID ?? "").trim() || (env[ACTING_SURFACE_ENV] ?? "").trim()) {
+    return {
+      granted: false,
+      reason:
+        "a run with no role session gets them only as a local CLI run, and this one carries a Discord session or surface stamp",
+    };
+  }
+  if (env[TOOL_CHILD_ENV] !== undefined) {
+    return {
+      granted: false,
+      reason: "a run started from inside a tool (the shell, a runner or a Fledge run) never gets them",
+    };
+  }
+  if (!talkWorktree?.trim()) {
+    return {
+      granted: false,
+      reason:
+        "a local CLI run gets them only in the new worktree it made for itself, not with --here or outside a git repo",
+    };
+  }
+  if (!isCliRunWorktree(cwd, talkWorktree)) {
+    return { granted: false, reason: "the run is not at the top of the worktree this CLI run made for itself" };
   }
   return { granted: true };
 }

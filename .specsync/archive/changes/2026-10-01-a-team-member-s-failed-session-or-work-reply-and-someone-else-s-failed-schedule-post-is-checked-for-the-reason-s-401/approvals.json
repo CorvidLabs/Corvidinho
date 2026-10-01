@@ -1,0 +1,46 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790824971,
+      "digest": "5d428723843ca83dd02cf24ae7db7ead936916fdc340448112da077bba06314d",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "a-team-member-s-failed-session-or-work-reply-and-someone-else-s-failed-schedule-post-is-checked-for-the-reason-s-401",
+        "title": "A team member's failed /session or /work reply, and someone else's failed schedule post, is checked for the reason's 401 with the run's own random ids masked, so an id that happens to contain 401 no longer fails the DISCORD-3.b test",
+        "description": "A team member's failed /session or /work reply, and someone else's failed schedule post, is checked for the reason's 401 with the run's own random ids masked, so an id that happens to contain 401 no longer fails the DISCORD-3.b test",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "tests/discord.failed-reply.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "tests/discord.failed-reply.test.ts checks that a team member's failed /session start and /work reply, and someone else's failed schedule post, never show the reason's 401 with the run's own random ids (session, work-task and schedule ids, and the worktree path) masked, so an id that happens to contain 401 no longer fails the test: with every crypto.randomUUID in those tests made to start with 401 the old bare check fails 90 of 90 runs and the new check passes; with natural random ids the /session and /work tests that failed 13 of 1200 runs on main (CI run 36805663978 failed on sess_e096e6401b2c480a) pass 1200 of 1200; no product code changes and the full suite passes"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "0be94e6900bf8f955b1b89b8855c9ad78748e3fc83c071bb2d176d21c31462e7"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790826583,
+      "digest": "abf31577c29625a035c2bb9660fa36764ad6a7dde5a60a91b7e33aded91329c5",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

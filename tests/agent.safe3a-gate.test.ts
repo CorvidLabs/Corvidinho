@@ -2,8 +2,9 @@
  * SAFE-3.a (#83, #124, REQ-agent-503): `shellToolsGate` decides whether an
  * execute attempt may be offered the allowlisted shell, language runners and
  * Fledge core runs. Only the owner's own chat, `/session start`, `/work` or
- * ask answer, inside that talk's own linked worktree; never a local CLI run
- * (no per-run talk worktree yet), a delegate or council worker, WATCH, a
+ * ask answer, inside that talk's own linked worktree; never a run with no
+ * role session outside the worktree a local CLI run made for itself (those
+ * rows: tests/cli.safe3a-shell.test.ts), a delegate or council worker, WATCH, a
  * schedule, a non-owner, a muted or deny-listed owner, the main checkout,
  * another talk's worktree, a subdirectory or a non-git scoped dir.
  *
@@ -196,14 +197,28 @@ describe("SAFE-3.a gate: who gets the shell, runners and Fledge runs (REQ-agent-
     await refused(ownerChatEnv(f, { CORVIDINHO_ALLOWLIST_FILE: empty, CORVIDINHO_OWNER_DISCORD_ID: undefined }));
   });
 
-  test("refused: delegate and council workers (depth > 0) and the local CLI (no role session)", async () => {
+  test("refused: delegate and council workers (depth > 0) and a run with no role session outside its own CLI worktree", async () => {
     const f = await fixture();
     for (const depth of ["1", "2", "junk"]) {
       const v = await shellToolsGate({ env: ownerChatEnv(f, { [DELEGATE_DEPTH_ENV]: depth }), cwd: f.own });
       expect(v).toEqual({ granted: false, reason: "a delegate or council worker never gets them" });
     }
-    const cli = await shellToolsGate({ env: ownerChatEnv(f, { CORVIDINHO_ACTING_IS_ADMIN: undefined }), cwd: f.own });
-    expect(cli).toEqual({ granted: false, reason: "a local CLI run has no role session (the CLI half of SAFE-3.a is not built yet)" });
+    // No role session but a Discord session id and stamp: a spawn, never the local CLI (REQ-cli-681).
+    const spawned = await shellToolsGate({ env: ownerChatEnv(f, { CORVIDINHO_ACTING_IS_ADMIN: undefined }), cwd: f.own });
+    expect(spawned).toEqual({
+      granted: false,
+      reason: "a run with no role session gets them only as a local CLI run, and this one carries a Discord session or surface stamp",
+    });
+    // A plain local CLI run with no worktree of its own (--here, a non-git folder): refused.
+    const local = ownerChatEnv(f, {
+      CORVIDINHO_ACTING_IS_ADMIN: undefined,
+      CORVIDINHO_DISCORD_SESSION_ID: undefined,
+      [ACTING_SURFACE_ENV]: undefined,
+    });
+    expect(await shellToolsGate({ env: local, cwd: f.own })).toEqual({
+      granted: false,
+      reason: "a local CLI run gets them only in the new worktree it made for itself, not with --here or outside a git repo",
+    });
   });
 
   test("refused: any cwd but the top of this talk's own linked worktree", async () => {
