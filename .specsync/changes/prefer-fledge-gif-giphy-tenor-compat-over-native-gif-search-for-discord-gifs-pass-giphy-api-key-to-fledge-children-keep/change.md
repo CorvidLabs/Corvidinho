@@ -1,6 +1,6 @@
 ---
 id: prefer-fledge-gif-giphy-tenor-compat-over-native-gif-search-for-discord-gifs-pass-giphy-api-key-to-fledge-children-keep
-state: implementing
+state: accepted
 type: feature
 base_commit: 3f760e0b5bb1722b885ab8a4ea40fe1ada9f1829
 ---

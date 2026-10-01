@@ -7,11 +7,11 @@
   "title": "Prefer fledge-gif (GIPHY Tenor-compat) over native gif-search for Discord GIFs; pass GIPHY_API_KEY to Fledge children; keep gif-search secondary",
   "description": "prefer fledge-gif (GIPHY Tenor-compat) over native gif-search for Discord GIFs; pass GIPHY_API_KEY to Fledge children; keep gif-search secondary",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "3f760e0b5bb1722b885ab8a4ea40fe1ada9f1829",
   "created_at": 1790871909,
-  "updated_at": 1790872191,
+  "updated_at": 1790872413,
   "affected_specs": [
     "plugins",
     "agent",
