@@ -782,7 +782,15 @@ repo with a bare origin (dry run):
   not yet read), one review call, the cycle stays open.
 - `buildDelegateSpawn` / `delegateAuthorsFromEnv` / `workerModelsFromResult`
   (REQ-agent-117).
+- Authors outlive the run: run 1's head model fails over and the next model
+  writes `src/app.ts` (`files-write`); run 2 (a new `createTaskExecute`) on
+  the head model opens the PR from the same checkout and the reviewer is the
+  third configured model, never the one that wrote it.
+  `recordChangeAuthors` keeps each (checkout, branch, model) once, scrubbed,
+  and records nothing below a git top level.
 
 Fail on base (modified sources at `9ea766b` swapped in, exports stubbed so
 the file loads): all five tool-loop cases and both delegate cases fail;
-restored they pass.
+restored they pass. The authors-outlive-the-run case fails with this
+change's pre-fix sources (`69257ea`: the fallback model reviewed its own
+change); restored it passes.

@@ -429,15 +429,20 @@ every path: a chat, slash or button run, `/session`, a schedule, a local
   `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`, every entry of each chain)
   that has its key and did not write the change. The writers are every model the
   run called (fallbacks included), its delegate workers' models (and a worker's
-  lead's), and the authors recorded in earlier review rounds of the branch; the
-  same model id behind another kind or gateway counts as the same model. There
-  is no reviewer setting. With no second model there is no PR, and the reply
-  ends with the one line saying why.
-- **Rounds.** At most 3 (a constant). The run's working tree, staged into a
-  temporary index (the real index is untouched), is diffed against its
-  merge-base with `--base`; the diff is secret-scrubbed, fenced as untrusted
-  data and capped at 200 KiB, and sent in one no-tools call through the run's
-  own provider path and spend caps. Findings (at most 10, scrubbed) come back to
+  lead's), every model an earlier run recorded as having changed the same
+  checkout (an earlier message in the talk, a resumed run; shared DB table
+  `pr_change_authors`), and the authors recorded in earlier review rounds of the
+  branch; the same model id behind another kind or gateway counts as the same
+  model. There is no reviewer setting. With no second model there is no PR, and
+  the reply ends with the one line saying why.
+- **Rounds.** At most 3 (a constant). The run's tracked files as they are in the
+  work tree (edits not yet committed included; untracked files never count —
+  they are not what the PR carries), staged into a temporary index (the real
+  index is untouched), are diffed against the merge-base with `--base`; the diff
+  is secret-scrubbed, leaves out the content of secret-looking paths (`.env*`,
+  `.ssh`, keys, keystores, credentials — named to the reviewer, never sent),
+  is fenced as untrusted data and capped at 200 KiB, and is sent in one
+  no-tools call through the run's own provider path and spend caps. Findings (at most 10, scrubbed) come back to
   the run as a refusal for round k of 3: change the tree, commit and push, and
   call again for the next round, or call again with the tree unchanged to open
   the PR with them listed as not changed. A round that raises nothing, an
@@ -446,7 +451,9 @@ every path: a chat, slash or button run, `/session`, a schedule, a local
 - **Open.** The branch on GitHub must be the reviewed tree, else one line asks
   to push it. The PR body gets a `## Second-model review` section: the
   reviewer, rounds used of 3, what each round raised, and the paths that
-  changed after each round (from git), fenced, with no amounts.
+  changed after each round (from git), fenced, with no amounts. It lists every
+  round since the last PR opened from the branch, so a review that ended before
+  the tree changed again (and started a new one) stays listed.
 - **No run model** (`/work`, `plugins run`): no round starts; the PR opens only
   when a finished review exists for the exact tree of the branch on GitHub,
   else one plain line refuses.
@@ -458,7 +465,10 @@ every path: a chat, slash or button run, `/session`, a schedule, a local
   tokens count in the owner's answer footer under the reviewer's own model, at
   its price or as unknown (DISCORD-15.a, SAFE-16).
 - Rounds are kept in the shared DB table `pr_review_rounds` (keyed by repo and
-  branch, tied to tree ids; created on first use, no schema version change).
+  branch, tied to tree ids, marked once a live PR listed them), and the models
+  that changed a checkout in `pr_change_authors` (keyed by the checkout and its
+  branch); both are created on first use, with no schema version change, and
+  scrubbed.
 
 
 ## Discord user lookup (IDENTITY-5 / DISCORD-13)

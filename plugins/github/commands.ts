@@ -4,7 +4,7 @@ import type { PluginCommand, PluginHandlerArgs, PluginHandlerResult } from "../.
 import { extractRepoFromArgs } from "../../src/plugins/githubDeny.ts";
 import { checkRepoGateForActingRole } from "../../src/plugins/githubPublic.ts";
 import { ROLE_REFUSED_MESSAGE, resolveActingRole } from "../../src/plugins/roles.ts";
-import { gatePrCreate, pushRemoteTree, withReviewSection } from "../../src/work/review.ts";
+import { gatePrCreate, markReviewOpened, pushRemoteTree, withReviewSection } from "../../src/work/review.ts";
 import { createOctokit, splitOwnerRepo, type ApiResult } from "./api.ts";
 import { Octokit } from "@octokit/rest";
 
@@ -529,6 +529,9 @@ export const githubCommands: PluginCommand[] = [
           base,
           draft,
         });
+        // GITHUB-9: the rounds this PR lists are not listed again by a later
+        // PR from the branch.
+        markReviewOpened(review.rounds);
         const data = {
           number: res.data.number,
           title: res.data.title,

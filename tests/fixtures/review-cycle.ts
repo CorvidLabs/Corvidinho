@@ -5,20 +5,25 @@
  * cycle seeded in the test data dir's shared DB for an exact tree.
  */
 
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { openCorvidinhoDb } from "../../src/store/db.ts";
 import { recordReviewRound, type ReviewEnd } from "../../src/work/review.ts";
 
 /** `git` in `cwd` without the caller's repo-locating env; throws on failure. */
 export function git(cwd: string, ...args: string[]): string {
+  return gitWith(cwd, {}, ...args);
+}
+
+function gitWith(cwd: string, extra: Record<string, string>, ...args: string[]): string {
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) {
     if (v === undefined || k === "GIT_DIR" || k === "GIT_WORK_TREE" || k === "GIT_INDEX_FILE") continue;
     env[k] = v;
   }
   env.GIT_CONFIG_NOSYSTEM = "1";
+  Object.assign(env, extra);
   const r = Bun.spawnSync(["git", "-c", "commit.gpgsign=false", ...args], {
     cwd,
     env,
@@ -77,6 +82,24 @@ export function commitAndPush(dir: string, branch: string, message = "change"): 
   git(dir, "add", "--all");
   git(dir, "commit", "-q", "-m", message);
   git(dir, "push", "-q", "origin", branch);
+}
+
+/**
+ * The tree a commit of everything in `dir` (untracked, non-ignored files
+ * included) would have — what `/work` commits — from a copy of the index,
+ * the real one untouched.
+ */
+export function fullWorkTree(dir: string): string {
+  const tmp = mkdtempSync(join(tmpdir(), "corvidinho-review-fixture-index-"));
+  const index = join(tmp, "index");
+  try {
+    const real = git(dir, "rev-parse", "--git-path", "index").trim();
+    copyFileSync(isAbsolute(real) ? real : join(dir, real), index);
+    gitWith(dir, { GIT_INDEX_FILE: index }, "add", "--all");
+    return gitWith(dir, { GIT_INDEX_FILE: index }, "write-tree").trim();
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
 }
 
 /** The tree id of HEAD in `dir`. */

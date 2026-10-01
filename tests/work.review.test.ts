@@ -12,7 +12,7 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { unlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Octokit } from "@octokit/rest";
 import { githubBranchTree } from "../plugins/github/commands.ts";
@@ -38,8 +38,11 @@ import { openCorvidinhoDb } from "../src/store/db.ts";
 import { SCRUB_TARGETS } from "../src/store/scrub.ts";
 import { openWorkPr } from "../src/work/pr.ts";
 import {
+  checkoutAuthors,
   configuredModels,
   latestReviewCycle,
+  markReviewOpened,
+  recordChangeAuthors,
   parseReviewFindings,
   REVIEW_DIFF_MAX_BYTES,
   REVIEW_FINDINGS_MAX,
@@ -59,6 +62,7 @@ import {
 import { LANE_PASS_OUTPUT } from "./fixtures/lane-output.ts";
 import {
   commitAndPush,
+  fullWorkTree,
   git,
   headTree,
   makeReviewRepo,
@@ -191,22 +195,24 @@ describe("resolveReviewer: the first other configured model that didn't write th
 
 // ─── Tree, findings, prompt ────────────────────────────────────────────────
 
-describe("reviewTree stages the work tree into a temporary index", () => {
-  test("tracked edits, deletions and untracked files count; the real index and status do not change", async () => {
+describe("reviewTree stages the work tree's tracked files into a temporary index", () => {
+  test("tracked edits, deletions and staged new files count, untracked files do not; the real index and status do not change", async () => {
     const fx = makeReviewRepo({ branch: nextBranch() });
     writeFileSync(join(fx.dir, "src", "app.ts"), "export const answer = 42;\n");
-    writeFileSync(join(fx.dir, "src", "new.ts"), "export const fresh = true;\n");
+    writeFileSync(join(fx.dir, "src", "staged.ts"), "export const staged = true;\n");
+    writeFileSync(join(fx.dir, "src", "untracked.ts"), "export const scratch = true;\n");
     unlinkSync(join(fx.dir, "README.md"));
-    git(fx.dir, "add", "src/app.ts"); // something already staged in the real index
+    git(fx.dir, "add", "src/staged.ts"); // a new file already staged in the real index
     const statusBefore = git(fx.dir, "status", "--porcelain");
     const stagedBefore = git(fx.dir, "diff", "--cached", "--name-only");
     const tree = await reviewTree(fx.dir);
     expect(tree).toMatch(/^[0-9a-f]{40}$/);
     expect(git(fx.dir, "status", "--porcelain")).toBe(statusBefore);
     expect(git(fx.dir, "diff", "--cached", "--name-only")).toBe(stagedBefore);
-    git(fx.dir, "add", "--all");
-    git(fx.dir, "commit", "-q", "-m", "all");
+    git(fx.dir, "add", "--update");
+    git(fx.dir, "commit", "-q", "-m", "tracked");
     expect(headTree(fx.dir)).toBe(tree!);
+    expect(git(fx.dir, "status", "--porcelain")).toBe("?? src/untracked.ts\n");
   });
 });
 
@@ -330,14 +336,14 @@ describe("github-pr-create with a run model: bounded rounds, then the PR lists t
 
   test("the branch on GitHub must be the reviewed tree: unpushed edits refuse in one line; after the push it opens", async () => {
     const fx = makeReviewRepo({ branch: nextBranch() });
-    writeFileSync(join(fx.dir, "src", "extra.ts"), "export const extra = 1;\n");
+    writeFileSync(join(fx.dir, "src", "app.ts"), "export const answer = 42;\n");
     const run = fakeRun(['{"findings":[]}']);
     const r = await prCreate(fx, run);
     expect(r.ok).toBe(false);
     expect(r.reviewHold).toBe("refused");
     expect(r.error).toBe(`${REVIEW_REFUSED_PREFIX}${REVIEW_REFUSAL.remoteMismatch(fx.branch)}`);
     expect(r.error).not.toContain("\n");
-    commitAndPush(fx.dir, fx.branch, "extra");
+    commitAndPush(fx.dir, fx.branch, "the answer");
     const ok = await prCreate(fx, run);
     expect(ok.ok).toBe(true);
     expect(run.calls.length).toBe(1);
@@ -505,7 +511,7 @@ describe("github-pr-create without a run model (plugins run, /work): no round, o
     expect(git(fx.bare, "rev-parse", `refs/heads/${fx.branch}`).trim()).toBe(git(fx.dir, "rev-parse", "HEAD").trim());
 
     const fx2 = make();
-    seedFinishedReview({ repo: REPO, branch: fx2.branch, tree: (await reviewTree(fx2.dir))! });
+    seedFinishedReview({ repo: REPO, branch: fx2.branch, tree: fullWorkTree(fx2.dir) });
     results.length = 0;
     const ok = await openWorkPr(input(fx2), deps);
     expect(ok).toMatchObject({ opened: true, dryRun: true });
@@ -813,5 +819,198 @@ describe("the PR section and the stored rounds", () => {
       columns: ["reviewer"],
       json: ["authors", "findings", "changed"],
     });
+  });
+});
+
+// ─── Review fixes: what is reviewed, who wrote it, what the PR lists ───────
+
+describe("what the reviewer sees is what the PR carries (GITHUB-9, SAFE-6)", () => {
+  test("untracked files are not part of the reviewed tree: a scratch file beside the pushed branch neither blocks the PR nor reaches the reviewer", async () => {
+    const fx = makeReviewRepo({ branch: nextBranch() });
+    writeFileSync(join(fx.dir, "notes.txt"), "scratch notes, never committed\n");
+    const run = fakeRun(['{"findings":[]}']);
+    const r = await prCreate(fx, run);
+    expect(r.ok).toBe(true);
+    expect(run.calls.length).toBe(1);
+    expect(run.calls[0]!.messages[1]!.content).not.toContain("scratch notes");
+    expect(cycle(fx).at(-1)!.tree).toBe(headTree(fx.dir));
+  });
+
+  test("a secret-looking path's content is never sent to the reviewer, only its name", async () => {
+    const fx = makeReviewRepo({ branch: nextBranch() });
+    mkdirSync(join(fx.dir, "config"));
+    writeFileSync(join(fx.dir, ".env.local"), "DB_PASSWORD=plain-words-only\n");
+    writeFileSync(join(fx.dir, "config", "credentials.json"), '{"password":"plain-words-too"}\n');
+    commitAndPush(fx.dir, fx.branch, "config");
+    const run = fakeRun(['{"findings":[".env.local and config/credentials.json should not be committed"]}']);
+    const r = await prCreate(fx, run);
+    expect(r.reviewHold).toBe("findings");
+    const sent = run.calls[0]!.messages[1]!.content;
+    expect(sent).not.toContain("plain-words");
+    expect(sent).toContain(".env.local");
+    expect(sent).toContain("config/credentials.json");
+    expect(sent).toContain("+export const answer = 41;");
+  });
+
+  test("a change to secret-looking paths only is still reviewed, by name", async () => {
+    const fx = makeReviewRepo({ branch: nextBranch(), push: false });
+    git(fx.dir, "reset", "-q", "--hard", "main");
+    writeFileSync(join(fx.dir, ".env.production"), "TOKEN=plain-words-only\n");
+    commitAndPush(fx.dir, fx.branch, "env");
+    const run = fakeRun(['{"findings":[".env.production should not be committed"]}']);
+    const r = await prCreate(fx, run);
+    expect(r.reviewHold).toBe("findings");
+    expect(run.calls[0]!.messages[1]!.content).toContain(".env.production");
+    expect(run.calls[0]!.messages[1]!.content).not.toContain("plain-words");
+  });
+});
+
+describe("the change's authors outlive the run that wrote it (GITHUB-9.a)", () => {
+  test("a model that wrote the change in an earlier run in the same checkout is never its reviewer", async () => {
+    const fx = makeReviewRepo({ branch: nextBranch() });
+    const env = {
+      CORVIDINHO_LLM_MODEL: "author-model,fallback-model",
+      CORVIDINHO_LLM_MODEL_READ: "third-model",
+      CORVIDINHO_LLM_API_KEY: "fake-key-not-real",
+      CORVIDINHO_LLM_BASE_URL: "http://fake-llm.invalid/v1",
+    };
+    // Run 1 (one message): author-model is down, fallback-model answers and writes the change.
+    let turn = 0;
+    const fetch1 = async (_input: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as Body;
+      if (body.model === "author-model") return new Response("down", { status: 500 });
+      const message =
+        turn++ === 0
+          ? {
+              role: "assistant",
+              content: null,
+              tool_calls: [
+                {
+                  id: "w1",
+                  type: "function",
+                  function: { name: "files-write", arguments: JSON.stringify({ argv: ["src/app.ts", "export const answer = 42;\n"] }) },
+                },
+              ],
+            }
+          : { role: "assistant", content: "Wrote it." };
+      return new Response(JSON.stringify({ choices: [{ message }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    await runOnce(execFor(fx, env, fetch1, { tier: "code" }));
+    expect(readFileSync(join(fx.dir, "src", "app.ts"), "utf8")).toBe("export const answer = 42;\n");
+    commitAndPush(fx.dir, fx.branch, "fallback wrote it");
+    // Run 2 (the next message, a new process): author-model is back and opens the PR.
+    const { fetchImpl, bodies } = scriptedFetch({ author: "author-model", turns: [[prCall(fx)], "done"] });
+    await runOnce(execFor(fx, env, fetchImpl));
+    expect(bodies.filter((b) => b.model !== "author-model").map((b) => b.model)).toEqual(["third-model"]);
+  });
+});
+
+describe("the PR lists every round since the last PR opened from the branch (GITHUB-9)", () => {
+  test("rounds of an earlier review that opened no PR stay listed when the tree changed after it ended", async () => {
+    const fx = makeReviewRepo({ branch: nextBranch() });
+    const run = fakeRun(['{"findings":["src/app.ts: the answer should be 42"]}', '{"findings":[]}', '{"findings":[]}']);
+    expect((await prCreate(fx, run)).reviewHold).toBe("findings");
+    // Fixed in the work tree, not pushed: round 2 is clean, but GitHub has the old tree.
+    writeFileSync(join(fx.dir, "src", "app.ts"), "export const answer = 42;\n");
+    expect((await prCreate(fx, run)).error).toBe(`${REVIEW_REFUSED_PREFIX}${REVIEW_REFUSAL.remoteMismatch(fx.branch)}`);
+    // Pushed with one more file: a new tree, so a new review.
+    writeFileSync(join(fx.dir, "src", "more.ts"), "export const more = 1;\n");
+    commitAndPush(fx.dir, fx.branch, "fix and more");
+    const ok = await prCreate(fx, run);
+    expect(ok.ok).toBe(true);
+    expect(run.calls.length).toBe(3);
+    const body = bodyOf(ok);
+    expect(body).toContain("1. src/app.ts: the answer should be 42");
+    expect(body).toContain("M  src/app.ts");
+    expect(body).toContain("A  src/more.ts");
+  });
+});
+
+describe("rounds a PR listed are not listed again; change authors are kept per checkout", () => {
+  test("after a PR opened listing them (marked), a later review of the branch lists only its own rounds", async () => {
+    const fx = makeReviewRepo({ branch: nextBranch() });
+    const run = fakeRun(['{"findings":["src/app.ts: consider a constant"]}', '{"findings":[]}']);
+    expect((await prCreate(fx, run)).reviewHold).toBe("findings");
+    const first = await prCreate(fx, run);
+    expect(first.ok).toBe(true);
+    markReviewOpened(cycle(fx));
+    expect(cycle(fx).every((r) => typeof r.openedAt === "number")).toBe(true);
+    writeFileSync(join(fx.dir, "src", "app.ts"), "export const answer = 42;\n");
+    commitAndPush(fx.dir, fx.branch, "follow-up");
+    const second = await prCreate(fx, run);
+    expect(second.ok).toBe(true);
+    const body = bodyOf(second);
+    expect(body).toContain(`1 of ${REVIEW_MAX_ROUNDS} rounds used`);
+    expect(body).not.toContain("consider a constant");
+  });
+
+  test("a live PR marks the rounds it listed once pulls.create succeeds", async () => {
+    delete process.env.CORVIDINHO_GITHUB_DRY_RUN;
+    process.env.GITHUB_TOKEN = `ghp_${"Ab3".repeat(12)}`;
+    const fx = makeReviewRepo({ branch: nextBranch() });
+    const tree = headTree(fx.dir);
+    const created: string[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+      const json = (body: unknown, status = 200) =>
+        new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+      if (url.hostname !== "api.github.com") return json({ message: "Not Found" }, 404);
+      if (method === "GET" && url.pathname.startsWith("/repos/acme/review-fixture/branches/")) {
+        return json({ name: fx.branch, commit: { sha: "c".repeat(40), commit: { tree: { sha: tree } } } });
+      }
+      if (method === "POST" && url.pathname === "/repos/acme/review-fixture/pulls") {
+        created.push(String(init?.body ?? ""));
+        return json(
+          {
+            number: 7,
+            title: "Add the app",
+            html_url: "https://github.com/acme/review-fixture/pull/7",
+            state: "open",
+            draft: true,
+            head: { ref: fx.branch },
+            base: { ref: "main" },
+          },
+          201,
+        );
+      }
+      return json({ message: "Not Found" }, 404);
+    }) as typeof fetch;
+    try {
+      const run = fakeRun(['{"findings":[]}']);
+      const r = await prCreate(fx, run);
+      expect(r.ok).toBe(true);
+      expect(created.length).toBe(1);
+      expect(JSON.parse(created[0]!).body).toContain(REVIEW_SECTION_HEADING);
+      expect(cycle(fx).map((x) => typeof x.openedAt)).toEqual(["number"]);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  test("recordChangeAuthors keeps each model once per checkout and branch, scrubbed, and only at a git top level", async () => {
+    const fx = makeReviewRepo({ branch: nextBranch() });
+    const seen = new Set<string>();
+    await recordChangeAuthors(fx.dir, ["model-a", `model-b ${FAKE_KEY}`, "model-a"], { seen });
+    await recordChangeAuthors(fx.dir, ["model-a", "model-c"], { seen });
+    await recordChangeAuthors(join(fx.dir, "src"), ["model-sub"]);
+    const db = openCorvidinhoDb({ env: process.env });
+    try {
+      const root = realpathSync(fx.dir);
+      expect(checkoutAuthors(db, root, [fx.branch]).sort()).toEqual(["model-a", "model-b [redacted:anthropic-key]", "model-c"]);
+      expect(checkoutAuthors(db, root, ["other-branch"])).toEqual([]);
+      const count = db
+        .query("SELECT COUNT(*) AS n FROM pr_change_authors WHERE root = ? AND model = 'model-a'")
+        .get(root) as { n: number };
+      expect(count.n).toBe(1);
+      expect(db.query("SELECT COUNT(*) AS n FROM pr_change_authors WHERE model = 'model-sub'").get()).toEqual({ n: 0 });
+    } finally {
+      db.close();
+    }
+    expect(SCRUB_TARGETS).toContainEqual({ table: "pr_change_authors", columns: ["model"] });
   });
 });

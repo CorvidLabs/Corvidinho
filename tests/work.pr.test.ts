@@ -43,9 +43,8 @@ import {
   type OpenWorkPrInput,
   type WorkPrOutcome,
 } from "../src/work/pr.ts";
-import { reviewTree } from "../src/work/review.ts";
 import { LANE_PASS_OUTPUT } from "./fixtures/lane-output.ts";
-import { seedFinishedReview } from "./fixtures/review-cycle.ts";
+import { fullWorkTree, seedFinishedReview } from "./fixtures/review-cycle.ts";
 
 const ENV_KEYS = [
   "GIT_CONFIG_GLOBAL",
@@ -340,7 +339,7 @@ describe("openWorkPr gates (AGENT-4, GITHUB-5, GITHUB-6)", () => {
       const allowed = makeFixture();
       writeFileSync(join(allowed.wt, "greet.ts"), "x\n");
       // GITHUB-9: the tree it pushes has a finished second-model review.
-      seedFinishedReview({ repo: "acme/widget", branch: allowed.branch, tree: (await reviewTree(allowed.wt))! });
+      seedFinishedReview({ repo: "acme/widget", branch: allowed.branch, tree: fullWorkTree(allowed.wt) });
       const rec2 = recorder();
       const ok = await openWorkPr(input(allowed), deps({ runPlugin: rec2.fn, repoGate: undefined }));
       expect(ok).toMatchObject({ opened: true, dryRun: true, repo: "acme/widget" });
@@ -381,7 +380,7 @@ describe("openWorkPr ships through the git + github plugins (AUTONOMOUS-3, GITHU
     writeFileSync(join(fx.wt, "README.md"), "hello\nworld\n");
     unlinkSync(join(fx.wt, "old.txt"));
     // GITHUB-9: the tree it commits and pushes has a finished second-model review.
-    seedFinishedReview({ repo: "acme/widget", branch: fx.branch, tree: (await reviewTree(fx.wt))! });
+    seedFinishedReview({ repo: "acme/widget", branch: fx.branch, tree: fullWorkTree(fx.wt) });
     const rec = recorder();
     let verifyCalls = 0;
     const r = await openWorkPr(

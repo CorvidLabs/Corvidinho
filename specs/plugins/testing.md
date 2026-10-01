@@ -404,8 +404,12 @@ network, no real tokens.
   `_TOOL`, `_CODE` order, each label once; authors skipped by model id across
   kinds; an entry without its key skipped; null when only authors remain;
   would-be reviewer keys (`CORVIDINHO_REVIEW_MODEL`, …) are never read.
-- `reviewTree`: a staged edit, an untracked file and a deletion give the tree
-  a full commit then has; `git status` and the staged list unchanged.
+- `reviewTree`: an edit, a staged new file and a deletion give the tree a
+  commit of the tracked files then has, an untracked file left out; `git
+  status` and the staged list unchanged. An untracked scratch file beside the
+  pushed branch neither blocks the PR nor reaches the reviewer; a committed
+  `.env.local` / `config/credentials.json` / `.env.production` is named to the
+  reviewer, its content never sent.
 - Findings: JSON, fenced JSON, bullets, clean replies, other text as one
   finding, capped at 10 with the rest counted, scrubbed before the cut; the
   review messages scrub the diff and fence it so it cannot close the fence.
@@ -428,9 +432,14 @@ network, no real tokens.
 - Without a run model: no cycle, a cycle for another tree, or an open cycle
   refuse in one line; a finished cycle for the pushed tree opens and lists
   its findings.
+- Every round since the last PR opened: a cycle that ended clean on an
+  unpushed edit, then a new cycle on the pushed, changed tree — the PR lists
+  round 1's finding, `M  src/app.ts` and `A  src/more.ts`; rounds marked
+  opened (`markReviewOpened`) are not listed again; a live `pulls.create`
+  (mocked fetch) marks the rounds it listed.
 - `githubBranchTree` (mocked Octokit fetch): the head commit's tree, an
   `owner:branch` head on that owner's repo, null on 404. `SCRUB_TARGETS`
-  lists `pr_review_rounds`.
+  lists `pr_review_rounds` and `pr_change_authors`.
 - Delegate plumbing: `buildDelegateSpawn` passes `authors` as
   `CORVIDINHO_DELEGATE_AUTHORS` and drops an inherited value;
   `delegateAuthorsFromEnv` / `workerModelsFromResult` validate and bound.
@@ -444,8 +453,10 @@ review it opens).
 Fail on base (the nine modified sources at `9ea766b` swapped in,
 `src/work/review.ts` kept): `tests/work.review.test.ts` cannot load
 (`githubBranchTree` missing); `tests/github.write.plugin.test.ts` 2 fail,
-`tests/roles.chat.gates.test.ts` 1 fails, `tests/work.pr.test.ts` 1 fails
-(base `runGit` ignores `indexFile`, so staging touched the real index). With
-the missing exports stubbed so it loads, `tests/work.review.test.ts` gave 8
-pass, 23 fail (the 8 are the new module's pure units and the token check).
-Restored: the four files 74 of 74.
+`tests/roles.chat.gates.test.ts` 1 fails. With the missing exports stubbed so
+it loads, `tests/work.review.test.ts` gave 8 pass, 23 fail (the 8 are the new
+module's pure units and the token check). `tests/work.pr.test.ts` only adapts
+(it seeds reviews with the fixture's `fullWorkTree`). The second-pass cases
+(tracked-only tree, secret paths, earlier cycles, marking, checkout authors)
+fail with this change's own pre-fix sources (`69257ea`): 9 fail. Restored:
+the four files 82 of 82.

@@ -80,7 +80,7 @@ import {
   searchMemoryBeforeIgnorance,
 } from "./recall-guard.ts";
 import { delegateAuthorsFromEnv, delegateDepthFromEnv } from "../autonomous/delegate.ts";
-import { ReviewSpendStop } from "../work/review.ts";
+import { recordChangeAuthors, ReviewSpendStop } from "../work/review.ts";
 import { appendAudit, argsDigest, auditContextFromEnv, auditKeyFromEnv } from "../audit/log.ts";
 import { openCorvidinhoDb } from "../store/db.ts";
 import {
@@ -740,6 +740,12 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
         : { ok: false, error: reply.error, failure: reply.failure };
     },
   };
+  // GITHUB-9.a: each model that changed this run's checkout is recorded for
+  // it (pr_change_authors, keyed by its top level and branch), so a later run
+  // that opens the PR — the next message, a resumed run — never picks one of
+  // them as the reviewer. Best effort; each (checkout, branch, model) once.
+  const authorsRecorded = new Set<string>();
+  const recordAuthors = () => recordChangeAuthors(cwd, [...authors], { seen: authorsRecorded });
   // GITHUB-9.a: the latest github-pr-create refusal of this run ("PR not
   // opened: …"), so the reply says why there is no PR; cleared by a later
   // call that opened one or got findings.
@@ -897,6 +903,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
         reviewRefusal =
           result.reviewHold === "refused" ? oneLineNote(result.error ?? "") || null : null;
       },
+      onStateChange: recordAuthors,
       repeatGuard,
       stallGuard,
       workspaceChanged,
@@ -982,6 +989,8 @@ type LoopArgs = {
   review?: PrReviewRun;
   /** GITHUB-9.a: each github-pr-create result of the run. */
   onPrCreate?: (result: PluginHandlerResult) => void;
+  /** GITHUB-9.a: a tool call may have changed the checkout (record the run's authors for it). */
+  onStateChange?: () => Promise<void>;
   /** A worker `delegate` starts may change files no result reports (REQ-agent-502). */
   workerEditsUnreported?: boolean;
   /** AGENT-16: the run's repeat-failure guard (src/agent/loop-guards.ts). */
@@ -1020,6 +1029,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     onPrivateReply,
     review,
     onPrCreate,
+    onStateChange,
     workerEditsUnreported = false,
     repeatGuard = createRepeatFailureGuard(),
     stallGuard = createStallNudgeGuard(),
@@ -1378,6 +1388,16 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
               .filter((m): m is string => Boolean(m)),
           );
         }
+      }
+      // GITHUB-9.a: a call that changed (or may have changed) the checkout —
+      // a state-changing result, a tool whose edits no result reports, a
+      // worker — makes the run's models its authors beyond this run.
+      if (
+        onStateChange &&
+        offered.has(name) &&
+        (changedState(name, result) || editsFilesUnreported(name) || name === DELEGATE_COMMAND_NAME)
+      ) {
+        await onStateChange();
       }
       // MEMORY-7.a (REQ-agent-710): private text goes to the run result for
       // the bridge to send privately — never into the tool message, the

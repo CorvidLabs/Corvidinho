@@ -32,12 +32,33 @@ cases, the live branch tree and `SCRUB_TARGETS`; the 8 that pass are the new
 module's pure units (reviewer choice, findings parse, messages, section) and
 the live-mode token check. Restored: the four files 74 of 74.
 
+Review fixes (second pass): `reviewTree` stages tracked files only
+(`git add --update`), the review diff leaves out secret-looking paths'
+content (named only), the tool loop records the run's authors per checkout
+(`pr_change_authors`) and the gate counts them, and the PR section lists
+earlier cycles no opened PR listed (`opened_at`, `markReviewOpened`). With
+the pre-fix sources of this change (`src/work/review.ts`,
+`src/agent/execute.ts`, `plugins/github/commands.ts`, `src/store/scrub.ts`
+at `69257ea`) swapped in and the three new exports stubbed,
+`tests/work.review.test.ts tests/work.pr.test.ts` gave 49 pass, 9 fail: the
+updated `reviewTree` case (the untracked file counted), the untracked
+scratch file (remote mismatch), both secret-path cases (content sent), the
+earlier run's author (it reviewed its own change), the earlier cycle's
+rounds (missing from the PR), the marked rounds, the live marking and
+`recordChangeAuthors`. `tests/work.pr.test.ts` now seeds its reviews with
+the fixture's `fullWorkTree` (a temp index of the whole work tree, what
+/work commits), so with the merge-base's (`9ea766b`) nine sources it passes:
+it only adapts to the gate; the base proof is the github-write and roles
+cases (3 fail). Restored: the four files 82 of 82.
+
 ## Requirement evidence
 
 | Requirement | Test | Evidence |
 |---|---|---|
 | `REQ-plugins-092` | `tests/work.review.test.ts` ("resolveReviewer: the first other configured model …") | Configured models in key order, each once; authors skipped by model id across kinds; no key skipped; null with no second model; no reviewer key read. |
-| `REQ-plugins-092` | `tests/work.review.test.ts` ("reviewTree stages the work tree …") | The temp-index tree equals a full commit's; status and staged list unchanged. |
+| `REQ-plugins-092` | `tests/work.review.test.ts` ("reviewTree stages the work tree's tracked files …", "untracked files are not part of the reviewed tree …") | The temp-index tree equals a commit of the tracked files (edit, staged new file, deletion; the untracked file left out); status and staged list unchanged; an untracked scratch file neither blocks the PR nor reaches the reviewer. |
+| `REQ-plugins-092` | `tests/work.review.test.ts` ("a secret-looking path's content is never sent …", "a change to secret-looking paths only …") | `.env.local`, `config/credentials.json`, `.env.production` named to the reviewer, their content never sent. |
+| `REQ-plugins-092` | `tests/work.review.test.ts` ("rounds of an earlier review that opened no PR stay listed …", "after a PR opened listing them (marked) …", "a live PR marks the rounds …") | An earlier cycle's finding and the paths changed since (`M  src/app.ts`, `A  src/more.ts`) are listed; marked rounds are not listed again; a live `pulls.create` (mocked fetch) marks them. |
 | `REQ-plugins-092` | `tests/work.review.test.ts` ("parseReviewFindings and the review call's messages") | JSON / fenced / bullets / clean / other text; 10 kept, rest counted; scrubbed before the cut; the diff scrubbed and fenced, its fence marker defanged. |
 | `REQ-plugins-092` | `tests/work.review.test.ts` ("round 1 findings hold the PR …", "the author may decline …", "round 3 always ends the cycle …") | Findings hold (round 1 of 3, fenced); change → round 2 clean → section (2 of 3 rounds, finding, `M  src/app.ts`, no amounts); decline listed as not changed; round 3 ends the cycle and the same tree reopens with no 4th call. |
 | `REQ-plugins-092` | `tests/work.review.test.ts` ("the branch on GitHub must be the reviewed tree …", "a branch not on GitHub yet …") | Unpushed edits, an unpushed branch, no changes and a non-git cwd refuse in one line; after the push it opens with no new call. |
@@ -51,6 +72,7 @@ the live-mode token check. Restored: the four files 74 of 74.
 | `REQ-agent-092` | `tests/work.review.test.ts` ("with no second model every call refuses …") | Three identical refusals, no steer, no stuck ask; the summary ends with the GITHUB-9.a line. |
 | `REQ-agent-092` | `tests/work.review.test.ts` ("a spend-cap stop of the review call ends the run …") | `spend-cap` ask; no review request sent; nothing recorded; no "PR not opened" line. |
 | `REQ-agent-092` | `tests/work.review.test.ts` ("a delegate worker's models are authors too …") | The worker's model is skipped; the next configured model reviews. |
+| `REQ-agent-092` | `tests/work.review.test.ts` ("a model that wrote the change in an earlier run …", "recordChangeAuthors keeps each model once …") | Run 1's fallback model, which wrote the change, is never run 2's reviewer (the third model is); each (checkout, branch, model) once, scrubbed, nothing below a top level; `SCRUB_TARGETS` lists `pr_change_authors`. |
 | `REQ-agent-092` | `tests/work.review.test.ts` ("a second call in the same batch as the findings is not run …") | The second call is held unrun; one review call; the cycle stays open. |
 | `REQ-agent-117` | `tests/work.review.test.ts` ("delegate workers report their models and get the lead's authors") | `CORVIDINHO_DELEGATE_AUTHORS` from `authors`; worker models from the result frame. |
 | `REQ-discord-088` | `tests/work.review.test.ts` ("/work: with no finished review …"), `tests/work.pr.test.ts` ("dirty verified worktree …", "GITHUB-6 default gate …") | `not-reviewed` line with the gate's reason and the branch pushed; with a finished review for the pushed tree /work commits, pushes and opens with the section. |

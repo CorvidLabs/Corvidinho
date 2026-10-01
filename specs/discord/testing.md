@@ -1499,12 +1499,11 @@ is `acme/review-fixture`: with no finished review the outcome is
 `not-reviewed`, the line is `PR: not opened — no second-model review has
 finished for this branch's tree on GitHub, and only an agent run can start
 one (GITHUB-9). The changes stay on branch …` and the branch is pushed; with
-a finished review seeded for the tree it pushes (`reviewTree` before the
-commit) it opens and the PR body has the section. `tests/work.pr.test.ts`
-seeds a finished review for its two opening cases (the shipped body, and the
-file-only allow).
+a finished review seeded for the tree it pushes (`fullWorkTree`, the whole
+work tree /work commits) it opens and the PR body has the section.
+`tests/work.pr.test.ts` seeds a finished review for its two opening cases
+(the shipped body, and the file-only allow).
 
-Fail on base: the /work case fails (base `pr.ts` has no `not-reviewed`), and
-`tests/work.pr.test.ts`'s shipping case fails (base `runGit` ignores the
-temporary index, so seeding staged a deletion in the real index); restored,
-both pass.
+Fail on base: the /work case fails (base `pr.ts` has no `not-reviewed`);
+restored, it passes. `tests/work.pr.test.ts` only adapts to the gate (with
+the base's sources it passes).
