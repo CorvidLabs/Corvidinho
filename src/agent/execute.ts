@@ -33,8 +33,13 @@ import { scrubSecrets } from "../store/scrub.ts";
 import { projectLabel } from "../discord/list-scope.ts";
 import { projectKeyFor } from "../memory/scope.ts";
 import { createSpendGuard, SpendCapRefusal } from "./spend.ts";
-import { formatSpendWarningLine } from "./spend-notice.ts";
-import { ROLE_REFUSED_SUMMARY_NOTE } from "./task-summary.ts";
+import { formatSpendWarningLine, SPEND_CAP_SUMMARY } from "./spend-notice.ts";
+import {
+  REPLY_ATTRIBUTION_BY_TOOL,
+  ROLE_REFUSED_SUMMARY_NOTE,
+  withoutReplyAttribution,
+  withReplyAttribution,
+} from "./task-summary.ts";
 import { verifyFeedbackExcerpt } from "./verify.ts";
 import {
   INJECTION_AUDIT_ACTION,
@@ -795,6 +800,8 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   // this run already said once why the gate held them back.
   const safe3aNamed = [...SAFE3A_TOOLS].filter((name) => allowlist.has(name));
   let safe3aNoted = false;
+  // REQ-agent-318: the attribution lines this run's successful tool calls need.
+  const attributions = new Set<string>();
 
   const run: ExecuteFn = async ({
     attempt,
@@ -926,6 +933,9 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
           result.reviewHold === "refused" ? oneLineNote(result.error ?? "") || null : null;
       },
       onStateChange: recordAuthors,
+      onReplyAttribution: (line) => {
+        attributions.add(line);
+      },
       repeatGuard,
       stallGuard,
       workspaceChanged,
@@ -946,13 +956,22 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   // GITHUB-9.a: when the run's last github-pr-create was refused at the
   // second-model review gate, the summary ends with that line (before the
   // role note), so the reply says why there is no PR.
+  // REQ-agent-318: once a tool whose provider asks for attribution succeeded
+  // in this run (a Brave `web-search`), every summary after it ends with that
+  // line, once, after the failover note and before the role note. Any such
+  // line the model's own answer ends with is dropped first, on every run
+  // (searched or not), so a reply only ever shows the line its run earned.
   return async (ctx) => {
     let result = spend.finish(await run(ctx));
+    result = { ...result, summary: withoutReplyAttribution(result.summary) };
     if (injection) result = { ...result, summary: withInjectionNote(result.summary, injection) };
     if (fallbacks.length > 0) {
       result = { ...result, summary: withModelFallbackNote(result.summary, fallbacks) };
     }
     if (reviewRefusal) result = { ...result, summary: withReviewRefusalNote(result.summary, reviewRefusal) };
+    if (attributions.size > 0) {
+      result = { ...result, summary: withReplyAttribution(result.summary, attributions) };
+    }
     return roleRefused
       ? { ...result, summary: withRoleRefusalNote(result.summary) }
       : result;
@@ -1013,6 +1032,11 @@ type LoopArgs = {
   onPrCreate?: (result: PluginHandlerResult) => void;
   /** GITHUB-9.a: a tool call may have changed the checkout (record the run's authors for it). */
   onStateChange?: () => Promise<void>;
+  /**
+   * REQ-agent-318: an offered tool whose provider's terms ask for a visible
+   * attribution line (`REPLY_ATTRIBUTION_BY_TOOL`) succeeded; `line` is that line.
+   */
+  onReplyAttribution?: (line: string) => void;
   /** A worker `delegate` starts may change files no result reports (REQ-agent-502). */
   workerEditsUnreported?: boolean;
   /** AGENT-16: the run's repeat-failure guard (src/agent/loop-guards.ts). */
@@ -1052,6 +1076,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     review,
     onPrCreate,
     onStateChange,
+    onReplyAttribution,
     workerEditsUnreported = false,
     repeatGuard = createRepeatFailureGuard(),
     stallGuard = createStallNudgeGuard(),
@@ -1423,6 +1448,21 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       ) {
         await onStateChange();
       }
+      // SAFE-8 (REQ-agent-098): a flat-priced tool call (`web-search`)
+      // stopped at the daily spend cap before it was sent ends the attempt
+      // with the same `spend-cap` ask a model call stopped at the cap gets:
+      // the run is blocked and the owner is asked. The ask (amounts, cap
+      // settings) never reaches the model, a tool message or the summary
+      // (SAFE-14.a).
+      if (offered.has(name) && result.spendAsk?.reason === "spend-cap") {
+        emit(onEvent, { type: "ToolResult", name: eventName, success: false, detail: SPEND_CAP_SUMMARY });
+        return {
+          summary: SPEND_CAP_SUMMARY,
+          filesChanged: [...filesChanged],
+          ask: { reason: "spend-cap", question: result.spendAsk.question },
+          ...unreportedEdits(unreportedEditTools),
+        };
+      }
       // MEMORY-7.a (REQ-agent-710): private text goes to the run result for
       // the bridge to send privately — never into the tool message, the
       // ToolResult event or the model's context (stringifyToolPayload
@@ -1430,6 +1470,12 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       if (offered.has(name) && result.ok && typeof result.privateText === "string" && result.privateText.trim()) {
         onPrivateReply(result.privateText);
       }
+      // REQ-agent-318: a successful call of a tool whose provider asks for a
+      // visible attribution (a Brave `web-search` that answered) puts that
+      // line on the run's reply. The line never enters the tool message or
+      // anything else the model reads.
+      const attribution = offered.has(name) && result.ok ? REPLY_ATTRIBUTION_BY_TOOL.get(name) : undefined;
+      if (attribution) onReplyAttribution?.(attribution);
 
       toolNamesUsed.push(name);
       for (const f of filesChangedFromToolData(result.data)) {
@@ -1549,7 +1595,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
  * The tool message for `result` (SAFE-12 / SAFE-13). A result of a tool that
  * carries third-party text (issue / PR bodies and titles, repo docs, guild
  * member names) is fenced as untrusted data; `web-fetch` fences its page
- * already. A result the detector scans that looks like an injection is
+ * and `web-search` its results already. A result the detector scans that looks like an injection is
  * reported once (`onInjection`) and gets the SAFE-13 note in front. A
  * `delegate` / `council` result whose worker reported a hit of its own
  * (`data.injection`, finished or not) counts as this run's hit: the note,

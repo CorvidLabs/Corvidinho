@@ -1,0 +1,615 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790800359,
+      "digest": "a3f15c787729f567e047f042b27022d7d7a18ff9ee15de2fe457bfccdb699a8a",
+      "note": "Leif's go: https://github.com/CorvidLabs/Corvidinho/issues/318#issuecomment-5918616747",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered",
+        "title": "Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap",
+        "description": "Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "INTENT.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "hi/plugin.md",
+          "plugins/fledge/spawn.ts",
+          "plugins/web/api.ts",
+          "plugins/web/commands.ts",
+          "plugins/web/fetch.ts",
+          "plugins/web/index.ts",
+          "plugins/web/search.ts",
+          "specs/agent/agent.spec.md",
+          "specs/agent/requirements.md",
+          "specs/agent/testing.md",
+          "specs/cli/cli.spec.md",
+          "specs/cli/requirements.md",
+          "specs/cli/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/requirements.md",
+          "specs/discord/testing.md",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/requirements.md",
+          "specs/plugins/testing.md",
+          "src/agent/execute.ts",
+          "src/agent/loop-guards.ts",
+          "src/agent/spend.ts",
+          "src/agent/task-summary.ts",
+          "src/agent/untrusted.ts",
+          "src/autonomous/delegate.ts",
+          "src/discord/rich-reply.ts",
+          "src/plugins/roles.ts",
+          "src/plugins/types.ts",
+          "src/store/scrub.ts",
+          "tests/fixtures/preload-probe.ts",
+          "tests/preload.operator-data-dir.test.ts",
+          "tests/preload.ts",
+          "tests/roles.team.test.ts",
+          "tests/web.fetch.test.ts",
+          "tests/web.search.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "PLUGIN-7 and PLUGIN-9 are captured verbatim in hi/plugin.md with the hi CLI. In tests/web.search.test.ts (no network: fake resolver and fake transport, fake key test-key-not-real): web-search is registered next to web-fetch with dangerous=true and minTier=1, offered at tool/code tier only when CORVIDINHO_ALLOWLIST names it and never at read tier, denied non-interactively without the entry (SAFE-1, denied audit row) and audited started/outcome when allowlisted (SAFE-5); owner, no role session and team (chat and /work) are offered it, community never, and a community role session is refused at runPlugin while a team one reaches the handler (PLUGIN-9, TEAM_SEARCH_TOOLS = web-search only, web-fetch stays owner-only); with a key one GET goes to the pinned public address of api.search.brave.com /res/v1/web/search with q, count 5 (1-20 whole numbers only), safesearch=moderate always and freshness pd|pw|pm|py when given, the key only in X-Subscription-Token; bad counts, freshness, flags and queries are usage errors with nothing sent (query words together with --query are refused, and a term that starts with -- goes in --query); no key or a malformed key is a clear not-configured error, starting web-search not-configured: web search is not configured and naming BRAVE_SEARCH_API_KEY, with no DNS or request (never an empty success); a query carrying a secret-looking value or a set secret env value (also split by a joiner) is refused with exit 2 before anything is sent; titles, URLs and descriptions reach the model only inside the untrusted web fence (HTML, entities and controls reduced, at most count hits, non-http URLs dropped, no results is an ok (no results)) with the Brave attribution in the summary; a hit that trips SAFE-13 notes the tool message and drops web-search, web-fetch and files-write for the rest of the run and refuses the later files-write; the key never appears in any result, error, data field or audit row even when the server, a transport error or a DNS error echoes it or an invisible or control character splits it (the secret scrub is the last step, after the fence), and it is dropped from delegate workers, the verify lane (shell and runners) and Fledge children and redacted by formatErrorLine; the keyed JSON GET refuses http, other hosts and ports and URL credentials before DNS, non-public answers before connecting, every redirect (Location never echoed), non-JSON, compressed, oversized and malformed bodies, times out at 15 s and stops on the run's abort (the transport's own signal is aborted in both cases; a run already stopped sends nothing), and never returns the request URL; Brave 401/403/422/429/5xx map to fixed codes without server text, a body that fails mid-read is a network error and any other failure is one fixed line; with CORVIDINHO_DAILY_SPEND_CAP_USD set each search reserves 5000 micro-USD before the request and settles actual / 0 on HTTP error or pre-connect refusal / estimate on network failure, timeout, unreadable 2xx body or an abort after sending, a run already stopped reserves nothing, an unavailable ledger fails closed with the ledger-unavailable ask, no cap opens no database, and at the cap nothing is sent, the error says only Work is paused for budget. and the tool loop ends the attempt with the spend-cap ask after one model call (the tool-loop tests configure CORVIDINHO_LLM_MODEL, AGENT-13); with only CORVIDINHO_PROVIDER_SPEND_CAPS_USD set a search is recorded at 5000 and sent (it counts against the total cap only), and a spend-cap setting that is not valid (an entry keyed on api.search.brave.com included) stops it with the setting named, never echoed (SAFE-14). A schedule the owner created is offered web-search when allowlisted (it runs as the owner, DISCORD-SCHEDULE-1.a); a team member's schedule is not. Leif's go on #318 (REQ-agent-318): once a web-search in a run was answered by Brave, every summary of that run ends with the visible line Search by Brave once, as a closing paragraph after the model fallback note and before the role note; a failed, refused or stopped search, or none, adds no line; no model request (fenced results, tool messages, prompts) contains it, a team member's reply carries it too, a run stopped at the spend cap after a search shows only Work is paused for budget. and the line while the spend-cap ask and the owner's spend DM never carry it, and closingNotesTail keeps it whole through the chat body, NDJSON result and Discord split clips. tests/roles.team.test.ts pins the team search rule; tests/web.fetch.test.ts now expects web-search to exist and web-fetch stays unchanged for any public host; tests/preload.operator-data-dir.test.ts shows a child bun test never sees BRAVE_SEARCH_API_KEY. The new tests fail on the base sources and pass after; one new env var (BRAVE_SEARCH_API_KEY), no table, column or schema version."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "6f4aecc9dd57087fb060b3d5bbb37d0bdaaae2b53dddc48aaeeaff4579f06ef3",
+        "cli": "488cdabe0c545a3af02e7d58923dfbb8ba58df6eecd14a278da8eb185eacbf2a",
+        "discord": "70f6306c7adcda691712b5b86afab66ad5b5f6e399600cb3555a9d4bf5350768",
+        "plugins": "4670052d1c4e73dc7abdb74ee61a3c043420d5d99a7de6c9bdc1d6e64c200b1b"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790802843,
+      "digest": "c7e7baa1e3d0cc5867fd71243c13d5265724fe681c4f3272bdbe54b428962464",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": [
+    {
+      "schema_version": 1,
+      "change_id": "web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered",
+      "actor": "corvid-agent",
+      "reason": "PR #326 review fixes: a 'Search by Brave' line the model wrote itself is dropped before the earned line goes on (no line without a search, once with one, also after an AGENT-11 fallback note); REQ-agent-318 and the approved definition are unchanged",
+      "timestamp": 1790805366,
+      "from_state": "archived",
+      "to_state": "verifying",
+      "superseded_approval": {
+        "gate": "finalization",
+        "actor": "specsync:finalization",
+        "timestamp": 1790802843,
+        "digest": "c7e7baa1e3d0cc5867fd71243c13d5265724fe681c4f3272bdbe54b428962464",
+        "note": "Same-PR finalization closing digest"
+      },
+      "prior_verification": {
+        "timestamp": 1790802576,
+        "commit": "f2ec089e0f108bb046fe4059f9d6da0acf60ec7c",
+        "contract_digest": "a3f15c787729f567e047f042b27022d7d7a18ff9ee15de2fe457bfccdb699a8a",
+        "execution_digest": "36d666bdc5fbcaa779e50206055395654bff658fc6c5c8324fc0ee3315c64e1d",
+        "workspace_digest": "2db781a0044d54e7c9e51240e14aaa9e733a5bb61d44c6047bfe455133108237",
+        "acceptance_input_digest": "376c38176af5b65bde367354d7bf3d4d43a046dd04fdbbec51c892f1905b554f",
+        "acceptance_manifest": {
+          "schema_version": 1,
+          "entries": [
+            {
+              "path": ".env.example",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "f2a1498d50fc8ba23c5be6f99f7541d3000df3470220a18a57deb4737f0c3092",
+              "entry_digest": "385153bd1acca3a2341a8503ef5fb0997d1be38658c620482e3620930a6b272e",
+              "owners": [
+                "cli"
+              ]
+            },
+            {
+              "path": "INTENT.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "8a47bc1f5278b761d3817fb600ceb50b2ae327d5851348ddfd93da7e1b6c1344",
+              "entry_digest": "ad6993e7b4f80c19c9cbc416ddf8dd9a277b112fb6ba05fe73db125f2cd80b12",
+              "owners": [
+                "@exact:delivery"
+              ]
+            },
+            {
+              "path": "docs/DISCORD-GO-LIVE.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "95ca07921721b57f7a64f41c56b4102e76ed4ed2cc10d673b9db1a87a0561064",
+              "entry_digest": "2664bd171d1bf5fb91412890328c51f6b2d84143a876ad1e982fe44bcffbe981",
+              "owners": [
+                "@exact:delivery"
+              ]
+            },
+            {
+              "path": "docs/discord.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "4c987ff251113bf88b27f75a772023743704715c942abc2be922640e61b9f318",
+              "entry_digest": "31b4084d454c81a92b46333eb8cc85e848e09574edfd649ebd26bb56e7a18e02",
+              "owners": [
+                "@exact:delivery"
+              ]
+            },
+            {
+              "path": "hi/plugin.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "8a66772840d3fa5ee9bd553b6325e59499f6f1a67b1961905204d92868474e41",
+              "entry_digest": "2b9a637da70fc73e68000ba5b3b6a01d67661a41280d49827f97710ed0e7ed5e",
+              "owners": [
+                "@exact:delivery"
+              ]
+            },
+            {
+              "path": "plugins/fledge/spawn.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "6c01d471382b717131a35d0e46ee2871779f551fecbaa2544c5157663eb07346",
+              "entry_digest": "0cc7b86a4f9ca243a6b3723f4435d95bc65ea828c8cf792a2128b27d47f1f0f5",
+              "owners": [
+                "plugins"
+              ]
+            },
+            {
+              "path": "plugins/web/api.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "c4d29861f792c2ff254937e030ff32d4e855a0b62393898736e31fba1cb3be57",
+              "entry_digest": "b2ab639f353640d32153bc39d6e3475c2b9d1ba641b65a3eb1ad4bd8b5de7048",
+              "owners": [
+                "plugins"
+              ]
+            },
+            {
+              "path": "plugins/web/commands.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "92b43d3a37a5eec445e952f5c1469fa682d81245be0b35935100de2cedfd3a77",
+              "entry_digest": "1e0a75067a585f7807328e2ea233c737812bea08a535b600ada07e747cf22459",
+              "owners": [
+                "plugins"
+              ]
+            },
+            {
+              "path": "plugins/web/fetch.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "1f94a6ca419ce1dfe50ff583c209ebb5ca141fed84143d31e2b9e08b7b5e6f1b",
+              "entry_digest": "0d4071d11b2bc4e0038213459598066b94bbbae45b26ce1b0b267a15aa9bee98",
+              "owners": [
+                "plugins"
+              ]
+            },
+            {
+              "path": "plugins/web/index.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "d6f9d540913d2a88b083ec1b6a308d2c51b55247199bb1c129c05a0b14e752da",
+              "entry_digest": "e431514fe816053b51e97369b5b5a7c0f7d712c10126e9f82e653be51bb8a9e5",
+              "owners": [
+                "plugins"
+              ]
+            },
+            {
+              "path": "plugins/web/search.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "40ea83db11c90ad63f0e835cd739f04099865431ce0cdb2343ad98e610748c7d",
+              "entry_digest": "e698977f9bc4f7fa9a461bf196534923cec0e0894c1707d459cb93131a4d22f6",
+              "owners": [
+                "plugins"
+              ]
+            },
+            {
+              "path": "specs/agent/agent.spec.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "3991346f5fbd67213898f33fc5e9df0509d2eabf89324db0f679daefa4782a3b",
+              "entry_digest": "f189e9ad25939bfe0b6dd8ab3da36b151e2adbaba4319f5edaab8b3776be81f6",
+              "owners": [
+                "agent"
+              ]
+            },
+            {
+              "path": "specs/agent/context.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "d76cd90c631ea926a7a66ed9c1d9e19cdc745e767687deaff21241041adfb8b9",
+              "entry_digest": "f93515f598a7f68afe90f924ba2680118dbcad9dc5735e84bc325f0aa1fc4208",
+              "owners": [
+                "agent"
+              ]
+            },
+            {
+              "path": "specs/agent/requirements.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "27f91a46ff78d91c4439ab625a48339225e2ffdefde58ea3b0d5c24546256ddb",
+              "entry_digest": "226d5f8d80235d888722f1c258d9c640db43b6e39f1348456dbb75946859f311",
+              "owners": [
+                "agent"
+              ]
+            },
+            {
+              "path": "specs/agent/tasks.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "15955dc0ea8bc11ad9e36cea1ca266e352d029a49b0803ae5dae3d239a9fb472",
+              "entry_digest": "320502eca3792ee5e517405b9d1da93a33b8016a009625d2b311ddfce229b670",
+              "owners": [
+                "agent"
+              ]
+            },
+            {
+              "path": "specs/agent/testing.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "cd06a116b8ac77fc892144cc214dd70ed71255f80cec10962a22760b62201bbe",
+              "entry_digest": "2c7c0fc94599cd6e1846595138bb4d1a1fe9b939b803653b10b703451f41d10a",
+              "owners": [
+                "agent"
+              ]
+            },
+            {
+              "path": "specs/cli/cli.spec.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "c33c1e0b68ecb13eae1f77296a63e8a9dd34327e61293596eae68f5548f9b11a",
+              "entry_digest": "72273918ab769819c3423fa3def148b7f6f7d193e63542dae4f08406a09b0da7",
+              "owners": [
+                "cli"
+              ]
+            },
+            {
+              "path": "specs/cli/context.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "30c4bb67bae0b0c55b7e4814964472d129473160f738d37282ac0e4f35e44215",
+              "entry_digest": "c7ed9b7e95da5de92400b51ea7fd88d43c84ff2074f32f4af404731fc28f1262",
+              "owners": [
+                "cli"
+              ]
+            },
+            {
+              "path": "specs/cli/requirements.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "e1123b7cbad1e9aed45e923f8195e35a3ea8ca19bd77bfb945163b1b728065e0",
+              "entry_digest": "07413d6334cd90477030e9d7ac39b869ad360267c16f5287f2d9b3ad79546483",
+              "owners": [
+                "cli"
+              ]
+            },
+            {
+              "path": "specs/cli/tasks.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "d885ef8812ae1d26402a1ad5c21afd2b0a6e23613adf12bd8c90099fc0ca2be9",
+              "entry_digest": "53296b4ad13365ae83bfd03b5aa5a28e2e0d02e885d6a6dc4481484d558bb26c",
+              "owners": [
+                "cli"
+              ]
+            },
+            {
+              "path": "specs/cli/testing.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "4ea2fd78cfa4111d3e1895ca6cb3c76874f3a37aaee5dad80b3358c6d4b43782",
+              "entry_digest": "520aedb4fc2788515b0f2d5def22fd85fce0c383071fc2036a8ac88ca0bea97c",
+              "owners": [
+                "cli"
+              ]
+            },
+            {
+              "path": "specs/discord/context.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "5959c58aadca03abe655cb690afcfb4232b04aa13ca3ca6fd3554d0ac2a8fd86",
+              "entry_digest": "d1eabe30183c4e345a24f6caf77b870adb27336be5c4bc83ee8cb7b2eeda3cef",
+              "owners": [
+                "discord"
+              ]
+            },
+            {
+              "path": "specs/discord/discord.spec.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "c9018560f7f8748bb497704bcb5896b5273d7034a9c6290792e384f7d53965bf",
+              "entry_digest": "01307b8a648ff0ab869e96584ef42da0bd67be0984e1a4eead31a1740411c9f6",
+              "owners": [
+                "discord"
+              ]
+            },
+            {
+              "path": "specs/discord/requirements.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "dcb0dc172e80d0b9f13813326b1142ceab1ff7d3fb6f0a35b4488419b143cb6a",
+              "entry_digest": "16600955cf8c874363331e8079756183c6627dcb2056b1e7b933b0fba9a22ec6",
+              "owners": [
+                "discord"
+              ]
+            },
+            {
+              "path": "specs/discord/tasks.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "0aa872cdc0f53390df90aede6279472e6356621550d2182db507584ee6d688bf",
+              "entry_digest": "fa9dbcfff2896ff46f933c60a877f0d68ff98c548e637557238ff93217dc7138",
+              "owners": [
+                "discord"
+              ]
+            },
+            {
+              "path": "specs/discord/testing.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "0f44a3618cc7fc5fe576c8e8a13a0861a5c8e86cfdb0d9f8fe81dd1d596fcbbb",
+              "entry_digest": "5655eb6e79a69e3345841ae86604eefdb381e00db22bdfc5458e24ecbabedc9f",
+              "owners": [
+                "discord"
+              ]
+            },
+            {
+              "path": "specs/plugins/context.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "bde5693042c3127e0d04336a6911b85bc5eff9f0b432d42c71ac5544e6d98a73",
+              "entry_digest": "3484832e2b821051fe802d8fc90c872354b6d9f68a08d917a4d9109e3bc3772c",
+              "owners": [
+                "plugins"
+              ]
+            },
+            {
+              "path": "specs/plugins/plugins.spec.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "9c5564ce0cc66db0c762db6a5de3c9c95deb06cea68901afa28512d750c46e0d",
+              "entry_digest": "ed340b1de8598c25983f25e82c96ca9d4a19d569e632ef74af04b7955f03d42c",
+              "owners": [
+                "plugins"
+              ]
+            },
+            {
+              "path": "specs/plugins/requirements.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "1f681ad49dc2317aa7198f13903c7fcfaa6d86b1dbe9ec336942d10345f2f3ab",
+              "entry_digest": "5976474340efeda9ec047d256a0f480f7fcbe8897e05c2173a1377e409b954af",
+              "owners": [
+                "plugins"
+              ]
+            },
+            {
+              "path": "specs/plugins/tasks.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "4fbcf0b7f5af3942f58ab90d5f38ebb0cf4fcd9d77112db6011bc147a6c45bcd",
+              "entry_digest": "c304de7eefe1a9a16d20288d10416125717ec528ef4ddc52ecbf82108e53e9ca",
+              "owners": [
+                "plugins"
+              ]
+            },
+            {
+              "path": "specs/plugins/testing.md",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "cf7c297f50a6e363ab0b85a1684ea01efde64cf8dc8480229fd6a38c6b3c734d",
+              "entry_digest": "5c93b97bbe094c9c1aae0b587c274b03e5d008cc8c6400d4f61dbc3dca3769b5",
+              "owners": [
+                "plugins"
+              ]
+            },
+            {
+              "path": "src/agent/execute.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "75c9cc4a596645032cccbb85d2221ccf070348e16bcfd63c376edebeea3e63bb",
+              "entry_digest": "917245d642f1526ad74adeb65f491bfd9bd8276ae9cfc99fad59fbf74bef9bd9",
+              "owners": [
+                "agent"
+              ]
+            },
+            {
+              "path": "src/agent/loop-guards.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "6092735b744d45d669bf9a640c7336568ab2a51da9e153d7e542536fa2247bc8",
+              "entry_digest": "05a1c59dfa8271195e16e347c1952c551745c353c7a51dd2ec4e7185ce6a6bd6",
+              "owners": [
+                "agent"
+              ]
+            },
+            {
+              "path": "src/agent/spend.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "e986c988ec13316c866f4a9d96e18eae1cbe65ccbb1d5d02b9edb0612c7b4c57",
+              "entry_digest": "8f6b0349af62bd9b5d62692b0521afcf8effc74f8e39638777753d753c34e5aa",
+              "owners": [
+                "agent"
+              ]
+            },
+            {
+              "path": "src/agent/task-summary.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "40bc4ef69e49e6906c87b60534562f4c124201c30f12e0c2f8cb7bfd3010b427",
+              "entry_digest": "b3b6dc02b0889b7aab0fed26efe9effff5d431f1da8d4f3a5b47c88d45a161cb",
+              "owners": [
+                "agent"
+              ]
+            },
+            {
+              "path": "src/agent/untrusted.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "6dbbfaf1ac370bb3ed84632915a6c06ded0e94d9019d37b48474f06394fdc9eb",
+              "entry_digest": "aa749c1ad3fe9cea4b193b11b7a09285cb864630d39c269806fdc29177cef566",
+              "owners": [
+                "agent"
+              ]
+            },
+            {
+              "path": "src/autonomous/delegate.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "c9656379862004af368677b25057bfdb56675b8d0789062065ba2580e55d0dcc",
+              "entry_digest": "671fdd5fe9d30c0c9139d4502979f68ce83de978648d3cf2b53dfb03fac9a4e3",
+              "owners": [
+                "agent"
+              ]
+            },
+            {
+              "path": "src/discord/rich-reply.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "30b75dbfee7d60d0a7b25baedcead550d48c87230feb1a2c8b4c79f1d7d57e36",
+              "entry_digest": "0ee812144c9105abedb1934f07e8072be34c9e5b494b53133d55d7d8e9d52549",
+              "owners": [
+                "discord"
+              ]
+            },
+            {
+              "path": "src/plugins/roles.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "3b3e8935cf4ca6c1f1bdc776f59b567f542baa998f94d0b2b9a9820f06bcd648",
+              "entry_digest": "141d4789f3ab8d698d8cdaf6b8b83f8e0183c7a04846f02aad1625d48ad2ac1f",
+              "owners": [
+                "plugins"
+              ]
+            },
+            {
+              "path": "src/plugins/types.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "5d6628bbd50e6f5c38c6d4d720d81f576e66d36fb04ab26df045bd28e3aa2f77",
+              "entry_digest": "b46fcfd9f244961fe558f55a4105159369f65d00860edf4ca1f00d572a53c0a6",
+              "owners": [
+                "plugins"
+              ]
+            },
+            {
+              "path": "src/store/scrub.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "bcfcf5a43abae4b7caf08f77c1c9ed0a24544ddcb357c4e9343ea44301468ed5",
+              "entry_digest": "7fc907a9ddfe2cd83f793b6d39e7f99f50173dc550bdb3fecd4c17ebb2c64097",
+              "owners": [
+                "discord"
+              ]
+            },
+            {
+              "path": "tests/fixtures/preload-probe.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "cb5fee38cba157c65f9ee31dd42e626b709fb84099a43303dde9286c71ae04a3",
+              "entry_digest": "54f213e84ee70e0a7e13610cfdf32baa60ccccf8d67de1d4bd3044c22eba6bf2",
+              "owners": [
+                "@exact:test"
+              ]
+            },
+            {
+              "path": "tests/preload.operator-data-dir.test.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "9a9377862c8a99fac820bc4ab27e0c82d7f8bb2118a19cb9c0fdd5c61891aee8",
+              "entry_digest": "6f9fd1475abb1cad66b545098fa39de2fc40d44461ab9acca131a7f5d4c2bbeb",
+              "owners": [
+                "@exact:test"
+              ]
+            },
+            {
+              "path": "tests/preload.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "390e6f54dd6b6aca7d5a13a194ec3ac74880f0cd7e16732c10781b5f68c7b9ae",
+              "entry_digest": "48bc2fb09eca7624dcac38076a2d0907259cb61949e439f69cb3f0cf230508c3",
+              "owners": [
+                "@exact:test"
+              ]
+            },
+            {
+              "path": "tests/roles.team.test.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "715c2a0a68c074eb5fd1635027855aad11918267513652ae65c9ea147d8a9ea9",
+              "entry_digest": "a7a7c5bda3f2ac1a2afe3479cbefad55f3c566113bc52121facada8d5eb18afb",
+              "owners": [
+                "@exact:test"
+              ]
+            },
+            {
+              "path": "tests/web.fetch.test.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "f98b345bc8a017e84fde17b6a66e094dcb9fb0a00806550dff0a411e5b60e89a",
+              "entry_digest": "5594bb2509ced88f3784f237c5e011b0d18d899f1e40366a3a02d3bbaae25125",
+              "owners": [
+                "@exact:test"
+              ]
+            },
+            {
+              "path": "tests/web.search.test.ts",
+              "kind": "file",
+              "mode": 33188,
+              "payload_digest": "b31f71ffa64934935f66aa4b52e99035dc3fb4bf459be183e5ff28904ccbfc9e",
+              "entry_digest": "72e1fa48da40fcb21d7db2b14b38053f3df30e0ca0a957db655dc346f4736d86",
+              "owners": [
+                "@exact:test"
+              ]
+            }
+          ]
+        },
+        "passed": true,
+        "commands": [
+          {
+            "command": "specsync check --spec agent --spec cli --spec discord --spec plugins",
+            "success": true,
+            "exit_code": 0
+          }
+        ],
+        "requirement_ids": [
+          "REQ-agent-002",
+          "REQ-agent-071",
+          "REQ-agent-086",
+          "REQ-agent-098",
+          "REQ-agent-117",
+          "REQ-agent-318",
+          "REQ-cli-262",
+          "REQ-discord-417",
+          "REQ-plugins-065",
+          "REQ-plugins-111",
+          "REQ-plugins-113",
+          "REQ-plugins-318",
+          "REQ-plugins-3181"
+        ]
+      },
+      "stale_acceptance_input_digest": "376c38176af5b65bde367354d7bf3d4d43a046dd04fdbbec51c892f1905b554f",
+      "current_acceptance_input_digest": "c056c920c73901b162e398fac6011914ba553d420aa33fb73767eedde3a1c720"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "f2ec089e0f108bb046fe4059f9d6da0acf60ec7c",
+      "contract_digest": "a3f15c787729f567e047f042b27022d7d7a18ff9ee15de2fe457bfccdb699a8a",
+      "execution_digest": "36d666bdc5fbcaa779e50206055395654bff658fc6c5c8324fc0ee3315c64e1d",
+      "workspace_digest": "2db781a0044d54e7c9e51240e14aaa9e733a5bb61d44c6047bfe455133108237",
+      "timestamp": 1790802767
+    }
+  ]
+}

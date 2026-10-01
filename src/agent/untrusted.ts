@@ -273,7 +273,7 @@ const NEGATION_BEFORE_RE = /\b(?:don'?t|do not|never|not|shouldn'?t|won'?t|can'?
 
 /** Corvidinho's mutating tool names, as a tool-call payload would name them. */
 const TOOL_NAMES =
-  "shell-exec|node-exec|python-exec|cargo-exec|files-(?:write|edit|delete)|git-(?:commit|push|checkout|reset|branch)|github-(?:pr-create|pr-review|issue-create|issue-comment)|memory-(?:store|forget|override)|discord-(?:post-message|send-file)|fledge-(?:run|lanes-run)|delegate|council|web-fetch";
+  "shell-exec|node-exec|python-exec|cargo-exec|files-(?:write|edit|delete)|git-(?:commit|push|checkout|reset|branch)|github-(?:pr-create|pr-review|issue-create|issue-comment)|memory-(?:store|forget|override)|discord-(?:post-message|send-file)|fledge-(?:run|lanes-run)|delegate|council|web-(?:fetch|search)";
 
 type Pattern = {
   reason: InjectionReason;
@@ -487,7 +487,8 @@ export function injectionNoticeFromUnknown(raw: unknown): InjectionNotice | unde
 /**
  * Tools whose results carry third-party text (issue / PR / comment / page
  * bodies and titles, guild member names): fenced as untrusted data in the
- * tool loop (SAFE-12). `web-fetch` fences its own page text already.
+ * tool loop (SAFE-12). `web-fetch` and `web-search` fence their own
+ * third-party text already (the web fence, plugins/web/text.ts).
  */
 export const UNTRUSTED_RESULT_TOOLS: ReadonlySet<string> = new Set([
   "github-pr-list",
@@ -503,12 +504,16 @@ export const UNTRUSTED_RESULT_TOOLS: ReadonlySet<string> = new Set([
 
 /**
  * Tools whose results the SAFE-13 detector scans: the prose readers (web
- * pages, issue / PR titles, repo docs, milestones, guild member names). PR
- * diffs and file lists are code (they quote prompts and payloads all the
- * time), so they are fenced but not scanned.
+ * pages, web search results (PLUGIN-7), issue / PR titles, repo docs,
+ * milestones, guild member names). PR diffs and file lists are code (they
+ * quote prompts and payloads all the time), so they are fenced but not
+ * scanned. One hit drops every mutating tool for the rest of the run, so a
+ * suspicious search snippet also switches off `web-search` and `web-fetch`
+ * themselves (both dangerous) — intended (#318).
  */
 export const INJECTION_SCAN_TOOLS: ReadonlySet<string> = new Set([
   "web-fetch",
+  "web-search",
   "github-pr-list",
   "github-pr-status",
   "github-issue-list",
