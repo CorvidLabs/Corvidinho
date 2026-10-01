@@ -7,8 +7,10 @@
  * controls, reusing the DISCORD-ASK buttons (src/discord/ask-buttons.ts) with
  * the run id (`srun_…`) as the ask id: **Choose** when its choices fit a
  * short list (the private pick UI), else **Answer** (the private form,
- * DISCORD-ASK-4.a), and **Cancel**; a spend-cap stop gets **Cancel** only
- * (continuing past the cap is not a choice here). The ask lives in SQLite
+ * DISCORD-ASK-4.a), and **Cancel**; a spend-cap stop gets **Continue** and
+ * **Cancel** (AUTONOMY-8 / SAFE-8.a: continuing goes through the owner's
+ * spend card, so only the owner may press Continue; its next run's call past
+ * a cap, or at an unknown price, raises a new card and code). The ask lives in SQLite
  * (`schedule_runs`, schema v15), so its controls work across restarts and do
  * not lapse while it is open — DISCORD-ASK-5's ~30-minute expiry stays for
  * session asks. A channel reply does not answer it: schedule posts are not
@@ -22,7 +24,13 @@
  * and who is the schedule's creator or the live owner. A pick or a typed
  * answer (SAFE-6 scrubbed; SAFE-13 scanned once, here) closes the ask and is
  * handed to the schedule's next run; Cancel (or `cancel` typed in the form)
- * closes it with no answer. Either way the next due run goes ahead.
+ * closes it with no answer. Either way the next due run goes ahead. On a
+ * spend-cap stop, the owner's Continue closes it as `continued` with no
+ * answer handed on (the question's amounts never reach a run's prompt), and
+ * the next due run goes ahead, asking on a spend card before any call past a
+ * cap (SAFE-8.a) or at an unknown price (SAFE-16.a); anyone else's Continue
+ * is refused like a press on someone else's ask, and a Choose or Answer
+ * submit on it is refused as before.
  */
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
@@ -78,6 +86,17 @@ export const SCHEDULE_ASK_ANSWER_HINT =
 /** Private ack once a schedule ask is answered (typed or picked). */
 export const SCHEDULE_ASK_ANSWERED_ACK = "Got it — the schedule's next run gets your answer.";
 
+/** Label of the Continue control on a schedule's spend-cap stop (AUTONOMY-8). */
+export const SCHEDULE_ASK_CONTINUE_LABEL = "Continue";
+
+/**
+ * Private ack (the owner's only) once a schedule's spend-cap stop is
+ * continued: nothing is spent until the owner approves each call on its card.
+ */
+export const SCHEDULE_ASK_CONTINUED_ACK =
+  "Continuing — the schedule's next run goes ahead, and any call past a spend cap (or at an unknown price) " +
+  "asks you first on a spend card with a one-time code (SAFE-8.a, SAFE-16.a).";
+
 /** Private ack once a schedule ask is cancelled. */
 export const SCHEDULE_ASK_CANCELLED_ACK =
   "Cancelled — the schedule's next runs go ahead without an answer.";
@@ -103,8 +122,8 @@ export function isScheduleAskId(askId: string): boolean {
 
 /**
  * The hint line of a schedule ask post: how its own controls answer it.
- * None for a spend-cap stop (only Cancel; its post stays "Work is paused for
- * budget.", SAFE-14.a).
+ * None for a spend-cap stop (Continue for the owner, Cancel; its post stays
+ * "Work is paused for budget.", SAFE-14.a).
  */
 export function scheduleAskHint(ask: HumanAsk): string | undefined {
   if (ask.reason === "spend-cap") return undefined;
@@ -113,18 +132,22 @@ export function scheduleAskHint(ask: HumanAsk): string | undefined {
 
 /**
  * The controls of a schedule ask post, one row: Choose (listed choices) or
- * Answer (free text), then Cancel; a spend-cap stop gets Cancel only.
+ * Answer (free text), then Cancel; a spend-cap stop gets Continue (the ask's
+ * open control, the owner's only) and Cancel (AUTONOMY-8).
  */
 export function scheduleAskComponents(runId: string, ask: HumanAsk): DiscordActionRow[] {
   const buttons: DiscordButton[] = [];
-  if (ask.reason !== "spend-cap") {
-    buttons.push({
-      type: 2,
-      style: 1,
-      label: ask.options?.length ? "Choose" : ASK_ANSWER_LABEL,
-      custom_id: openCustomId(runId),
-    });
-  }
+  buttons.push({
+    type: 2,
+    style: 1,
+    label:
+      ask.reason === "spend-cap"
+        ? SCHEDULE_ASK_CONTINUE_LABEL
+        : ask.options?.length
+        ? "Choose"
+        : ASK_ANSWER_LABEL,
+    custom_id: openCustomId(runId),
+  });
   buttons.push({ type: 2, style: 2, label: ASK_CANCEL_LABEL, custom_id: cancelCustomId(runId) });
   return [{ type: 1, components: buttons }];
 }
@@ -292,11 +315,25 @@ export async function handleScheduleAskPress(
     return;
   }
 
-  // A spend-cap stop is answered by Cancel only (continuing past the cap is
-  // not a choice here); a forged Choose / Answer press or submit on it is
-  // refused like someone else's.
+  // AUTONOMY-8: a spend-cap stop is answered by the owner's Continue (its
+  // open control) or by Cancel. Continuing goes through the owner's spend
+  // card (money), so only the live owner may press it; the creator's press
+  // and a forged Choose / Answer press or submit are refused like someone
+  // else's (SAFE-14.a: no spend detail in the refusal). No answer is handed
+  // on, so the stop's amounts never reach a run's prompt.
   if (spendCap) {
-    await notYours(interaction);
+    if (parsed.kind !== "open" || !isOwnerDiscord(deps.owner, interaction.userId)) {
+      await notYours(interaction);
+      return;
+    }
+    if (!deps.store.closeRunAsk(runId, { outcome: "continued", closedBy }, now)) {
+      await notYours(interaction);
+      return;
+    }
+    await interaction.reply({
+      content: withPausedNote(SCHEDULE_ASK_CONTINUED_ACK, schedule),
+      ephemeral: true,
+    });
     return;
   }
 

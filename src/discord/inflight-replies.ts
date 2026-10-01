@@ -7,8 +7,9 @@
  * every exit path. A row still present at bridge start belongs to a process
  * that died mid-reply (update SIGTERM, crash, OOM): its progress embed is
  * frozen at "working…". Startup recovery turns that embed into a failed
- * "interrupted" status, or replies to the request message when the edit is
- * not possible, then deletes the row.
+ * "interrupted" status (clearing the dead run's Stop button, AGENT-3.a), or
+ * replies to the request message when the edit is not possible, then deletes
+ * the row.
  *
  * Recovery only touches the row's own channel (where the reply was going), and
  * only while that channel (or the thread's parent) is still allowlisted
@@ -213,6 +214,8 @@ export async function recoverInterruptedReplies(
           channelId: row.channelId,
           messageId: row.progressMessageId,
           embed: buildInterruptedEmbed(row),
+          // AGENT-3.a (REQ-discord-303): the dead run's Stop button goes too.
+          components: null,
         });
       } catch {
         edited = false;

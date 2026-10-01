@@ -1,0 +1,150 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790809906,
+      "digest": "980fe7722d66d669a78414120e651a1d54683e18f82adeee855c1fc0af670e7c",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "a-call-whose-price-is-unknown-stops-and-asks-on-the-owner-s-spend-card-showing-the-amount-as-unknown-when-a-cap-covers",
+        "title": "A call whose price is unknown stops and asks on the owner's spend card showing the amount as unknown when a cap covers it (recorded unknown, owner lines read $X + unknown, no price override), and every surface asks before spending over a cap: WATCH spend-cap stops reach the owner by DM and a schedule's spend-cap stop can go on through the card (SAFE-16, SAFE-16.a, AUTONOMY-8)",
+        "description": "A call whose price is unknown stops and asks on the owner's spend card showing the amount as unknown when a cap covers it (recorded unknown, owner lines read $X + unknown, no price override), and every surface asks before spending over a cap: WATCH spend-cap stops reach the owner by DM and a schedule's spend-cap stop can go on through the card (SAFE-16, SAFE-16.a, AUTONOMY-8)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "discord",
+          "watch"
+        ],
+        "affected_paths": [
+          "INTENT.md",
+          "docs/DAEMON.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/WATCH.md",
+          "docs/discord.md",
+          "hi/safe.md",
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "specs/watch/testing.md",
+          "specs/watch/watch.spec.md",
+          "src/agent/spend-notice.ts",
+          "src/agent/spend-outbox.ts",
+          "src/agent/spend.ts",
+          "src/agent/types.ts",
+          "src/discord/schedule-ask.ts",
+          "src/discord/spend-card.ts",
+          "src/discord/watch-ask.ts",
+          "src/scheduler/service.ts",
+          "src/scheduler/store.ts",
+          "src/store/db.ts",
+          "src/watch/owner-ask.ts",
+          "tests/agent.spend-approve.test.ts",
+          "tests/agent.spend-ask.test.ts",
+          "tests/agent.spend-caps.test.ts",
+          "tests/agent.spend-unknown.test.ts",
+          "tests/agent.spend.test.ts",
+          "tests/discord.schedule-ask.test.ts",
+          "tests/discord.spend-dm.test.ts",
+          "tests/scheduler.ask-block.test.ts",
+          "tests/spend.surfaces.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "With a spend cap covering the call (the total cap, its provider's cap, or both) and an owner configured, a model call whose price is unknown is held, not sent, and asks the owner on a DM spend card (kind spend, class money: Approve plus the one-time code) whose Amount reads unknown (never $0), whose Target names every covering cap and whose title says Spend at an unknown price; Approve plus the code lets exactly that call through, recorded in spend_ledger with status unknown (no amount), and the next such call asks again; deny, no answer, a late code or a stop sends and records nothing and the run ends blocked with the unpriced spend-cap ask naming the card, without the reply note. With no cap covering it the call just runs, unrecorded, with no card; with no owner (or no card path) the operator ask comes at once as before; there is no price override. The rolling window counts unknownCalls, and every owner spend line (doctor, the owner's /status, the 80% warning and its DM, the stop ask and the card context) reads $X + unknown while the window holds such a call; non-owners still see only Work is paused for budget. A WATCH run stopped at a spend cap is recorded in watch_owner_asks (reason spend-cap) and the bridge DMs the owner the stop's details with the GitHub thread once per cap episode, while GitHub shows only the pause. A schedule's spend-cap stop carries Continue (the owner's only; closes it continued with no answer handed on, so the next run asks on a card before any call past a cap) and Cancel. A cross-surface test drives chat, slash /session and /work, ask buttons, schedules, the daemon, WATCH, the CLI and delegate/council workers through their real spawn env and shows each stops and asks before spending over the total cap, a provider cap and at an unknown price. The new tests fail on main's sources and pass on the branch; no schema bump, no new config key or env var."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "007a8a431800c97e85e1acd383555da6f4ad6e008d42cf61a3fd776de9a63421",
+        "discord": "bc0845f96bc556f5b3ae1308f1ee7d3d2f4e0753b46078e757cd7c000432e143",
+        "watch": "f51dce8dc7b5f9d9a13a37ed76a3bee84656beed075d8dc0e852aa54df114411"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790811097,
+      "digest": "980fe7722d66d669a78414120e651a1d54683e18f82adeee855c1fc0af670e7c",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "a-call-whose-price-is-unknown-stops-and-asks-on-the-owner-s-spend-card-showing-the-amount-as-unknown-when-a-cap-covers",
+        "title": "A call whose price is unknown stops and asks on the owner's spend card showing the amount as unknown when a cap covers it (recorded unknown, owner lines read $X + unknown, no price override), and every surface asks before spending over a cap: WATCH spend-cap stops reach the owner by DM and a schedule's spend-cap stop can go on through the card (SAFE-16, SAFE-16.a, AUTONOMY-8)",
+        "description": "A call whose price is unknown stops and asks on the owner's spend card showing the amount as unknown when a cap covers it (recorded unknown, owner lines read $X + unknown, no price override), and every surface asks before spending over a cap: WATCH spend-cap stops reach the owner by DM and a schedule's spend-cap stop can go on through the card (SAFE-16, SAFE-16.a, AUTONOMY-8)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "discord",
+          "watch"
+        ],
+        "affected_paths": [
+          "INTENT.md",
+          "docs/DAEMON.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/WATCH.md",
+          "docs/discord.md",
+          "hi/safe.md",
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "specs/watch/testing.md",
+          "specs/watch/watch.spec.md",
+          "src/agent/spend-notice.ts",
+          "src/agent/spend-outbox.ts",
+          "src/agent/spend.ts",
+          "src/agent/types.ts",
+          "src/discord/schedule-ask.ts",
+          "src/discord/spend-card.ts",
+          "src/discord/watch-ask.ts",
+          "src/scheduler/service.ts",
+          "src/scheduler/store.ts",
+          "src/store/db.ts",
+          "src/watch/owner-ask.ts",
+          "tests/agent.spend-approve.test.ts",
+          "tests/agent.spend-ask.test.ts",
+          "tests/agent.spend-caps.test.ts",
+          "tests/agent.spend-unknown.test.ts",
+          "tests/agent.spend.test.ts",
+          "tests/discord.schedule-ask.test.ts",
+          "tests/discord.spend-dm.test.ts",
+          "tests/scheduler.ask-block.test.ts",
+          "tests/spend.surfaces.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "With a spend cap covering the call (the total cap, its provider's cap, or both) and an owner configured, a model call whose price is unknown is held, not sent, and asks the owner on a DM spend card (kind spend, class money: Approve plus the one-time code) whose Amount reads unknown (never $0), whose Target names every covering cap and whose title says Spend at an unknown price; Approve plus the code lets exactly that call through, recorded in spend_ledger with status unknown (no amount), and the next such call asks again; deny, no answer, a late code or a stop sends and records nothing and the run ends blocked with the unpriced spend-cap ask naming the card, without the reply note. With no cap covering it the call just runs, unrecorded, with no card; with no owner (or no card path) the operator ask comes at once as before; there is no price override. The rolling window counts unknownCalls, and every owner spend line (doctor, the owner's /status, the 80% warning and its DM, the stop ask and the card context) reads $X + unknown while the window holds such a call; non-owners still see only Work is paused for budget. A WATCH run stopped at a spend cap is recorded in watch_owner_asks (reason spend-cap) and the bridge DMs the owner the stop's details with the GitHub thread once per cap episode, while GitHub shows only the pause. A schedule's spend-cap stop carries Continue (the owner's only; closes it continued with no answer handed on, so the next run asks on a card before any call past a cap) and Cancel. A cross-surface test drives chat, slash /session and /work, ask buttons, schedules, the daemon, WATCH, the CLI and delegate/council workers through their real spawn env and shows each stops and asks before spending over the total cap, a provider cap and at an unknown price. The new tests fail on main's sources and pass on the branch; no schema bump, no new config key or env var."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "007a8a431800c97e85e1acd383555da6f4ad6e008d42cf61a3fd776de9a63421",
+        "discord": "a12f2f5bfaa4df8a161793f86a79e920d874f7d96bfc4d574847304420cf48a3",
+        "watch": "9efb41a54cca5b20d4ea8fd097e400eda91dc081a0d20a49a49d83c8a943c25c"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790812717,
+      "digest": "98edadcba86f95d864239a80dc0f7f9881be516afde28fa3d0c1bf56996548d8",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

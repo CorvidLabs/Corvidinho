@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "a-call-whose-price-is-unknown-stops-and-asks-on-the-owner-s-spend-card-showing-the-amount-as-unknown-when-a-cap-covers",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "8fd65c33dd8e0ddce6926e90b32abe78c987a2d2",
+  "contract_digest": "980fe7722d66d669a78414120e651a1d54683e18f82adeee855c1fc0af670e7c",
+  "execution_digest": "ee98a3bfe524ce0cf210cda841de2676ddeca66b070b620432ed39782366ac18",
+  "workspace_digest": "74c010a420e6d5b060438691e85b1706e550e98855f0455f4764c91bd1224794",
+  "timestamp": 1790812702
+}

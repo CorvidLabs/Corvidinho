@@ -28,6 +28,14 @@
  * WATCH) is the generic SPEND_PAUSED_TEXT without amounts, scopes or setting
  * names (SAFE-14.a); the details live in the ask question, which on Discord
  * reaches only the owner, by DM (src/discord/spend-dm.ts).
+ *
+ * SAFE-16 / SAFE-16.a: a model with no known price is never counted as $0.
+ * Its call under a cap waits for the owner's spend card with the amount shown
+ * as unknown; an approved one is recorded as `unknown` in the ledger, and
+ * every owner line that reports spend (doctor, `/status`, the warning and
+ * stop DMs, the card) shows the 24 h spend as "$X + unknown" while the window
+ * holds such a call (`formatSpend`). Anyone else still sees only "Work is
+ * paused for budget.".
  */
 
 import { scrubSecrets } from "../store/scrub.ts";
@@ -107,6 +115,18 @@ export function formatUsd(microUsd: number): string {
   return `$${Math.floor(n / scale)}.${String(n % scale).padStart(digits, "0")}`;
 }
 
+/** Most unknown-price calls a bridge accepts from a child's result frame. */
+const MAX_UNKNOWN_CALLS = 1e9;
+
+/**
+ * SAFE-16 / SAFE-16.a: 24 h spend as the owner sees it — `formatUsd` of the
+ * priced spend, plus " + unknown" while the window holds a call whose price
+ * is unknown (it is never counted as $0).
+ */
+export function formatSpend(microUsd: number, unknownCalls?: number): string {
+  return unknownCalls && unknownCalls > 0 ? `${formatUsd(microUsd)} + unknown` : formatUsd(microUsd);
+}
+
 /** floor(spent × 100 / cap); a zero cap is always at 100%. */
 export function spendPercent(spentMicroUsd: number, capMicroUsd: number): number {
   if (capMicroUsd <= 0) return 100;
@@ -123,20 +143,21 @@ export function atWarnThreshold(spentMicroUsd: number, capMicroUsd: number): boo
 /**
  * Runner-side warning text (Text event, CLI stderr, the owner's DM). A
  * provider cap's warning names its scope (SAFE-14 / SAFE-15); the total
- * cap's reads as before.
+ * cap's reads as before. Spend that includes calls at an unknown price reads
+ * "$X + unknown" (SAFE-16).
  */
 export function formatSpendWarningLine(w: SpendWarning): string {
   const provider = providerOfSpendScope(w.scope);
   if (provider !== undefined) {
     const id = shownProvider(provider);
     return (
-      `⚠️ Spend warning (SAFE-15, provider:${id}): ${formatUsd(w.spentMicroUsd)} of the ` +
+      `⚠️ Spend warning (SAFE-15, provider:${id}): ${formatSpend(w.spentMicroUsd, w.unknownCalls)} of the ` +
       `${formatUsd(w.capMicroUsd)} daily cap for ${id} used in the last 24h (${w.percent}%). ` +
       "At that cap I stop and ask before spending more on it."
     );
   }
   return (
-    `⚠️ Spend warning (SAFE-8): ${formatUsd(w.spentMicroUsd)} of the ` +
+    `⚠️ Spend warning (SAFE-8): ${formatSpend(w.spentMicroUsd, w.unknownCalls)} of the ` +
     `${formatUsd(w.capMicroUsd)} daily cap used in the last 24h (${w.percent}%). ` +
     "At the cap I stop and ask before spending more."
   );
@@ -150,8 +171,9 @@ function microUsd(v: unknown): number | undefined {
 
 /**
  * Read a SpendWarning from a parsed `result` frame (child output). Only the
- * two amounts and a well-formed provider scope are taken; the percent is
- * recomputed. Undefined unless valid.
+ * two amounts, a well-formed provider scope and a whole count of calls at an
+ * unknown price (SAFE-16) are taken; the percent is recomputed. Undefined
+ * unless valid.
  */
 export function spendWarningFromUnknown(raw: unknown): SpendWarning | undefined {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
@@ -161,6 +183,10 @@ export function spendWarningFromUnknown(raw: unknown): SpendWarning | undefined 
   if (spent === undefined || cap === undefined) return undefined;
   const w: SpendWarning = { spentMicroUsd: spent, capMicroUsd: cap, percent: spendPercent(spent, cap) };
   if (isSpendScope(o.scope) && o.scope !== TOTAL_SPEND_SCOPE) w.scope = o.scope;
+  const unknown = o.unknownCalls;
+  if (typeof unknown === "number" && Number.isSafeInteger(unknown) && unknown > 0 && unknown <= MAX_UNKNOWN_CALLS) {
+    w.unknownCalls = unknown;
+  }
   return w;
 }
 
@@ -170,9 +196,10 @@ export function spendWarningFromUnknown(raw: unknown): SpendWarning | undefined 
 const OPERATOR_HINT =
   "in the environment Corvidinho runs with and restarts the bridge or daemon so new runs pick it up";
 /**
- * Nobody's Approve card can lift this stop (no owner configured, or nothing
- * priced to approve): say plainly that answering does not unblock. Not on a
- * stop that already went through the owner's spend card.
+ * Nobody's Approve card can lift this stop (no owner configured, no card
+ * path, an unreadable setting or ledger): say plainly that answering does
+ * not unblock. Not on a stop that already went through the owner's spend
+ * card.
  */
 const NO_REPLY_NOTE = "Replying can't lift the cap — this needs the operator.";
 
@@ -229,16 +256,22 @@ function spendCapAsk(question: string, scopes?: readonly string[]): HumanAsk {
   return ask;
 }
 
-/** One cap a call would pass: its scope and that scope's 24 h spend against it. */
-export type SpendTrip = { scope: string; spentMicroUsd: number; capMicroUsd: number };
+/**
+ * One cap a call would pass (or, for a call at an unknown price, one cap that
+ * covers it): its scope and that scope's 24 h spend against it.
+ * `unknownCalls` counts that scope's calls at an unknown price in the window
+ * (SAFE-16: the spend then reads "$X + unknown").
+ */
+export type SpendTrip = { scope: string; spentMicroUsd: number; capMicroUsd: number; unknownCalls?: number };
 
 /** "$X spent in the last 24h (P% of the $Y cap)", or for a provider "… on <id> … of its $Y cap". */
 function tripClause(t: SpendTrip): string {
   const pct = spendPercent(t.spentMicroUsd, t.capMicroUsd);
   const provider = providerOfSpendScope(t.scope);
+  const spent = formatSpend(t.spentMicroUsd, t.unknownCalls);
   return provider === undefined
-    ? `${formatUsd(t.spentMicroUsd)} spent in the last 24h (${pct}% of the ${formatUsd(t.capMicroUsd)} cap)`
-    : `${formatUsd(t.spentMicroUsd)} spent on ${shownProvider(provider)} in the last 24h ` +
+    ? `${spent} spent in the last 24h (${pct}% of the ${formatUsd(t.capMicroUsd)} cap)`
+    : `${spent} spent on ${shownProvider(provider)} in the last 24h ` +
         `(${pct}% of its ${formatUsd(t.capMicroUsd)} cap)`;
 }
 
@@ -366,12 +399,19 @@ export function spendCapInvalidAsk(keys?: readonly string[]): HumanAsk {
  * `CORVIDINHO_LLM_MODEL_READ` wins over `CORVIDINHO_LLM_MODEL`), so the ask
  * names the key that actually has to change. `scope` is the cap that covers
  * the call (default the total cap); a provider cap names its entry.
+ *
+ * With `card` (SAFE-16.a) the call was held for the owner's spend card, which
+ * showed the amount as unknown, and that card came to no: the question says
+ * so, keeps the "Stopped at cap" marker, and names both ways on — ask again
+ * for a new card and code, or the operator action — without the "replying
+ * can't lift the cap" note. There is no price override (SAFE-16.a).
  */
 export function spendCapUnpricedAsk(
   model: string,
   capMicroUsd: number,
   modelKey = "CORVIDINHO_LLM_MODEL",
   scope: string = TOTAL_SPEND_SCOPE,
+  card?: SpendCardNo,
 ): HumanAsk {
   const shown = scrubSecrets(model).replace(/\s+/g, " ").trim().slice(0, 80) || "(none)";
   const provider = providerOfSpendScope(scope);
@@ -383,6 +423,16 @@ export function spendCapUnpricedAsk(
     provider === undefined
       ? `unsets ${SPEND_CAP_ENV}`
       : `removes the ${shownProvider(provider)} entry of ${PROVIDER_SPEND_CAPS_ENV}`;
+  if (card) {
+    return spendCapAsk(
+      `Spend at an unknown price (SAFE-16.a): model "${shown}" has no known price, so I held its call ` +
+        `under ${cap} and asked the owner on a spend Approve card showing the amount as unknown ` +
+        `(never counted as $0). ${spendCardNoText(card)} ${stoppedAt([spendScopeLabel(scope)])} ` +
+        "To continue, ask again — the next call at an unknown price raises a new card and code — or the " +
+        `operator switches ${modelKey} to a priced model or ${unset} ${OPERATOR_HINT}.`,
+      [scope],
+    );
+  }
   return spendCapAsk(
     `Spend cap can't be enforced (SAFE-8): model "${shown}" has no known price, so I can't ` +
       `count it against ${cap} and stopped before calling ` +
@@ -450,7 +500,17 @@ const STOPS_AND_ASKS = "runs stop and ask before calling the provider";
 
 function unpricedNote(s: { model: string; tier?: CapabilityTier }): string {
   const runs = s.tier ? `${s.tier}-tier runs` : "runs";
-  return `model "${scrubSecrets(s.model)}" has no known price, so ${runs} stop and ask before calling the provider`;
+  return (
+    `model "${scrubSecrets(s.model)}" has no known price, so ${runs} stop and ask before calling the provider ` +
+    "(each call on a spend card showing the amount as unknown, SAFE-16.a)"
+  );
+}
+
+/** ", N counted at its estimate" / ", N at an unknown price" for a doctor line (SAFE-16). */
+function windowCounts(w: SpendWindow): string {
+  const estimated = w.estimatedCalls ? `, ${w.estimatedCalls} counted at its estimate` : "";
+  const unknown = w.unknownCalls ? `, ${w.unknownCalls} at an unknown price` : "";
+  return `${estimated}${unknown}`;
 }
 
 /** Doctor `spend` line (the total cap). Informational: `ok` is always true, so it never fails doctor. */
@@ -489,7 +549,6 @@ export function formatSpendDoctorLine(s: SpendSnapshot): SpendDoctorLine {
         };
       }
       const pct = spendPercent(w.spentMicroUsd, cap);
-      const estimated = w.estimatedCalls ? `, ${w.estimatedCalls} counted at its estimate` : "";
       if (w.spentMicroUsd >= cap) notes.push(`cap reached — ${STOPS_AND_ASKS}`);
       else if (atWarnThreshold(w.spentMicroUsd, cap)) {
         notes.push(`past the ${SPEND_WARN_PERCENT}% warning — a call that would pass the cap stops and asks first`);
@@ -499,8 +558,8 @@ export function formatSpendDoctorLine(s: SpendSnapshot): SpendDoctorLine {
         ok: true,
         mark: notes.length ? "warn" : "ok",
         detail:
-          `${formatUsd(w.spentMicroUsd)} of ${formatUsd(cap)} daily cap used in the last 24h ` +
-          `(${pct}%; ${w.calls} provider call(s)${estimated}; ${SPEND_CAP_ENV}, SAFE-8)` +
+          `${formatSpend(w.spentMicroUsd, w.unknownCalls)} of ${formatUsd(cap)} daily cap used in the last 24h ` +
+          `(${pct}%; ${w.calls} provider call(s)${windowCounts(w)}; ${SPEND_CAP_ENV}, SAFE-8)` +
           (notes.length ? `; ${notes.join("; ")}` : ""),
       };
     }
@@ -512,7 +571,6 @@ export function formatProviderSpendDoctorLine(p: ProviderSpend): NamedSpendDocto
   const id = shownProvider(p.provider);
   const { window: w, capMicroUsd: cap } = p;
   const pct = spendPercent(w.spentMicroUsd, cap);
-  const estimated = w.estimatedCalls ? `, ${w.estimatedCalls} counted at its estimate` : "";
   const notes: string[] = [];
   if (w.spentMicroUsd >= cap) notes.push(`cap reached — calls to ${id} stop and ask before they are sent`);
   else if (atWarnThreshold(w.spentMicroUsd, cap)) {
@@ -523,8 +581,8 @@ export function formatProviderSpendDoctorLine(p: ProviderSpend): NamedSpendDocto
     ok: true,
     mark: notes.length ? "warn" : "ok",
     detail:
-      `${formatUsd(w.spentMicroUsd)} of ${formatUsd(cap)} daily cap for ${id} used in the last 24h ` +
-      `(${pct}%; ${w.calls} provider call(s)${estimated}; ${PROVIDER_SPEND_CAPS_ENV}, SAFE-14)` +
+      `${formatSpend(w.spentMicroUsd, w.unknownCalls)} of ${formatUsd(cap)} daily cap for ${id} used in the last 24h ` +
+      `(${pct}%; ${w.calls} provider call(s)${windowCounts(w)}; ${PROVIDER_SPEND_CAPS_ENV}, SAFE-14)` +
       (notes.length ? `; ${notes.join("; ")}` : ""),
   };
 }
@@ -570,7 +628,7 @@ function providerStatusLine(p: ProviderSpend): string {
   const id = shownProvider(p.provider);
   const { window: w, capMicroUsd: cap } = p;
   const pct = spendPercent(w.spentMicroUsd, cap);
-  let line = `Spend (24h) on ${id}: ${formatUsd(w.spentMicroUsd)} of ${formatUsd(cap)} daily cap (${pct}%)`;
+  let line = `Spend (24h) on ${id}: ${formatSpend(w.spentMicroUsd, w.unknownCalls)} of ${formatUsd(cap)} daily cap (${pct}%)`;
   if (w.spentMicroUsd >= cap) line += ` — 🛑 cap reached, calls to ${id} stop and ask`;
   else if (atWarnThreshold(w.spentMicroUsd, cap)) line += ` — ⚠️ past ${SPEND_WARN_PERCENT}%`;
   return line;
@@ -604,14 +662,14 @@ export function formatSpendStatusLine(s: SpendSnapshot): string {
         line = `Spend cap (total): off (${SPEND_CAP_ENV}); per-provider caps below`;
       } else {
         const pct = spendPercent(w.spentMicroUsd, cap);
-        line = `Spend (24h): ${formatUsd(w.spentMicroUsd)} of ${formatUsd(cap)} daily cap (${pct}%)`;
+        line = `Spend (24h): ${formatSpend(w.spentMicroUsd, w.unknownCalls)} of ${formatUsd(cap)} daily cap (${pct}%)`;
         if (w.spentMicroUsd >= cap) line += " — 🛑 cap reached, runs stop and ask";
         else if (atWarnThreshold(w.spentMicroUsd, cap)) line += ` — ⚠️ past ${SPEND_WARN_PERCENT}%`;
       }
       if (!s.priced) {
         line += s.tier
-          ? ` — ⚠️ ${s.tier}-tier model has no known price, ${s.tier}-tier runs stop and ask`
-          : " — ⚠️ model has no known price, runs stop and ask";
+          ? ` — ⚠️ ${s.tier}-tier model has no known price, ${s.tier}-tier runs stop and ask (card shows the amount as unknown)`
+          : " — ⚠️ model has no known price, runs stop and ask (card shows the amount as unknown)";
       }
       return [line, ...(s.providers ?? []).map(providerStatusLine)].join("\n");
     }

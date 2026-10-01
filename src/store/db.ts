@@ -348,7 +348,8 @@ CREATE INDEX IF NOT EXISTS idx_approval_codes_request
  * `ask_options` holds the ask's listed choices (JSON, labels SAFE-6 scrubbed,
  * a re-scrub target), `ask_blocking` marks an ask recorded under these rules,
  * `ask_closed_at` / `ask_outcome` (`answered` | `picked` | `cancelled` |
- * `superseded`) / `ask_closed_by` say when, how and by whom it closed,
+ * `continued` — the owner's Continue on a spend-cap stop, no answer —
+ * | `superseded`) / `ask_closed_by` say when, how and by whom it closed,
  * `ask_answer` is the answer handed to the next run (SAFE-6 scrubbed, a
  * re-scrub target), `ask_skip_at` is when a due run first waited on it and
  * `ask_note_at` when the one wait note went out. An ask recorded before v15

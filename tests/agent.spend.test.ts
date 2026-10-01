@@ -168,7 +168,7 @@ describe("withSpendCap (SAFE-8)", () => {
       completion_tokens: 500,
     });
     expect(rows[0].estimate_micro_usd).toBeGreaterThan(450);
-    expect(new SpendLedger(db).window(NOW)).toEqual({ spentMicroUsd: 450, calls: 1, estimatedCalls: 0 });
+    expect(new SpendLedger(db).window(NOW)).toEqual({ spentMicroUsd: 450, calls: 1, estimatedCalls: 0, unknownCalls: 0 });
   });
 
   test("stops before sending when spend + estimate would break the cap, with a spend-cap ask", async () => {
@@ -267,6 +267,7 @@ describe("withSpendCap (SAFE-8)", () => {
       spentMicroUsd: rows[1].estimate_micro_usd + rows[2].estimate_micro_usd,
       calls: 2,
       estimatedCalls: 2,
+      unknownCalls: 0,
     });
   });
 

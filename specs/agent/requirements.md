@@ -249,12 +249,17 @@ code, REQ-agent-198); the attempt's summary SHALL be the generic `SPEND_CAP_SUMM
 which is `SPEND_PAUSED_TEXT` "Work is paused for budget." (SAFE-14.a), with no
 amounts, no cap and no env names (safe for a public reply such as a WATCH
 comment), and `runTask` SHALL return state `blocked` (never `done`, verify
-not run, no retry) through the AUTONOMY-1/2 ask path. A model with no known
-price, a cap value that is not a plain USD amount (never echoed), or an
-unavailable ledger SHALL end the attempt the same way (never counted as
-free, fail closed; no card is raised for them, since there is no price to
-approve). The runner SHALL NOT send a provider call past the cap, except the
-one call an owner's spend card approved (REQ-agent-198, SAFE-8.a).
+not run, no retry) through the AUTONOMY-1/2 ask path. A cap value that is not
+a plain USD amount (never echoed) or an unavailable ledger SHALL end the
+attempt the same way (fail closed; no card is raised for them). A model with
+no known price SHALL never be counted as free: under a cap that covers its
+call it SHALL, with an owner configured and `approval` given, ask on the
+owner's spend card with the amount shown as unknown (SAFE-16.a,
+REQ-agent-199), and otherwise end the attempt the same way; with no cap
+covering it, it runs unrecorded. The runner SHALL NOT send a provider call
+past the cap, except the one call an owner's spend card approved
+(REQ-agent-198, SAFE-8.a), nor a covered call at an unknown price except the
+one call an owner's unknown-price card approved (REQ-agent-199).
 
 At 80%, after a call settles, when 24-hour spend is at or above 80% of the
 cap and the warning for that cap value is armed, the module SHALL record one
@@ -305,6 +310,7 @@ Acceptance Criteria
 - `SPEND_PAUSED_TEXT` is "Work is paused for budget." and `SPEND_CAP_SUMMARY` equals it; `formatSpendPublicStatusLine` is undefined with no cap and under the cap, and "Spend: Work is paused for budget." at the cap, for an unpriced model, an invalid value and an unreadable ledger; `spendPaused` flips exactly at the cap; the owner's `formatSpendStatusLine` keeps the amounts.
 - With an owner configured and `approval` given, a call over the cap is held for the owner's spend card (REQ-agent-198); with no owner, or through `withSpendCap` (no `approval`), the ask above comes at once with no card and still ends with "Replying can't lift the cap — this needs the operator."
 - After a spend card came to no, the ask keeps the amounts and the `Stopped at cap: …` marker, names the card and what it came to, adds "ask again — the next call past the cap raises a new card and code", and has no reply note and no question mark.
+- An unpriced model under a cap with an owner configured and `approval` given asks on the owner's card with the amount shown as unknown (REQ-agent-199); with no owner, or through `withSpendCap`, it stops at once with the unpriced operator ask as above.
 
 ### REQ-agent-117
 
@@ -1777,7 +1783,9 @@ so it is never a model failure: no model fallback (AGENT-11) may route a
 stopped call to another provider or model. Calls to a provider with no cap
 of its own still count against the total cap. A model with no known price
 SHALL stop and ask when a cap covers its call (the total cap, or its
-provider's cap; the ask names that scope) and SHALL be sent unrecorded when
+provider's cap; the ask names that scope) — with an owner configured, on the
+owner's spend card showing the amount as unknown and targeting every
+covering cap (SAFE-16.a, REQ-agent-199) — and SHALL be sent unrecorded when
 none does (its cost stays unknown, never counted as free, SAFE-16).
 
 At 80%, after a call settles, each cap the call counts against SHALL be
@@ -1812,8 +1820,9 @@ output and the daemon's logs. The Approve card that continues past a cap
 (SAFE-8, SAFE-8.a, SAFE-18..20) is REQ-agent-198: with an owner configured, a
 call past any cap first waits on the owner's spend card, whose target names
 each tripped scope (`total`, `provider:<id>`); with no owner, and for the
-invalid-setting and unpriced stops, the stop keeps the operator-action ask of
-REQ-agent-098.
+invalid-setting stop, the stop keeps the operator-action ask of
+REQ-agent-098; an unpriced call under a cap asks on the same card with the
+amount shown as unknown (REQ-agent-199).
 
 Acceptance Criteria
 - `configuredProviderIds` lists the host of every chain entry of every tier key (OpenAI, Anthropic, Ollama's `127.0.0.1:11434`, a custom `CORVIDINHO_LLM_BASE_URL` host); `parseSpendCaps` is `off` with nothing set, `caps` with a total only, providers only (keys lower-cased, spaces trimmed) or both.
@@ -1834,6 +1843,7 @@ Acceptance Criteria
 - `corvidinho doctor` with an Anthropic model and `CORVIDINHO_PROVIDER_SPEND_CAPS_USD=api.anthropic.com=2` prints `[info] spend: no total daily cap set` and `[ok] spend provider:api.anthropic.com: $0.00 of $2.00 daily cap …`.
 - These tests fail on main's sources.
 - A spend card for a call past a provider cap has target `provider:<id>`; for a call past both caps, `total, provider:<id>`, and its text names each cap's spend when it paused (REQ-agent-198).
+- An unpriced model's card under a provider cap targets `provider:<id>`, under both caps `total, provider:<id>`, with the amount shown as unknown (REQ-agent-199).
 
 ### REQ-agent-198
 
@@ -1905,9 +1915,12 @@ not sent, and SHALL wait for the owner's decision on a spend card:
   when the request's timeout fired during the card wait, so no AGENT-11
   fallback routes around a cap.
 - With no owner configured, without `approval` (`withSpendCap`), and for the
-  unpriced-model, invalid-setting and ledger stops (no price to approve), no
-  card SHALL be raised and the stop SHALL keep the operator-action ask of
-  REQ-agent-098 / REQ-agent-114.
+  invalid-setting and ledger stops, no card SHALL be raised and the stop
+  SHALL keep the operator-action ask of REQ-agent-098 / REQ-agent-114. A
+  call to a model with no known price under a cap raises the same `spend`
+  card with the amount shown as unknown (SAFE-16.a, REQ-agent-199); the
+  card waits, one-at-a-time rule, wait note, abort and no-is-no rules above
+  apply to it too.
 - A CLI-only or daemon-only install (no bridge to DM the card) SHALL record
   the card all the same and wait out its lifetime; the lapse is a no and
   nothing is spent. The bridge's card engine closes a card whose waiting
@@ -1920,7 +1933,7 @@ Acceptance Criteria
 - Denied: no call, no ledger row, request `denied`; the ask (`spendScopes` `["total"]`) says the owner denied Approve card `<id>`, keeps `Stopped at cap: total.`, offers asking again and the operator action, and has no reply note and no `?`; `finish` gives `SPEND_CAP_SUMMARY` and keeps `filesChanged`.
 - No answer before the card lapses: request `expired`, nothing sent or recorded; an approval recorded after that does not take.
 - The call's abort signal ends the wait at once: request `expired`, nothing sent; a stop that lands as the owner approves sends nothing and leaves the approval unused.
-- No owner configured (even with a long card lifetime): the plain ask at once, no card; `withSpendCap` with an owner: no card; an unpriced model under a cap: no card.
+- No owner configured (even with a long card lifetime): the plain ask at once, no card; `withSpendCap` with an owner: no card; an unpriced model under a cap with an owner: a card whose amount is unknown (REQ-agent-199).
 - A provider cap's card targets `provider:llm.test`; a call past both caps targets `total, provider:llm.test`.
 - Two paused calls of one run: the second card is recorded only after the first is decided; two runs paused at once each have a pending card.
 - `reserveApproved` records the approved amount past the cap with the tripped caps named, refuses a larger estimate with no row, and records a call that fits with `trips` empty; a call that would now also pass a cap outside the approved scopes is refused (`reason: "target"`) with no row.
@@ -2021,4 +2034,95 @@ Acceptance Criteria
 - No nudge on the tool tier (no state-changing tool offered), on the read tier, or after a SAFE-13 trip.
 - `runTask` with a stubbed git diff: a non-empty diff (an edit no tool reported) means no nudge and the gate verifies; an empty one means the nudge and nothing to verify.
 - The real CLI (`task run --output ndjson`, localhost fake LLM always saying "Done.") exits 0 after exactly two LLM requests, the second carrying the nudge, with both operator lines and a `done` result whose summary is "Done.".
+
+### REQ-agent-199
+
+A call whose price is unknown stops and asks on a card that shows the amount
+as unknown when a cap covers it; with no cap covering it, it just runs; there
+is no price override (SAFE-16.a, captured with `hi` in this change from
+Leif's 2026-09-30 decision, interview round 13; parent SAFE-16 "An unknown
+model price counts as unknown and shows as unknown, never as free."). It
+asks before any spend that would go over a cap, on every surface
+(AUTONOMY-8).
+
+- Card. When `createSpendGuard` is given `approval` and an owner is
+  configured, a provider call whose model has no known price
+  (`priceForModel` null) and that a cap covers — the total cap, the call's
+  provider cap, or both — SHALL be held, not sent, and SHALL wait for the
+  owner's `spend` card (class `money`: Approve also needs the SAFE-19
+  one-time code), one card at a time per run like a priced card
+  (REQ-agent-198). The card (`spendCardFields` with `estimateMicroUsd`
+  null) SHALL have title `Spend at an unknown price — asks first (SAFE-16.a)
+  · from <surface>`, action `send one model call to <model> via
+  <provider>`, target every covering cap (`total` first, then
+  `provider:<id>`, from `SpendLedger.covering`), amount `unknown (no known
+  price for this model; never counted as free)` (`SPEND_CARD_UNKNOWN_AMOUNT`,
+  `isUnknownSpendAmount`; never a dollar figure), and as text who asked
+  where, the project label, each covering cap's 24-hour spend and that the
+  call's cost is unknown, never counted as $0, and the next such call asks
+  again, then the task (scrubbed, then cut). The run SHALL emit the
+  AUTONOMY-8 wait note naming "one model call at an unknown price under a
+  spend cap" (no amounts).
+- Approve. Only an approval the guard uses once while the call's signal is
+  not aborted SHALL let exactly that call through:
+  `SpendLedger.recordUnknown` records one `spend_ledger` row with status
+  `unknown` (estimate and cost 0 — it adds nothing to the priced spend and
+  is never shown as $0), the call is sent, and it settles as `unknown` with
+  its token usage when reported (`SpendSettlement` `unknown`), or `failed` on
+  an HTTP error reply; a second note says the owner approved it. The next
+  call at an unknown price SHALL raise a new card and code.
+- No. A deny, no answer before the card lapses, a late code, a stop or the
+  per-request timeout while waiting, or a card that could not be raised SHALL
+  send and record nothing, and SHALL throw `SpendCapRefusal` with
+  `spendCapUnpricedAsk(model, cap, modelKey, scope, card)`: a question that
+  says the price is unknown and was shown as unknown on the card, what the
+  card came to (as in REQ-agent-198), the `Stopped at cap: <scope>.` marker,
+  and both ways on (ask again for a new card and code, or the operator
+  switches the model key to a priced model or unsets / removes the cap),
+  without the reply note; `finish` gives `SPEND_CAP_SUMMARY`.
+- No card. With no cap covering the call it SHALL be sent unrecorded with no
+  card. With no owner configured or no `approval` (`withSpendCap`) the
+  unpriced operator ask of REQ-agent-098 comes at once, before the ledger is
+  opened. There SHALL be no price override: the price table
+  (`MODEL_PRICES_USD_PER_MTOK`) stays frozen and no env var or config key
+  sets or changes a model's price.
+- Unknown spend shows as unknown. `SpendLedger.window` SHALL return
+  `unknownCalls` (calls with status `unknown` in the window, counted in
+  `calls` too, never in `estimatedCalls`); a refused reservation's trips and
+  a covering cap carry that scope's `unknownCalls` (`SpendTrip`), and
+  `SpendWarning` carries `unknownCalls` from `noteWarning`, the outbox's
+  `takeWarning` and `spendWarningFromUnknown` (a whole positive count only).
+  `formatSpend` SHALL render spend as `$X + unknown` while that count is
+  above 0, and every owner line that reports 24-hour spend SHALL use it: the
+  doctor `spend` and `spend provider:<id>` lines (which also count `N at an
+  unknown price`), the owner's `/status` lines, the 80% warning line (and so
+  its DM), the stop ask's spend clause and the card's context. The caps' 80%
+  and 100% checks compare the priced spend. Anyone but the owner still sees
+  only "Work is paused for budget." (SAFE-14.a).
+- Every surface. Chat, slash `/session` and `/work`, ask buttons, schedules,
+  `corvidinho daemon`, WATCH, the CLI and delegate / council workers all run
+  the agent through `createTaskExecute`, so each SHALL stop and ask on the
+  owner's card before any call past the total cap, past a provider cap or at
+  an unknown price under a cap, and with no owner configured SHALL stop at
+  once with the operator ask; no surface's spawn env may bypass the guard.
+
+No schema version bump, no new table, env var or config key.
+
+Acceptance Criteria
+- Under a $5 total cap with an owner, an unpriced call records one `spend` / `money` card before any provider call, titled `Spend at an unknown price — asks first (SAFE-16.a) · from cli`, target `total`, amount `unknown (no known price for this model; never counted as free)` (no `$` figure), text naming `total $1.00 of $5.00`, "never counted as $0" and the task; the wait note is the must-ask wait line with no amounts.
+- Approved: the call is sent once, the request ends `used`, the ledger gains one `unknown` row with estimate and cost 0 and the reply's tokens, and the window reads `{ spentMicroUsd: 1000000, calls: 2, estimatedCalls: 1, unknownCalls: 1 }`.
+- The next unpriced call raises a second card; denied, nothing more is sent.
+- Denied: nothing sent or recorded; the ask (`spendScopes` `["total"]`) starts `Spend at an unknown price (SAFE-16.a)`, names the denied card, keeps `Stopped at cap: total.`, offers asking again and the operator action, has no reply note and no `?`; `finish` gives `SPEND_CAP_SUMMARY` and keeps `filesChanged`.
+- A lapse and an abort send and record nothing.
+- A provider cap alone targets `provider:llm.test` (text `provider:llm.test $0.00 of $2.00`); both caps target `total, provider:llm.test`.
+- A call no cap covers runs with no card and no ledger table; no owner or `withSpendCap`: the unpriced operator ask with the reply note, no card, no DB file.
+- An HTTP error on the approved call settles `failed` (`unknownCalls` 0).
+- The price table is frozen and env keys naming a price change nothing: the card still shows the amount as unknown.
+- `formatSpend` adds ` + unknown` only for a positive count; doctor reads `$4.50 + unknown of $5.00 daily cap used in the last 24h (90%; 2 provider call(s), 1 counted at its estimate, 1 at an unknown price; …` and the provider line likewise; the owner's `/status` reads `Spend (24h): $4.50 + unknown of $5.00 daily cap (90%)`; the public line stays undefined under the cap.
+- The 80% warning carries `unknownCalls` 1 and reads `$4.50 + unknown of the $5.00 daily cap`; the outbox's warning and its DM do too; `spendWarningFromUnknown` keeps a whole positive count and drops 0, negatives, fractions, strings and huge values.
+- A priced call past the cap after an unknown call: the card text reads `total $4.9990 + unknown of $5.00` and the ask `$4.9990 + unknown spent in the last 24h (99% of the $5.00 cap)`.
+- `createTaskExecute` with an unpriced model under a $5 cap: approved, the call goes out with the wait and approval Text events; denied, `runTask` is `blocked` with the generic summary and verify not run.
+- The engine DMs the unknown-price card with `Amount: unknown (…)` (never `Amount: $0`), and Approve plus the code sends the call once with `SPEND_CARD_UNKNOWN_APPROVED`.
+- For each of chat, slash `/session`, slash `/work`, ask buttons, schedules, the daemon, WATCH, the CLI and a delegate / council worker (the env its real spawner gives `task run`), a run past the total cap, past a provider cap and at an unknown price under a cap makes no provider call before the owner's card is decided, the card names the surface, and a no ends `blocked` with the spend-cap ask; with no owner each stops at once with the operator ask and no card.
+- These tests fail on main's sources (the unknown-price cases on every surface; the card and ledger tests cannot load).
 

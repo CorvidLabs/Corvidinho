@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "a-stop-button-on-the-run-s-progress-message-lets-me-or-the-person-who-asked-stop-it-agent-3-a",
+  "implementation_commit": "c25e4eefc9b2c765f7d4df9b9133022e10cdbedb",
+  "implementation_tree": "0318bb4b3b7ac371eda1066e24fad5102900fad8",
+  "contract_digest": "f32c0c208047835d1f9c240359a54cd36a335ded8afac5be133192941e6f34eb",
+  "workspace_digest": "97198d25981869d72426847aa6cff47c460a21585471711b1a5d77562d378342",
+  "closing_digest": "6744441da3530eb00e9d47eb0785d3d75b6c7cee970750649b0a7f4bd50f7886",
+  "review_digest": "f4505bd677ef86166769b47baa282f57f6b44215652cfec99e3dea6da41dc93f",
+  "finalization_digest": "25e0092806f998d0188462fd35fd07369f3495c8c3aecf3c8ece343c7d9ddbce",
+  "timestamp": 1790811874
+}

@@ -43,6 +43,8 @@ files:
   - tests/agent.spend-ask.test.ts
   - tests/agent.spend-caps.test.ts
   - tests/agent.spend-approve.test.ts
+  - tests/agent.spend-unknown.test.ts
+  - tests/spend.surfaces.test.ts
   - tests/agent.ask.test.ts
   - tests/agent.verify-env.test.ts
   - tests/agent.verify-feedback.test.ts
@@ -385,6 +387,23 @@ and how to continue (ask again for a new card and code, or the operator
 action) without the "replying can't lift the cap" note. `createTaskExecute`
 passes `approval` (the task text, the project label from `projectKeyFor`
 via `projectLabel`, never a host path, and the Text-event notes).
+
+Unknown prices on the card (REQ-agent-199, SAFE-16 / SAFE-16.a, AUTONOMY-8):
+`src/agent/spend.ts` adds `SPEND_CARD_UNKNOWN_AMOUNT`, `isUnknownSpendAmount`,
+`spendCardFields({ estimateMicroUsd: null, … })` (the unknown-price card:
+title `Spend at an unknown price — asks first (SAFE-16.a) · from <surface>`,
+target every covering cap, amount `unknown (…)`), the `unknown` ledger status
+(`SpendStatus`, `SpendSettlement` `{ status: "unknown", usage }`),
+`SpendWindow.unknownCalls`, `SpendLedger.covering` (the caps that cover a call
+with their spend) and `SpendLedger.recordUnknown` (one approved unknown-price
+call, no amount). `createSpendGuard` holds a covered unpriced call for that
+card (the shared `waitOnCard`, one card at a time per run) and ends a no with
+`spendCapUnpricedAsk(…, card)`. `src/agent/spend-notice.ts` adds `formatSpend`
+(`$X + unknown`), `SpendTrip.unknownCalls` and uses it in every owner spend
+line (doctor, `/status`, the warning line, the stop ask); `SpendWarning`
+gains `unknownCalls` (`src/agent/types.ts`), carried by `noteWarning`, the
+outbox's `takeWarning` and `spendWarningFromUnknown`. There is no price
+override: the price table is frozen and no env var sets a price.
 
 Autonomous gate + delegation core (REQ-agent-117, issue #117):
 `src/autonomous/enabled.ts` exports `parseAutonomousConfig`,
@@ -745,11 +764,14 @@ provider call is never sent unless its estimate was reserved under the total
 cap and its provider's cap in one IMMEDIATE transaction; each cap warns and
 stops on its own (SAFE-15), and a cap stop never falls back to another model
 (AGENT-11). A call that would pass
-the cap, and every call while the model is unpriced, the cap value is invalid
-or the ledger is unavailable, is not sent: the attempt ends with a
-`spend-cap` ask and the run is `blocked` (never `done`, never retried, verify
-skipped) — the runner never spends past the cap and never counts an unpriced
-model as free. The 80% warning is recorded once per crossing across
+the cap, and every call while the cap value is invalid or the ledger is
+unavailable, is not sent: the attempt ends with a `spend-cap` ask and the run
+is `blocked` (never `done`, never retried, verify skipped) — the runner never
+spends past the cap and never counts an unpriced model as free. A call to an
+unpriced model under a cap that covers it is sent only on the owner's
+unknown-price card (Approve plus the code, one call each) and recorded
+`unknown`, never as $0; owner spend lines then read `$X + unknown`
+(SAFE-16.a, REQ-agent-199). There is no price override. The 80% warning is recorded once per crossing across
 processes (`spend_alerts`, same IMMEDIATE transaction as its check): it
 re-arms when spend is seen back under 70% of that cap value (by a settle or
 by the next call's reservation), 24 h after the last warning, or for a new
@@ -771,7 +793,8 @@ not show, or no owner configured is a no (SAFE-20): nothing is sent
 or recorded, and the stop is a `SpendCapRefusal` — never a model failure,
 even when the request timeout ended the wait. The wait line is a Text event
 without amounts; the card records its waiting process so a killed run's card
-closes as a no. Unpriced, invalid-setting and ledger stops never raise a card.
+closes as a no. Invalid-setting and ledger stops never raise a card; a covered
+unpriced model's call asks on its own unknown-price card (REQ-agent-199).
 Autonomous mode is off unless the project `fledge.toml` sets
 `[corvidinho.autonomous] enabled = true` (AUTONOMOUS-1). Autonomous extras are
 left out of the tool catalog unless the session is allowed (enabled, depth
@@ -972,6 +995,12 @@ A change the run did not open is never touched.
 - **When** the run's next `gpt-4o` call would pass the cap
 - **Then** the call is held and a `spend` card (money) is recorded with action `send one model call to gpt-4o via <host>`, target `total` and that call's estimate as amount; the run emits `[operator] AUTONOMY-8: waiting for the owner's OK on an Approve card with the one-time code …` (no amounts); once the owner approves with the code the call goes out once, recorded at that estimate; the next call past the cap raises a new card; a Deny or a lapse sends nothing and the run ends `blocked` on a `spend-cap` ask (REQ-agent-198)
 
+### Scenario: an unpriced model under a cap asks on a card showing the amount as unknown
+
+- **Given** `CORVIDINHO_DAILY_SPEND_CAP_USD=5`, a configured owner and a model with no known price
+- **When** the run's next call to it would go out
+- **Then** the call is held and a `spend` card (money) is recorded with title `Spend at an unknown price — asks first (SAFE-16.a) · from <surface>`, target `total` and amount `unknown (no known price for this model; never counted as free)`; approved with the code, that one call goes out and is recorded `unknown` (the window's `unknownCalls` 1, owner lines `$X + unknown`); the next such call asks again; a Deny or a lapse sends nothing and the run ends `blocked` on the unpriced `spend-cap` ask naming the card (REQ-agent-199)
+
 ### Scenario: a run deletes a test and the lane still passes
 - **Given** a git project whose `tests/math.test.ts` has `adds numbers` and `keeps order`
 - **When** a run edits `app.ts`, drops `keeps order` (or turns it into `test.skip`, or adds a `.only` beside it) and the verify lane passes with a `bun test` summary
@@ -1129,8 +1158,9 @@ A change the run did not open is never touched.
 | Source file with no spec coverage | verify lane `spec-check` (`--require-coverage 100`) fails; verified=false, retried like any verify failure |
 | SpecSync registry missing | Planning lists modules from `specs/<name>/<name>.spec.md` instead (REQ-plugins-008); none there → soft-fails; execute continues |
 | Dangerous plugin + non-interactive + not allowlisted | ToolResult success=false (SAFE-1); loop may continue |
-| Spend cap set and 24h spend + estimate over it with no owner configured, unpriced model, invalid cap value, or ledger unavailable | provider call not sent; run ends `blocked` with a `spend-cap` ask stating spend vs cap and the operator action (no yes/no question); summary is the generic `SPEND_CAP_SUMMARY` (SAFE-8) |
+| Spend cap set and 24h spend + estimate over it with no owner configured, an unpriced model under a cap with no owner (or no card path), invalid cap value, or ledger unavailable | provider call not sent; run ends `blocked` with a `spend-cap` ask stating spend vs cap and the operator action (no yes/no question); summary is the generic `SPEND_CAP_SUMMARY` (SAFE-8) |
 | Spend cap set, an owner configured, and a priced call over a cap: the owner denies the spend card, it lapses (no bridge, no answer), a code comes late, the run is stopped, the request times out, or the card cannot be raised | call held and then not sent, nothing recorded; run ends `blocked` with a `spend-cap` ask naming the card and what it came to, and how to continue (ask again for a new card, or the operator action), no reply note; generic summary (REQ-agent-198) |
+| A cap covers a call to a model with no known price, an owner is configured, and its unknown-price card comes to no (deny, lapse, late code, stop, timeout, unavailable) | call not sent, nothing recorded; run ends `blocked` with the unpriced `spend-cap` ask naming the card, the amount shown as unknown, and both ways on (a new card, or a priced model / the cap), no reply note; generic summary (REQ-agent-199) |
 | `CORVIDINHO_PROVIDER_SPEND_CAPS_USD` set and a provider's 24h spend + estimate over its cap (or a bad entry / unknown provider) | provider call not sent (none to any other model either); run ends `blocked` with a `spend-cap` ask naming `provider:<id>` (or the bad setting, never its value) and `spendScopes`; generic summary (SAFE-14 / SAFE-15) |
 | Settled call brings 24h spend to ≥80% of the cap while the warning is armed | one `Text` warning + `TaskResult.spendWarning` + a pending `warn` row; later calls stay quiet until spend is seen under 70% (or 24 h pass) (SAFE-8) |
 | Autonomous tool named while not offered | Refused like any non-offered tool (REQ-agent-128) |
@@ -1244,3 +1274,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-30 | the-safe-3-a-approved-prod-command-test-runs-a-stand-in-kubectl-first-on-path-instead-of-the-host-s-real-one-which-took: The SAFE-3.a approved-prod-command test runs a stand-in kubectl first on PATH instead of the host's real one, which took 2.4-3.1 s on CI runners and once passed the 5 s test timeout |
 | 2026-09-30 | if-it-only-plans-or-says-done-without-changing-anything-it-gets-one-nudge-to-the-same-model-a-second-stall-stands-with: If it only plans or says 'Done.' without changing anything, it gets one nudge to the same model; a second stall stands with an operator note (AGENT-17, nudge half) |
 | 2026-09-30 | a-cli-task-run-in-a-git-repo-works-in-its-own-worktree-by-default-here-runs-it-in-my-checkout-session-worktree-1-a: A CLI task run in a git repo works in its own worktree by default; --here runs it in my checkout (SESSION-WORKTREE-1.a) |
+| 2026-09-30 | a-call-whose-price-is-unknown-stops-and-asks-on-the-owner-s-spend-card-showing-the-amount-as-unknown-when-a-cap-covers: A call whose price is unknown stops and asks on the owner's spend card showing the amount as unknown when a cap covers it (recorded unknown, owner lines read $X + unknown, no price override), and every surface asks before spending over a cap: WATCH spend-cap stops reach the owner by DM and a schedule's spend-cap stop can go on through the card (SAFE-16, SAFE-16.a, AUTONOMY-8) |

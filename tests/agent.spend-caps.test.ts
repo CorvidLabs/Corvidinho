@@ -178,7 +178,7 @@ describe("the ledger tracks spend against each cap (SAFE-14)", () => {
     seed(ledger, ANTHROPIC, 250_000);
     seed(ledger, OPENAI, 100_000, NOW - 25 * 3_600_000);
     expect(ledger.window(NOW).spentMicroUsd).toBe(650_000);
-    expect(ledger.window(NOW, OPENAI)).toEqual({ spentMicroUsd: 400_000, calls: 1, estimatedCalls: 1 });
+    expect(ledger.window(NOW, OPENAI)).toEqual({ spentMicroUsd: 400_000, calls: 1, estimatedCalls: 1, unknownCalls: 0 });
     expect(ledger.window(NOW, ANTHROPIC).spentMicroUsd).toBe(250_000);
     expect(ledger.window(NOW, "other.host").spentMicroUsd).toBe(0);
     const idx = db.query("PRAGMA index_list(spend_ledger)").all() as Array<{ name: string }>;

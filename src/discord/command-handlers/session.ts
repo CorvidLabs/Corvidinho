@@ -26,7 +26,7 @@ import {
   slashOwnerNotice,
 } from "../spend-post.ts";
 import { spendStopFor } from "../spend-dm.ts";
-import { RUN_STOPPED_TEXT, type SessionRunTurn } from "../run-control.ts";
+import { RUN_STOPPED_TEXT, buildStopComponents, type SessionRunTurn } from "../run-control.ts";
 import type { SessionStub } from "../types.ts";
 
 function formatSessionLine(
@@ -190,6 +190,8 @@ async function runSessionStart(
         sessionId: session.id,
         model: llmModel,
         showUsage: ownerRun,
+        // AGENT-3.a (REQ-discord-303): the run's Stop button.
+        ...(turn ? { components: buildStopComponents(turn.runId) } : {}),
         debounceMs: ctx.thinkingDebounceMs,
         tickMs: ctx.thinkingTickMs,
       })
@@ -197,7 +199,8 @@ async function runSessionStart(
 
   if (thinking) {
     await thinking.start({ description: `Session: ${topic.slice(0, 80)}` });
-    // AGENT-3.a: a reply 'stop' / 'cancel' to this progress message stops the run.
+    // AGENT-3.a: a reply 'stop' / 'cancel' to this progress message, or its
+    // Stop button, stops the run.
     turn?.setProgressMessage(thinking.progressMessageId);
   }
 
