@@ -260,13 +260,14 @@ describe("SAFE-3.a gate, local CLI rows (REQ-cli-681)", () => {
       granted: false,
       reason: "scheduled runs never get them",
     });
-    for (const extra of [
+    const spawns: Record<string, string>[] = [
       { CORVIDINHO_DISCORD_SESSION_ID: "sess_1" },
       { [ACTING_SURFACE_ENV]: "chat" },
       { [ACTING_SURFACE_ENV]: "watch" },
       { [ACTING_SURFACE_ENV]: "schedule" },
       { [ACTING_SURFACE_ENV]: "cli" },
-    ]) {
+    ];
+    for (const extra of spawns) {
       expect({ extra, v: await verdict(extra) }).toEqual({ extra, v: { granted: false, reason: SPAWNED } });
     }
   });
