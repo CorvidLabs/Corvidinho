@@ -64,7 +64,8 @@ schedules; delegate and council workers inherit them):
   tool output, verify-lane output — for that long is stopped, its tools and verify lane killed
   with their process trees, and it fails (exit 1) with `Stopped: no output for 10 minutes (idle
   timeout).` as the first line of its summary and as its `error`. Model calls,
-  delegate/council workers and Approve-card waits do not count as idle.
+  delegate/council workers and Approve-card waits do not count as idle. A step that ignores
+  the stop is waited for at most 5 more seconds; then the run ends failed anyway.
 
 A value that is not a positive whole number is ignored with a one-line note, and the default
 is used.

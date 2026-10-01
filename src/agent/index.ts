@@ -30,7 +30,9 @@ export { runTask } from "./loop.ts";
 export {
   DEFAULT_IDLE_TIMEOUT_MS,
   DEFAULT_MAX_TURNS,
+  effectiveIdleTimeoutMs,
   formatIdleDuration,
+  IDLE_STOP_GRACE_MS,
   IDLE_TIMEOUT_ENV,
   idleTimeoutFromEnv,
   idleTimeoutLine,

@@ -12,6 +12,8 @@ artifact: docs
 - `docs/discord.md`: the AGENT-9 paragraph is followed by the AGENT-12 one
   (`stopped=turn-cap` / `stopped=idle-timeout` in the footer, never the body;
   schedule posts have no footer).
+- `docs/DAEMON.md`: the configuration table lists both keys and the
+  scheduler's turn-cap log line (review).
 - `docs/WATCH.md`: a "Turn cap and idle timeout (AGENT-12)" bullet (the plain
   turn-cap line; the idle-timeout comment).
 - `.env.example` and `src/cli.ts` help: both keys with their defaults.

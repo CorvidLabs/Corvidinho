@@ -642,8 +642,9 @@ bridge/daemon after changing them.
   own attempt, so AGENT-4.a retries are kept. When the run's last attempt hits it, the answer is
   its best prose so far (AGENT-9), and the run says so: `stopped=turn-cap` in the Discord answer
   footer and thinking embed (never the channel body), a plain `Stopped: it reached the turn cap
-  …` line on WATCH comments and after the summary of `task run`, and `stopReason: "turn-cap"` in
-  `--json` / ndjson results.
+  …` line on WATCH comments and after the summary of `task run`, `stopReason: "turn-cap"` in
+  `--json` / ndjson results, and (a schedule's post has no footer) a `[scheduler] schedule <id>:
+  run stopped=turn-cap …` log line.
 - `CORVIDINHO_IDLE_TIMEOUT_MS` (default 600000, 10 minutes): a run with no output for that long
   — no event, no tool output, no verify-lane output — is stopped. Its tools and the verify lane
   are killed with their process trees, and the run ends failed with `stopReason:
@@ -652,7 +653,9 @@ bridge/daemon after changing them.
   own run's reply is that line (DISCORD-3.b), anyone else's says it didn't
   work and that you have been told, and the footer shows `stopped=idle-timeout`. A model call (it keeps its own 10-minute request cap), a
   delegate or council worker (bounded by its own limits and its worker time cap) and a wait
-  on an Approve card (bounded by the card's expiry) do not count as idle.
+  on an Approve card (bounded by the card's expiry) do not count as idle. A step that ignores
+  the stop (an in-process call with no timeout of its own) is waited for at most 5 more seconds;
+  then the run ends failed anyway, saying any changes so far were not verified.
 
 There is no value that turns either off; a value that is not a positive whole number is
 ignored, with one `[operator] AGENT-12: …` line, and the default is used.

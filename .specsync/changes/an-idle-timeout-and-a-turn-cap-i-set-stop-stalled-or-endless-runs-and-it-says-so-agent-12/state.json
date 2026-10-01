@@ -55,7 +55,10 @@
     "specs/watch/watch.spec.md",
     "specs/watch/testing.md",
     "specs/plugins/plugins.spec.md",
-    "specs/plugins/testing.md"
+    "specs/plugins/testing.md",
+    "docs/DAEMON.md",
+    "src/scheduler/service.ts",
+    "plugins/autonomous/commands.ts"
   ],
   "no_spec_change": false,
   "no_spec_change_rationale": null,

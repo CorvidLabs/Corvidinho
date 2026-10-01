@@ -153,6 +153,8 @@ exports `MAX_TURNS_ENV` (`CORVIDINHO_MAX_TURNS`), `IDLE_TIMEOUT_ENV`
 `maxTurnsFromEnv(env)` / `idleTimeoutFromEnv(env)` → `LimitSetting`
 (`{ value, invalid }`), `invalidLimitNote(key, fallback)`,
 `formatIdleDuration(ms)`, `idleTimeoutLine(ms)`, `TURN_CAP_NOTE`,
+`IDLE_STOP_GRACE_MS` (5000), `effectiveIdleTimeoutMs(ms)` (an unusable
+value — 0, negative, NaN, Infinity — is the default),
 `stopReasonFromUnknown(v)`, `startIdleWatchdog(ms, timers?)` →
 `IdleWatchdog` (`timeoutMs`, `signal`, `fired`, `touch()`, `pause()` →
 resume, `stop()`), and the current-run hooks `withIdleWatchdog(w, fn)`,
@@ -661,8 +663,13 @@ events, tool output and verify-lane output feed it; a model call, a
 `delegate` / `council` worker and an Approve-card wait hold it (each bounded
 by its own cap or expiry); when it fires, the run's abort kills tool and
 verify-lane process trees and the run ends failed (never cancelled, never
-done) with `stopReason` `idle-timeout` and the one-line `error`. The caller's
-own abort still wins (cancelled). No value turns either limit off.
+done) with `stopReason` `idle-timeout` and the one-line `error`. A step that
+ignores the abort is waited for at most `IDLE_STOP_GRACE_MS` after the
+watchdog fires; then the run ends the same way anyway (its changes said to
+be not verified) and that step's later events are dropped, so a stalled run
+always stops. The caller's own abort still wins (cancelled). No value turns
+either limit off. A `delegate` worker a limit stopped returns its
+`stopReason` to its lead.
 
 A failed run names why in harness text only (DISCORD-3.b, AGENT-9,
 REQ-agent-032): `runTask` sets `error` on a failed result from the attempt's
@@ -1263,6 +1270,7 @@ A change the run did not open is never touched.
 | Own change on Corvidinho, approve or finalize not allowlisted, refused or failing | one Text line with the scrubbed reason; the change stays open for a human; the run stays verified (REQ-agent-519) |
 | Lane fails when re-run over what approve and finalize wrote | run failed, not verified, no retry; the summary says so (REQ-agent-519) |
 | No output (event, tool output, lane output) for `CORVIDINHO_IDLE_TIMEOUT_MS` outside a model call, worker or card wait | run aborted (tool / lane trees killed); `failed`, `stopReason: "idle-timeout"`, `error` = `Stopped: no output for … (idle timeout).` (REQ-agent-244) |
+| The step the run is on ignores the idle-timeout abort (no timeout of its own) | waited for at most `IDLE_STOP_GRACE_MS` (5 s); then `failed`, `stopReason: "idle-timeout"`, summary `… (idle timeout). Any changes so far were not verified.`, an `[operator] AGENT-12: …` line; its later events dropped (REQ-agent-244) |
 | Final attempt used up `CORVIDINHO_MAX_TURNS` rounds | best prose so far; `stopReason: "turn-cap"`; verify still runs when files changed (REQ-agent-312) |
 | `CORVIDINHO_MAX_TURNS` / `CORVIDINHO_IDLE_TIMEOUT_MS` not a positive whole number | ignored with one `[operator] AGENT-12: …` line; the default applies (REQ-cli-125) |
 

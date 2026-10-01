@@ -791,3 +791,12 @@ is killed with its task (exit 1) and a printing lane is verified.
 - Fail on base (aeb2de3's modified sources swapped in, `src/agent/limits.ts`
   kept): 18 of 28 fail (no `stopReason`, hangs until the test timeout, the
   watchdog fires during a worker or a card wait); restored, 28 of 28 pass.
+- Review: a tool that never returns and ignores the abort still ends the run
+  about `IDLE_STOP_GRACE_MS` after the timeout (`failed`, `idle-timeout`,
+  "Any changes so far were not verified.", the `[operator]` line); an
+  `idleTimeoutMs` of 0, -1 or NaN is the default (no 1 ms stop); a
+  `delegate` worker's `stopReason: "turn-cap"` reaches its outcome; a
+  turn-capped schedule run posts only its prose and the scheduler logs one
+  `[scheduler] schedule <id>: run stopped=turn-cap …` line. These
+  fail on the pre-review head 05f7a6c (hang, instant stop, none) and on
+  base; 32 of 32 pass on the branch (11 pass / 21 fail with base sources).

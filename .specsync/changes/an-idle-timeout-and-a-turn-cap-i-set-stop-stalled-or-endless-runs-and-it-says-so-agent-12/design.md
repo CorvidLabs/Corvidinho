@@ -22,6 +22,15 @@ artifact: design
   watchdog fired, caller did not abort, not already done → the idle-timeout
   result (`idleTimeoutResult`); else a final capped attempt →
   `stopReason: "turn-cap"`. AGENT-15.a settles on the mapped result.
+  Review fix: the gate is awaited through `settleWithinGrace`, so once the
+  watchdog fires a step that ignores the abort (an in-process call with no
+  timeout of its own — Octokit, the Discord REST posts) is waited for at
+  most `IDLE_STOP_GRACE_MS` (5 s); then the run ends with the idle-timeout
+  result anyway (attempts started, files finished attempts reported, "Any
+  changes so far were not verified.", an `[operator]` line) and that step's
+  later events are dropped. `effectiveIdleTimeoutMs` turns an unusable
+  `idleTimeoutMs` (0, negative, NaN, Infinity) into the default instead of
+  a 1 ms instant stop.
 - **execute.ts** (two regions only): `maxToolRounds` defaults to
   `maxTurnsFromEnv(env).value`; the soft-land return carries
   `stopReason: "turn-cap"`; `callModels` runs `callChain` inside
@@ -41,4 +50,9 @@ artifact: design
   ask paths, `/session start` and `/work` pass it to the plumbing; the WATCH
   spawn client validates it and `buildSummaryBody` adds `TURN_CAP_NOTE`;
   the CLI prints `TURN_CAP_NOTE` after a capped summary, reads both keys,
-  says when one is ignored, and passes `idleTimeoutMs`.
+  says when one is ignored, and passes `idleTimeoutMs`. Review fixes: a
+  schedule post has no footer, so the scheduler logs one
+  `[scheduler] schedule <id>: run stopped=turn-cap …` line (bridge and
+  daemon logs; never the post, AGENT-9); a `delegate` worker's validated
+  `stopReason` comes back in `DelegateChildOutcome` and the tool's `data`,
+  so the lead knows a capped worker's answer is its best so far.

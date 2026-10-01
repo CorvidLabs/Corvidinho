@@ -47,7 +47,9 @@ import {
   verifyFeedbackExcerpt,
 } from "./verify.ts";
 import {
-  DEFAULT_IDLE_TIMEOUT_MS,
+  effectiveIdleTimeoutMs,
+  formatIdleDuration,
+  IDLE_STOP_GRACE_MS,
   idleTimeoutLine,
   startIdleWatchdog,
   withIdleWatchdog,
@@ -191,32 +193,62 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
   // emits, tool output and verify-lane output reset it (model calls, workers
   // and Approve-card waits hold it); with no output for that long it aborts
   // the run's signal, so tool and verify-lane process trees are killed.
-  const watchdog = startIdleWatchdog(opts.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS);
+  // An unusable value (0, negative, NaN) is the default, never an instant stop.
+  const watchdog = startIdleWatchdog(effectiveIdleTimeoutMs(opts.idleTimeoutMs));
   const signal = opts.signal
     ? AbortSignal.any([opts.signal, watchdog.signal])
     : watchdog.signal;
+  // Once the run stopped waiting for a step that ignored the abort, that
+  // step's later events are dropped (the result is already out).
+  let abandoned = false;
   const onEvent = (e: AgentEvent) => {
+    if (abandoned) return;
     watchdog.touch();
     opts.onEvent?.(e);
   };
   // AGENT-12 (REQ-agent-312): whether the last attempt used up its turn cap.
   let finalTurnCap = false;
+  // For a run that stopped waiting on a stuck step: the attempts started and
+  // the files the finished attempts reported.
+  let attemptsStarted = 0;
+  const reported = new Set<string>();
   const execute: RunTaskOptions["execute"] = async (ctx) => {
+    attemptsStarted = ctx.attempt;
     finalTurnCap = false;
     const r = await opts.execute(ctx);
+    for (const f of r.filesChanged) reported.add(f);
     finalTurnCap = r.stopReason === "turn-cap";
     return r;
   };
   let result: TaskResult;
   try {
-    result = await withIdleWatchdog(watchdog, () =>
-      gate(
-        { ...opts, signal, onEvent, execute },
-        (w) => {
-          workspace = w;
-        },
-        sdd,
+    // AGENT-12 (REQ-agent-244): after the watchdog fires, the step the run is
+    // on gets IDLE_STOP_GRACE_MS to see the abort and return; one that
+    // ignores it (an in-process call with no timeout) is not waited for.
+    result = await settleWithinGrace(
+      withIdleWatchdog(watchdog, () =>
+        gate(
+          { ...opts, signal, onEvent, execute },
+          (w) => {
+            workspace = w;
+          },
+          sdd,
+        ),
       ),
+      watchdog.signal,
+      IDLE_STOP_GRACE_MS,
+      () => {
+        abandoned = true;
+        return {
+          summary: "",
+          filesChanged: [...reported],
+          verified: false,
+          verifySkipped: false,
+          cancelled: true,
+          state: "failed",
+          attempts: attemptsStarted,
+        };
+      },
     );
   } finally {
     watchdog.stop();
@@ -224,9 +256,15 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
   }
   if (watchdog.fired && !opts.signal?.aborted && !(result.state === "done" && !result.cancelled)) {
     // AGENT-12: stopped for no output — failed, never cancelled, and it says so.
-    result = idleTimeoutResult(result, watchdog.timeoutMs);
-    onEvent({ type: "Text", text: result.error ?? idleTimeoutLine(watchdog.timeoutMs) });
-    onEvent({ type: "StateChanged", state: "failed" });
+    result = idleTimeoutResult(result, watchdog.timeoutMs, abandoned);
+    if (abandoned) {
+      opts.onEvent?.({
+        type: "Text",
+        text: `[operator] AGENT-12: the step the run was on did not stop within ${formatIdleDuration(IDLE_STOP_GRACE_MS)} of the idle timeout, so the run stopped waiting for it.`,
+      });
+    }
+    opts.onEvent?.({ type: "Text", text: result.error ?? idleTimeoutLine(watchdog.timeoutMs) });
+    opts.onEvent?.({ type: "StateChanged", state: "failed" });
   } else if (finalTurnCap && !result.cancelled) {
     result = { ...result, stopReason: "turn-cap" };
   }
@@ -239,6 +277,41 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
   return result;
 }
 
+/**
+ * AGENT-12 (REQ-agent-244): `work`'s outcome — or, once `fired` has aborted
+ * and `work` has not settled `graceMs` later, `abandoned()`, so a step that
+ * ignores the abort cannot keep a stopped run from ending.
+ */
+function settleWithinGrace<T>(
+  work: Promise<T>,
+  fired: AbortSignal,
+  graceMs: number,
+  abandoned: () => T,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      timer = setTimeout(() => resolve(abandoned()), graceMs);
+    };
+    if (fired.aborted) arm();
+    else fired.addEventListener("abort", arm, { once: true });
+    const settle = () => {
+      if (timer) clearTimeout(timer);
+      fired.removeEventListener("abort", arm);
+    };
+    work.then(
+      (v) => {
+        settle();
+        resolve(v);
+      },
+      (err) => {
+        settle();
+        reject(err);
+      },
+    );
+  });
+}
+
 /** The tool loop's own placeholder for an attempt stopped mid-way (execute.ts). */
 const ABORTED_PLACEHOLDER_RE = /^tool loop aborted[^\n]*(?:\n\n|$)/;
 
@@ -247,11 +320,18 @@ const ABORTED_PLACEHOLDER_RE = /^tool loop aborted[^\n]*(?:\n\n|$)/;
  * failed (not cancelled, not verified) with `stopReason` `idle-timeout`, the
  * one-line `error`, and a summary that leads with that line, then the best
  * prose so far (closing notes kept last), and says when its changes were not
+ * verified. A run that stopped waiting for a stuck step (`abandoned`) cannot
+ * know what that step changed, so it always says its changes were not
  * verified.
  */
-function idleTimeoutResult(r: TaskResult, timeoutMs: number): TaskResult {
+function idleTimeoutResult(r: TaskResult, timeoutMs: number, abandoned = false): TaskResult {
   const line = idleTimeoutLine(timeoutMs);
-  const unverified = r.filesChanged.length > 0 ? " Its changes so far were not verified." : "";
+  const unverified =
+    r.filesChanged.length > 0
+      ? " Its changes so far were not verified."
+      : abandoned
+      ? " Any changes so far were not verified."
+      : "";
   const prose = r.summary.trim().replace(ABORTED_PLACEHOLDER_RE, "").trim();
   const { ask: _ask, ...rest } = r;
   return {

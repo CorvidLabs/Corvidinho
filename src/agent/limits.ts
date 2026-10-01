@@ -44,6 +44,26 @@ export const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
  */
 export const MAX_IDLE_TIMEOUT_MS = 2_147_483_647;
 
+/**
+ * After the idle watchdog fires, how long a run waits for the step it was on
+ * to see the abort and return (a tool or verify lane it stopped returns well
+ * within this). A step that ignores the abort (an in-process call with no
+ * timeout of its own) is not waited for any longer: the run ends with the
+ * idle-timeout result anyway, so a stalled run always stops (REQ-agent-244).
+ */
+export const IDLE_STOP_GRACE_MS = 5_000;
+
+/**
+ * The idle timeout a watchdog uses for `ms`: a finite value of at least 1 ms
+ * (clamped to {@link MAX_IDLE_TIMEOUT_MS}); anything else (0, a negative
+ * number, NaN, ±Infinity) is {@link DEFAULT_IDLE_TIMEOUT_MS}, never an
+ * instant stop and never no limit.
+ */
+export function effectiveIdleTimeoutMs(ms: number | undefined): number {
+  if (typeof ms !== "number" || !Number.isFinite(ms) || ms < 1) return DEFAULT_IDLE_TIMEOUT_MS;
+  return Math.min(Math.floor(ms), MAX_IDLE_TIMEOUT_MS);
+}
+
 /** One limit read from the env: the value in force, and whether the setting was ignored. */
 export type LimitSetting = {
   value: number;
@@ -154,12 +174,15 @@ const realTimers: IdleWatchdogTimers = {
   clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
 };
 
-/** Start a run's watchdog; it fires after `timeoutMs` with no output. */
+/**
+ * Start a run's watchdog; it fires after `timeoutMs` with no output (see
+ * {@link effectiveIdleTimeoutMs} for a value that is not a usable timeout).
+ */
 export function startIdleWatchdog(
   timeoutMs: number,
   timers: IdleWatchdogTimers = realTimers,
 ): IdleWatchdog {
-  const ms = Math.min(Math.max(1, Math.floor(timeoutMs)), MAX_IDLE_TIMEOUT_MS);
+  const ms = effectiveIdleTimeoutMs(timeoutMs);
   const ctrl = new AbortController();
   let handle: unknown;
   let paused = 0;

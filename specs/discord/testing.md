@@ -1551,3 +1551,6 @@ and its body is only the prose; an idle-timed-out frame gives `failureReason`
 mention is answered with that line (DISCORD-3.b) and `stopped=idle-timeout`
 in the footer; `waitForDecision` answered after 0.9 s does not fire a 250 ms
 watchdog, which fires once the card is decided. Fail on base: all four.
+Review (REQ-agent-312): an owner's schedule whose run hit the turn cap posts only its prose
+and the scheduler logs one `[scheduler] schedule <id>: run stopped=turn-cap
+…` line (none for a plain run beside it); fails on base and on 05f7a6c.

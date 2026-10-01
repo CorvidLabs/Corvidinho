@@ -8,7 +8,7 @@
  * `corvidinho` bins are sh scripts in temp dirs; nothing touches this
  * checkout or the network.
  */
-import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import {
   chmodSync,
   existsSync,
@@ -25,7 +25,9 @@ import { createTaskExecute } from "../src/agent/execute.ts";
 import {
   DEFAULT_IDLE_TIMEOUT_MS,
   DEFAULT_MAX_TURNS,
+  effectiveIdleTimeoutMs,
   formatIdleDuration,
+  IDLE_STOP_GRACE_MS,
   idleTimeoutFromEnv,
   idleTimeoutLine,
   MAX_IDLE_TIMEOUT_MS,
@@ -39,6 +41,7 @@ import {
 import { runTask } from "../src/agent/loop.ts";
 import { chatBodyFromTaskResult, formatTaskPlumbing } from "../src/agent/task-summary.ts";
 import type { AgentEvent, ExecuteContext, ExecuteResult, TaskResult } from "../src/agent/types.ts";
+import { emptyConfig } from "../src/allowlist/types.ts";
 import { ApprovalStore } from "../src/approvals/store.ts";
 import { buildDelegateSpawn, runDelegateChild } from "../src/autonomous/delegate.ts";
 import {
@@ -49,6 +52,8 @@ import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { clearRegistry, register } from "../src/plugins/registry.ts";
+import { SchedulerService } from "../src/scheduler/service.ts";
+import { ScheduleStore } from "../src/scheduler/store.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 import { createSpawnAgentClient as createWatchClient } from "../src/watch/agent-client.ts";
 import { buildSummaryBody } from "../src/watch/summary.ts";
@@ -393,6 +398,88 @@ describe("the idle timeout I set (AGENT-12, REQ-agent-244)", () => {
   }, 10_000);
 });
 
+describe("a stopped run always ends (AGENT-12, REQ-agent-244)", () => {
+  beforeEach(() => {
+    clearRegistry();
+    register({
+      name: "stuck-tool",
+      description: "never returns and ignores the abort (an in-process call with no timeout)",
+      dangerous: false,
+      minTier: 0,
+      handler: () => new Promise(() => {}),
+    });
+  });
+  afterEach(() => {
+    clearRegistry();
+    loadBuiltins();
+  });
+
+  test("a tool that ignores the abort cannot hold the run: it ends failed IDLE_STOP_GRACE_MS after the timeout, saying so", async () => {
+    const events: AgentEvent[] = [];
+    const exec = createTaskExecute({
+      taskText: "call the stuck tool",
+      env: LLM_ENV,
+      fetchImpl: fakeLlmFetch(() => ({ toolCalls: [{ name: "stuck-tool", args: '{"argv":[]}' }], text: "calling it" })),
+      tier: "tool",
+      loadPlugins: false,
+      projectInstructions: false,
+      nonInteractive: false,
+      cwd: NON_GIT_CWD,
+      onEvent: (e) => events.push(e),
+    });
+    const started = Date.now();
+    const r = await runTask({
+      cwd: NON_GIT_CWD,
+      idleTimeoutMs: 200,
+      execute: exec,
+      workspaceDiff: async () => null,
+      onEvent: (e) => events.push(e),
+    });
+    const took = Date.now() - started;
+    expect(took).toBeGreaterThanOrEqual(200 + IDLE_STOP_GRACE_MS - 50);
+    expect(took).toBeLessThan(200 + IDLE_STOP_GRACE_MS + 4000);
+    expect(r).toMatchObject({
+      state: "failed",
+      cancelled: false,
+      verified: false,
+      stopReason: "idle-timeout",
+      error: "Stopped: no output for 200 ms (idle timeout).",
+      attempts: 1,
+    });
+    // It cannot know what the stuck step changed, so it never claims nothing changed.
+    expect(r.summary).toBe("Stopped: no output for 200 ms (idle timeout). Any changes so far were not verified.");
+    expect(events.slice(-3)).toEqual([
+      {
+        type: "Text",
+        text: "[operator] AGENT-12: the step the run was on did not stop within 5 seconds of the idle timeout, so the run stopped waiting for it.",
+      },
+      { type: "Text", text: "Stopped: no output for 200 ms (idle timeout)." },
+      { type: "StateChanged", state: "failed" },
+    ]);
+  }, 20_000);
+
+  test("an unusable idle timeout (0, negative, NaN, Infinity) is the default, never an instant stop", async () => {
+    for (const bad of [0, -5, 0.5, Number.NaN, Number.POSITIVE_INFINITY, undefined]) {
+      expect(effectiveIdleTimeoutMs(bad)).toBe(DEFAULT_IDLE_TIMEOUT_MS);
+    }
+    expect(effectiveIdleTimeoutMs(1.7)).toBe(1);
+    expect(effectiveIdleTimeoutMs(1e15)).toBe(MAX_IDLE_TIMEOUT_MS);
+    for (const bad of [0, -1, Number.NaN]) {
+      const r = await runTask({
+        cwd: NON_GIT_CWD,
+        idleTimeoutMs: bad,
+        workspaceDiff: async () => null,
+        execute: async () => {
+          await Bun.sleep(150);
+          return { summary: "quiet but fine", filesChanged: [] };
+        },
+      });
+      expect(r).toMatchObject({ state: "done", cancelled: false, summary: "quiet but fine" });
+      expect(r.stopReason).toBeUndefined();
+    }
+  }, 10_000);
+});
+
 describe("what holds or feeds the watchdog deep in a run", () => {
   test("tool output (spawnCapped: shell, runners, Fledge) counts as activity; a silent tool does not", async () => {
     const chatty = startIdleWatchdog(500);
@@ -476,6 +563,113 @@ describe("what holds or feeds the watchdog deep in a run", () => {
       expect(readFileSync(join(dir, "limits.txt"), "utf8").trim()).toBe("3|45000");
     } finally {
       w.stop();
+    }
+  }, 15_000);
+});
+
+describe("a delegate worker a limit stopped says so to its lead (AGENT-12)", () => {
+  test("the worker's validated stopReason comes back in its outcome", async () => {
+    const dir = mkdtempSync(join(scratch, "worker-capped-"));
+    const run = async (stopReason: unknown) => {
+      const bin = join(dir, `corvidinho-${String(stopReason).replace(/[^a-z-]/gi, "_")}`);
+      const frame: Record<string, unknown> = {
+        summary: "best so far",
+        filesChanged: [],
+        verified: false,
+        verifySkipped: true,
+        cancelled: false,
+        state: "done",
+        attempts: 1,
+        stopReason,
+      };
+      writeFileSync(bin, `#!/bin/sh\ncat <<'EOF'\n${serializeFrame(resultFrame(frame as TaskResult))}\nEOF\n`, {
+        mode: 0o755,
+      });
+      return runDelegateChild({
+        bin,
+        cwd: dir,
+        taskText: "t",
+        tier: "tool",
+        childDepth: 1,
+        allowlist: [],
+        baseEnv: { PATH: process.env.PATH ?? "" },
+      });
+    };
+    const capped = await run("turn-cap");
+    expect(capped).toMatchObject({ state: "done", stopReason: "turn-cap" });
+    expect((await run("Stopped after 8 tool rounds")).stopReason).toBeUndefined();
+  }, 15_000);
+});
+
+describe("a schedule run that hit the turn cap (AGENT-12, REQ-agent-312)", () => {
+  test("its post is only its best prose; the scheduler log says it stopped at the turn cap", async () => {
+    const warns: string[] = [];
+    const spy = spyOn(console, "warn").mockImplementation((...a: unknown[]) => {
+      warns.push(a.map(String).join(" "));
+    });
+    const db = openCorvidinhoDb({ memory: true });
+    try {
+      const OWNER_ID = "111122223333444455";
+      const clock = { now: Date.parse("2026-10-01T10:30:00Z") };
+      const store = new ScheduleStore({ db });
+      const make = (name: string) =>
+        store.create({
+          name,
+          cronExpression: "0 * * * *",
+          project: "proj-a",
+          prompt: "dig",
+          createdByUserId: OWNER_ID,
+          channelId: "chan-1",
+          now: clock.now,
+        });
+      const capped = make("Capped");
+      const plain = make("Plain");
+      const cfg = emptyConfig();
+      cfg.discord.channels = ["chan-1"];
+      const posts: Array<{ channelId: string; content: string }> = [];
+      const svc = new SchedulerService({
+        store,
+        agent: {
+          async runChat({ sessionId }) {
+            const isCapped = sessionId.endsWith(capped.id);
+            return {
+              ok: true,
+              sessionId,
+              summary: "Here is what I found so far.",
+              exitCode: 0,
+              task: {
+                state: "done",
+                verified: false,
+                verifySkipped: true,
+                attempts: 1,
+                ...(isCapped ? { stopReason: "turn-cap" as const } : {}),
+              },
+            };
+          },
+        },
+        allowlist: cfg,
+        manual: true,
+        useWorktrees: false,
+        owner: { discordId: OWNER_ID, display: "Leif" },
+        now: () => clock.now,
+        outbound: { post: async (p) => void posts.push(p) },
+      });
+      clock.now += 3_600_000;
+      expect((await svc.tick()).started.sort()).toEqual([capped.id, plain.id].sort());
+      for (let i = 0; i < 200 && svc.runningIds().length > 0; i++) await Bun.sleep(5);
+      expect(posts).toHaveLength(2);
+      for (const p of posts) {
+        expect(p.content).toEndWith(":\nHere is what I found so far.");
+        expect(p.content).not.toContain("turn");
+        expect(p.content).not.toContain("stopped=");
+      }
+      const limitLines = warns.filter((l) => l.includes("stopped=turn-cap"));
+      expect(limitLines).toEqual([
+        `[scheduler] schedule ${capped.id}: run stopped=turn-cap (CORVIDINHO_MAX_TURNS); its post is its best answer so far (AGENT-12)`,
+      ]);
+    } finally {
+      spy.mockRestore();
+      db.close();
     }
   }, 15_000);
 });

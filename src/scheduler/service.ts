@@ -199,6 +199,15 @@ function scheduleTitle(schedule: Schedule, opts: { withName?: boolean } = {}): s
   return `Schedule **${schedule.name}** ${id} on \`${project}\``;
 }
 
+/**
+ * AGENT-12 (REQ-agent-312): the scheduler's log line for a run whose last
+ * attempt hit the turn cap I set — its post is only its best prose, with no
+ * footer to carry `stopped=turn-cap` (AGENT-9 keeps the stop out of the post).
+ */
+export function scheduleTurnCapLog(scheduleId: string): string {
+  return `[scheduler] schedule ${scheduleId}: run stopped=turn-cap (CORVIDINHO_MAX_TURNS); its post is its best answer so far (AGENT-12)`;
+}
+
 /** One scrubbed line (SAFE-6), capped, never a stack. Never throws. */
 function errorLine(err: unknown): string {
   try {
@@ -911,6 +920,14 @@ export class SchedulerService {
         cwd: workDir,
         signal,
       });
+
+      // AGENT-12 (REQ-agent-312): a schedule's post has no footer to carry
+      // `stopped=turn-cap`, and AGENT-9 keeps the stop out of the post, so
+      // the scheduler log says the run stopped at the turn cap. (An idle
+      // timeout is a failed run: its reason is logged below, DISCORD-3.b.)
+      if (result.task?.stopReason === "turn-cap" && !signal.aborted) {
+        console.warn(scheduleTurnCapLog(schedule.id));
+      }
 
       // DISCORD-3.b: a failed run without an ask of its own says why on the
       // owner's own schedule; anyone else's says the owner was told (DMed).

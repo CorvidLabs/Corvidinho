@@ -15,3 +15,4 @@ artifact: tasks
 - [x] `tests/agent.limits.test.ts`; fail-on-base proof recorded in testing.md.
 - [x] README, docs/DISCORD-GO-LIVE.md, docs/discord.md, docs/WATCH.md, spec prose, deltas and module testing evidence updated.
 - [x] `specsync check --require-coverage 100`, `hi check`, `bunx tsc --noEmit`, `bun test`, `fledge lanes run verify --non-interactive` green.
+- [x] Review: a step that ignores the abort is waited for at most `IDLE_STOP_GRACE_MS` after the watchdog fires; an unusable `idleTimeoutMs` is the default; a turn-capped schedule run is logged by the scheduler; a `delegate` worker's `stopReason` reaches its lead; docs/DAEMON.md lists both keys; 4 tests added (fail on the pre-review head and on base).
