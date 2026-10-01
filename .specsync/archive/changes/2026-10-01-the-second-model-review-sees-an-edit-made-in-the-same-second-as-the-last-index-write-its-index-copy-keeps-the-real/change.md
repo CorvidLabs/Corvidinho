@@ -1,6 +1,6 @@
 ---
 id: the-second-model-review-sees-an-edit-made-in-the-same-second-as-the-last-index-write-its-index-copy-keeps-the-real
-state: implementing
+state: archived
 type: bug_fix
 base_commit: 5ea21feedeecd51e4058d2892d86ce30ec573959
 ---

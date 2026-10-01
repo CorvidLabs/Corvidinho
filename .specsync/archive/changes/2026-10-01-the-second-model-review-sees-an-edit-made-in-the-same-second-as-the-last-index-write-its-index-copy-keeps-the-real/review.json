@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "the-second-model-review-sees-an-edit-made-in-the-same-second-as-the-last-index-write-its-index-copy-keeps-the-real",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "4adbacacde6bcb600ed1cd19a3a301052a930d5f",
+  "contract_digest": "ebd6a7be248e872c61ee4f2c3006aca6eff67862c0989e6c41bd1d5d9e1ee7cc",
+  "execution_digest": "ebd205c4958c1e80d977d4e98af1a689c5461b00c1cddb193470c526470840a7",
+  "workspace_digest": "339e7b7b53f3918fffa8a43c34863cd2b00ae71b1ae581c2d5ef30646684b880",
+  "timestamp": 1790823655
+}

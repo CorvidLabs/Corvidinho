@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "the-second-model-review-sees-an-edit-made-in-the-same-second-as-the-last-index-write-its-index-copy-keeps-the-real",
+  "implementation_commit": "4adbacacde6bcb600ed1cd19a3a301052a930d5f",
+  "implementation_tree": "c6bfc91793407afc956a80e346e6b287c8c8ce52",
+  "contract_digest": "ebd6a7be248e872c61ee4f2c3006aca6eff67862c0989e6c41bd1d5d9e1ee7cc",
+  "workspace_digest": "339e7b7b53f3918fffa8a43c34863cd2b00ae71b1ae581c2d5ef30646684b880",
+  "closing_digest": "4d4a25e39d287c0dac0949ecc5c56ddbdadcc4976a330063e056afc12ccf99bd",
+  "review_digest": "e7f4e8452df8d0714bfe067941ee8849dee25eee07ee7bab9e82e7c8453e4bb7",
+  "finalization_digest": "52ac15569df51eab54b0e83aa48c3ea4aae0f0cc5cf4f2623d12f6ef57763a07",
+  "timestamp": 1790823670
+}
