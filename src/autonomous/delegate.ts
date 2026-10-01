@@ -28,16 +28,29 @@
  * - a worker inherits the lead's turn cap and idle timeout
  *   (CORVIDINHO_MAX_TURNS / CORVIDINHO_IDLE_TIMEOUT_MS, AGENT-12), the
  *   lead's idle watchdog is held while it runs, and a worker a limit stopped
- *   comes back with its `stopReason`.
+ *   comes back with its `stopReason`;
+ * - a worker that failed (not `done` with exit 0, and not stopped on an ask
+ *   of its own) comes back to its lead — and a council voice to its
+ *   transcript — as one plain line ({@link workerFailureLine}): its result's
+ *   `error` without the provider's host, else the no-provider notice for its
+ *   tier, else its exit code. Never its summary, its result's summary or its
+ *   stderr, which for a model failure is `LLM HTTP <status>: <provider body>`
+ *   (org / account names, request ids, the provider's host) that a lead could
+ *   quote into a public reply or GitHub comment. The lead keeps no copy of
+ *   that detail (nothing is logged to its stderr, whose end a bridge reads as
+ *   a failed lead's fallback reason, DISCORD-3.b / REQ-watch-009).
  */
 
 import { join } from "node:path";
+import { askFromUnknown } from "../agent/ask.ts";
 import { collectTaskRunStream } from "../agent/events-ndjson.ts";
 import { pauseIdleWatchdog, stopReasonFromUnknown } from "../agent/limits.ts";
 import {
   modelFallbackFromUnknown,
   modelLabelFromUnknown,
   modelUsageFromUnknown,
+  providerNotice,
+  withoutProviderHost,
 } from "../agent/providers.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
 import type { ModelFallback, TaskStopReason } from "../agent/types.ts";
@@ -54,6 +67,7 @@ import {
   trackChildProcess,
   type ProcEntry,
 } from "../plugins/proc-group.ts";
+import { failureReasonFromUnknown, plainFailureLine } from "../discord/failure-reason.ts";
 import { roleSessionActive } from "../plugins/roles.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 
@@ -402,6 +416,10 @@ export function createDelegateLimiter(
 export type DelegateChildOutcome = {
   exitCode: number;
   state: string;
+  /**
+   * What the lead gets: the worker's chat body (SAFE-6 scrubbed, capped), or
+   * for a worker that failed its one plain line ({@link workerFailureLine}).
+   */
   summary: string;
   filesChanged: string[];
   /** Worker's prove-before-done outcome, when it reported a result. */
@@ -410,7 +428,7 @@ export type DelegateChildOutcome = {
   /**
    * The worker's own result `summary` (SAFE-6 scrubbed, capped at
    * DELEGATE_SUMMARY_MAX rather than the 1800-char chat body), when it
-   * reported a result. Councils quote this.
+   * reported a result and did not fail. Councils quote this.
    */
   resultText?: string;
   totalTokens?: number;
@@ -440,6 +458,45 @@ export type DelegateChildOutcome = {
    */
   stopReason?: TaskStopReason;
 };
+
+/** A worker its own time cap stopped ({@link DELEGATE_TIMEOUT_MS}). */
+export const WORKER_TIMED_OUT_LINE = "worker timed out and was stopped";
+/** A worker stopped because its lead run was interrupted (AGENT-3). */
+export const WORKER_INTERRUPTED_LINE = "worker stopped: lead run was interrupted";
+
+/**
+ * REQ-agent-117: a failed worker's one plain line for its lead (and a
+ * council voice's transcript entry), from harness text only — the timeout or
+ * interrupt line; else the worker's result `error` (which model call failed
+ * and how, which verify failed, the idle-timeout line) as one plain line
+ * (`plainFailureLine`: SAFE-6 scrubbed, at most 200 chars) without the
+ * provider's host (`withoutProviderHost`, the same helper WATCH's public
+ * comment uses); else the no-provider notice for the worker's tier in its
+ * `env` (AGENT-10); else `the worker failed (exit N)`. Never the worker's
+ * summary, its result's summary or its stderr, which for a model failure is
+ * `LLM HTTP <status>: <provider body>`.
+ */
+export function workerFailureLine(
+  facts: {
+    exitCode: number;
+    /** The worker's result frame `error`, when it reported one. */
+    error?: unknown;
+    timedOut?: boolean;
+    aborted?: boolean;
+  },
+  env: NodeJS.ProcessEnv,
+  tier: CapabilityTier,
+): string {
+  if (facts.timedOut) return WORKER_TIMED_OUT_LINE;
+  if (facts.aborted) return WORKER_INTERRUPTED_LINE;
+  const reason = failureReasonFromUnknown(facts.error);
+  const line = reason ? plainFailureLine(reason) : "";
+  if (line) return withoutProviderHost(line);
+  const notice = providerNotice(env, [tier]);
+  const noticeLine = notice ? plainFailureLine(notice) : "";
+  if (noticeLine) return noticeLine;
+  return `the worker failed (exit ${facts.exitCode})`;
+}
 
 /** After a worker exits (or is killed), how long its pipes may still drain. */
 export const DELEGATE_DRAIN_MS = 1000;
@@ -607,12 +664,18 @@ export async function runDelegateChild(opts: {
           .filter((f): f is string => typeof f === "string" && f.length > 0 && f.length <= 1024)
           .slice(0, DELEGATE_FILES_MAX)
       : [];
-    let summary = scrubSecrets(out.summary).slice(0, DELEGATE_SUMMARY_MAX);
-    if (timedOut) summary = `worker timed out and was stopped\n${summary}`;
-    else if (aborted) summary = `worker stopped: lead run was interrupted\n${summary}`;
+    const state = timedOut || aborted ? "cancelled" : (r?.state ?? "failed");
+    // REQ-agent-117: a worker that failed (not done with exit 0, and not
+    // stopped on an ask of its own) hands its lead one plain line, never its
+    // summary or stderr — for a model failure the provider's raw error body.
+    const failed =
+      timedOut || aborted || (!(out.exitCode === 0 && state === "done") && !askFromUnknown(r?.ask));
+    const summary = failed
+      ? workerFailureLine({ exitCode: out.exitCode, error: r?.error, timedOut, aborted }, env, opts.tier)
+      : scrubSecrets(out.summary).slice(0, DELEGATE_SUMMARY_MAX);
     const outcome: DelegateChildOutcome = {
       exitCode: out.exitCode,
-      state: timedOut || aborted ? "cancelled" : (r?.state ?? "failed"),
+      state,
       summary,
       filesChanged,
       timedOut,
@@ -628,7 +691,7 @@ export async function runDelegateChild(opts: {
     const stopReason = stopReasonFromUnknown(r?.stopReason);
     if (stopReason) outcome.stopReason = stopReason;
     if (typeof r?.verifySkipped === "boolean") outcome.verifySkipped = r.verifySkipped;
-    if (typeof r?.summary === "string") {
+    if (!failed && typeof r?.summary === "string") {
       outcome.resultText = scrubSecrets(r.summary).trim().slice(0, DELEGATE_SUMMARY_MAX);
     }
     if (out.totalTokens !== undefined) outcome.totalTokens = out.totalTokens;

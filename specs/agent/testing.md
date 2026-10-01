@@ -864,3 +864,46 @@ is killed with its task (exit 1) and a printing lane is verified.
   `[scheduler] schedule <id>: run stopped=turn-cap …` line. These
   fail on the pre-review head 05f7a6c (hang, instant stop, none) and on
   base; 32 of 32 pass on the branch (11 pass / 21 fail with base sources).
+
+## A failed worker hands its lead one plain line (REQ-agent-117, REQ-agent-118; found in #343's review)
+
+`tests/autonomous.worker-failure.test.ts` (fake `corvidinho` sh bins and the
+real `task run` against the localhost fake provider of
+`tests/fixtures/fake-llm.ts`, whose `reply` may now return a `FakeHttpError`:
+a status and the provider's own raw body; temp dirs only):
+
+- `workerFailureLine`: a `modelCallFailedLine` error loses the provider's host
+  (`The model call failed (429 Too Many Requests)`, `The model call timed
+  out`, `… (network error)`); the idle-timeout line stays; a token is
+  scrubbed, stack frames and host paths go, one line of at most 200
+  characters; the timeout / interrupt lines win; with no error the
+  no-provider notice for the worker's tier, else `the worker failed (exit
+  N)`. `watchPublicFailureLine` is `withoutProviderHost` for every shape.
+- Fake bins: a worker whose result `error` is a 429 from
+  `acme-prod.openai.azure.com:8443`, whose summary and stderr are `LLM HTTP
+  429: <body with an org name, a request id and the host>` → the tool's
+  `error` is `worker (tier code, depth 1) did not finish (state failed, exit
+  1):` and the plain line, `data.summary` the line, `data.models` kept, no
+  provider detail anywhere in the result; an idle-timed-out worker keeps
+  `stopReason: "idle-timeout"` and its line; a worker with no result frame
+  never hands over its stdout or stderr (the no-provider notice, else the exit
+  code); a successful worker and one that stopped on an ask of its own are
+  unchanged.
+- The lead's tool loop: a failed worker that reported an injection is still
+  `injectionWorkerNote` + the SAFE-12 fence, with the plain line inside.
+- End to end: a lead's `delegate` worker whose model answers 429 → the lead
+  model's tool message has `The model call failed (429 Too Many Requests)`
+  and no org name, request id, host (`127.0.0.1:<port>`), `LLM HTTP` or
+  provider message; with a 200 reply the worker's answer comes back as
+  before. A 3-voice `council` whose voice 3 gets the 429: that voice's
+  transcript entry is the plain line, the others' entries and the chair's
+  decision are their own replies, and neither the result nor any later
+  phase's prompt holds the provider detail.
+- `tests/autonomous.delegate.test.ts` › "worker failure is reported as its
+  one plain line, scrubbed (SAFE-6), never its summary".
+- Fail on base: with main's `src/autonomous/delegate.ts` swapped in (stub
+  exports added so the file loads), 9 fail (8 of the 10 new tests and the
+  delegate test) — the lead's tool message and the council transcript carry
+  `LLM HTTP 429: {"error":{"message":"Rate limit reached … organization
+  org-acme-widgets-7731 … https://127.0.0.1:<port>/account/limits."},
+  "request_id":"req_7f3c9a1b2d4e5f60"}`; restored, all pass.

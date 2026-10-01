@@ -160,7 +160,9 @@ A failed run's reason (DISCORD-3.b's reason on GitHub, REQ-watch-009):
 that did not fail or stopped on an ask of its own, and
 `watchPublicFailureLine(reason)` → that line without the provider's host for
 a model-call line (`The model call failed (429 Too Many Requests)`), any
-other line as it is; `buildSummaryBody(spawn, ownerLogin?, env?)` and
+other line as it is (it is the shared `withoutProviderHost` from
+`src/agent/providers.ts`, which a failed delegate worker's line for its lead
+uses too, REQ-agent-117); `buildSummaryBody(spawn, ownerLogin?, env?)` and
 `maybePostWatchSummary({ env })` take the watcher's env for its no-provider
 fallback.
 

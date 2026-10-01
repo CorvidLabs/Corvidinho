@@ -20,6 +20,7 @@
  */
 
 import { TURN_CAP_NOTE } from "../agent/limits.ts";
+import { withoutProviderHost } from "../agent/providers.ts";
 import { clipKeepingRoleNote } from "../agent/task-summary.ts";
 import { describeInjectionReasons } from "../agent/untrusted.ts";
 import { attribution } from "../attribution.ts";
@@ -169,17 +170,6 @@ export function watchFailureReason(
 }
 
 /**
- * A model-call reason as `modelCallFailedLine` (src/agent/providers.ts)
- * words it: `The model call failed|timed out (…)`, ending in the provider's
- * host (`… from <host>)`, `… reaching <host>)` or `(<host>)` alone), or in
- * the start of a host the 200-char cap cut (`…`). The no-key line (`(<model>
- * needs <ENV>, which is not set)`) has spaces where a host has none, so it
- * never matches.
- */
-const MODEL_CALL_HOST_RE =
-  /^(The model call (?:failed|timed out)) \((?:(.*?) (?:from|reaching) )?[^\s()]+(?:\)|…)$/;
-
-/**
  * REQ-watch-009: a failed run's reason as the public thread and the thread's
  * kept agent turn show it — a model-call line without the provider's host
  * (`The model call failed (429 Too Many Requests)`), since a host can be the
@@ -188,12 +178,11 @@ const MODEL_CALL_HOST_RE =
  * model, which could repeat it in a later public comment. The owner's
  * `[watch] run failed` log line keeps the host. Any other reason (the no-key
  * line, the no-provider notice, a stderr line, the exit-code line) is
- * returned as is.
+ * returned as is. The shared `withoutProviderHost` (src/agent/providers.ts),
+ * which a failed delegate worker's line for its lead uses too.
  */
 export function watchPublicFailureLine(reason: string): string {
-  const m = MODEL_CALL_HOST_RE.exec(reason);
-  if (!m) return reason;
-  return m[2] ? `${m[1]} (${m[2]})` : m[1]!;
+  return withoutProviderHost(reason);
 }
 
 /**

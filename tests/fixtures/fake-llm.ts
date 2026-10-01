@@ -10,7 +10,8 @@
  *
  * Every reply is a plain assistant message with no tool calls, so a run
  * changes nothing (like the removed demo stub, it claims no files), unless a
- * test's `reply` returns {@link FakeToolCalls}.
+ * test's `reply` returns {@link FakeToolCalls}, or {@link FakeHttpError} for
+ * a provider that answers with an error status and its own raw body.
  */
 
 import { afterAll, beforeAll } from "bun:test";
@@ -23,8 +24,15 @@ export function fakeReplyText(attempt: number): string {
 /** A scripted reply that calls tools, with optional text beside them (AGENT-17 tests). */
 export type FakeToolCalls = { toolCalls: { name: string; args?: string }[]; text?: string };
 
-/** What a test's `reply` returns: the reply text, or tool calls. */
-export type FakeReply = string | FakeToolCalls;
+/**
+ * A scripted provider error: HTTP `httpStatus` with the provider's own raw
+ * `body` (an org name, a request id, …), as a rate-limited or broken
+ * provider answers (REQ-agent-117 worker-failure tests).
+ */
+export type FakeHttpError = { httpStatus: number; body: string; headers?: Record<string, string> };
+
+/** What a test's `reply` returns: the reply text, tool calls, or an HTTP error. */
+export type FakeReply = string | FakeToolCalls | FakeHttpError;
 
 /** The attempt number in a chat request's user message, else 1. */
 function attemptOf(body: unknown): number {
@@ -45,6 +53,12 @@ function attemptOf(body: unknown): number {
 
 function completion(body: unknown, reply?: (body: unknown) => FakeReply): Response {
   const out = reply ? reply(body) : fakeReplyText(attemptOf(body));
+  if (typeof out !== "string" && "httpStatus" in out) {
+    return new Response(out.body, {
+      status: out.httpStatus,
+      headers: { "content-type": "application/json", ...out.headers },
+    });
+  }
   const message =
     typeof out === "string"
       ? { role: "assistant", content: out }
