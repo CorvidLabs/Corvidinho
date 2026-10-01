@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-38-spend-approve-cards-unknown-price-cards-stall-nudge-stop-button-cli-task-worktree-failed-runs-say-why",
+  "implementation_commit": "ec80caef56ccc7565cea4092a5c6bc2478960c29",
+  "implementation_tree": "eb430903893e64d58fdf8f6f7f1bcd4b529267e1",
+  "contract_digest": "74ca2ab32b40262d96ff68ecac042fbad23ea1531615a7debe98759dd215c565",
+  "workspace_digest": "9b77ae25f579a4532a166de9d7f112cc1d81ce98f21d45df992eac68a99ae64e",
+  "closing_digest": "c15ae67fee0e9a304dbc062ba0baed528aeec1fee5b9436bc4de7756d1933b06",
+  "review_digest": "fd9880917078cfc02a65255a1777fc463a647731324c3756408284198599c585",
+  "finalization_digest": "60082119bc19c0ef676f42065dfe7a6176881cff1c0cc6225f0f434a1fe4ade2",
+  "timestamp": 1790818074
+}

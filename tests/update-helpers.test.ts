@@ -180,6 +180,15 @@ describe("update-helpers.sh", () => {
     }
   });
 
+  test("extract_changelog_section finds 0.0.38", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.38`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("SAFE-8.a");
+    expect(r.stdout).toContain("DISCORD-3.b");
+  });
+
   test("extract_changelog_section finds 0.0.37", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.37`,
@@ -947,10 +956,10 @@ describe("release tagging helpers", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.37", () => {
+  test("package.json is 0.0.38", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.37");
+    expect(pkg.version).toBe("0.0.38");
   });
 });
