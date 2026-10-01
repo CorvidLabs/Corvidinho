@@ -34,6 +34,7 @@ const RUN_ENV_KEYS = [
   "CORVIDINHO_DISCORD_SESSION_ID",
   "BRAVE_SEARCH_API_KEY",
   "GIPHY_API_KEY",
+  "TENOR_API_KEY",
 ] as const;
 const SHOW_ENV =
   'printf "%s|%s|%s|%s" "${CORVIDINHO_DATA_DIR-}" "${CORVIDINHO_AUDIT_HMAC_KEY-}" ' +

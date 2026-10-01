@@ -779,7 +779,7 @@ describe("the key (and the request URL that carries it) never appears in any out
     }
   });
 
-  test("the key is on the SAFE-6 secret env list and never reaches workers, the verify lane, the shell / runners or Fledge plugins", () => {
+  test("the key is on the SAFE-6 secret env list and never reaches workers or the verify lane; Fledge gets it for fledge-gif", () => {
     expect(redactSecretEnvValues(`x ${KEY} y`, { [GIPHY_API_KEY_ENV]: KEY })).toBe("x [redacted:env-secret] y");
     expect(formatErrorLine(new Error(`GET https://${GIPHY_API_HOST}/v2/search?key=${KEY}`), { env: { [GIPHY_API_KEY_ENV]: KEY } })).toBe(
       `GET https://${GIPHY_API_HOST}/v2/search?key=[redacted:env-secret]`,
@@ -791,8 +791,9 @@ describe("the key (and the request URL that carries it) never appears in any out
     expect(worker.env[GIPHY_API_KEY_ENV]).toBeUndefined();
     expect(JSON.stringify(worker)).not.toContain(KEY);
     expect(buildVerifyEnv(base)).toEqual({ PATH: "/usr/bin" });
+    // Preferred Discord GIF path: fledge-gif needs the key in its child env.
     const fledge = fledgeChildEnv(base, "/proj");
-    expect(fledge[GIPHY_API_KEY_ENV]).toBeUndefined();
+    expect(fledge[GIPHY_API_KEY_ENV]).toBe(KEY);
     expect(fledge.PATH).toBe("/usr/bin");
   });
 
@@ -1052,13 +1053,21 @@ describe("each GIF search is recorded at $0 against the SAFE-8 total daily cap (
 });
 
 describe("docs: the key, the allowlist name, link-only posting and GIPHY's attribution", () => {
-  test(".env.example and docs/DISCORD-GO-LIVE.md document GIPHY_API_KEY, gif-search and 'Powered By GIPHY'", () => {
+  test(".env.example and docs/DISCORD-GO-LIVE.md document GIPHY_API_KEY, gif-search, fledge-gif and 'Powered By GIPHY'", () => {
     const env = readFileSync(join(ROOT, ".env.example"), "utf8");
     expect(env).toMatch(/^# GIPHY_API_KEY=$/m);
+    expect(env).toContain("gif-search");
+    expect(env).toContain("fledge-gif");
+    expect(env).toContain("Powered By GIPHY");
     const live = readFileSync(join(ROOT, "docs/DISCORD-GO-LIVE.md"), "utf8");
     expect(live).toContain("| `gif-search` | true | 1 | true |");
+    expect(live).toContain("| `fledge-gif` | true | 2 | true |");
     expect(live).toContain("Powered By GIPHY");
     expect(live).toContain("GIPHY_API_KEY");
     expect(live).toContain("contentfilter=medium");
+    expect(live).toContain("fledge-gif");
+    expect(live).toContain("Preferred");
+    expect(live).toContain("only when someone asks for a GIF");
+    expect(live).toContain("never downloaded, re-hosted or attached");
   });
 });

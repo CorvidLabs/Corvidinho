@@ -109,6 +109,7 @@ delete process.env.CORVIDINHO_LLM_TIER;
 delete process.env.BRAVE_SEARCH_API_KEY;
 // The GIPHY key (PLUGIN-8): `bun test` never sends a real GIF search.
 delete process.env.GIPHY_API_KEY;
+delete process.env.TENOR_API_KEY;
 // A scheduled run's session id (`schedule_*`) narrows its GitHub tools and
 // web-fetch to allowlisted repos (DISCORD-SCHEDULE-3.a); its verify lane
 // inherits the key, and the suite must not run as a scheduled run.

@@ -265,7 +265,8 @@ inside that talk's own worktree, and in a local `corvidinho task run` inside the
 |------|-----------|---------|----------|-------------------|
 | `web-fetch` | true | 1 | true | an operator runs `corvidinho plugins run web-fetch` non-interactively (GET-only, SSRF-guarded, SAFE-7) |
 | `web-search` | true | 1 | true | the owner's and declared team members' runs should search the web through Brave (PLUGIN-7/9); also needs `BRAVE_SEARCH_API_KEY`, see E.3.a |
-| `gif-search` | true | 1 | true | the owner's and declared team members' runs should find GIFs through GIPHY and post them as links (PLUGIN-8/9); also needs `GIPHY_API_KEY`, see E.3.b |
+| `gif-search` | true | 1 | true | secondary GIF path (native GIPHY) for owner and team at tool tier (PLUGIN-8/9); prefer allowlisted `fledge-gif` for owner code-tier Discord GIFs; needs `GIPHY_API_KEY`, see E.3.b |
+| `fledge-gif` | true | 2 | true | preferred GIF path once `fledge plugins install corvid-agent/fledge-plugin-gif` is on the box; owner code-tier only (`CORVIDINHO_LLM_TIER=code`); needs `GIPHY_API_KEY` in the bridge env (passed through to Fledge); see E.3.b |
 | `fledge-<command>` | true | 2 (native) / 1 (wasm without `exec`) | true | an operator runs `corvidinho plugins run fledge-<command>` non-interactively; one entry per Fledge command you trust, names from `plugins list` (a Fledge plugin command named `run`, `lanes-list`, `lanes-validate` or `lanes-run` is skipped: the Fledge core builtins `fledge-run`, `fledge-lanes-list`, `fledge-lanes-validate` and `fledge-lanes-run` hold those names) |
 | `fledge-lanes-run` / `fledge-run` | true | 2 | true | an operator runs `corvidinho plugins run fledge-lanes-run -- <lane>` or `fledge-run -- <task> [args…]` non-interactively; builtins that run fledge's own `lanes run` / `run` in the project dir (PLUGIN-1), so they run whatever that lane or task's commands do, starting without the owner's GitHub or git credentials like `shell-exec` and the runners (SAFE-21.a), so pushes, PRs and merges go through the checked GitHub tools; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
 | `git-commit` | true | 2 | true | `/work` should open draft PRs (needed when the work tree has changes) |
@@ -416,10 +417,13 @@ What one search does:
 - Still open for you: whether a reply that quotes search results is fine to keep in chat history
   and condensed summaries, given Brave's terms against storing results beyond transient use.
 
-### E.3.b GIF search through GIPHY: `gif-search` (PLUGIN-8, PLUGIN-9)
+### E.3.b GIF search: prefer `fledge-gif`, secondary `gif-search` (PLUGIN-8, PLUGIN-9)
 
-`gif-search` finds GIFs through GIPHY so a run can post one as a link. Powered By GIPHY. It stays
-off until you turn it on in two places, like `web-search`:
+Preferred for Discord "show me a gif": **`fledge-gif`** (Fledge plugin `corvid-agent/fledge-plugin-gif`,
+GIPHY Tenor-compat). Secondary / team / tool-tier: **`gif-search`** (native GIPHY). Powered By GIPHY
+for both. Each stays off until you turn it on:
+
+For **`gif-search`** (secondary), two places like `web-search`:
 
 1. `GIPHY_API_KEY` in the environment Corvidinho runs with (the bridge's `EnvironmentFile`;
    spawned runs inherit it). It is read from the environment only, with no default. Without it
@@ -476,10 +480,19 @@ What one search does:
   and check that the link unfurls beside the reply footer, that its host is one of the media
   hosts above, and that a $0 `spend_ledger` row appears when a spend cap is set.
 
-`fledge-plugin-gif` (`corvid-agent/fledge-plugin-gif`) is not a working path for GIFs: it calls
-Tenor's v2 API, which is shut down (no new keys since 2026-01-13, every API agreement ended
-2026-06-30), and it ships a hardcoded API key its owner should revoke or restrict. Use
-`gif-search` instead.
+**Preferred path (owner decision 2026-10-01): `fledge-gif`.** Install
+`corvid-agent/fledge-plugin-gif` on the box (`fledge plugins install corvid-agent/fledge-plugin-gif`),
+allowlist `fledge-gif` in `CORVIDINHO_ALLOWLIST`, and keep `GIPHY_API_KEY` in the bridge env.
+Tenor's own API shut down 2026-06-30; the plugin (v0.2+) calls GIPHY's Tenor-compatible
+`https://api.giphy.com/v2/search` with `contentfilter=medium` and reads `GIPHY_API_KEY`
+(optional alias `TENOR_API_KEY`). Corvidinho discovers it as `fledge-gif` (PLUGIN-3):
+dangerous, minTier 2 (needs `CORVIDINHO_LLM_TIER=code`), owner code-tier runs when allowlisted.
+CLI check: `fledge gif search "thumbs up"`. Post one result as a link in the reply, like
+`gif-search`.
+
+`gif-search` stays loaded as the **secondary** / team / tool-tier path (minTier 1, PLUGIN-9).
+Do not remove it from the allowlist without a SpecSync change that covers #331. Prefer
+`fledge-gif` in owner Discord "show me a gif" runs when both are allowlisted.
 
 ### E.4 `corvidinho daemon` under systemd (CLI-8, AUTONOMOUS-4)
 
