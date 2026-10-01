@@ -1241,3 +1241,12 @@ Acceptance Criteria
 - A post-checkout hook that fails (as git-lfs's does without git-lfs), in-process and through the real CLI: exit 1 with the hook's line and the `pass --here` hint, no model call, and neither the worktree nor its `talk/cli_…` branch left.
 - A run that switched its worktree to a branch of its own: with commits there, the worktree is removed, that branch is named and kept and the empty talk branch is deleted; dirty, the worktree is kept under that branch's name; a talk branch with commits only on it is kept and named (alone, or with `Also kept branch …` when both have commits of their own).
 
+### REQ-cli-429
+
+The project SHALL ship package version `0.0.38` (spend approve cards, unknown-price cards, stall nudge, stop button, CLI task worktree, failed runs say why). CLI `version` and Discord presence (DISCORD-12) report `0.0.38` after a restart. CHANGELOG SHALL include verbose 0.0.38 notes.
+
+Acceptance Criteria
+- `package.json` version is `0.0.38`.
+- CLI `version` prints `0.0.38`.
+- CHANGELOG has a 0.0.38 section that the updater's changelog helper extracts exactly.
+
