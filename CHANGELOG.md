@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.0.40
+
+### Plugins
+
+- **It can search the web through Brave when I set a key, for me and the team only** — [#326](https://github.com/CorvidLabs/Corvidinho/pull/326) (PLUGIN-7, PLUGIN-9): `web-search` in `plugins/web` via Brave Search API (`BRAVE_SEARCH_API_KEY`). Dangerous, minTier 1, SAFE-1 allowlist, owner and declared team only (`TEAM_SEARCH_TOOLS`). Results fenced + SAFE-13 scanned. Each search reserves ~$0.005 against SAFE-8. Replies that got an answer end with `Search by Brave` once.
+- **It can find a GIF through GIPHY, with the safety filter at medium, and post it as a link when asked, for me and the team only** — [#331](https://github.com/CorvidLabs/Corvidinho/pull/331) (PLUGIN-8, PLUGIN-9): `gif-search` in `plugins/gif` via GIPHY (`GIPHY_API_KEY`, `contentfilter=medium`). Link-only posting (no download/attach). Team shares the tool with web-search. Spend recorded at $0. Summary carries `Powered By GIPHY`. SpecSync tip orphans after squash archived in [#354](https://github.com/CorvidLabs/Corvidinho/pull/354) / [#355](https://github.com/CorvidLabs/Corvidinho/pull/355).
+
+### Ops
+
+- Package version **0.0.40** — restart the Discord bridge, `corvidinho daemon` and `github watch` after update. Allowlist `web-search` and `gif-search` in `CORVIDINHO_ALLOWLIST` and set `BRAVE_SEARCH_API_KEY` / `GIPHY_API_KEY` for live dogfood (PLUGIN-9 docs E.3 / E.3.b). No schema bump; NDJSON protocol stays 2.
+- Needs operator action: (1) Restart bridge/daemon/watch. (2) Add `web-search,gif-search` to `CORVIDINHO_ALLOWLIST`. (3) Set API keys. (4) Team members already get both tools when allowlisted (IDENTITY-10).
+- Rollback to 0.0.39: schema unchanged. 0.0.39 has neither tool; drop the new allowlist names and keys.
+
 ## 0.0.39
 
 ### Real dev teammate (M3)
