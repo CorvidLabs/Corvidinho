@@ -42,6 +42,27 @@
         "REQ-watch-080",
         "REQ-watch-472"
       ]
+    },
+    {
+      "timestamp": 1790818296,
+      "commit": "0d67d607604735b041a95fdab318f7c12d7261a4",
+      "contract_digest": "7daa476a6978e54344616f5a4651198047d417fa959b5dd540a45796401faca0",
+      "execution_digest": "c064586f567289895a4881e2f29c8321beb49bd653b85c2d0b3c7f54360a9765",
+      "workspace_digest": "e240e7fca9651c883d41ef11ea38e87ba43269705278db551f774153f656174f",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec cli --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-cli-079",
+        "REQ-watch-009",
+        "REQ-watch-080",
+        "REQ-watch-472"
+      ]
     }
   ]
 }
