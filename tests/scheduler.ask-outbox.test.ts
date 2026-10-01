@@ -35,6 +35,7 @@ import { ASK_REPLY_HINT, askPingKey, SPEND_CAP_HEADLINE } from "../src/discord/a
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway } from "../src/discord/gateway.ts";
 import { createSpendDm } from "../src/discord/spend-dm.ts";
+import { FAILED_TEXT } from "../src/discord/failure-reason.ts";
 import {
   autoPauseAsk,
   FAILURE_AUTO_PAUSE,
@@ -608,9 +609,11 @@ describe("auto-pause and pre-run failures ask the owner instead of dying silentl
     await h.daemonRun("fail");
     expect(h.status()).toBe("paused");
     expect(h.finished.at(-1)).toMatchObject({ ok: false, autoPaused: true, askReason: "stuck" });
+    // DISCORD-3.b: someone else's schedule, and the daemon cannot tell the
+    // owner — the plain line; the reason is the row's error (and logged).
     expect(h.lastRun()).toMatchObject({
       status: "failed",
-      summary: "failed (exit 1)",
+      summary: FAILED_TEXT,
       ask_reason: "stuck",
       ask_question: autoPauseAsk().question,
       ask_posted_at: null,
@@ -623,7 +626,7 @@ describe("auto-pause and pre-run failures ask the owner instead of dying silentl
     expect(post.content).toStartWith("Schedule **Nightly**");
     expect(post.content).toContain(`⚠️ I'm stuck and need a human. <@${OWNER_ID}>`);
     expect(post.content).toContain(PAUSED_LINE);
-    expect(post.content).toContain("failed (exit 1)");
+    expect(post.content).toContain(FAILED_TEXT);
     expect(post.mentionUserIds).toEqual([OWNER_ID]);
     expect(h.lastRun().ask_posted_at).not.toBeNull();
 
@@ -662,9 +665,9 @@ describe("auto-pause and pre-run failures ask the owner instead of dying silentl
     const last = h.posts.at(-1)!;
     expect(last.content).toStartWith("Schedule **Nightly**");
     expect(last.content).toContain(PAUSED_LINE);
-    // Like the ❌ line it replaces (and the delivery pass): the exit code,
-    // never the failed run's own output.
-    expect(last.content).toContain("failed (exit 1)");
+    // Like the ❌ line it replaces (and the delivery pass): the DISCORD-3.b
+    // failed line (someone else's schedule), never the failed run's own output.
+    expect(last.content).toContain(FAILED_TEXT);
     expect(last.content).not.toContain("boom");
     expect(pinged(last, OWNER_ID)).toBe(true);
     expect(h.lastRun().ask_posted_at).not.toBeNull();

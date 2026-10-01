@@ -39,6 +39,7 @@ import {
 import { answerCustomId, openCustomId, pickCustomId } from "../src/discord/ask-buttons.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
+import { FAILED_TEXT } from "../src/discord/failure-reason.ts";
 import { routeMessage, type RouterDeps } from "../src/discord/message-router.ts";
 import {
   RUN_STOP_ACK,
@@ -864,7 +865,9 @@ describe("the Stop button on a run's progress message (AGENT-3.a, REQ-discord-30
     const thrown = b.outbound.sends[1]!;
     expect(thrown.components).toEqual(STOP_ROW);
     const last = b.outbound.edits.filter((e) => e.messageId === thrown.messageId).at(-1)!;
-    expect((last.embed as { description: string }).description).toBe("❌ spawn failed");
+    // DISCORD-3.b: Alice is not the owner and no owner DM went out here, so
+    // the failure status says only that it didn't work (no reason).
+    expect((last.embed as { description: string }).description).toBe(`❌ ${FAILED_TEXT}`);
     expect(last.components).toBeNull();
     await b.result.stop();
   });

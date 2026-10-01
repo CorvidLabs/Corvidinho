@@ -610,6 +610,17 @@ test seam), `HUMAN_LIFECYCLE_LINE`, `selfLifecycleRefusal(cwd, id, env)`,
 `citedHiIds(text, families)`. `ExecuteContext` gains optional
 `repoWays?: RepoWays`. No env var, config key, flag or schema.
 
+A failed run's plain reason (DISCORD-3.b, REQ-agent-032): `TaskResult` gains
+an optional `error?: string` (additive; no protocol bump) and `ExecuteResult`
+an optional `failureReason?: string` beside `error: true`.
+`modelCallFailedLine(failure, provider)` (`src/agent/providers.ts`) builds
+`The model call failed (<status> <standard name> from <host>)` / `The model
+call timed out (<host>)` / `… (network error reaching <host>)` / `…
+(malformed reply from <host>)` / `… (<label> needs <KEY>, which is not set)`,
+or `NO_PROVIDER_NOTICE` for an empty chain. `src/agent/loop.ts` exports
+`VERIFY_RERUN_FAILED_REASON` and `verifyGaveUpReason(maxRetries)`.
+`collectTaskRunStream` returns `stderrTail?` (the last `STDERR_TAIL_MAX`,
+4000, characters of the child's stderr when it wrote any).
 A local `task run`'s own worktree (SESSION-WORKTREE-1.a, REQ-cli-122):
 `TaskResult` gains optional `workspace?: TaskWorkspaceReport` (`dir`,
 `branch`, `kept`, `branchKept`), set only by the CLI for a run that worked in
@@ -621,6 +632,14 @@ with no role session reads `a local CLI run has no role session (the CLI half
 of SAFE-3.a is not built yet)` (REQ-agent-503).
 
 ## Invariants
+
+A failed run names why in harness text only (DISCORD-3.b, AGENT-9,
+REQ-agent-032): `runTask` sets `error` on a failed result from the attempt's
+`failureReason` (the no-provider notice, or `modelCallFailedLine` of the
+chain's last failure — status and host, never the provider's reply body), and
+to `verifyGaveUpReason` / `VERIFY_RERUN_FAILED_REASON` when verify fails for
+good; never model or tool text. A spend-cap stop is not a failure and carries
+none (its `SPEND_CAP_SUMMARY` and ask are unchanged, SAFE-14.a).
 
 A failed model hands the run to the next configured one and says so (AGENT-11,
 REQ-agent-080): one `ModelChain` per `createTaskExecute` (every surface's
@@ -1080,6 +1099,12 @@ A change the run did not open is never touched.
 - **When** the run starts
 - **Then** the no-provider notice is the first stderr line (text output), no provider is called, and the run ends `failed` with that notice as its summary and no files; there is no `gpt-4o-mini` default and no demo answer (REQ-agent-179)
 
+### Scenario: the model call is refused (DISCORD-3.b)
+
+- **Given** a configured model whose provider answers every call with 401 and a body quoting a key
+- **When** `task run --output ndjson` runs
+- **Then** it exits 1 and the `result` frame is `failed` with `error` `The model call failed (401 Unauthorized from <host>)`; the body never reaches `error` (REQ-agent-032)
+
 ### Scenario: the configured model is retired
 
 - **Given** `CORVIDINHO_LLM_MODEL=ollama:gone-model, ollama:fake-model` and a provider that answers `gone-model` with HTTP 404
@@ -1114,7 +1139,8 @@ A change the run did not open is never touched.
 
 | Condition | Behavior |
 |-----------|----------|
-| Verify exhausted | state failed, verified=false, summary includes verifier output, `ask` reason stuck |
+| Verify exhausted | state failed, verified=false, summary includes verifier output, `ask` reason stuck, `error` `Verification failed after N retries` (REQ-agent-032) |
+| Model call fails on the last configured model (HTTP, timeout, network, malformed) or no provider is configured | state failed; `error` is `modelCallFailedLine` (status / kind and host only) or the no-provider notice (REQ-agent-032) |
 | Verify lane log over 4000 chars (passing steps such as the `--help` smoke fill its head) | the retry gets the failing step's name, its output (or its error lines and the end of the log) within 4000 chars, never the start of the log (REQ-agent-002, AGENT-4.a) |
 | Edit no tool reported (code-tier shell-exec, delegate worker, commit through a shell) | the real git diff adds the path to filesChanged; verify runs; done only on a pass (REQ-agent-085) |
 | A tool claims a path git does not show (gitignored, nested repo, nothing written) | not listed in filesChanged; one note names it; verify runs anyway (REQ-agent-085) |
@@ -1273,5 +1299,6 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-30 | at-a-spend-cap-the-run-asks-the-owner-on-a-dm-spend-approve-card-with-a-one-time-code-instead-of-refusing-approve-lets: At a spend cap the run asks the owner on a DM spend Approve card with a one-time code instead of refusing; Approve lets only the paused call through at the amount shown and the next call past the cap asks again (SAFE-8, SAFE-8.a, SAFE-15, SAFE-19 money) |
 | 2026-09-30 | the-safe-3-a-approved-prod-command-test-runs-a-stand-in-kubectl-first-on-path-instead-of-the-host-s-real-one-which-took: The SAFE-3.a approved-prod-command test runs a stand-in kubectl first on PATH instead of the host's real one, which took 2.4-3.1 s on CI runners and once passed the 5 s test timeout |
 | 2026-09-30 | if-it-only-plans-or-says-done-without-changing-anything-it-gets-one-nudge-to-the-same-model-a-second-stall-stands-with: If it only plans or says 'Done.' without changing anything, it gets one nudge to the same model; a second stall stands with an operator note (AGENT-17, nudge half) |
+| 2026-09-30 | a-failed-run-tells-the-owner-why-in-one-plain-line-and-everyone-else-that-it-didn-t-work-and-the-owner-has-been-told: A failed run tells the owner why in one plain line, and everyone else that it didn't work and the owner has been told (DISCORD-3.b) |
 | 2026-09-30 | a-cli-task-run-in-a-git-repo-works-in-its-own-worktree-by-default-here-runs-it-in-my-checkout-session-worktree-1-a: A CLI task run in a git repo works in its own worktree by default; --here runs it in my checkout (SESSION-WORKTREE-1.a) |
 | 2026-09-30 | a-call-whose-price-is-unknown-stops-and-asks-on-the-owner-s-spend-card-showing-the-amount-as-unknown-when-a-cap-covers: A call whose price is unknown stops and asks on the owner's spend card showing the amount as unknown when a cap covers it (recorded unknown, owner lines read $X + unknown, no price override), and every surface asks before spending over a cap: WATCH spend-cap stops reach the owner by DM and a schedule's spend-cap stop can go on through the card (SAFE-16, SAFE-16.a, AUTONOMY-8) |

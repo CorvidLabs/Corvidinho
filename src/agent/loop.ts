@@ -85,6 +85,18 @@ function setState(
   emit(onEvent, { type: "StateChanged", state });
 }
 
+/**
+ * DISCORD-3.b: a failed verify's plain reason on the result (`error`); the
+ * lane's output stays in the summary, never in this line.
+ */
+export const VERIFY_RERUN_FAILED_REASON =
+  "Verification failed when re-run over what approving and archiving its own SpecSync change wrote";
+
+/** DISCORD-3.b: the plain reason of a run that gave up after its verify retries. */
+export function verifyGaveUpReason(maxRetries: number): string {
+  return `Verification failed after ${maxRetries} retries`;
+}
+
 function isAborted(signal?: AbortSignal): boolean {
   return Boolean(signal?.aborted);
 }
@@ -363,6 +375,9 @@ async function gate(
         cancelled: false,
         state: "failed",
         attempts,
+        // DISCORD-3.b: the attempt's plain harness reason (no provider, or
+        // which model call failed and how), never the model's text.
+        ...(exec.failureReason ? { error: exec.failureReason } : {}),
       };
     }
 
@@ -568,6 +583,7 @@ async function gate(
               cancelled: false,
               state: "failed",
               attempts,
+              error: VERIFY_RERUN_FAILED_REASON,
             };
           }
         }
@@ -609,6 +625,7 @@ async function gate(
         state: "failed",
         attempts,
         ask,
+        error: verifyGaveUpReason(maxRetries),
       };
     }
 

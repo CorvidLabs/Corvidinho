@@ -101,6 +101,12 @@ export type ExecuteResult = {
    */
   error?: boolean;
   /**
+   * DISCORD-3.b / AGENT-9: with `error`, why the attempt failed as one plain
+   * harness line — the no-provider notice (AGENT-10) or which model call
+   * failed and how (`modelCallFailedLine`); never model or tool output.
+   */
+  failureReason?: string;
+  /**
    * Tools the attempt ran whose file edits no tool result reports (a Fledge
    * command, the shell or a runner, or a `delegate` worker that may have run
    * an allowlisted Fledge command). With no git snapshot to diff, runTask
@@ -190,6 +196,14 @@ export type TaskResult = {
    * Absent when no model failed over.
    */
   modelFallback?: ModelFallback[];
+  /**
+   * DISCORD-3.b / AGENT-9: a failed run's reason as one plain line of harness
+   * text (the no-provider notice, which model call failed and how, or which
+   * verify failed) — never model or tool output (SAFE-12/13). Bridges show it
+   * to the owner only, after a secret scrub. Absent on a run that did not
+   * fail, and on a failure that names no reason. Additive: no protocol bump.
+   */
+  error?: string;
   /**
    * SESSION-WORKTREE-1.a (REQ-cli-122): the worktree a local `task run`
    * worked in and whether it and its branch were kept (additive; no protocol

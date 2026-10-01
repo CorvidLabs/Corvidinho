@@ -31,6 +31,7 @@ import {
   type ProcEntry,
 } from "../plugins/proc-group.ts";
 export { summarizeTaskRunOutput } from "../agent/task-summary.ts";
+import { failureReasonFromUnknown } from "./failure-reason.ts";
 import { privateRepliesFromUnknown } from "./private-reply.ts";
 import { DISCORD_ANSWER_MAX } from "./rich-reply.ts";
 import type { AgentSpawnResult } from "./types.ts";
@@ -241,6 +242,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         usage,
         usageByModel: streamedByModel,
         result,
+        stderrTail,
       } = await collectTaskRunStream({
         stdout: proc.stdout,
         stderr: proc.stderr,
@@ -286,6 +288,10 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       const modelFallback = modelFallbackFromUnknown(result?.modelFallback);
       const usageByModel = modelUsageFromUnknown(result?.usageByModel) ?? streamedByModel;
       if (modelFallback) (opts.onModelFallback ?? warnModelFallback)(modelFallback, sessionId);
+      // DISCORD-3.b: why a failed run failed (the result frame's plain
+      // `error`, else the stderr end), for `failureReasonFor` only.
+      const failed = exitCode !== 0;
+      const failureReason = failed ? failureReasonFromUnknown(result?.error) : undefined;
       return {
         ok: exitCode === 0,
         sessionId,
@@ -300,6 +306,8 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         ...(usageByModel ? { usageByModel } : {}),
         ...(model ? { model } : {}),
         ...(modelFallback ? { modelFallback } : {}),
+        ...(failureReason ? { failureReason } : {}),
+        ...(failed && stderrTail ? { stderrTail } : {}),
         // Verify facts for the /work PR gate (REQ-discord-088).
         ...(result
           ? {

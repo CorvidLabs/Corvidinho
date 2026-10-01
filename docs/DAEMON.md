@@ -151,7 +151,7 @@ optional `CORVIDINHO_BACKUP_DIR` (nightly backup, above) is read by both.
 | `CORVIDINHO_DATA_DIR` | Data dir holding `corvidinho.db` and `daemon.lock` (default `~/.local/share/corvidinho`) |
 | `CORVIDINHO_BIN` | Agent binary to spawn per run (default `<cwd>/src/cli.ts`) |
 | `CORVIDINHO_ALLOWLIST_FILE`, `CORVIDINHO_DISCORD_ALLOW_CHANNELS`, `DISCORD_CHANNEL_IDS`, … | The same allowlists as the bridge. An empty channel list refuses every schedule that has a channel. Users and roles both empty leave only the channel gate and the deny lists, so any creator's schedule runs; once either is set, the creator gate above applies. Deny lists always win. |
-| `CORVIDINHO_LLM_MODEL` (+ its key: `CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`; `OLLAMA_HOST` for `ollama:`) | The model the spawned `task run` calls: `openai:<model>`, `ollama:<model>` or `anthropic:<model>` (AGENT-13); a comma list is a fallback chain (AGENT-11, `llm.fallback` below). There is no built-in default: unset, every scheduled run fails (`failed (exit 1)`) and the `llm.no_provider` start line says why (never commit keys) |
+| `CORVIDINHO_LLM_MODEL` (+ its key: `CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`; `OLLAMA_HOST` for `ollama:`) | The model the spawned `task run` calls: `openai:<model>`, `ollama:<model>` or `anthropic:<model>` (AGENT-13); a comma list is a fallback chain (AGENT-11, `llm.fallback` below). There is no built-in default: unset, every scheduled run fails and the `llm.no_provider` start line says why (never commit keys) |
 | `CORVIDINHO_BACKUP_DIR` | Optional absolute local directory for the nightly backup (OPS-1/2); unset = no backup |
 
 ## Single instance
@@ -202,13 +202,13 @@ scrubbed for secrets (SAFE-6).
 | Event | When |
 |-------|------|
 | `daemon.started` | Lock taken, DB open, ticker armed; `backup` is the backup directory, `off`, or why it is unusable; `llm` is the model runs at the default tier call (`<model> @ <host>`), or `none` (AGENT-13) |
-| `llm.no_provider` | (warn, at start) Some or every tier has no usable model provider (AGENT-10): `notice` says which and what to set (`CORVIDINHO_LLM_MODEL`, or the entry's missing key). Those scheduled runs fail (`failed (exit 1)`) until one is set; there is no built-in default |
+| `llm.no_provider` | (warn, at start) Some or every tier has no usable model provider (AGENT-10): `notice` says which and what to set (`CORVIDINHO_LLM_MODEL`, or the entry's missing key). Those scheduled runs fail until one is set (each `run.finished` `error` reads `failed (exit 1): No model provider is configured …`); there is no built-in default |
 | `daemon.lock_held` / `daemon.lock_failed` | Start refused (exit 1) |
 | `daemon.start_failed` | Start refused (exit 1): start-up setup failed, for example an allowlist file that cannot be read or parsed or a DB that cannot open. `message` gives the reason; nothing runs and the lock is released |
 | `daemon.protocol_mismatch` / `daemon.protocol_unverified` | `CORVIDINHO_BIN` speaks another wire protocol (exit 1), or could not be checked (warn) |
 | `tick` | A tick started or skipped a due run. `skipped` includes runs that another ticker claimed first and runs that wait on their schedule's open question (AUTONOMY-6.a). |
 | `run.finished` | One run ended: `ok`, `error`, `autoPaused` |
-| `llm.fallback` | (warn) A scheduled run's model failed and it fell back to the next configured model (AGENT-11): `sessionId`, `fallbacks` (`from`, `to`, `reason` each; `via` for a delegate or council worker's) and a `message` line. The post of a run that still finished carries the same note (a failed run's post stays `failed (exit N)`); there is no DM |
+| `llm.fallback` | (warn) A scheduled run's model failed and it fell back to the next configured model (AGENT-11): `sessionId`, `fallbacks` (`from`, `to`, `reason` each; `via` for a delegate or council worker's) and a `message` line. The post of a run that still finished carries the same note (a failed run's post is its DISCORD-3.b line); there is no DM |
 | `spend.warning` | (warn) A schedule run crossed 80% of a rolling 24 h spend cap — the total (`CORVIDINHO_DAILY_SPEND_CAP_USD`, SAFE-8) or a provider's (`CORVIDINHO_PROVIDER_SPEND_CAPS_USD`, SAFE-14/15; its `message` names `provider:<id>`): `spentMicroUsd`, `capMicroUsd`, `percent` and a `message` line. The daemon has no Discord: the warning stays pending for a bridge's scheduler tick to DM to the owner (never posted in a channel, SAFE-14.a) |
 | `run.needs_human` | (warn) A run stopped to ask a human: `reason` is `stuck`, `clarify` or `spend-cap`. Also `stuck` for a run that could not start and for the run that auto-paused its schedule. Its question stays on the run row until a bridge posts it, and the schedule's due runs wait until someone answers or cancels it on Discord (AUTONOMY-6.a). |
 | `tick.failed` | A tick threw (for example, SQLite busy); the daemon keeps running |
