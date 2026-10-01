@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "release-0-0-40-brave-web-search-and-giphy-gif-search-for-owner-and-team-plugin-7-8-9",
+  "slug": "release-0-0-40-brave-web-search-and-giphy-gif-search-for-owner-and-team-plugin-7-8-9",
+  "title": "Release 0.0.40: Brave web-search and GIPHY gif-search for owner and team (PLUGIN-7/8/9)",
+  "description": "Release 0.0.40: Brave web-search and GIPHY gif-search for owner and team (PLUGIN-7/8/9)",
+  "kind": "operations",
+  "state": "approved",
+  "base_commit": "def494bec1d7969cd494e1576dca67bb3809ca06",
+  "created_at": 1790870369,
+  "updated_at": 1790870394,
+  "affected_specs": [
+    "cli"
+  ],
+  "affected_paths": [
+    "package.json",
+    "CHANGELOG.md",
+    "STATUS.md",
+    "tests/version.test.ts",
+    "tests/update-helpers.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "package.json 0.0.40; version prints 0.0.40; CHANGELOG 0.0.40 extractable; STATUS rows mention web-search and gif-search"
+  ],
+  "selected_artifacts": [
+    "context",
+    "plan",
+    "testing",
+    "design",
+    "tasks",
+    "requirements",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}

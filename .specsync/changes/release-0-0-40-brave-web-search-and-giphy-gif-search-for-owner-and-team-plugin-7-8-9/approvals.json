@@ -1,0 +1,43 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790870394,
+      "digest": "c077225ba86a42abc0fff76bb82fab096064878f68a3fa21e691958bd202e00b",
+      "note": "Release bump after #326/#331 GIF+web-search dogfood land. PROCESS-3 corvid-agent.",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "release-0-0-40-brave-web-search-and-giphy-gif-search-for-owner-and-team-plugin-7-8-9",
+        "title": "Release 0.0.40: Brave web-search and GIPHY gif-search for owner and team (PLUGIN-7/8/9)",
+        "description": "Release 0.0.40: Brave web-search and GIPHY gif-search for owner and team (PLUGIN-7/8/9)",
+        "kind": "operations",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "package.json 0.0.40; version prints 0.0.40; CHANGELOG 0.0.40 extractable; STATUS rows mention web-search and gif-search"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "c8de8e8fc76a4651310566f97b1bfe96368441c1124c08363c76c4396c3ba25a"
+      }
+    }
+  ],
+  "reopenings": []
+}
