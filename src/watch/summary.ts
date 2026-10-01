@@ -13,8 +13,13 @@
  * ids, quota details) never lands on a public thread; the comment names the
  * model call's status but not the provider's host (`watchPublicFailureLine`),
  * which only the `[watch] run failed` log line keeps.
+ * AGENT-12 — a run that hit the turn cap I set says so in a plain line after
+ * the run's summary; a failed run's comment shows its one reason line
+ * instead, without the note (an idle-timed-out run's reason line is
+ * `Stopped: no output for … (idle timeout).`).
  */
 
+import { TURN_CAP_NOTE } from "../agent/limits.ts";
 import { clipKeepingRoleNote } from "../agent/task-summary.ts";
 import { describeInjectionReasons } from "../agent/untrusted.ts";
 import { attribution } from "../attribution.ts";
@@ -196,7 +201,9 @@ export function watchPublicFailureLine(reason: string): string {
  * scrubbed, clipped to 1200) — or, for a failed run without an ask of its
  * own, its one plain reason line without the provider's host
  * (`watchFailureReason` read with `env`, then `watchPublicFailureLine`) —
- * then the SAFE-13 owner line when the run reports one, then the footer.
+ * then the AGENT-12 `TURN_CAP_NOTE` when it shows a turn-capped run's
+ * summary, then the SAFE-13 owner line when the run reports one, then the
+ * footer.
  */
 export function buildSummaryBody(
   spawn: AgentSpawnResult,
@@ -221,9 +228,13 @@ export function buildSummaryBody(
   const body = preview
     ? `Corvidinho WATCH run summary — ${status}\n\n${preview}`
     : `Corvidinho WATCH run summary — ${status}`;
+  // AGENT-12: the turn-cap note follows the run's best answer; a failed run's
+  // comment shows its one reason line instead (REQ-watch-009), without it.
+  const capped =
+    reason === null && spawn.stopReason === "turn-cap" ? `\n\n${TURN_CAP_NOTE}` : "";
   const notice = spawn.injection ? `\n\n${watchInjectionLine(spawn.injection, ownerLogin)}` : "";
   const foot = attribution("markdown");
-  return `${body}${notice}\n\n---\n${foot}`;
+  return `${body}${capped}${notice}\n\n---\n${foot}`;
 }
 
 function splitRepo(repo: string): { owner: string; name: string } | null {

@@ -132,6 +132,8 @@ export function createDelegateCommand(deps: DelegateCommandDeps = {}): PluginCom
           ...(outcome.injection ? { injection: outcome.injection } : {}),
           // AGENT-11: the worker's model failovers, for the lead's result.
           ...(outcome.modelFallback ? { modelFallback: outcome.modelFallback } : {}),
+          // AGENT-12: a limit stopped the worker (turn-cap: its best answer so far).
+          ...(outcome.stopReason ? { stopReason: outcome.stopReason } : {}),
         };
         const label = parsed.value.skill ? ` [${parsed.value.skill}]` : "";
         return ok

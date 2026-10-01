@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "07000bae2fd3237bd7676fbfed2b9ee696820a20",
+      "contract_digest": "8d52af7507dd4a973d06664a2c7eb86e5381c036cbb1a9e9db2266ff160c0255",
+      "execution_digest": "e8e34b6d6641710c4304a21c23002290e79ecc3404d99e9f11d67e514b799aa8",
+      "workspace_digest": "01a5e4cf949e572a3c96893af2f93bc54e2a59eef1eceaf02781597a1d86927f",
+      "timestamp": 1790820917
+    }
+  ]
+}

@@ -166,6 +166,13 @@ fallback.
 
 ## Invariants
 
+A WATCH run a limit I set stopped (AGENT-12, REQ-watch-125): the spawn client
+validates the result frame's `stopReason`; a turn-capped run's summary comment
+adds the plain line `TURN_CAP_NOTE` after the summary (no `stopped=`
+plumbing; a failed turn-capped run shows its one reason line instead, without
+it), and an idle-timed-out run's comment is a failed one whose one reason line
+(REQ-watch-009) is `Stopped: no output for … (idle timeout).`
+
 The spawn client runs `task run --here --task <prompt> --output ndjson`
 (REQ-watch-006 / REQ-watch-073): the run works in the watcher's cwd and never
 makes a worktree of its own (SESSION-WORKTREE-1.a, REQ-cli-122).
@@ -369,5 +376,6 @@ WATCH poll-first thin (#19, 2026-09-26, corvid-agent): mention/review_request/is
 | 2026-09-30 | owner-chat-session-start-and-work-may-use-the-allowlisted-shell-runners-and-fledge-runs-only-in-that-talk-s-own: Owner chat, /session start and /work may use the allowlisted shell, runners and Fledge runs only in that talk's own worktree; non-owners, WATCH, schedules, workers and the local CLI never get them (SAFE-3.a) |
 | 2026-09-30 | a-cli-task-run-in-a-git-repo-works-in-its-own-worktree-by-default-here-runs-it-in-my-checkout-session-worktree-1-a: A CLI task run in a git repo works in its own worktree by default; --here runs it in my checkout (SESSION-WORKTREE-1.a) |
 | 2026-09-30 | a-call-whose-price-is-unknown-stops-and-asks-on-the-owner-s-spend-card-showing-the-amount-as-unknown-when-a-cap-covers: A call whose price is unknown stops and asks on the owner's spend card showing the amount as unknown when a cap covers it (recorded unknown, owner lines read $X + unknown, no price override), and every surface asks before spending over a cap: WATCH spend-cap stops reach the owner by DM and a schedule's spend-cap stop can go on through the card (SAFE-16, SAFE-16.a, AUTONOMY-8) |
+| 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |
 | 2026-10-01 | a-failed-github-watch-run-s-comment-says-why-in-one-plain-line-which-model-call-failed-status-and-host-never-the: A failed GitHub WATCH run's comment says why in one plain line (which model call failed: status and host), never the provider's raw error body; REQ-cli-079 matches what a daemon no-provider schedule run now records |
 | 2026-10-01 | a-failed-watch-run-s-public-comment-and-kept-turn-name-the-model-call-s-status-but-not-the-provider-s-host-the-account: A failed WATCH run's public comment and kept turn name the model call's status but not the provider's host (the account's resource name, a private gateway or an Ollama server's address); the [watch] run failed log line keeps the host |

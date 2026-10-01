@@ -22,6 +22,7 @@ import type { ModelFallback } from "../agent/types.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
 import { spendWarningFromUnknown } from "../agent/spend-notice.ts";
 import { injectionNoticeFromUnknown } from "../agent/untrusted.ts";
+import { stopReasonFromUnknown } from "../agent/limits.ts";
 import type { PersonRole } from "../identity/people.ts";
 import { extractConfirmTokens } from "../memory/confirm.ts";
 import {
@@ -292,6 +293,8 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       // `error`, else the stderr end), for `failureReasonFor` only.
       const failed = exitCode !== 0;
       const failureReason = failed ? failureReasonFromUnknown(result?.error) : undefined;
+      // AGENT-12: a limit I set stopped the run (validated; footer plumbing only).
+      const stopReason = stopReasonFromUnknown(result?.stopReason);
       return {
         ok: exitCode === 0,
         sessionId,
@@ -317,6 +320,8 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
                 state: result.state,
                 attempts: result.attempts,
                 cancelled: result.cancelled === true,
+                // AGENT-12: shown only as `stopped=…` in the footer plumbing.
+                ...(stopReason ? { stopReason } : {}),
               },
             }
           : {}),

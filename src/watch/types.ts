@@ -2,7 +2,7 @@
  * WATCH ingress types — GitHub mention/review/assignment → session stub (#19/#48).
  */
 
-import type { HumanAsk } from "../agent/types.ts";
+import type { HumanAsk, TaskStopReason } from "../agent/types.ts";
 import type { InjectionNotice } from "../agent/untrusted.ts";
 
 export const NOT_AUTHORIZED = "not authorized";
@@ -69,6 +69,11 @@ export type AgentSpawnResult = {
    * (AGENT-16.a, src/watch/owner-ask.ts).
    */
   ask?: HumanAsk;
+  /**
+   * AGENT-12: a limit I set stopped the run (validated from the result
+   * frame); a turn-capped run's summary comment gets a plain note.
+   */
+  stopReason?: TaskStopReason;
   /**
    * DISCORD-3.b on GitHub (REQ-watch-009): a failed run's reason from the
    * result frame's `error` (one line of harness text — which model call

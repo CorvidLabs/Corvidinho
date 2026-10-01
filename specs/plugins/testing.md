@@ -391,3 +391,10 @@ under the ~9000-token budget. The fail-on-base proof is in
 `tests/autonomous.council.test.ts` ("voices are delegated read-tier …") —
 every worker's argv has `--here` right after `task run`. Fail on base: both
 fail.
+
+## Tool output keeps a run alive (REQ-plugins-125, AGENT-12)
+
+`tests/agent.limits.test.ts` ("tool output (spawnCapped …)"): a child that
+prints every 0.1 s for 1.5 s keeps a 500 ms idle watchdog from firing; a
+silent 1.2 s child lets it fire. Fail on base: the printing child lets it
+fire.

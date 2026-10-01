@@ -302,6 +302,8 @@ async function runWork(
         verifySkipped: result.task.verifySkipped,
         attempts: result.task.attempts,
         cancelled: result.task.cancelled,
+        // AGENT-12: `stopped=turn-cap|idle-timeout`, plumbing only (AGENT-9).
+        stopReason: result.task.stopReason,
       })
     : undefined;
   // DISCORD-15/15.a: the answer footer adds tokens and cost on owner runs.

@@ -12,6 +12,7 @@ import type {
   ModelFallback,
   ModelUsage,
   SpendWarning,
+  TaskStopReason,
 } from "../agent/types.ts";
 import type { InjectionNotice } from "../agent/untrusted.ts";
 import type { PendingAsk } from "./ask-buttons.ts";
@@ -206,6 +207,8 @@ export type AgentSpawnResult = {
     state?: string;
     attempts?: number;
     cancelled?: boolean;
+    /** AGENT-12: a limit I set stopped the run (validated); footer plumbing only. */
+    stopReason?: TaskStopReason;
   };
 };
 

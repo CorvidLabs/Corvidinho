@@ -20,6 +20,7 @@
 
 import { createHash, randomUUID } from "node:crypto";
 import type { Database } from "bun:sqlite";
+import { pauseIdleWatchdog } from "../agent/limits.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 
 export type ApprovalClass = "plain" | "destructive" | "money";
@@ -303,6 +304,8 @@ export class ApprovalStore {
    * Wait until the request is decided, polling the shared DB. A request
    * still pending at its expiry, or when `signal` aborts, is closed as
    * `expired` (no answer means no, SAFE-20). Resolves the closed request.
+   * The waiting run's idle watchdog is held meanwhile (AGENT-12): waiting on
+   * the owner's card is not a stalled run; the card's own expiry bounds it.
    */
   async waitForDecision(
     id: string,
@@ -310,14 +313,19 @@ export class ApprovalStore {
   ): Promise<ApprovalRequest | undefined> {
     const pollMs = Math.max(1, opts.pollMs ?? 1000);
     const sleep = opts.sleep ?? ((ms: number) => Bun.sleep(ms));
-    for (;;) {
-      const req = this.get(id);
-      if (!req || req.status !== "pending") return req;
-      if (opts.signal?.aborted || this.now() >= req.expiresAt) {
-        this.decide(id, "expired");
-        return this.get(id);
+    const resume = pauseIdleWatchdog();
+    try {
+      for (;;) {
+        const req = this.get(id);
+        if (!req || req.status !== "pending") return req;
+        if (opts.signal?.aborted || this.now() >= req.expiresAt) {
+          this.decide(id, "expired");
+          return this.get(id);
+        }
+        await sleep(Math.min(pollMs, Math.max(1, req.expiresAt - this.now())));
       }
-      await sleep(Math.min(pollMs, Math.max(1, req.expiresAt - this.now())));
+    } finally {
+      resume();
     }
   }
 }

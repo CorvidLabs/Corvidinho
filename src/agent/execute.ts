@@ -137,6 +137,7 @@ import {
   type ProviderKind,
   type ResolvedProvider,
 } from "./providers.ts";
+import { maxTurnsFromEnv, whileIdlePaused } from "./limits.ts";
 import { renderRepoWaysBlock, type RepoWays } from "./repo-ways.ts";
 import { shellToolsGate, shellToolsRefusedLine } from "./shell-gate.ts";
 import {
@@ -348,7 +349,11 @@ export type CreateTaskExecuteOpts = {
   onModelFallback?: (hop: ModelFallback) => void;
   /** AGENT-11: the configured model (entry label) each reply came from. */
   onModel?: (model: string) => void;
-  /** Cap LLM↔tool rounds per execute attempt (default 8). */
+  /**
+   * Cap LLM↔tool rounds per execute attempt (AGENT-12, REQ-agent-312):
+   * default `CORVIDINHO_MAX_TURNS` from `env` when it is a positive whole
+   * number, else 8.
+   */
   maxToolRounds?: number;
   /** Per-request LLM timeout (default {@link LLM_REQUEST_TIMEOUT_MS}). */
   llmTimeoutMs?: number;
@@ -629,7 +634,9 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   const cwd = opts.cwd ?? process.cwd();
   const nonInteractive = opts.nonInteractive ?? true;
   const allowlist = toAllowSet(opts.allowlist ?? allowlistFromEnv());
-  const maxToolRounds = opts.maxToolRounds ?? 8;
+  // AGENT-12 (REQ-agent-312): the turn cap I set, per attempt (AGENT-4.a
+  // retries are kept); unset or not a positive whole number = 8.
+  const maxToolRounds = opts.maxToolRounds ?? maxTurnsFromEnv(env).value;
   const timeoutMs = opts.llmTimeoutMs ?? LLM_REQUEST_TIMEOUT_MS;
   const includeDangerous = Boolean(opts.includeDangerous);
   const onEvent = opts.onEvent;
@@ -1358,6 +1365,8 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
   }
 
   // AGENT-9: soft-land — never dump internal stop reason into the chat summary.
+  // AGENT-12 (REQ-agent-312): the attempt hit the turn cap; runTask marks the
+  // run `stopReason: "turn-cap"` when this was its final attempt.
   const landed = softLandToolRoundExhaustion({
     lastText,
     maxToolRounds,
@@ -1367,6 +1376,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
   return {
     summary: landed.summary,
     filesChanged: [...filesChanged],
+    stopReason: "turn-cap",
     ...unreportedEdits(unreportedEditTools),
   };
 }
@@ -1514,15 +1524,19 @@ async function callModels(
   models: ModelCalls,
   request: (provider: ResolvedProvider) => Promise<Completion>,
 ): Promise<Completion> {
-  const r = await callChain<AssistantMessage>(
-    models.chain,
-    async (provider): Promise<ChainCall<AssistantMessage>> => {
-      const reply = await request(provider);
-      return reply.ok
-        ? { ok: true, value: reply.message }
-        : { ok: false, error: reply.error, failure: reply.failure };
-    },
-    models.onFallback,
+  // AGENT-12 (REQ-agent-244): the run's idle watchdog is held while a model
+  // call is in flight (each request has its own per-request cap).
+  const r = await whileIdlePaused(() =>
+    callChain<AssistantMessage>(
+      models.chain,
+      async (provider): Promise<ChainCall<AssistantMessage>> => {
+        const reply = await request(provider);
+        return reply.ok
+          ? { ok: true, value: reply.message }
+          : { ok: false, error: reply.error, failure: reply.failure };
+      },
+      models.onFallback,
+    ),
   );
   if (!r.ok) {
     return {

@@ -153,6 +153,7 @@ optional `CORVIDINHO_BACKUP_DIR` (nightly backup, above) is read by both.
 | `CORVIDINHO_ALLOWLIST_FILE`, `CORVIDINHO_DISCORD_ALLOW_CHANNELS`, `DISCORD_CHANNEL_IDS`, … | The same allowlists as the bridge. An empty channel list refuses every schedule that has a channel. Users and roles both empty leave only the channel gate and the deny lists, so any creator's schedule runs; once either is set, the creator gate above applies. Deny lists always win. |
 | `CORVIDINHO_LLM_MODEL` (+ its key: `CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`; `OLLAMA_HOST` for `ollama:`) | The model the spawned `task run` calls: `openai:<model>`, `ollama:<model>` or `anthropic:<model>` (AGENT-13); a comma list is a fallback chain (AGENT-11, `llm.fallback` below). There is no built-in default: unset, every scheduled run fails and the `llm.no_provider` start line says why (never commit keys) |
 | `CORVIDINHO_BACKUP_DIR` | Optional absolute local directory for the nightly backup (OPS-1/2); unset = no backup |
+| `CORVIDINHO_MAX_TURNS`, `CORVIDINHO_IDLE_TIMEOUT_MS` | Optional run limits every spawned `task run` reads (AGENT-12): model/tool rounds per attempt (default 8) and the idle timeout in ms (default 600000). A run stopped for no output fails and its reason is logged like any failed run; a run whose last attempt hit the turn cap posts its best answer so far and the scheduler logs `[scheduler] schedule <id>: run stopped=turn-cap …` |
 
 ## Single instance
 

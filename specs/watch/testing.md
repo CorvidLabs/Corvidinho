@@ -200,6 +200,16 @@ clarify ask still never records one).
 - Fail on base: `noteWatchRunAsk` drops every non-stuck ask, so no row is
   recorded and the three tests fail.
 
+## Turn cap note on the run-summary comment (REQ-watch-125, AGENT-12)
+
+`tests/agent.limits.test.ts` ("WATCH: …"): the spawn client keeps
+`stopReason`; the comment has the prose, a blank line and `TURN_CAP_NOTE`,
+no `stopped=`; an idle-timed-out spawn (exit 1, `error` the stop line) gives
+`failureReason` the stop line and its comment is `Failed (exit 1).` with that
+one line (REQ-watch-009), no summary and no turn-cap line; a failed
+turn-capped run shows its reason line without the note; a plain run has none.
+Fail on base.
+
 ## A failed run's comment says why in one plain line (REQ-watch-009, REQ-watch-472, REQ-watch-080 modified; DISCORD-3.b's reason on GitHub)
 
 `tests/watch.failed-comment.test.ts` (7 tests, 8 with the host case below; `startWatchPoller` with the

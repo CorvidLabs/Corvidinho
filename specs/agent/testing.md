@@ -774,3 +774,29 @@ for an unpriced model (was: no card); `tests/agent.spend.test.ts`,
   gives a schedule's spend-cap stop `["Cancel"]`; on the branch: one card
   with the amount unknown and one call, `no-bridge` (recorded), `["Continue",
   "Cancel"]`. Restored, all pass.
+
+## Turn cap and idle timeout (REQ-agent-244, REQ-agent-312, AGENT-12)
+
+`tests/agent.limits.test.ts` (fake LLM; fake `fledge` / `corvidinho` sh bins in
+temp dirs): the env readers and lines; the watchdog (touch, nested holds);
+`CORVIDINHO_MAX_TURNS=2` → 2 requests, `stopReason: "turn-cap"`, the last
+prose, the operator stop event; unset → 8; `stopReason` only from the final
+attempt (a capped first attempt whose retry verifies has none; a capped final
+attempt does; a cancelled run never); a hung tool at 150 ms → `failed`,
+`stopReason: "idle-timeout"`, `error` and summary the stop line, `Text` +
+`StateChanged failed`; best prose kept and unverified changes named; output,
+a slow model call, a silent `delegate` worker and an Approve-card wait never
+stop a run; a caller abort stays cancelled; the CLI's hung silent verify lane
+is killed with its task (exit 1) and a printing lane is verified.
+- Fail on base (aeb2de3's modified sources swapped in, `src/agent/limits.ts`
+  kept): 18 of 28 fail (no `stopReason`, hangs until the test timeout, the
+  watchdog fires during a worker or a card wait); restored, 28 of 28 pass.
+- Review: a tool that never returns and ignores the abort still ends the run
+  about `IDLE_STOP_GRACE_MS` after the timeout (`failed`, `idle-timeout`,
+  "Any changes so far were not verified.", the `[operator]` line); an
+  `idleTimeoutMs` of 0, -1 or NaN is the default (no 1 ms stop); a
+  `delegate` worker's `stopReason: "turn-cap"` reaches its outcome; a
+  turn-capped schedule run posts only its prose and the scheduler logs one
+  `[scheduler] schedule <id>: run stopped=turn-cap …` line. These
+  fail on the pre-review head 05f7a6c (hang, instant stop, none) and on
+  base; 32 of 32 pass on the branch (11 pass / 21 fail with base sources).

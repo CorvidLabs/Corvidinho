@@ -24,14 +24,19 @@
  *   (SAFE-6), only what a task run needs (LLM provider keys stay);
  * - a lead in a ROLES-CHAT role session gets a non-ADMIN worker (read/chat
  *   tools only, ROLES-CHAT-2/3); a lead outside one (local CLI) gets a worker
- *   outside one too, so the worker never has more power than the lead.
+ *   outside one too, so the worker never has more power than the lead;
+ * - a worker inherits the lead's turn cap and idle timeout
+ *   (CORVIDINHO_MAX_TURNS / CORVIDINHO_IDLE_TIMEOUT_MS, AGENT-12), the
+ *   lead's idle watchdog is held while it runs, and a worker a limit stopped
+ *   comes back with its `stopReason`.
  */
 
 import { join } from "node:path";
 import { collectTaskRunStream } from "../agent/events-ndjson.ts";
+import { pauseIdleWatchdog, stopReasonFromUnknown } from "../agent/limits.ts";
 import { modelFallbackFromUnknown } from "../agent/providers.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
-import type { ModelFallback } from "../agent/types.ts";
+import type { ModelFallback, TaskStopReason } from "../agent/types.ts";
 import { injectionNoticeFromUnknown, type InjectionNotice } from "../agent/untrusted.ts";
 import {
   TIER_RANK,
@@ -357,6 +362,12 @@ export type DelegateChildOutcome = {
    * frame). The lead reports them as its own run's, marked `via`.
    */
   modelFallback?: ModelFallback[];
+  /**
+   * AGENT-12: a limit the worker inherited stopped it (`turn-cap`: its
+   * summary is its best answer so far; `idle-timeout`), validated from its
+   * result frame, so the lead knows the answer may be unfinished.
+   */
+  stopReason?: TaskStopReason;
 };
 
 /** After a worker exits (or is killed), how long its pipes may still drain. */
@@ -507,6 +518,10 @@ export async function runDelegateChild(opts: {
     );
     return code;
   });
+  // AGENT-12: the lead's idle watchdog is held while its worker runs — the
+  // worker inherits CORVIDINHO_IDLE_TIMEOUT_MS / CORVIDINHO_MAX_TURNS and
+  // stops itself, and the worker timeout above bounds the wait.
+  const resumeIdle = pauseIdleWatchdog();
   try {
     const out = await collectTaskRunStream({
       stdout: stdout.stream,
@@ -535,6 +550,8 @@ export async function runDelegateChild(opts: {
     if (injection) outcome.injection = injection;
     const modelFallback = modelFallbackFromUnknown(r?.modelFallback);
     if (modelFallback) outcome.modelFallback = modelFallback;
+    const stopReason = stopReasonFromUnknown(r?.stopReason);
+    if (stopReason) outcome.stopReason = stopReason;
     if (typeof r?.verifySkipped === "boolean") outcome.verifySkipped = r.verifySkipped;
     if (typeof r?.summary === "string") {
       outcome.resultText = scrubSecrets(r.summary).trim().slice(0, DELEGATE_SUMMARY_MAX);
@@ -542,6 +559,7 @@ export async function runDelegateChild(opts: {
     if (out.totalTokens !== undefined) outcome.totalTokens = out.totalTokens;
     return outcome;
   } finally {
+    resumeIdle();
     for (const t of timers) clearTimeout(t);
     opts.signal?.removeEventListener("abort", onAbort);
     if (stopping) hardKill();

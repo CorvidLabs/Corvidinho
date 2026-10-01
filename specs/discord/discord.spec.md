@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 95
+version: 96
 status: draft
 files:
   - src/discord/types.ts
@@ -920,6 +920,15 @@ shared `createFailureOwnerDm` on its gateway `sendDm`; the daemon none).
 
 ## Invariants
 
+A run a limit I set stopped (AGENT-12, REQ-discord-125) shows it only as
+`stopped=turn-cap` / `stopped=idle-timeout` at the end of the answer's footer
+and thinking plumbing (chat, ask answers, `/session start`, `/work`), from the
+validated `result` frame `stopReason`, never in the channel body; a schedule
+post has no footer, so the scheduler logs `[scheduler] schedule <id>: run
+stopped=turn-cap …` instead (never the post); a waiting
+`ApprovalStore.waitForDecision` holds the run's idle watchdog until the card
+is decided, lapses or the wait is aborted.
+
 Empty channel allowlist fail-start; empty user/role = deny-all when checked;
 empty admin lists = nobody ADMIN; missing token clean exit; no ProcessManager;
 secrets out of repo; discord-post-message dangerous, and every post it makes
@@ -1543,3 +1552,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-30 | a-cli-task-run-in-a-git-repo-works-in-its-own-worktree-by-default-here-runs-it-in-my-checkout-session-worktree-1-a: A CLI task run in a git repo works in its own worktree by default; --here runs it in my checkout (SESSION-WORKTREE-1.a) |
 | 2026-09-30 | a-call-whose-price-is-unknown-stops-and-asks-on-the-owner-s-spend-card-showing-the-amount-as-unknown-when-a-cap-covers: A call whose price is unknown stops and asks on the owner's spend card showing the amount as unknown when a cap covers it (recorded unknown, owner lines read $X + unknown, no price override), and every surface asks before spending over a cap: WATCH spend-cap stops reach the owner by DM and a schedule's spend-cap stop can go on through the card (SAFE-16, SAFE-16.a, AUTONOMY-8) |
 | 2026-09-30 | a-stop-button-on-the-run-s-progress-message-lets-me-or-the-person-who-asked-stop-it-agent-3-a: A Stop button on the run's progress message lets me or the person who asked stop it (AGENT-3.a) |
+| 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |
