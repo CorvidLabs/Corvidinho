@@ -17,7 +17,10 @@
  *   dirty), `git-push` and `github-pr-create` are allowlisted for
  *   non-interactive use (GITHUB-5 / SAFE-1). Nothing is committed or pushed
  *   unless every step it needs is allowed;
- * - the remote OWNER/REPO passes the repo gate (GITHUB-6).
+ * - the remote OWNER/REPO passes the repo gate (GITHUB-6);
+ * - `github-pr-create` itself holds a tree with no finished second-model
+ *   review (GITHUB-9, src/work/review.ts): this step has no run model, so
+ *   it starts no round, and says so on the PR line (`not-reviewed`).
  *
  * The steps go through the existing typed plugins via `runPlugin`, so each
  * dangerous action keeps its SAFE-1 deny and SAFE-5 audit row. Otherwise the
@@ -46,6 +49,7 @@ import { runPlugin, type RunOptions } from "../plugins/run.ts";
 import type { PluginHandlerResult } from "../plugins/types.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import { resolveBase } from "../worktree/base.ts";
+import { reviewRefusalReason } from "./review.ts";
 import {
   buildWorkPrBody,
   workCommitMessage,
@@ -95,6 +99,7 @@ export type WorkPrSkipReason =
   | "commit-failed"
   | "push-failed"
   | "pr-failed"
+  | "not-reviewed"
   | "error";
 
 export type WorkPrOutcome =
@@ -373,6 +378,15 @@ async function ship(input: OpenWorkPrInput, deps: OpenWorkPrDeps): Promise<WorkP
       "--draft",
     ],
   });
+  // GITHUB-9: github-pr-create holds a PR whose tree has no finished
+  // second-model review (no run model here: no round starts until the /work
+  // round driver lands); the line says why, the changes stay pushed.
+  if (!created.ok && created.reviewHold) {
+    return skip(
+      "not-reviewed",
+      `not opened — ${reviewRefusalReason(created.error)} The changes stay on branch \`${branch}\`.`,
+    );
+  }
   if (!created.ok) {
     return skip(
       "pr-failed",

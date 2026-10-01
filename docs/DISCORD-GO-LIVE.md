@@ -261,7 +261,7 @@ worktree (SAFE-3.a, see "What an entry unlocks" below):
 | `fledge-lanes-run` / `fledge-run` | true | 2 | true | an operator runs `corvidinho plugins run fledge-lanes-run -- <lane>` or `fledge-run -- <task> [args…]` non-interactively; builtins that run fledge's own `lanes run` / `run` in the project dir (PLUGIN-1), so they run whatever that lane or task's commands do, starting without the owner's GitHub or git credentials like `shell-exec` and the runners (SAFE-21.a), so pushes, PRs and merges go through the checked GitHub tools; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, at code tier (SAFE-3.a) |
 | `git-commit` | true | 2 | true | `/work` should open draft PRs (needed when the work tree has changes) |
 | `git-push` | true | 2 | true | `/work` should open draft PRs; the remote's OWNER/REPO must also pass the GitHub allowlist (GITHUB-6) |
-| `github-pr-create` | true | 1 | true | `/work` should open draft PRs; needs `GITHUB_TOKEN`/`GH_TOKEN` |
+| `github-pr-create` | true | 1 | true | `/work` should open draft PRs; needs `GITHUB_TOKEN`/`GH_TOKEN`. A PR opens only after a second configured model reviewed the diff (GITHUB-9 / GITHUB-9.a, see [`discord.md`](discord.md) Second-model review): configure at least two models, or every PR is refused with the reason |
 | `git-branch-create` | true | 2 | true | an operator runs `corvidinho plugins run git-branch-create` non-interactively (`/work` does not need it: the worktree makes the branch) |
 | `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, `env -C` and symlinks included, SAFE-3; refuses `sed -i` / `>` edits, downloads piped into a shell, deletes outside the worktree and secret reads, saying why, SAFE-21; starts without GitHub or git credentials, so pushes, PRs and merges go only through the typed GitHub tools, SAFE-21.a; 10 minute timeout, 64 KiB output cap, output scrubbed); the model gets it only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, at code tier (SAFE-3.a) |
 | `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere) without GitHub or git credentials (SAFE-21.a), and `plugins list` names any that are not loaded; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, at code tier (SAFE-3.a) |
@@ -345,6 +345,12 @@ What an entry unlocks **today**:
 - Allowlisting `git-commit`, `git-push` and `github-pr-create` for the `/work` PR step also
   offers them to the owner's runs, so the model can commit, push or open a PR itself before the
   run's verify.
+- Every `github-pr-create`, from a run, `/work` or `plugins run`, first needs a finished
+  second-model review of the exact tree on GitHub (GITHUB-9): the reviewer is the first other
+  configured model that did not write the change (no reviewer setting, GITHUB-9.a), in at most 3
+  rounds, and the PR body lists what it raised and what changed. An agent run starts the rounds
+  itself; `/work` and `plugins run` have no run model, so they open only a tree a run already had
+  reviewed (the `/work` round driver is a later change) and otherwise say why on one line.
 
 ### E.4 `corvidinho daemon` under systemd (CLI-8, AUTONOMOUS-4)
 

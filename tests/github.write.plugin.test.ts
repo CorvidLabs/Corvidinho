@@ -7,6 +7,8 @@ import { list } from "../src/plugins/registry.ts";
 import { runPlugin } from "../src/plugins/run.ts";
 import { parseJsonStdout } from "../plugins/github/api.ts";
 import { ATTRIBUTION_MARKDOWN, ATTRIBUTION_PLAIN } from "../src/attribution.ts";
+import { REVIEW_SECTION_HEADING } from "../src/work/review.ts";
+import { headTree, makeReviewRepo, seedFinishedReview } from "./fixtures/review-cycle.ts";
 
 const fixtures = import.meta.dir + "/fixtures/github";
 
@@ -137,8 +139,12 @@ describe("github write plugins (GITHUB-2/3/5)", () => {
 
   test("dry-run pr-create appends Made with Corvidinho attribution", async () => {
     loadBuiltins();
+    // GITHUB-9: the branch's pushed tree has a finished second-model review.
+    const fx = makeReviewRepo({ branch: "corvidinho/github-write-plugins" });
+    seedFinishedReview({ repo: "CorvidLabs/Corvidinho", branch: fx.branch, tree: headTree(fx.dir) });
     await withEnv({ CORVIDINHO_GITHUB_DRY_RUN: "1" }, async () => {
       const r = await runPlugin({
+        cwd: fx.dir,
         name: "github-pr-create",
         args: [
           "--repo",
@@ -162,32 +168,45 @@ describe("github write plugins (GITHUB-2/3/5)", () => {
       expect(body).toContain("Corvidinho");
       expect(body).not.toContain("@Corvidinho");
       expect(body).not.toContain("@corvid-agent");
+      expect(body).toContain(REVIEW_SECTION_HEADING);
     });
   });
 
   test("dry-run pr-create: a body that only mentions \"Made with\" and \"Corvidinho\" still gets the footer; one that has it does not get a second", async () => {
     loadBuiltins();
+    const fx = makeReviewRepo({ branch: "h" });
+    seedFinishedReview({ repo: "CorvidLabs/Corvidinho", branch: "h", tree: headTree(fx.dir) });
     const prCreate = (body: string) =>
       runPlugin({
         name: "github-pr-create",
         args: ["--repo", "CorvidLabs/Corvidinho", "--title", "t", "--body", body, "--head", "h"],
         nonInteractive: true,
         allowlist: ["github-pr-create"],
+        cwd: fx.dir,
       });
     const bodyOf = (r: { data?: unknown }) => (r.data as { body?: string })?.body ?? "";
+    // GITHUB-9: the review section sits between the body and the footer.
+    const section = (b: string) => b.slice(b.indexOf(REVIEW_SECTION_HEADING));
     await withEnv({ CORVIDINHO_GITHUB_DRY_RUN: "1" }, async () => {
       const mention = "Made with Bun; fixes the Corvidinho watch poller.";
       const r = await prCreate(mention);
       expect(r.ok).toBe(true);
-      expect(bodyOf(r)).toBe(`${mention}\n\n---\n${ATTRIBUTION_MARKDOWN}`);
+      const b = bodyOf(r);
+      expect(b.startsWith(`${mention}\n\n${REVIEW_SECTION_HEADING}`)).toBe(true);
+      expect(b.endsWith(`\n\n---\n${ATTRIBUTION_MARKDOWN}`)).toBe(true);
+      expect(b.split(ATTRIBUTION_MARKDOWN).length).toBe(2);
 
-      for (const has of [
-        `Fixes the watch poller.\n\n${ATTRIBUTION_MARKDOWN}`,
-        `Fixes the watch poller.\n\n${ATTRIBUTION_PLAIN}`,
-      ]) {
+      for (const [has, foot] of [
+        [`Fixes the watch poller.\n\n${ATTRIBUTION_MARKDOWN}`, ATTRIBUTION_MARKDOWN],
+        [`Fixes the watch poller.\n\n${ATTRIBUTION_PLAIN}`, ATTRIBUTION_PLAIN],
+      ] as const) {
         const again = await prCreate(has);
         expect(again.ok).toBe(true);
-        expect(bodyOf(again)).toBe(has);
+        const body = bodyOf(again);
+        expect(body.startsWith(`Fixes the watch poller.\n\n${REVIEW_SECTION_HEADING}`)).toBe(true);
+        expect(body.endsWith(`\n\n${foot}`)).toBe(true);
+        expect(body.split(foot).length).toBe(2);
+        expect(section(body).length).toBeGreaterThan(0);
       }
     });
   });

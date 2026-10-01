@@ -28,6 +28,8 @@ export type RunOptions = {
   /** Passed to the handler: calling run's tier and abort signal. */
   tier?: PluginHandlerArgs["tier"];
   signal?: AbortSignal;
+  /** Passed to the handler: the calling agent run's review context (GITHUB-9). */
+  review?: PluginHandlerArgs["review"];
 };
 
 export class PluginDeniedError extends Error {
@@ -152,6 +154,7 @@ export async function runPlugin(opts: RunOptions): Promise<PluginHandlerResult> 
       allowlist: allow,
       ...(opts.tier ? { tier: opts.tier } : {}),
       ...(opts.signal ? { signal: opts.signal } : {}),
+      ...(opts.review ? { review: opts.review } : {}),
     });
   } catch (e) {
     if (dangerous) safeRecord(cmd.name, args, "error", 1);

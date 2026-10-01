@@ -20,3 +20,4 @@ The agent should be a normal citizen of the repo: read issues, open PRs, check C
 - **GITHUB-6**  There are repos it simply will not touch, even if prompted, so a bad instruction cannot spray noise across the org.
 - **GITHUB-7**  It may merge its own Corvidinho PR when verify and CI are green and branch protection, reviews and CODEOWNERS allow it; it never bypasses them, never merges someone else's PR, and outside Corvidinho a human still merges.
 - **GITHUB-9**  Before the PR, a second model reviews the diff in bounded rounds, and the PR lists what it raised and what changed.
+  - **GITHUB-9.a**  The reviewer is the first other model I've configured that didn't write the change; there's no reviewer setting, and with no second model there's no PR and the reply says why.

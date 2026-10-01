@@ -697,7 +697,13 @@ merge-base, HEAD and the work tree, merged fail-closed) requires a change for
 meaningful files, a meaningful path changed since the merge-base that no
 open change and no change archived on the branch covers, or a diff that
 cannot be read, keeps the PR from opening, before the pre-push lane and
-before anything is committed or pushed (AGENT-18, REQ-discord-518).
+before anything is committed or pushed (AGENT-18, REQ-discord-518), and
+`not-reviewed`: `github-pr-create` held the PR at the GITHUB-9 second-model
+review gate (this step has no run model, so it starts no round; only a tree a
+run already had reviewed opens), the line reusing the gate's reason
+(`reviewRefusalReason`) with the changes left on the pushed branch
+(REQ-discord-088). `SCRUB_TARGETS` lists `pr_review_rounds` (`reviewer`, and
+the JSON `authors`, `findings`, `changed`; REQ-plugins-092).
 `src/worktree/base.ts` exports `resolveBase` (the talk base: the remote's
 default branch, else `main`, and HEAD's merge-base with it; shared by
 `openWorkPr` and the verify gate), `talkWorktreeGitDir` (the own git dir of a
@@ -1552,4 +1558,5 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-30 | a-cli-task-run-in-a-git-repo-works-in-its-own-worktree-by-default-here-runs-it-in-my-checkout-session-worktree-1-a: A CLI task run in a git repo works in its own worktree by default; --here runs it in my checkout (SESSION-WORKTREE-1.a) |
 | 2026-09-30 | a-call-whose-price-is-unknown-stops-and-asks-on-the-owner-s-spend-card-showing-the-amount-as-unknown-when-a-cap-covers: A call whose price is unknown stops and asks on the owner's spend card showing the amount as unknown when a cap covers it (recorded unknown, owner lines read $X + unknown, no price override), and every surface asks before spending over a cap: WATCH spend-cap stops reach the owner by DM and a schedule's spend-cap stop can go on through the card (SAFE-16, SAFE-16.a, AUTONOMY-8) |
 | 2026-09-30 | a-stop-button-on-the-run-s-progress-message-lets-me-or-the-person-who-asked-stop-it-agent-3-a: A Stop button on the run's progress message lets me or the person who asked stop it (AGENT-3.a) |
+| 2026-10-01 | before-a-pr-opens-a-second-model-reviews-the-diff-in-bounded-rounds-and-the-pr-lists-what-it-raised-and-what-changed: Before a PR opens, a second model reviews the diff in bounded rounds, and the PR lists what it raised and what changed (GITHUB-9, GITHUB-9.a) |
 | 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |

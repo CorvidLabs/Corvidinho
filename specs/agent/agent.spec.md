@@ -437,6 +437,25 @@ Autonomous gate + delegation core (REQ-agent-117, issue #117):
 `MAX_DELEGATES_PER_RUN` 4, `DELEGATE_MIN_TIER` 2). `buildOpenAiTools` takes
 `autonomous?: boolean`; `createTaskExecute` takes `autonomous?: boolean`
 (default: `autonomousSessionAllowed({ cwd, env })`).
+GITHUB-9 (REQ-agent-117, REQ-agent-092): `src/autonomous/delegate.ts` also
+exports `DELEGATE_AUTHORS_ENV` (`CORVIDINHO_DELEGATE_AUTHORS`, internal: set
+only on a worker spawn), `DELEGATE_AUTHORS_MAX` (32),
+`delegateAuthorsFromEnv(env)` and `workerModelsFromResult(r)`;
+`buildDelegateSpawn` and `runDelegateChild` take `authors?`, and
+`DelegateChildOutcome.models?` lists the worker's models.
+
+Second-model review in the tool loop (REQ-agent-092, GITHUB-9 / GITHUB-9.a):
+`createTaskExecute` hands every `runPlugin` call of its tool loop a
+`PrReviewRun` (`env`, `authors()`: every model its chain called, AGENT-11
+failovers included, its delegate workers' reported models and, in a worker,
+the lead's; `complete`: one no-tools `chatCompletions` call through the run's
+spend-guarded fetch, usage under the reviewer's label). A `ReviewSpendStop`
+thrown by `github-pr-create` ends the attempt (the spend guard's `finish`
+turns it into the spend-cap ask); a result with `reviewHold` is never counted
+by the AGENT-16 guard; a second `github-pr-create` in the batch that just got
+findings is not run; `withReviewRefusalNote(summary, line)` adds the run's
+latest `github-pr-create` refusal line ("PR not opened: …") once, before the
+role note.
 
 Council core (REQ-agent-118, issue #118, AUTONOMOUS-6):
 `src/autonomous/council.ts` exports `parseCouncilArgs`, `resolveCouncilTier`,
@@ -1356,4 +1375,5 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-30 | a-failed-run-tells-the-owner-why-in-one-plain-line-and-everyone-else-that-it-didn-t-work-and-the-owner-has-been-told: A failed run tells the owner why in one plain line, and everyone else that it didn't work and the owner has been told (DISCORD-3.b) |
 | 2026-09-30 | a-cli-task-run-in-a-git-repo-works-in-its-own-worktree-by-default-here-runs-it-in-my-checkout-session-worktree-1-a: A CLI task run in a git repo works in its own worktree by default; --here runs it in my checkout (SESSION-WORKTREE-1.a) |
 | 2026-09-30 | a-call-whose-price-is-unknown-stops-and-asks-on-the-owner-s-spend-card-showing-the-amount-as-unknown-when-a-cap-covers: A call whose price is unknown stops and asks on the owner's spend card showing the amount as unknown when a cap covers it (recorded unknown, owner lines read $X + unknown, no price override), and every surface asks before spending over a cap: WATCH spend-cap stops reach the owner by DM and a schedule's spend-cap stop can go on through the card (SAFE-16, SAFE-16.a, AUTONOMY-8) |
+| 2026-10-01 | before-a-pr-opens-a-second-model-reviews-the-diff-in-bounded-rounds-and-the-pr-lists-what-it-raised-and-what-changed: Before a PR opens, a second model reviews the diff in bounded rounds, and the PR lists what it raised and what changed (GITHUB-9, GITHUB-9.a) |
 | 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |

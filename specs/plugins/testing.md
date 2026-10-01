@@ -392,6 +392,74 @@ under the ~9000-token budget. The fail-on-base proof is in
 every worker's argv has `--here` right after `task run`. Fail on base: both
 fail.
 
+## Second-model review before every PR (REQ-plugins-092 added, REQ-plugins-117 modified; GITHUB-9, GITHUB-9.a)
+
+`tests/work.review.test.ts` — temp git repos with a local bare `origin` at
+`…/acme/review-fixture.git` (`tests/fixtures/review-cycle.ts`), dry-run
+`github-pr-create` (the branch's tree read with `git ls-remote`), a scripted
+`PrReviewRun` or a scripted provider fetch, the test data dir's DB. No
+network, no real tokens.
+
+- Reviewer: configured models listed in `CORVIDINHO_LLM_MODEL`, `_READ`,
+  `_TOOL`, `_CODE` order, each label once; authors skipped by model id across
+  kinds; an entry without its key skipped; null when only authors remain;
+  would-be reviewer keys (`CORVIDINHO_REVIEW_MODEL`, …) are never read.
+- `reviewTree`: an edit, a staged new file and a deletion give the tree a
+  commit of the tracked files then has, an untracked file left out; `git
+  status` and the staged list unchanged. An untracked scratch file beside the
+  pushed branch neither blocks the PR nor reaches the reviewer; a committed
+  `.env.local` / `config/credentials.json` / `.env.production` is named to the
+  reviewer, its content never sent.
+- Findings: JSON, fenced JSON, bullets, clean replies, other text as one
+  finding, capped at 10 with the rest counted, scrubbed before the cut; the
+  review messages scrub the diff and fence it so it cannot close the fence.
+- With a run model: round 1 findings hold (`reviewHold: findings`, round 1 of
+  3, reviewer, fenced findings, `data.review` counts only); a committed and
+  pushed change gets round 2, clean, and the PR body has the section (2 of 3
+  rounds, the finding, `M  src/app.ts` after round 1, round 2 raised nothing,
+  no `$`/`USD`/tokens) before the attribution; decline (same tree) opens with
+  "Not changed: the tree was left as it was after round 1"; round 3 ends the
+  cycle (`A  src/step1.ts`, `A  src/step2.ts`, "round 3 of 3 ends the
+  review") and the same tree reopens with no 4th call; unpushed edits, a
+  branch not on the remote, no changes against `main` and a non-git cwd each
+  refuse in one line; no second model refuses with the GITHUB-9.a line and no
+  call; an author recorded for the branch is never its reviewer; a provider
+  HTTP 500 refuses with `reviewer-model failed (HTTP 500)` and none of the
+  provider text; a diff over 200 KiB refuses with no call; a completion with
+  no model failure rejects with `ReviewSpendStop`; none of the refusals
+  records a round; a caller heading `## Second-model review` is quoted; live
+  mode with no token fails before any review call.
+- Without a run model: no cycle, a cycle for another tree, or an open cycle
+  refuse in one line; a finished cycle for the pushed tree opens and lists
+  its findings.
+- Every round since the last PR opened: a cycle that ended clean on an
+  unpushed edit, then a new cycle on the pushed, changed tree — the PR lists
+  round 1's finding, `M  src/app.ts` and `A  src/more.ts`; rounds marked
+  opened (`markReviewOpened`) are not listed again; a live `pulls.create`
+  (mocked fetch) marks the rounds it listed.
+- `githubBranchTree` (mocked Octokit fetch): the head commit's tree, an
+  `owner:branch` head on that owner's repo, null on 404. `SCRUB_TARGETS`
+  lists `pr_review_rounds` and `pr_change_authors`.
+- Delegate plumbing: `buildDelegateSpawn` passes `authors` as
+  `CORVIDINHO_DELEGATE_AUTHORS` and drops an inherited value;
+  `delegateAuthorsFromEnv` / `workerModelsFromResult` validate and bound.
+
+Updated: `tests/github.write.plugin.test.ts` (the attribution cases run in a
+reviewed fixture repo; the section sits between the body and the footer, one
+footer), `tests/roles.chat.gates.test.ts` ((b): past SAFE-1 and GITHUB-6 the
+admin call reaches the GITHUB-9 gate, never the role refusal; with a finished
+review it opens).
+
+Fail on base (the nine modified sources at `9ea766b` swapped in,
+`src/work/review.ts` kept): `tests/work.review.test.ts` cannot load
+(`githubBranchTree` missing); `tests/github.write.plugin.test.ts` 2 fail,
+`tests/roles.chat.gates.test.ts` 1 fails. With the missing exports stubbed so
+it loads, `tests/work.review.test.ts` gave 8 pass, 23 fail (the 8 are the new
+module's pure units and the token check). `tests/work.pr.test.ts` only adapts
+(it seeds reviews with the fixture's `fullWorkTree`). The second-pass cases
+(tracked-only tree, secret paths, earlier cycles, marking, checkout authors)
+fail with this change's own pre-fix sources (`69257ea`): 9 fail. Restored:
+the four files 82 of 82.
 ## Tool output keeps a run alive (REQ-plugins-125, AGENT-12)
 
 `tests/agent.limits.test.ts` ("tool output (spawnCapped …)"): a child that

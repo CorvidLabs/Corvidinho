@@ -113,6 +113,10 @@ bun src/cli.ts github watch
 
 **Poll-first for bot/VM** (no public URL). Webhook deferred. Empty GitHub allowlists refuse start. Details: [`docs/WATCH.md`](docs/WATCH.md).
 
+## Second-model review before a PR (GITHUB-9)
+
+Before `github-pr-create` opens a PR, a second model reviews the diff in at most 3 rounds, and the PR body lists what it raised and what changed. The reviewer is the first configured model that did not write the change; there is no reviewer setting, so configure at least two models (`CORVIDINHO_LLM_MODEL` and the per-tier keys), or there is no PR and the reply says why (GITHUB-9.a). Details: [`docs/discord.md`](docs/discord.md#second-model-review-before-every-pr-github-9--github-9a).
+
 ## Schedule daemon
 
 ```bash

@@ -1541,6 +1541,22 @@ base: both fail (no `--here`).
   (`SCHEDULE_ASK_CONTINUED_ACK` missing), the ask-block test gets
   `["Cancel"]`, and main's watch delivery never sees a spend-cap stop.
 
+## The /work PR line says why when no second-model review finished (REQ-discord-088 modified; GITHUB-9)
+
+`tests/work.review.test.ts` ("/work: with no finished review …"):
+`openWorkPr` with the real dry-run plugins in a temp repo whose bare origin
+is `acme/review-fixture`: with no finished review the outcome is
+`not-reviewed`, the line is `PR: not opened — no second-model review has
+finished for this branch's tree on GitHub, and only an agent run can start
+one (GITHUB-9). The changes stay on branch …` and the branch is pushed; with
+a finished review seeded for the tree it pushes (`fullWorkTree`, the whole
+work tree /work commits) it opens and the PR body has the section.
+`tests/work.pr.test.ts` seeds a finished review for its two opening cases
+(the shipped body, and the file-only allow).
+
+Fail on base: the /work case fails (base `pr.ts` has no `not-reviewed`);
+restored, it passes. `tests/work.pr.test.ts` only adapts to the gate (with
+the base's sources it passes).
 ## Turn cap / idle timeout plumbing and card waits (REQ-discord-125, AGENT-12)
 
 `tests/agent.limits.test.ts` ("it says so on each surface", "waiting on an

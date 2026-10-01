@@ -3,7 +3,47 @@
  * Danger and minTier are declared on every command; runtime enforces them (SAFE-1).
  */
 
+import type { ModelFailure, ResolvedProvider } from "../agent/providers.ts";
 import type { CapabilityTier } from "../agent/tier.ts";
+
+/** One message of the second-model review's no-tools chat call (GITHUB-9). */
+export type ReviewMessage = { role: "system" | "user"; content: string };
+
+/**
+ * The review call's reply, or why there is none. `failure: null` means the
+ * call was not a model failure: the run's own stop, or a SAFE-8 spend-cap
+ * stop (src/work/review.ts throws `ReviewSpendStop` for that one).
+ */
+export type ReviewCompletion =
+  | { ok: true; text: string }
+  | { ok: false; error: string; failure: ModelFailure | null };
+
+/**
+ * GITHUB-9 / GITHUB-9.a: what the calling agent run (the tool loop,
+ * src/agent/execute.ts) hands a handler for the second-model review of a
+ * PR it opens. Absent for every other caller (`corvidinho plugins run`, the
+ * /work PR step): github-pr-create then starts no review round.
+ */
+export type PrReviewRun = {
+  /** The run's env: its AGENT-13 model config, which the reviewer is chosen from. */
+  env: NodeJS.ProcessEnv;
+  /**
+   * Entry labels of every model that wrote this run's change: the models
+   * its own chain called (AGENT-11 fallbacks included), its delegate
+   * workers' and, in a worker, its lead's.
+   */
+  authors: () => readonly string[];
+  /**
+   * One no-tools chat completion to `provider` through the run's provider
+   * call path and its SAFE-8 spend guard; usage counts under the provider's
+   * entry label (DISCORD-15.a footer, SAFE-16).
+   */
+  complete: (
+    provider: ResolvedProvider,
+    messages: ReviewMessage[],
+    signal?: AbortSignal,
+  ) => Promise<ReviewCompletion>;
+};
 
 export type PluginHandlerArgs = {
   /** Args after the command name (and after `--` when invoked via CLI). */
@@ -16,6 +56,8 @@ export type PluginHandlerArgs = {
   tier?: CapabilityTier;
   /** Aborts with the calling run (AGENT-3), when the caller has one. */
   signal?: AbortSignal;
+  /** GITHUB-9: the calling agent run's models and call path (tool loop only). */
+  review?: PrReviewRun;
 };
 
 /** An image a plugin opened for the model to look at (DISCORD-9). */
@@ -49,6 +91,14 @@ export type PluginHandlerResult = {
    * sends it by direct message (REQ-agent-710 / REQ-discord-710).
    */
   privateText?: string;
+  /**
+   * GITHUB-9: github-pr-create held the PR at the second-model review gate —
+   * `findings` (round k of N raised findings; change the tree or leave it,
+   * then call again) or `refused` (one plain line saying why no PR opens).
+   * The tool loop never counts it as a failed call (AGENT-16) or a change
+   * (AGENT-17).
+   */
+  reviewHold?: "findings" | "refused";
 };
 
 /**

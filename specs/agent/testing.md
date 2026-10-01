@@ -775,6 +775,42 @@ for an unpriced model (was: no card); `tests/agent.spend.test.ts`,
   with the amount unknown and one call, `no-bridge` (recorded), `["Continue",
   "Cancel"]`. Restored, all pass.
 
+## The tool loop hands github-pr-create its run (REQ-agent-092 added, REQ-agent-117 modified; GITHUB-9, GITHUB-9.a)
+
+`tests/work.review.test.ts` ("the agent tool loop hands github-pr-create its
+run …") drives `createTaskExecute` with a scripted provider fetch in a temp
+repo with a bare origin (dry run):
+
+- The reviewer (`CORVIDINHO_LLM_MODEL_READ` = `reviewer-model`, the run on
+  `author-model`) is called once with no `tools`, a system and a fenced user
+  message holding the diff; round 1's findings come back fenced; the same
+  call again opens the PR listing them as not changed; no tool message has
+  the AGENT-16 steer; `onUsage`'s `byModel` has the reviewer's row and
+  `answerSpendFor` makes the cost unknown (unpriced reviewer); `onModel`
+  names only `author-model`.
+- No second model: three identical calls all run and refuse, no steer, no
+  stuck ask, no reviewer request; the summary ends with the GITHUB-9.a line.
+- A provider cap covering the reviewer's own (Ollama) provider, no owner:
+  the run ends with the `spend-cap` ask, no review request is sent, nothing
+  is recorded, no `PR not opened` line.
+- A `delegate` result with `data.models: ["worker-model"]` makes the reviewer
+  the next configured model (`third-model`).
+- Two `github-pr-create` calls in one batch: the second is not run (findings
+  not yet read), one review call, the cycle stays open.
+- `buildDelegateSpawn` / `delegateAuthorsFromEnv` / `workerModelsFromResult`
+  (REQ-agent-117).
+- Authors outlive the run: run 1's head model fails over and the next model
+  writes `src/app.ts` (`files-write`); run 2 (a new `createTaskExecute`) on
+  the head model opens the PR from the same checkout and the reviewer is the
+  third configured model, never the one that wrote it.
+  `recordChangeAuthors` keeps each (checkout, branch, model) once, scrubbed,
+  and records nothing below a git top level.
+
+Fail on base (modified sources at `9ea766b` swapped in, exports stubbed so
+the file loads): all five tool-loop cases and both delegate cases fail;
+restored they pass. The authors-outlive-the-run case fails with this
+change's pre-fix sources (`69257ea`: the fallback model reviewed its own
+change); restored it passes.
 ## Turn cap and idle timeout (REQ-agent-244, REQ-agent-312, AGENT-12)
 
 `tests/agent.limits.test.ts` (fake LLM; fake `fledge` / `corvidinho` sh bins in
