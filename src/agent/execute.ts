@@ -596,15 +596,17 @@ function isRoleRefusal(name: string, result: PluginHandlerResult): boolean {
 /**
  * ROLES-CHAT-3/6 + IDENTITY-12: a role session whose caller's role, resolved
  * at this call against the live owner config and people list the way
- * `runPlugin` does, may not run `cmd`.
+ * `runPlugin` does, may not run `cmd`. Team work tools need a `/work` run in
+ * a git work tree (`cwd`; AGENT-1.a: others only read in a non-git folder).
  */
 async function refusedForRole(
   env: NodeJS.ProcessEnv,
   cmd: { name: string; dangerous?: boolean; mutating?: boolean },
+  cwd: string,
 ): Promise<boolean> {
   return (
     roleSessionActive(env) &&
-    !roleAllowsPlugin(await resolveActingRole(env), cmd, actingWorkTask(env))
+    !roleAllowsPlugin(await resolveActingRole(env), cmd, actingWorkTask(env, cwd))
   );
 }
 
@@ -884,7 +886,8 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
         allowlist,
         safe3a,
         actingRole,
-        workTask: actingWorkTask(env),
+        // AGENT-1.a: team work tools only in a git work tree.
+        workTask: actingWorkTask(env, cwd),
         autonomous,
       }),
     );
@@ -1365,7 +1368,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
               signal,
               ...(review ? { review } : {}),
             })
-          : invented && isMutatingPlugin(invented) && (await refusedForRole(roleEnv, invented))
+          : invented && isMutatingPlugin(invented) && (await refusedForRole(roleEnv, invented, cwd))
           ? roleRefusal(name)
           : {
               ok: false,

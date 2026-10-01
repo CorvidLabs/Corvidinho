@@ -56,6 +56,7 @@ files:
   - plugins/files/resolvePath.ts
   - plugins/files/argv.ts
   - plugins/files/image.ts
+  - tests/plugins.nongit-project-dir.test.ts
   - plugins/search/index.ts
   - plugins/search/commands.ts
   - src/memory/confirm.ts
@@ -282,6 +283,16 @@ when fledge is on PATH and the project defines it, else local `specsync
 check`).
 
 ## Invariants
+
+In a project folder that isn't a git repo (`isGitRepo(cwd)` false) the file
+tools never change its root `AGENTS.md` or `CLAUDE.md` (AGENT-1.b,
+REQ-plugins-110): `refuseProtected` refuses, for every caller,
+`isNonGitRootInstructionPath` — the root names, paths under them, the file a
+symlink of that name leads to, a hard link to one — with `refused (AGENT-1.b)`.
+Team work tools need a git work tree: `actingWorkTask(env, cwd)` reads the
+`/work` stamp and `isGitRepo(cwd)`, and `runPlugin` passes the call's cwd, so
+other people's runs only read in a non-git folder (AGENT-1.a,
+REQ-plugins-115).
 
 `spawnCapped` counts each output chunk of its child as the calling run's
 activity for the idle timeout (AGENT-12, REQ-plugins-125, `noteIdleActivity`;

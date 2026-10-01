@@ -35,6 +35,7 @@ import {
   roleOfPerson,
   type PersonRole,
 } from "../identity/people.ts";
+import { isGitRepo } from "../worktree/manager.ts";
 import { isMutatingPlugin, type MutatingLike } from "./mutating.ts";
 
 export const ROLE_REFUSED_MESSAGE =
@@ -169,9 +170,14 @@ export function actingRoleCap(env: NodeJS.ProcessEnv = process.env): ActingRole 
   return s === "owner" || s === "team" ? s : "community";
 }
 
-/** True when the run is a `/work` task (team work tools, IDENTITY-10). */
-export function actingWorkTask(env: NodeJS.ProcessEnv = process.env): boolean {
-  return truthy(env[ACTING_WORK_TASK_ENV]);
+/**
+ * True when the run is a `/work` task (team work tools, IDENTITY-10) whose
+ * `cwd` is in a git work tree (`isGitRepo`). In a project that is not a git
+ * repo the talk runs in the project folder itself, so other people's runs
+ * only read there (AGENT-1.a): their work tools are not offered or run.
+ */
+export function actingWorkTask(env: NodeJS.ProcessEnv, cwd: string): boolean {
+  return truthy(env[ACTING_WORK_TASK_ENV]) && isGitRepo(cwd);
 }
 
 /**

@@ -280,14 +280,18 @@ worktree, and in a local `corvidinho task run` inside the worktree it made for i
 | `danger-ping` | true | 1 | true | only to test the deny path (no-op) |
 
 Not dangerous, but mutating (no allowlist entry needed; owner-only under ROLES-CHAT, E.6, except
-that a team member's `/work` run gets `files-write` / `files-edit` and the SpecSync change tools, IDENTITY-10):
+that a team member's `/work` run gets `files-write` / `files-edit` and the SpecSync change tools, IDENTITY-10,
+only in a git worktree: in a project folder that isn't a git repo the talk runs in the folder itself, so
+other people's runs only read there, AGENT-1.a):
 `files-write` (minTier 2), `files-edit` (minTier 2), `specsync-change-new` and `specsync-change-answer`
 (minTier 2; they open and answer a SpecSync change where the project's SpecSync change workflow is on,
 and in a hi repo an `acceptance_criteria` answer must cite captured hi ids, AGENT-18), `delegate` and
 `council` (minTier 2, autonomous extras, E.5). `specsync-change-status` is read-only. The file tools
 still fill a change's `.md` artifacts, but refuse SpecSync's own records in its folder (the `*.json`
 directly in `.specsync/changes/<id>/`: state, approvals, review, verification), which only the
-`specsync change` commands write (SAFE-2, AGENT-18 / AGENT-18.a).
+`specsync change` commands write (SAFE-2, AGENT-18 / AGENT-18.a). In a project folder that isn't a git
+repo they also refuse its root `AGENTS.md` and `CLAUDE.md` (and the file a symlink of that name leads to),
+which are read from disk into every run's instructions there; you edit those yourself (AGENT-1.b).
 
 `minTier` is the capability tier the model needs to see the tool: `1` = `tool`, `2` = `code`
 (`CORVIDINHO_LLM_TIER`). `mutating` = dangerous or explicitly marked mutating (ROLES-CHAT-5).
