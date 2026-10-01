@@ -1,0 +1,108 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790816961,
+      "digest": "7daa476a6978e54344616f5a4651198047d417fa959b5dd540a45796401faca0",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "a-failed-github-watch-run-s-comment-says-why-in-one-plain-line-which-model-call-failed-status-and-host-never-the",
+        "title": "A failed GitHub WATCH run's comment says why in one plain line (which model call failed: status and host), never the provider's raw error body; REQ-cli-079 matches what a daemon no-provider schedule run now records",
+        "description": "A failed GitHub WATCH run's comment says why in one plain line (which model call failed: status and host), never the provider's raw error body; REQ-cli-079 matches what a daemon no-provider schedule run now records",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "cli",
+          "watch"
+        ],
+        "affected_paths": [
+          "docs/WATCH.md",
+          "specs/cli/cli.spec.md",
+          "specs/cli/testing.md",
+          "specs/watch/testing.md",
+          "specs/watch/watch.spec.md",
+          "src/watch/agent-client.ts",
+          "src/watch/poller.ts",
+          "src/watch/summary.ts",
+          "src/watch/types.ts",
+          "tests/daemon.no-provider-run.test.ts",
+          "tests/watch.failed-comment.test.ts",
+          "tests/watch.reliability.test.ts",
+          "tests/watch.summary-scrub.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A failed WATCH run without an ask of its own posts, under 'Corvidinho WATCH run summary — Failed (exit N).', one plain reason line (DISCORD-3.b's failureReasonFor: the task run result's error — which model call failed as status and host, never the provider body; else the tier's no-provider notice; else the stderr end; else the exit code; SAFE-6 scrubbed, at most 200 chars) and never the run's summary: through startWatchPoller and the real task run against a localhost model answering 429 with an org name and a request id, the comment is exactly the status line, 'The model call failed (429 Too Many Requests from 127.0.0.1:<port>)' and the footer, with neither the org name nor the request id; the watcher logs '[watch] run failed (<repo>#<n> id=<id>, exit N): <reason>' (no exit for a spawn that threw); the thread's kept agent turn is that line; the operator-only spawn JSONL keeps the scrubbed summary; a successful run, a failed run with an ask (Needs your input, AGENT-16.a) and a spend-cap stop (SAFE-14.a) are unchanged; tests/watch.failed-comment.test.ts fails on main's sources and passes on the branch. REQ-cli-079 says what a daemon no-provider schedule run now records (DISCORD-3.b, #340): the run row's summary is the no-provider notice on the owner's own schedule and 'That didn't work.' on anyone else's, its error and the run.finished error are 'failed (exit 1): <notice>', a '[scheduler] run failed (schedule <id>, exit 1): <notice>' line is logged, and the daemon posts nothing to a channel itself."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "79177481bb319bca65ad1c8c2e361b81396b50be98271d4d8cc2bbb321cf13b4",
+        "watch": "254b48e8f7cdb80d380e694e4078aa60b7cf293095928272f966c4f6bb2ed0c7"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790818285,
+      "digest": "7daa476a6978e54344616f5a4651198047d417fa959b5dd540a45796401faca0",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "a-failed-github-watch-run-s-comment-says-why-in-one-plain-line-which-model-call-failed-status-and-host-never-the",
+        "title": "A failed GitHub WATCH run's comment says why in one plain line (which model call failed: status and host), never the provider's raw error body; REQ-cli-079 matches what a daemon no-provider schedule run now records",
+        "description": "A failed GitHub WATCH run's comment says why in one plain line (which model call failed: status and host), never the provider's raw error body; REQ-cli-079 matches what a daemon no-provider schedule run now records",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "cli",
+          "watch"
+        ],
+        "affected_paths": [
+          "docs/WATCH.md",
+          "specs/cli/cli.spec.md",
+          "specs/cli/testing.md",
+          "specs/watch/testing.md",
+          "specs/watch/watch.spec.md",
+          "src/watch/agent-client.ts",
+          "src/watch/poller.ts",
+          "src/watch/summary.ts",
+          "src/watch/types.ts",
+          "tests/daemon.no-provider-run.test.ts",
+          "tests/watch.failed-comment.test.ts",
+          "tests/watch.reliability.test.ts",
+          "tests/watch.summary-scrub.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "A failed WATCH run without an ask of its own posts, under 'Corvidinho WATCH run summary — Failed (exit N).', one plain reason line (DISCORD-3.b's failureReasonFor: the task run result's error — which model call failed as status and host, never the provider body; else the tier's no-provider notice; else the stderr end; else the exit code; SAFE-6 scrubbed, at most 200 chars) and never the run's summary: through startWatchPoller and the real task run against a localhost model answering 429 with an org name and a request id, the comment is exactly the status line, 'The model call failed (429 Too Many Requests from 127.0.0.1:<port>)' and the footer, with neither the org name nor the request id; the watcher logs '[watch] run failed (<repo>#<n> id=<id>, exit N): <reason>' (no exit for a spawn that threw); the thread's kept agent turn is that line; the operator-only spawn JSONL keeps the scrubbed summary; a successful run, a failed run with an ask (Needs your input, AGENT-16.a) and a spend-cap stop (SAFE-14.a) are unchanged; tests/watch.failed-comment.test.ts fails on main's sources and passes on the branch. REQ-cli-079 says what a daemon no-provider schedule run now records (DISCORD-3.b, #340): the run row's summary is the no-provider notice on the owner's own schedule and 'That didn't work.' on anyone else's, its error and the run.finished error are 'failed (exit 1): <notice>', a '[scheduler] run failed (schedule <id>, exit 1): <notice>' line is logged, and the daemon posts nothing to a channel itself."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "79177481bb319bca65ad1c8c2e361b81396b50be98271d4d8cc2bbb321cf13b4",
+        "watch": "80431a6dd6e55698d0822d250a943dc21a71c3d81cde55d34b7ecc3fd85edfc7"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790819369,
+      "digest": "6aca11538f9a3289de75f0533c4bc77ee5c7f5f8327856196c1189aac37e9e2e",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

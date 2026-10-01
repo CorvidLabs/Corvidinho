@@ -715,7 +715,16 @@ export type TaskRunStreamOutcome = {
   frames: number;
   /** Protocol the binary streamed when it differs from the bridge's. */
   protocolMismatch?: number;
+  /**
+   * DISCORD-3.b: the last {@link STDERR_TAIL_MAX} characters of the child's
+   * stderr, when it wrote any — the last fallback for a failed run's reason
+   * (`failureReasonFor` scrubs it and keeps one line). Never posted as is.
+   */
+  stderrTail?: string;
 };
+
+/** How much of a child's stderr end a stream outcome keeps (DISCORD-3.b). */
+export const STDERR_TAIL_MAX = 4000;
 
 /** Reply text for a stream from another protocol — no frame content. */
 export function protocolMismatchSummary(binary: number, bridge: number): string {
@@ -784,5 +793,6 @@ export async function collectTaskRunStream(opts: {
   if (streamed.protocolMismatch !== undefined) {
     out.protocolMismatch = streamed.protocolMismatch;
   }
+  if (stderr.trim()) out.stderrTail = stderr.slice(-STDERR_TAIL_MAX);
   return out;
 }

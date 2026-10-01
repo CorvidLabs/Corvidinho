@@ -1,0 +1,44 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790814725,
+      "digest": "9260a780bd1d00c0d41c7324183194f2292e8ca1b715c84ff7be93818199a645",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "stop-button-test-a-non-owner-s-thrown-run-shows-discord-3-b-s-failure-line-not-the-raw-error",
+        "title": "Stop-button test: a non-owner's thrown run shows DISCORD-3.b's failure line, not the raw error",
+        "description": "Stop-button test: a non-owner's thrown run shows DISCORD-3.b's failure line, not the raw error",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "tests/discord.stop-run.test.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Test-only merge fix: main's AGENT-3.a Stop-button test asserted the thrown error verbatim on a non-owner's failure status; with DISCORD-3.b only the owner sees the reason. REQ-discord-303 (the button clears on a failed or thrown run) is unchanged, so no spec text changes.",
+        "acceptance_criteria": [
+          "tests/discord.stop-run.test.ts 'a failed run's answer clears the button too, and so does the failure status when the run throws' expects Alice's (non-owner) thrown-run failure status to read the DISCORD-3.b line FAILED_TEXT ('That didn't work.', no owner DM in that harness) instead of the raw error, still asserts the Stop button clears (REQ-discord-303), and passes on the merged branch; specsync change audit reports no uncovered meaningful paths."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790815325,
+      "digest": "306a007a04b903c9363040c83900348b835cb1d2fdf23c46c1d116f8ac1a23e7",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

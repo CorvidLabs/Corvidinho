@@ -101,6 +101,18 @@ export type ExecuteResult = {
    */
   error?: boolean;
   /**
+   * DISCORD-3.b / AGENT-9: with `error`, why the attempt failed as one plain
+   * harness line — the no-provider notice (AGENT-10) or which model call
+   * failed and how (`modelCallFailedLine`); never model or tool output.
+   */
+  failureReason?: string;
+  /**
+   * AGENT-12 (REQ-agent-312): the attempt used up its turn cap
+   * (`CORVIDINHO_MAX_TURNS` model↔tool rounds) and ended with its best prose
+   * so far (AGENT-9).
+   */
+  stopReason?: "turn-cap";
+  /**
    * Tools the attempt ran whose file edits no tool result reports (a Fledge
    * command, the shell or a runner, or a `delegate` worker that may have run
    * an allowlisted Fledge command). With no git snapshot to diff, runTask
@@ -146,6 +158,13 @@ export type VerifyRunner = (
   signal?: AbortSignal,
 ) => Promise<VerifyResult>;
 
+/**
+ * Why a run was stopped by a limit I set (AGENT-12): `turn-cap` — its final
+ * attempt used up `CORVIDINHO_MAX_TURNS` rounds (REQ-agent-312);
+ * `idle-timeout` — no output for `CORVIDINHO_IDLE_TIMEOUT_MS` (REQ-agent-244).
+ */
+export type TaskStopReason = "turn-cap" | "idle-timeout";
+
 export type TaskResult = {
   summary: string;
   filesChanged: string[];
@@ -190,6 +209,23 @@ export type TaskResult = {
    * Absent when no model failed over.
    */
   modelFallback?: ModelFallback[];
+  /**
+   * AGENT-12: a limit I set stopped the run (additive; no protocol change).
+   * Bridges show it only as `stopped=…` in the footer / thinking plumbing
+   * (`formatTaskPlumbing`), never in a Discord channel body (AGENT-9,
+   * DISCORD-3.a); WATCH comments and the CLI's human output add a plain note.
+   * Absent when no limit stopped it.
+   */
+  stopReason?: TaskStopReason;
+  /**
+   * DISCORD-3.b / AGENT-9: a failed run's reason as one plain line of harness
+   * text (the no-provider notice, which model call failed and how, which
+   * verify failed, or AGENT-12's `Stopped: no output for 10 minutes (idle
+   * timeout).`) — never model or tool output (SAFE-12/13). Bridges show it
+   * to the owner only, after a secret scrub. Absent on a run that did not
+   * fail, and on a failure that names no reason. Additive: no protocol bump.
+   */
+  error?: string;
   /**
    * SESSION-WORKTREE-1.a (REQ-cli-122): the worktree a local `task run`
    * worked in and whether it and its branch were kept (additive; no protocol
@@ -305,6 +341,12 @@ export type RunTaskOptions = {
   workspaceDiff?: WorkspaceDiffStart;
   onEvent?: (event: AgentEvent) => void;
   signal?: AbortSignal;
+  /**
+   * AGENT-12 (REQ-agent-244): stop the run after this long with no output
+   * (default `DEFAULT_IDLE_TIMEOUT_MS`, 10 min; `task run` passes
+   * `CORVIDINHO_IDLE_TIMEOUT_MS`).
+   */
+  idleTimeoutMs?: number;
   /** Config loaded from fledge.toml; used as defaults when overrides omitted. */
   config?: AgentConfig;
 };

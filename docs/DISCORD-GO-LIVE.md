@@ -625,9 +625,43 @@ With no usable model for a tier (nothing set, or its first entry's key is missin
   only `No model provider is configured.` (no setting names, like the spend line, SAFE-14.a);
 - in `doctor` and `init`: `[warn] llm: No model provider is configured …` (never fails them);
 - in the runs themselves: a run on that tier calls nothing and ends failed with the notice as its
-  result. `task run` prints it, and a WATCH run's summary comment carries it; Discord chat,
-  button answers, `/session start`, `/work` and schedules post their usual `… failed (exit 1)`
-  reply, like any failed run, so check `/status` or the start-up line.
+  result (and as the result's `error`). `task run` prints it, and a WATCH run's summary comment
+  carries it; on Discord (chat, button answers, `/session start`, `/work` and schedules) the
+  owner's own run answers with the notice as its one line, and anyone else's with `That didn't
+  work — the owner has been told.` while the owner gets the notice by DM (DISCORD-3.b, below).
+
+A failed run on Discord says why in one plain line to the owner and only `That didn't work — the
+owner has been told.` to anyone else, whose failure DMs the owner the line (once per reason per
+hour; `That didn't work.` when no DM could go out). Every failure logs `[discord] run failed
+(<surface>, exit N): <reason>`, scrubbed and cut to one line (DISCORD-3.b).
 
 Keys stay in the environment and are never printed; `ANTHROPIC_API_KEY` is scrubbed from
 error lines like the other LLM keys and never reaches the verify lane or a shell (SAFE-6).
+
+### E.10 Turn cap and idle timeout (AGENT-12)
+
+Two optional env keys, read by every run (`task run` is the child of the bridge, `github
+watch`, the daemon and schedules; delegate and council workers inherit them). Restart the
+bridge/daemon after changing them.
+
+- `CORVIDINHO_MAX_TURNS` (default 8): model/tool rounds per attempt. Each verify retry is its
+  own attempt, so AGENT-4.a retries are kept. When the run's last attempt hits it, the answer is
+  its best prose so far (AGENT-9), and the run says so: `stopped=turn-cap` in the Discord answer
+  footer and thinking embed (never the channel body), a plain `Stopped: it reached the turn cap
+  …` line on WATCH comments and after the summary of `task run`, `stopReason: "turn-cap"` in
+  `--json` / ndjson results, and (a schedule's post has no footer) a `[scheduler] schedule <id>:
+  run stopped=turn-cap …` log line.
+- `CORVIDINHO_IDLE_TIMEOUT_MS` (default 600000, 10 minutes): a run with no output for that long
+  — no event, no tool output, no verify-lane output — is stopped. Its tools and the verify lane
+  are killed with their process trees, and the run ends failed with `stopReason:
+  "idle-timeout"` and the one-line `error` `Stopped: no output for 10 minutes (idle timeout).`,
+  which also starts its summary (WATCH comments, `task run`); on Discord your
+  own run's reply is that line (DISCORD-3.b), anyone else's says it didn't
+  work and that you have been told, and the footer shows `stopped=idle-timeout`. A model call (it keeps its own 10-minute request cap), a
+  delegate or council worker (bounded by its own limits and its worker time cap) and a wait
+  on an Approve card (bounded by the card's expiry) do not count as idle. A step that ignores
+  the stop (an in-process call with no timeout of its own) is waited for at most 5 more seconds;
+  then the run ends failed anyway, saying any changes so far were not verified.
+
+There is no value that turns either off; a value that is not a positive whole number is
+ignored, with one `[operator] AGENT-12: …` line, and the default is used.

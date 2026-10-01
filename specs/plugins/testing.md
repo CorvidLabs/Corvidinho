@@ -460,3 +460,9 @@ module's pure units and the token check). `tests/work.pr.test.ts` only adapts
 (tracked-only tree, secret paths, earlier cycles, marking, checkout authors)
 fail with this change's own pre-fix sources (`69257ea`): 9 fail. Restored:
 the four files 82 of 82.
+## Tool output keeps a run alive (REQ-plugins-125, AGENT-12)
+
+`tests/agent.limits.test.ts` ("tool output (spawnCapped …)"): a child that
+prints every 0.1 s for 1.5 s keeps a 500 ms idle watchdog from firing; a
+silent 1.2 s child lets it fire. Fail on base: the printing child lets it
+fire.

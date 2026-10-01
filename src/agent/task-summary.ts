@@ -92,11 +92,17 @@ export type TaskResultSummaryInput = {
   verifySkipped?: boolean;
   attempts?: number;
   cancelled?: boolean;
+  /** AGENT-12: the limit that stopped the run (`turn-cap` / `idle-timeout`). */
+  stopReason?: string;
 };
 
 /**
  * Operator plumbing line for thinking/progress embeds (DISCORD-3.a).
- * Example: `state=done verified=false verifySkipped attempts=1`
+ * Example: `state=done verified=false verifySkipped attempts=1`. A run a
+ * limit I set stopped ends with `stopped=turn-cap` or `stopped=idle-timeout`
+ * (AGENT-12): the footer / thinking plumbing is where AGENT-9 lets an
+ * internal stop reason show, never the channel body. Only those two values
+ * are shown.
  */
 export function formatTaskPlumbing(r: TaskResultSummaryInput): string {
   const bits: string[] = [];
@@ -105,6 +111,9 @@ export function formatTaskPlumbing(r: TaskResultSummaryInput): string {
   if (r.verifySkipped) bits.push("verifySkipped");
   if (r.cancelled) bits.push("cancelled");
   if (typeof r.attempts === "number") bits.push(`attempts=${r.attempts}`);
+  if (r.stopReason === "turn-cap" || r.stopReason === "idle-timeout") {
+    bits.push(`stopped=${r.stopReason}`);
+  }
   return bits.join(" ");
 }
 

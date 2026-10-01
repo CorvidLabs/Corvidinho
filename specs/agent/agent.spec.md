@@ -69,6 +69,8 @@ files:
   - tests/agent.safe3a-gate.test.ts
   - tests/agent.safe3a-owner-shell.test.ts
   - tests/agent.repo-ways.test.ts
+  - src/agent/limits.ts
+  - tests/agent.limits.test.ts
 
 db_tables: []
 depends_on:
@@ -143,6 +145,25 @@ once per run; a second stall stands with an operator note. Moving to a
 stronger model is not built yet.
 
 ## Public API
+
+Run limits (AGENT-12, REQ-agent-244 / REQ-agent-312): `src/agent/limits.ts`
+exports `MAX_TURNS_ENV` (`CORVIDINHO_MAX_TURNS`), `IDLE_TIMEOUT_ENV`
+(`CORVIDINHO_IDLE_TIMEOUT_MS`), `DEFAULT_MAX_TURNS` (8),
+`DEFAULT_IDLE_TIMEOUT_MS` (600000), `MAX_IDLE_TIMEOUT_MS` (2147483647),
+`maxTurnsFromEnv(env)` / `idleTimeoutFromEnv(env)` → `LimitSetting`
+(`{ value, invalid }`), `invalidLimitNote(key, fallback)`,
+`formatIdleDuration(ms)`, `idleTimeoutLine(ms)`, `TURN_CAP_NOTE`,
+`IDLE_STOP_GRACE_MS` (5000), `effectiveIdleTimeoutMs(ms)` (an unusable
+value — 0, negative, NaN, Infinity — is the default),
+`stopReasonFromUnknown(v)`, `startIdleWatchdog(ms, timers?)` →
+`IdleWatchdog` (`timeoutMs`, `signal`, `fired`, `touch()`, `pause()` →
+resume, `stop()`), and the current-run hooks `withIdleWatchdog(w, fn)`,
+`noteIdleActivity()`, `pauseIdleWatchdog()` and `whileIdlePaused(fn)`
+(AsyncLocalStorage; no-ops outside a run). Types: `TaskStopReason`
+(`"turn-cap" | "idle-timeout"`), `ExecuteResult.stopReason?: "turn-cap"`,
+`TaskResult.stopReason?` and `TaskResult.error?` (one plain line, set by an
+idle timeout; additive, protocol unchanged), `RunTaskOptions.idleTimeoutMs?`.
+`formatTaskPlumbing` input gains `stopReason?`.
 
 Loop guards (REQ-agent-086, AGENT-16): `src/agent/loop-guards.ts` exports
 `callSignature(name, rawArgs)` (JSON of the name and
@@ -629,6 +650,17 @@ test seam), `HUMAN_LIFECYCLE_LINE`, `selfLifecycleRefusal(cwd, id, env)`,
 `citedHiIds(text, families)`. `ExecuteContext` gains optional
 `repoWays?: RepoWays`. No env var, config key, flag or schema.
 
+A failed run's plain reason (DISCORD-3.b, REQ-agent-032): `TaskResult` gains
+an optional `error?: string` (additive; no protocol bump) and `ExecuteResult`
+an optional `failureReason?: string` beside `error: true`.
+`modelCallFailedLine(failure, provider)` (`src/agent/providers.ts`) builds
+`The model call failed (<status> <standard name> from <host>)` / `The model
+call timed out (<host>)` / `… (network error reaching <host>)` / `…
+(malformed reply from <host>)` / `… (<label> needs <KEY>, which is not set)`,
+or `NO_PROVIDER_NOTICE` for an empty chain. `src/agent/loop.ts` exports
+`VERIFY_RERUN_FAILED_REASON` and `verifyGaveUpReason(maxRetries)`.
+`collectTaskRunStream` returns `stderrTail?` (the last `STDERR_TAIL_MAX`,
+4000, characters of the child's stderr when it wrote any).
 A local `task run`'s own worktree (SESSION-WORKTREE-1.a, REQ-cli-122):
 `TaskResult` gains optional `workspace?: TaskWorkspaceReport` (`dir`,
 `branch`, `kept`, `branchKept`), set only by the CLI for a run that worked in
@@ -640,6 +672,31 @@ with no role session reads `a local CLI run has no role session (the CLI half
 of SAFE-3.a is not built yet)` (REQ-agent-503).
 
 ## Invariants
+
+A limit I set stops a stalled or endless run and the run says so (AGENT-12,
+REQ-agent-244 / REQ-agent-312). The turn cap is per execute attempt, so verify
+retries keep working; `stopReason` is `turn-cap` only when the final attempt
+hit it, and the stop reason reaches Discord only as `stopped=…` plumbing,
+never the channel body. Every `runTask` has an idle watchdog bound to it: run
+events, tool output and verify-lane output feed it; a model call, a
+`delegate` / `council` worker and an Approve-card wait hold it (each bounded
+by its own cap or expiry); when it fires, the run's abort kills tool and
+verify-lane process trees and the run ends failed (never cancelled, never
+done) with `stopReason` `idle-timeout` and the one-line `error`. A step that
+ignores the abort is waited for at most `IDLE_STOP_GRACE_MS` after the
+watchdog fires; then the run ends the same way anyway (its changes said to
+be not verified) and that step's later events are dropped, so a stalled run
+always stops. The caller's own abort still wins (cancelled). No value turns
+either limit off. A `delegate` worker a limit stopped returns its
+`stopReason` to its lead.
+
+A failed run names why in harness text only (DISCORD-3.b, AGENT-9,
+REQ-agent-032): `runTask` sets `error` on a failed result from the attempt's
+`failureReason` (the no-provider notice, or `modelCallFailedLine` of the
+chain's last failure — status and host, never the provider's reply body), and
+to `verifyGaveUpReason` / `VERIFY_RERUN_FAILED_REASON` when verify fails for
+good; never model or tool text. A spend-cap stop is not a failure and carries
+none (its `SPEND_CAP_SUMMARY` and ask are unchanged, SAFE-14.a).
 
 A failed model hands the run to the next configured one and says so (AGENT-11,
 REQ-agent-080): one `ModelChain` per `createTaskExecute` (every surface's
@@ -1099,11 +1156,29 @@ A change the run did not open is never touched.
 - **When** the run starts
 - **Then** the no-provider notice is the first stderr line (text output), no provider is called, and the run ends `failed` with that notice as its summary and no files; there is no `gpt-4o-mini` default and no demo answer (REQ-agent-179)
 
+### Scenario: the model call is refused (DISCORD-3.b)
+
+- **Given** a configured model whose provider answers every call with 401 and a body quoting a key
+- **When** `task run --output ndjson` runs
+- **Then** it exits 1 and the `result` frame is `failed` with `error` `The model call failed (401 Unauthorized from <host>)`; the body never reaches `error` (REQ-agent-032)
+
 ### Scenario: the configured model is retired
 
 - **Given** `CORVIDINHO_LLM_MODEL=ollama:gone-model, ollama:fake-model` and a provider that answers `gone-model` with HTTP 404
 - **When** `task run --output ndjson` runs
 - **Then** it calls `gone-model` once, then `fake-model`; a Text frame says `[operator] ollama:gone-model failed (HTTP 404); falling back to ollama:fake-model`; the result is `done`, its summary ends with `(model fallback: ollama:gone-model failed (HTTP 404), fell back to ollama:fake-model)`, and it carries `model` `ollama:fake-model`, `usageByModel` and `modelFallback` (REQ-agent-080)
+
+### Scenario: a verify lane hangs and prints nothing
+
+- **Given** `CORVIDINHO_IDLE_TIMEOUT_MS=4000` and a run whose verify lane stops printing and never exits
+- **When** 4 seconds pass with no event, tool output or lane output
+- **Then** the lane's process tree is killed and the run ends `failed` (exit 1) with `stopReason: "idle-timeout"`, `error` `Stopped: no output for 4 seconds (idle timeout).`, and that line first in its summary (REQ-agent-244)
+
+### Scenario: the model never stops calling tools
+
+- **Given** `CORVIDINHO_MAX_TURNS=2` and a model that calls a tool on every reply
+- **When** the attempt has made 2 model/tool rounds
+- **Then** it ends with its last prose, the `[operator] Stopped after 2 tool rounds …` event, and — as the run's final attempt — `stopReason: "turn-cap"`: `stopped=turn-cap` in the Discord footer, a plain turn-cap line on WATCH and in the CLI (REQ-agent-312)
 
 ### Scenario: the model repeats a failing call
 
@@ -1133,7 +1208,8 @@ A change the run did not open is never touched.
 
 | Condition | Behavior |
 |-----------|----------|
-| Verify exhausted | state failed, verified=false, summary includes verifier output, `ask` reason stuck |
+| Verify exhausted | state failed, verified=false, summary includes verifier output, `ask` reason stuck, `error` `Verification failed after N retries` (REQ-agent-032) |
+| Model call fails on the last configured model (HTTP, timeout, network, malformed) or no provider is configured | state failed; `error` is `modelCallFailedLine` (status / kind and host only) or the no-provider notice (REQ-agent-032) |
 | Verify lane log over 4000 chars (passing steps such as the `--help` smoke fill its head) | the retry gets the failing step's name, its output (or its error lines and the end of the log) within 4000 chars, never the start of the log (REQ-agent-002, AGENT-4.a) |
 | Edit no tool reported (code-tier shell-exec, delegate worker, commit through a shell) | the real git diff adds the path to filesChanged; verify runs; done only on a pass (REQ-agent-085) |
 | A tool claims a path git does not show (gitignored, nested repo, nothing written) | not listed in filesChanged; one note names it; verify runs anyway (REQ-agent-085) |
@@ -1212,6 +1288,10 @@ A change the run did not open is never touched.
 | Own change on a repo other than Corvidinho after a green lane | one Text line: it stays open for a human; nothing approved (REQ-agent-519) |
 | Own change on Corvidinho, approve or finalize not allowlisted, refused or failing | one Text line with the scrubbed reason; the change stays open for a human; the run stays verified (REQ-agent-519) |
 | Lane fails when re-run over what approve and finalize wrote | run failed, not verified, no retry; the summary says so (REQ-agent-519) |
+| No output (event, tool output, lane output) for `CORVIDINHO_IDLE_TIMEOUT_MS` outside a model call, worker or card wait | run aborted (tool / lane trees killed); `failed`, `stopReason: "idle-timeout"`, `error` = `Stopped: no output for … (idle timeout).` (REQ-agent-244) |
+| The step the run is on ignores the idle-timeout abort (no timeout of its own) | waited for at most `IDLE_STOP_GRACE_MS` (5 s); then `failed`, `stopReason: "idle-timeout"`, summary `… (idle timeout). Any changes so far were not verified.`, an `[operator] AGENT-12: …` line; its later events dropped (REQ-agent-244) |
+| Final attempt used up `CORVIDINHO_MAX_TURNS` rounds | best prose so far; `stopReason: "turn-cap"`; verify still runs when files changed (REQ-agent-312) |
+| `CORVIDINHO_MAX_TURNS` / `CORVIDINHO_IDLE_TIMEOUT_MS` not a positive whole number | ignored with one `[operator] AGENT-12: …` line; the default applies (REQ-cli-125) |
 
 ## Dependencies
 
@@ -1292,6 +1372,8 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-30 | at-a-spend-cap-the-run-asks-the-owner-on-a-dm-spend-approve-card-with-a-one-time-code-instead-of-refusing-approve-lets: At a spend cap the run asks the owner on a DM spend Approve card with a one-time code instead of refusing; Approve lets only the paused call through at the amount shown and the next call past the cap asks again (SAFE-8, SAFE-8.a, SAFE-15, SAFE-19 money) |
 | 2026-09-30 | the-safe-3-a-approved-prod-command-test-runs-a-stand-in-kubectl-first-on-path-instead-of-the-host-s-real-one-which-took: The SAFE-3.a approved-prod-command test runs a stand-in kubectl first on PATH instead of the host's real one, which took 2.4-3.1 s on CI runners and once passed the 5 s test timeout |
 | 2026-09-30 | if-it-only-plans-or-says-done-without-changing-anything-it-gets-one-nudge-to-the-same-model-a-second-stall-stands-with: If it only plans or says 'Done.' without changing anything, it gets one nudge to the same model; a second stall stands with an operator note (AGENT-17, nudge half) |
+| 2026-09-30 | a-failed-run-tells-the-owner-why-in-one-plain-line-and-everyone-else-that-it-didn-t-work-and-the-owner-has-been-told: A failed run tells the owner why in one plain line, and everyone else that it didn't work and the owner has been told (DISCORD-3.b) |
 | 2026-09-30 | a-cli-task-run-in-a-git-repo-works-in-its-own-worktree-by-default-here-runs-it-in-my-checkout-session-worktree-1-a: A CLI task run in a git repo works in its own worktree by default; --here runs it in my checkout (SESSION-WORKTREE-1.a) |
 | 2026-09-30 | a-call-whose-price-is-unknown-stops-and-asks-on-the-owner-s-spend-card-showing-the-amount-as-unknown-when-a-cap-covers: A call whose price is unknown stops and asks on the owner's spend card showing the amount as unknown when a cap covers it (recorded unknown, owner lines read $X + unknown, no price override), and every surface asks before spending over a cap: WATCH spend-cap stops reach the owner by DM and a schedule's spend-cap stop can go on through the card (SAFE-16, SAFE-16.a, AUTONOMY-8) |
 | 2026-10-01 | before-a-pr-opens-a-second-model-reviews-the-diff-in-bounded-rounds-and-the-pr-lists-what-it-raised-and-what-changed: Before a PR opens, a second model reviews the diff in bounded rounds, and the PR lists what it raised and what changed (GITHUB-9, GITHUB-9.a) |
+| 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |

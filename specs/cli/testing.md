@@ -105,8 +105,17 @@ and provider keys never reach the suite. `tests/cli.plugins-run-argv.test.ts`,
 `tests/cli.project-path.test.ts`, `tests/agent.cli.test.ts` run `task run`
 against the localhost fake provider. `tests/docs.operator-facts.test.ts`
 checks the `llm.no_provider` Logs row.
+`tests/daemon.no-provider-run.test.ts` — a daemon with no model whose two due
+schedules spawn the real `task run` (a wrapper bin that clears the model
+settings): the owner's schedule's run row keeps the notice as `summary`,
+another creator's `That didn't work.`, both with `error` `failed (exit 1):
+<notice>`; each `run.finished` is a `warn` with `ok: false` and that `error`,
+and `[scheduler] run failed (schedule <id>, exit 1): <notice>` is logged for
+each (DISCORD-3.b since #340; the REQ-cli-079 text now says so).
 - Fail on base: the notice, daemon, doctor, init, preload and `--task -h`
-  cases fail with the base's sources (and the base preload).
+  cases fail with the base's sources (and the base preload). The daemon
+  schedule-run case documents #340's behaviour and passes on main (the
+  REQ text was stale, not the code).
 
 ## Model fallback in task run and the daemon (REQ-cli-080; AGENT-11)
 
@@ -193,3 +202,15 @@ test removes the worktrees and branches it made.
   dirty, talk branch only, both branches kept): with the first cut of
   `src/worktree/cli-run.ts` (4c20563) swapped in, 6 fail (the
   talk-branch-only case passes there too); restored, 25 of 25 pass.
+
+## Turn cap and idle timeout in task run (REQ-cli-125, AGENT-12)
+
+`tests/agent.limits.test.ts` ("corvidinho task run (CLI, AGENT-12)"):
+`CORVIDINHO_MAX_TURNS=2` with a fake model that always calls `files-list` →
+2 requests, `still listing` then `TURN_CAP_NOTE` on stdout, ndjson `result`
+with `stopReason: "turn-cap"`; `lots` / `off` → one `[operator] AGENT-12: …`
+line each, value not printed; `CORVIDINHO_IDLE_TIMEOUT_MS=4000` with a silent
+hung lane → exit 1, `failed` frame with `stopReason` / `error`, lane killed;
+`--help` and `.env.example` name both keys. Fail on base: all four (8
+requests and no line; no note; the lane still running at the 60 s timeout;
+no help lines).

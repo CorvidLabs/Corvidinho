@@ -684,6 +684,23 @@ Unchanged suites that cover the touched files pass: `tests/agent.spend.test.ts`,
   first cut (`6ac2d8c`) sources, which recorded and sent the call past a cap
   the card did not show and cut the task before scrubbing it.
 
+## A failed run's result names why in plain harness text (REQ-agent-032, DISCORD-3.b)
+
+`tests/discord.failed-reply.test.ts`:
+
+- `modelCallFailedLine`: HTTP 401 → `The model call failed (401 Unauthorized
+  from api.openai.com)`; an unnamed status keeps its number; timeout, network,
+  malformed reply and a missing key each name their kind and the host; an
+  empty chain is `NO_PROVIDER_NOTICE`. `verifyGaveUpReason(2)` and
+  `VERIFY_RERUN_FAILED_REASON` name the verify failure.
+- The real `task run --output ndjson` against a localhost provider that
+  answers 401 with a body quoting a key: exit 1, `failed` result with `error`
+  `The model call failed (401 Unauthorized from 127.0.0.1:<port>)` and no body
+  text; with no model configured the `error` is the AGENT-10 notice.
+- `collectTaskRunStream` (through the spawn client): a crash's stderr end is
+  `stderrTail` (at most 4000 characters).
+- Fail on base: those cases fail with the base's `src/agent/*` sources (no
+  `error` field, no `modelCallFailedLine`, no `stderrTail`).
 ## Workers pass --here; the local-CLI shell refusal names the missing role session (REQ-agent-117, REQ-agent-503 modified; SESSION-WORKTREE-1.a)
 
 - `tests/cli.task-worktree.test.ts` › "delegate and council workers spawn
@@ -794,3 +811,28 @@ the file loads): all five tool-loop cases and both delegate cases fail;
 restored they pass. The authors-outlive-the-run case fails with this
 change's pre-fix sources (`69257ea`: the fallback model reviewed its own
 change); restored it passes.
+## Turn cap and idle timeout (REQ-agent-244, REQ-agent-312, AGENT-12)
+
+`tests/agent.limits.test.ts` (fake LLM; fake `fledge` / `corvidinho` sh bins in
+temp dirs): the env readers and lines; the watchdog (touch, nested holds);
+`CORVIDINHO_MAX_TURNS=2` → 2 requests, `stopReason: "turn-cap"`, the last
+prose, the operator stop event; unset → 8; `stopReason` only from the final
+attempt (a capped first attempt whose retry verifies has none; a capped final
+attempt does; a cancelled run never); a hung tool at 150 ms → `failed`,
+`stopReason: "idle-timeout"`, `error` and summary the stop line, `Text` +
+`StateChanged failed`; best prose kept and unverified changes named; output,
+a slow model call, a silent `delegate` worker and an Approve-card wait never
+stop a run; a caller abort stays cancelled; the CLI's hung silent verify lane
+is killed with its task (exit 1) and a printing lane is verified.
+- Fail on base (aeb2de3's modified sources swapped in, `src/agent/limits.ts`
+  kept): 18 of 28 fail (no `stopReason`, hangs until the test timeout, the
+  watchdog fires during a worker or a card wait); restored, 28 of 28 pass.
+- Review: a tool that never returns and ignores the abort still ends the run
+  about `IDLE_STOP_GRACE_MS` after the timeout (`failed`, `idle-timeout`,
+  "Any changes so far were not verified.", the `[operator]` line); an
+  `idleTimeoutMs` of 0, -1 or NaN is the default (no 1 ms stop); a
+  `delegate` worker's `stopReason: "turn-cap"` reaches its outcome; a
+  turn-capped schedule run posts only its prose and the scheduler logs one
+  `[scheduler] schedule <id>: run stopped=turn-cap …` line. These
+  fail on the pre-review head 05f7a6c (hang, instant stop, none) and on
+  base; 32 of 32 pass on the branch (11 pass / 21 fail with base sources).

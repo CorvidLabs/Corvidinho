@@ -63,6 +63,12 @@ import {
 import { askPingOwner } from "../discord/spend-post.ts";
 import { spendStopFor, type SpendDm } from "../discord/spend-dm.ts";
 import {
+  failedRunOutcome,
+  failureReasonFor,
+  formatFailureLog,
+  type FailureOwnerDm,
+} from "../discord/failure-reason.ts";
+import {
   formatScheduleWaitNote,
   scheduleAskComponents,
   scheduleAskHint,
@@ -191,6 +197,15 @@ function scheduleTitle(schedule: Schedule, opts: { withName?: boolean } = {}): s
   // quoted back into the channel; the id still says which schedule it is.
   if (opts.withName === false) return `Schedule ${id} on \`${project}\``;
   return `Schedule **${schedule.name}** ${id} on \`${project}\``;
+}
+
+/**
+ * AGENT-12 (REQ-agent-312): the scheduler's log line for a run whose last
+ * attempt hit the turn cap I set — its post is only its best prose, with no
+ * footer to carry `stopped=turn-cap` (AGENT-9 keeps the stop out of the post).
+ */
+export function scheduleTurnCapLog(scheduleId: string): string {
+  return `[scheduler] schedule ${scheduleId}: run stopped=turn-cap (CORVIDINHO_MAX_TURNS); its post is its best answer so far (AGENT-12)`;
 }
 
 /** One scrubbed line (SAFE-6), capped, never a stack. Never throws. */
@@ -326,6 +341,13 @@ export type SchedulerServiceOpts = {
    * stays pending in the shared DB for a bridge.
    */
   spendDm?: Pick<SpendDm, "deliver">;
+  /**
+   * DISCORD-3.b — a failed run of a schedule the owner did not create DMs the
+   * owner its reason (the bridge's `createFailureOwnerDm`), so its post can
+   * say the owner has been told. Without it (the daemon) the post says only
+   * "That didn't work." and the reason is logged.
+   */
+  failureDm?: FailureOwnerDm;
   /** Called once per run when it finishes or is abandoned (daemon logs). */
   onRunFinished?: (event: ScheduleRunFinished) => void;
   /**
@@ -381,6 +403,7 @@ export class SchedulerService {
   private readonly loadOwner?: () => Promise<OwnerRecord | null> | OwnerRecord | null;
   private readonly spendAlerts?: SpendAlertOutbox;
   private readonly spendDm?: Pick<SpendDm, "deliver">;
+  private readonly failureDm?: FailureOwnerDm;
   /**
    * SAFE-14.a: per schedule, the run whose spend-cap details were last handed
    * to the owner's DM, so an ask retried every tick (its post failed and
@@ -418,6 +441,7 @@ export class SchedulerService {
     this.loadOwner = opts.loadOwner;
     this.spendAlerts = opts.spendAlerts;
     this.spendDm = opts.spendDm;
+    this.failureDm = opts.failureDm;
     this.onRunFinished = opts.onRunFinished;
     this.onTick = opts.onTick;
     this.backup = opts.backup;
@@ -897,16 +921,43 @@ export class SchedulerService {
         signal,
       });
 
+      // AGENT-12 (REQ-agent-312): a schedule's post has no footer to carry
+      // `stopped=turn-cap`, and AGENT-9 keeps the stop out of the post, so
+      // the scheduler log says the run stopped at the turn cap. (An idle
+      // timeout is a failed run: its reason is logged below, DISCORD-3.b.)
+      if (result.task?.stopReason === "turn-cap" && !signal.aborted) {
+        console.warn(scheduleTurnCapLog(schedule.id));
+      }
+
+      // DISCORD-3.b: a failed run without an ask of its own says why on the
+      // owner's own schedule; anyone else's says the owner was told (DMed).
+      // The reason is logged and kept as the row's error either way. A run
+      // abandoned at shutdown posts nothing, so it tells nobody either.
+      const failed =
+        result.ok || result.ask || signal.aborted
+          ? null
+          : await failedRunOutcome({
+              run: result,
+              ownerRun: byOwner,
+              surface: `schedule ${schedule.id}`,
+              ...(schedule.channelId ? { channelId: schedule.channelId } : {}),
+              ownerDm: this.failureDm,
+              logPrefix: "[scheduler]",
+            });
       // ROLES-CHAT-3 (REQ-discord-734): the run row's summary and the post
       // keep a closing role note when they cap a long summary.
       const summary = result.ok
         ? clipPostSummary(result.summary)
-        : `failed (exit ${result.exitCode})`;
+        : failed?.body ?? `failed (exit ${result.exitCode})`;
 
       const done = this.finish(schedule, run, {
         ok: result.ok,
         summary,
-        error: result.ok ? undefined : summary,
+        error: result.ok
+          ? undefined
+          : failed
+          ? `failed (exit ${result.exitCode}): ${failed.reason}`
+          : summary,
         ...(result.ask ? { ask: result.ask } : {}),
         ...(result.spendWarning ? { spendWarning: result.spendWarning } : {}),
       });
@@ -957,7 +1008,18 @@ export class SchedulerService {
         // Already recorded (a post failed after the outcome was written, or
         // the run was abandoned): log it instead of swallowing it.
         logSchedulerError("run", err);
-      } else if (done.ask) {
+      } else {
+        // DISCORD-3.b: the reason is always logged (scrubbed, one line).
+        console.warn(
+          formatFailureLog(
+            "[scheduler]",
+            `schedule ${schedule.id}`,
+            undefined,
+            failureReasonFor({ failureReason: msg }),
+          ),
+        );
+      }
+      if (done?.ask) {
         // This failure auto-paused the schedule (REQ-discord-353): post the
         // pause ask now, with no context (the error may name host paths).
         try {

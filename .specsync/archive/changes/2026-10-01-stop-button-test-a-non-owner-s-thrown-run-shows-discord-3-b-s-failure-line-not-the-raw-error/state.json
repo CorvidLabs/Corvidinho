@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "stop-button-test-a-non-owner-s-thrown-run-shows-discord-3-b-s-failure-line-not-the-raw-error",
+  "slug": "stop-button-test-a-non-owner-s-thrown-run-shows-discord-3-b-s-failure-line-not-the-raw-error",
+  "title": "Stop-button test: a non-owner's thrown run shows DISCORD-3.b's failure line, not the raw error",
+  "description": "Stop-button test: a non-owner's thrown run shows DISCORD-3.b's failure line, not the raw error",
+  "kind": "bug_fix",
+  "state": "archived",
+  "canonical_applied": true,
+  "base_commit": "7f46a09de7c9133a10a2b8d07e5afd0dd888b1b8",
+  "created_at": 1790814699,
+  "updated_at": 1790815646,
+  "affected_specs": [
+    "discord"
+  ],
+  "affected_paths": [
+    "tests/discord.stop-run.test.ts"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Test-only merge fix: main's AGENT-3.a Stop-button test asserted the thrown error verbatim on a non-owner's failure status; with DISCORD-3.b only the owner sees the reason. REQ-discord-303 (the button clears on a failed or thrown run) is unchanged, so no spec text changes.",
+  "acceptance_criteria": [
+    "tests/discord.stop-run.test.ts 'a failed run's answer clears the button too, and so does the failure status when the run throws' expects Alice's (non-owner) thrown-run failure status to read the DISCORD-3.b line FAILED_TEXT ('That didn't work.', no owner DM in that harness) instead of the raw error, still asserts the Stop button clears (REQ-discord-303), and passes on the merged branch; specsync change audit reports no uncovered meaningful paths."
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

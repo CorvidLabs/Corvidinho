@@ -12,6 +12,7 @@ import type {
   ModelFallback,
   ModelUsage,
   SpendWarning,
+  TaskStopReason,
 } from "../agent/types.ts";
 import type { InjectionNotice } from "../agent/untrusted.ts";
 import type { PendingAsk } from "./ask-buttons.ts";
@@ -186,6 +187,17 @@ export type AgentSpawnResult = {
    */
   privateReplies?: string[];
   /**
+   * DISCORD-3.b: a failed run's reason from the result frame's `error` (one
+   * line of harness text, capped); absent on success or when none was given.
+   * Shown only through `failureReasonFor` (scrubbed, one line, owner only).
+   */
+  failureReason?: string;
+  /**
+   * DISCORD-3.b: the end of a failed run's stderr, the last fallback for its
+   * reason (`failureReasonFor`); never posted as is. Absent on success.
+   */
+  stderrTail?: string;
+  /**
    * Verify facts from the child's `result` frame (AGENT-4); absent when no
    * frame parsed. /work ships a PR only from a verified tree (REQ-discord-088).
    */
@@ -195,6 +207,8 @@ export type AgentSpawnResult = {
     state?: string;
     attempts?: number;
     cancelled?: boolean;
+    /** AGENT-12: a limit I set stopped the run (validated); footer plumbing only. */
+    stopReason?: TaskStopReason;
   };
 };
 

@@ -16,6 +16,7 @@ import type { HumanAsk } from "../src/agent/types.ts";
 import type { AgentClient } from "../src/discord/agent-client.ts";
 import { createEchoAgentClient } from "../src/discord/agent-client.ts";
 import { pickCustomId } from "../src/discord/ask-buttons.ts";
+import { FAILED_TEXT } from "../src/discord/failure-reason.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import {
   createNullGateway,
@@ -462,7 +463,8 @@ describe("DISCORD-ASK-6/7 collapsed replies clear the in-flight row (REQ-discord
     const { box, calls, gatewayFactory } = fakeDiscord({ editMessage: true });
     await start(db, { agent, gatewayFactory });
     await box.handlers!.onMessage(mention("c2"));
-    expect(calls.messageEdits.at(-1)?.content).toContain("failed (exit 3)");
+    // DISCORD-3.b: not the owner's run and no owner to tell.
+    expect(calls.messageEdits.at(-1)?.content).toBe(FAILED_TEXT);
     expect(calls.replies).toHaveLength(0);
     expect(inflightRows(db)).toEqual([]);
   });

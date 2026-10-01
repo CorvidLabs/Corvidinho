@@ -12,7 +12,9 @@
  * change, every changed meaningful path must be covered by one first
  * (AGENT-18, REQ-agent-518); on Corvidinho the run then approves and
  * archives the change it opened and verifies again (AGENT-18.a,
- * REQ-agent-519).
+ * REQ-agent-519). An idle timeout I set stops a run that went quiet, and
+ * the result says when a limit I set stopped it (AGENT-12, REQ-agent-244 /
+ * REQ-agent-312; src/agent/limits.ts).
  */
 
 import { relative, resolve } from "node:path";
@@ -44,6 +46,14 @@ import {
   VERIFY_FEEDBACK_MAX_CHARS,
   verifyFeedbackExcerpt,
 } from "./verify.ts";
+import {
+  effectiveIdleTimeoutMs,
+  formatIdleDuration,
+  IDLE_STOP_GRACE_MS,
+  idleTimeoutLine,
+  startIdleWatchdog,
+  withIdleWatchdog,
+} from "./limits.ts";
 import { judgeTestEvidence, startTestNameWalk, type TestDropCheck } from "./test-evidence.ts";
 import { startWorkspaceDiff, WORKSPACE_DIFF_MAX_FILES } from "./workspace-diff.ts";
 import type {
@@ -83,6 +93,18 @@ function setState(
   state: AgentState,
 ): void {
   emit(onEvent, { type: "StateChanged", state });
+}
+
+/**
+ * DISCORD-3.b: a failed verify's plain reason on the result (`error`); the
+ * lane's output stays in the summary, never in this line.
+ */
+export const VERIFY_RERUN_FAILED_REASON =
+  "Verification failed when re-run over what approving and archiving its own SpecSync change wrote";
+
+/** DISCORD-3.b: the plain reason of a run that gave up after its verify retries. */
+export function verifyGaveUpReason(maxRetries: number): string {
+  return `Verification failed after ${maxRetries} retries`;
 }
 
 function isAborted(signal?: AbortSignal): boolean {
@@ -167,17 +189,84 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
   // AGENT-18.a: this run's SpecSync ledger (the changes it opened, and
   // whether its lane is green right now), for the approve and finalize tools.
   const sdd = beginSddRun(opts.cwd);
+  // AGENT-12 (REQ-agent-244): the run's idle watchdog. Every event the run
+  // emits, tool output and verify-lane output reset it (model calls, workers
+  // and Approve-card waits hold it); with no output for that long it aborts
+  // the run's signal, so tool and verify-lane process trees are killed.
+  // An unusable value (0, negative, NaN) is the default, never an instant stop.
+  const watchdog = startIdleWatchdog(effectiveIdleTimeoutMs(opts.idleTimeoutMs));
+  const signal = opts.signal
+    ? AbortSignal.any([opts.signal, watchdog.signal])
+    : watchdog.signal;
+  // Once the run stopped waiting for a step that ignored the abort, that
+  // step's later events are dropped (the result is already out).
+  let abandoned = false;
+  const onEvent = (e: AgentEvent) => {
+    if (abandoned) return;
+    watchdog.touch();
+    opts.onEvent?.(e);
+  };
+  // AGENT-12 (REQ-agent-312): whether the last attempt used up its turn cap.
+  let finalTurnCap = false;
+  // For a run that stopped waiting on a stuck step: the attempts started and
+  // the files the finished attempts reported.
+  let attemptsStarted = 0;
+  const reported = new Set<string>();
+  const execute: RunTaskOptions["execute"] = async (ctx) => {
+    attemptsStarted = ctx.attempt;
+    finalTurnCap = false;
+    const r = await opts.execute(ctx);
+    for (const f of r.filesChanged) reported.add(f);
+    finalTurnCap = r.stopReason === "turn-cap";
+    return r;
+  };
   let result: TaskResult;
   try {
-    result = await gate(
-      opts,
-      (w) => {
-        workspace = w;
+    // AGENT-12 (REQ-agent-244): after the watchdog fires, the step the run is
+    // on gets IDLE_STOP_GRACE_MS to see the abort and return; one that
+    // ignores it (an in-process call with no timeout) is not waited for.
+    result = await settleWithinGrace(
+      withIdleWatchdog(watchdog, () =>
+        gate(
+          { ...opts, signal, onEvent, execute },
+          (w) => {
+            workspace = w;
+          },
+          sdd,
+        ),
+      ),
+      watchdog.signal,
+      IDLE_STOP_GRACE_MS,
+      () => {
+        abandoned = true;
+        return {
+          summary: "",
+          filesChanged: [...reported],
+          verified: false,
+          verifySkipped: false,
+          cancelled: true,
+          state: "failed",
+          attempts: attemptsStarted,
+        };
       },
-      sdd,
     );
   } finally {
+    watchdog.stop();
     endSddRun(sdd);
+  }
+  if (watchdog.fired && !opts.signal?.aborted && !(result.state === "done" && !result.cancelled)) {
+    // AGENT-12: stopped for no output — failed, never cancelled, and it says so.
+    result = idleTimeoutResult(result, watchdog.timeoutMs, abandoned);
+    if (abandoned) {
+      opts.onEvent?.({
+        type: "Text",
+        text: `[operator] AGENT-12: the step the run was on did not stop within ${formatIdleDuration(IDLE_STOP_GRACE_MS)} of the idle timeout, so the run stopped waiting for it.`,
+      });
+    }
+    opts.onEvent?.({ type: "Text", text: result.error ?? idleTimeoutLine(watchdog.timeoutMs) });
+    opts.onEvent?.({ type: "StateChanged", state: "failed" });
+  } else if (finalTurnCap && !result.cancelled) {
+    result = { ...result, stopReason: "turn-cap" };
   }
   // AGENT-15.a (REQ-agent-015): only a `done` run (verified, or nothing to
   // verify) lets the next run in this talk worktree start from its own
@@ -186,6 +275,75 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
     result.state === "done" && !result.cancelled,
   );
   return result;
+}
+
+/**
+ * AGENT-12 (REQ-agent-244): `work`'s outcome — or, once `fired` has aborted
+ * and `work` has not settled `graceMs` later, `abandoned()`, so a step that
+ * ignores the abort cannot keep a stopped run from ending.
+ */
+function settleWithinGrace<T>(
+  work: Promise<T>,
+  fired: AbortSignal,
+  graceMs: number,
+  abandoned: () => T,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      timer = setTimeout(() => resolve(abandoned()), graceMs);
+    };
+    if (fired.aborted) arm();
+    else fired.addEventListener("abort", arm, { once: true });
+    const settle = () => {
+      if (timer) clearTimeout(timer);
+      fired.removeEventListener("abort", arm);
+    };
+    work.then(
+      (v) => {
+        settle();
+        resolve(v);
+      },
+      (err) => {
+        settle();
+        reject(err);
+      },
+    );
+  });
+}
+
+/** The tool loop's own placeholder for an attempt stopped mid-way (execute.ts). */
+const ABORTED_PLACEHOLDER_RE = /^tool loop aborted[^\n]*(?:\n\n|$)/;
+
+/**
+ * AGENT-12 (REQ-agent-244): the result of a run the idle watchdog stopped —
+ * failed (not cancelled, not verified) with `stopReason` `idle-timeout`, the
+ * one-line `error`, and a summary that leads with that line, then the best
+ * prose so far (closing notes kept last), and says when its changes were not
+ * verified. A run that stopped waiting for a stuck step (`abandoned`) cannot
+ * know what that step changed, so it always says its changes were not
+ * verified.
+ */
+function idleTimeoutResult(r: TaskResult, timeoutMs: number, abandoned = false): TaskResult {
+  const line = idleTimeoutLine(timeoutMs);
+  const unverified =
+    r.filesChanged.length > 0
+      ? " Its changes so far were not verified."
+      : abandoned
+      ? " Any changes so far were not verified."
+      : "";
+  const prose = r.summary.trim().replace(ABORTED_PLACEHOLDER_RE, "").trim();
+  const { ask: _ask, ...rest } = r;
+  return {
+    ...rest,
+    summary: prose ? `${line}${unverified}\n\n${prose}` : `${line}${unverified}`,
+    verified: false,
+    verifySkipped: false,
+    cancelled: false,
+    state: "failed",
+    stopReason: "idle-timeout",
+    error: line,
+  };
 }
 
 /**
@@ -363,6 +521,9 @@ async function gate(
         cancelled: false,
         state: "failed",
         attempts,
+        // DISCORD-3.b: the attempt's plain harness reason (no provider, or
+        // which model call failed and how), never the model's text.
+        ...(exec.failureReason ? { error: exec.failureReason } : {}),
       };
     }
 
@@ -568,6 +729,7 @@ async function gate(
               cancelled: false,
               state: "failed",
               attempts,
+              error: VERIFY_RERUN_FAILED_REASON,
             };
           }
         }
@@ -609,6 +771,7 @@ async function gate(
         state: "failed",
         attempts,
         ask,
+        error: verifyGaveUpReason(maxRetries),
       };
     }
 

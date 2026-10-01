@@ -52,6 +52,24 @@ has commits of its own; one with changes is kept and named (stderr, and `result.
 `--here`, which runs it in the current checkout as before. Outside a git repo it works in the
 folder itself.
 
+### Turn cap and idle timeout (AGENT-12)
+
+Two optional limits stop endless or stalled runs on every surface (CLI, Discord, WATCH,
+schedules; delegate and council workers inherit them):
+
+- `CORVIDINHO_MAX_TURNS` (default 8): model/tool rounds per attempt; each verify retry gets
+  its own. A run whose last attempt hits it ends with its best answer so far and says so
+  (`stopReason: "turn-cap"` in `--json` / ndjson, a plain line after the summary in text mode).
+- `CORVIDINHO_IDLE_TIMEOUT_MS` (default 600000, 10 minutes): a run with no output — events,
+  tool output, verify-lane output — for that long is stopped, its tools and verify lane killed
+  with their process trees, and it fails (exit 1) with `Stopped: no output for 10 minutes (idle
+  timeout).` as the first line of its summary and as its `error`. Model calls,
+  delegate/council workers and Approve-card waits do not count as idle. A step that ignores
+  the stop is waited for at most 5 more seconds; then the run ends failed anyway.
+
+A value that is not a positive whole number is ignored with a one-line note, and the default
+is used.
+
 ### Another project without `cd` (CLI-5)
 
 ```bash

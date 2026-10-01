@@ -417,8 +417,8 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   stuck `autoPauseAsk` (earlier failures store none); the bridge's next tick
   posts it once with the owner ping; a stuck 5th run posts the pause line
   plus `Last failure: <question>`; a bridge-claimed 5th failure posts the
-  pause ask with the ping and the `failed (exit 1)` context (not the run's
-  output) instead of the `❌` line; a pause ask whose in-process post
+  pause ask with the ping and the run's DISCORD-3.b failed line as context
+  (`That didn't work.`, not the run's output) instead of the `❌` line; a pause ask whose in-process post
   resolves `false` or throws stays pending with no ping key and the next
   tick posts it once with the ping; a bridge run that throws and makes the
   5th failure posts the pause ask at once without the error text;
@@ -1250,7 +1250,9 @@ configured." with no setting name; configured and partly configured lines.
 closed) and `tests/discord.spend.test.ts` (the non-owner body still has no
 `CORVIDINHO_`). Bridge footer tests configure a model for the file
 (`useConfiguredModel`, `tests/fixtures/fake-llm.ts`); the stub agent calls
-no model.
+no model. `tests/discord.failed-reply.test.ts` ("no provider configured: the
+owner sees the AGENT-10 notice") — the owner's own failed run answers the
+notice as its one line (DISCORD-3.b, REQ-discord-032).
 - Fail on base: the startup and `/status` cases fail (no line; "demo stub").
 
 ## Model fallback on Discord (REQ-discord-080, REQ-discord-457; AGENT-11)
@@ -1457,6 +1459,54 @@ code step. The SAFE-14.a surface tests (`tests/discord.spend.test.ts`,
   (`src/discord/spend-card.ts` does not exist), and main's bridge has no
   `spend` kind, so such a card is never DMed.
 
+## A failed run says why to the owner, and that the owner was told to anyone else (REQ-discord-032, DISCORD-3.b)
+
+`tests/discord.failed-reply.test.ts` (22 tests; stub agents, a dry-run
+`startBridge` whose gateway stub records replies and `sendDm`, in-memory
+SQLite, a `SchedulerService` with a recording poster, a localhost provider
+that answers 401; no live Discord, no network):
+
+- `failureReasonFor` / `plainFailureLine`: the result frame's `error` wins; a
+  key in stderr is `[redacted:openai-key]`, also when the cut would split it;
+  a stderr with a source excerpt, stack frames, host paths and the Bun banner
+  becomes the one `error: …` line with `…/corvidinho`; a long line is cut to
+  200 with `…`; URLs keep their host; `@everyone` is defanged; with no reason
+  the AGENT-10 notice (unset model, missing key), else the stderr end, else
+  the exit code (130 = interrupted); never the summary.
+- `createFailureOwnerDm`: one DM per reason per hour (a later hour or another
+  reason sends again); a DM that fails (null or a throw) is false and not
+  remembered; no owner or no DM path is false.
+- `failedRunReply`: owner → the reason; others → told (DM out) or the plain
+  line (DM failed, none wired); one `[discord] run failed (<surface>, exit N)`
+  log line each.
+- Spawn client: a result frame's `error` becomes `failureReason`; a crash
+  with no frame hands over `stderrTail`; a successful run carries neither.
+- Surfaces through `startBridge`: chat (owner body = the reason, footer keeps
+  `state=failed verified=false attempts=1`, no DM; a team member's run is
+  told and DMs the owner once per reason; a failed DM or no owner → `That
+  didn't work.`; no provider → the AGENT-10 notice to the owner; a secret and a
+  stack in stderr reach the owner as one scrubbed line; a run that throws →
+  `❌ <scrubbed line>` for the owner, `❌ That didn't work — the owner has been
+  told.` for anyone else), an ask pick (owner and team), `/session start` and
+  `/work` (owner and team, `failed (exit` never shown), and schedule posts
+  (the owner's schedule posts the reason and keeps it as the row's error;
+  someone else's is told with the DM naming `schedule <id>`; the daemon or a
+  failed DM → `That didn't work.`; `[scheduler] run failed (schedule <id>,
+  exit 1): …` logged).
+- End to end: the bridge spawning the real `task run` against the 401
+  provider answers the owner `The model call failed (401 Unauthorized from
+  127.0.0.1:<port>)` and a team member `That didn't work — the owner has been
+  told.` with the owner DMed that line; the provider's body never appears.
+- Updated for the new line: `tests/discord.thinking-bridge.test.ts`,
+  `tests/discord.inflight-replies.test.ts` (non-owner, no owner → `That didn't
+  work.`) and `tests/scheduler.ask-outbox.test.ts` (someone else's schedule
+  without a DM path → `That didn't work.` in the row summary and the pause
+  ask; the failed run's own output never shown).
+- Fail on base: with the base's (9ea4005) twelve modified source files swapped
+  in (`src/discord/failure-reason.ts` kept so imports resolve), the file gave
+  7 pass, 15 fail; restored, 22 pass. The 7 that pass on the base are the pure
+  units of the new module; every surface, spawn-client, `task run` and
+  `modelCallFailedLine` case fails on the base.
 ## The spawn client passes --here (REQ-discord-014 / REQ-discord-073 modified; SESSION-WORKTREE-1.a)
 
 `tests/agent.ndjson-spawn.test.ts` (Discord spawn client) and
@@ -1507,3 +1557,16 @@ work tree /work commits) it opens and the PR body has the section.
 Fail on base: the /work case fails (base `pr.ts` has no `not-reviewed`);
 restored, it passes. `tests/work.pr.test.ts` only adapts to the gate (with
 the base's sources it passes).
+## Turn cap / idle timeout plumbing and card waits (REQ-discord-125, AGENT-12)
+
+`tests/agent.limits.test.ts` ("it says so on each surface", "waiting on an
+Approve card …"): the spawn client keeps `stopReason: "turn-cap"` and drops an
+unknown value; a mention answer's footer ends `… attempts=1 stopped=turn-cap`
+and its body is only the prose; an idle-timed-out frame gives `failureReason`
+= the stop line and `task.stopReason: "idle-timeout"`, and the owner's own
+mention is answered with that line (DISCORD-3.b) and `stopped=idle-timeout`
+in the footer; `waitForDecision` answered after 0.9 s does not fire a 250 ms
+watchdog, which fires once the card is decided. Fail on base: all four.
+Review (REQ-agent-312): an owner's schedule whose run hit the turn cap posts only its prose
+and the scheduler logs one `[scheduler] schedule <id>: run stopped=turn-cap
+…` line (none for a plain run beside it); fails on base and on 05f7a6c.

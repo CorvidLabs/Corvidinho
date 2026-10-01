@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "a-failed-watch-run-s-public-comment-and-kept-turn-name-the-model-call-s-status-but-not-the-provider-s-host-the-account",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "86e4acac1a2ddd8cf145053363079c1dd509b3e4",
+  "contract_digest": "a3546a44db99bae09844456a426862fdd4889f374731182c4a6382670a943e27",
+  "execution_digest": "06a2abaa3022019f80954ce1cc7976a8c24b1c2a05300f76abaea1c940c3ebc4",
+  "workspace_digest": "24ee59ccfbbe6c88d0faceb8074dc413e52d1ff1a5c7b16d30c19d176b9342df",
+  "timestamp": 1790819704
+}

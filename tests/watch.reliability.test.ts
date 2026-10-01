@@ -27,6 +27,7 @@ import {
   maybePostWatchSummary,
   SuccessfulAckStore,
   SummarizedIdStore,
+  watchFailureReason,
 } from "../src/watch/summary.ts";
 import type { DetectedEvent } from "../src/watch/types.ts";
 
@@ -650,7 +651,12 @@ describe("WATCH-RELIABILITY-1 once-per-event summary", () => {
     expect(ack.posts.length).toBe(2);
     expect(ack.posts[0]!.body).toContain("Ack —");
     expect(ack.posts[1]!.body).toContain("Failed (exit 3)");
-    expect(ack.posts[1]!.body).toContain("agent blew up");
+    // REQ-watch-009 (DISCORD-3.b on GitHub): a failed run's comment is its
+    // one plain reason line, never the run's summary.
+    expect(ack.posts[1]!.body).toContain(
+      `\n\n${watchFailureReason({ ok: false, exitCode: 3 }, envBase)}\n\n---\n`,
+    );
+    expect(ack.posts[1]!.body).not.toContain("agent blew up");
     expect(logs.some((l) => l.includes("summary"))).toBe(true);
 
     // Second poll with same id should not re-ack/re-summary (processed dedup).

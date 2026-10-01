@@ -2188,8 +2188,10 @@ pass ping the owner:
   `askPingKey`, with its REQ-discord-606 controls; with no channel, to the
   owner by DM); the pausing run's ask SHALL replace its plain `❌` post.
   When the pausing run had no ask of its own, the post's context SHALL be
-  only what that `❌` post showed (`failed (exit N)`, the summary the run
-  row keeps and the delivery pass posts), never the run's own output; a run
+  only what that `❌` post showed (its DISCORD-3.b failed line,
+  REQ-discord-032: the reason on the owner's own schedule, else `That didn't
+  work — the owner has been told.` or `That didn't work.`; the summary the
+  run row keeps and the delivery pass posts), never the run's own output; a run
   that throws posts its pause ask at once with no context. An in-process
   post of the pause ask that does not go out (resolves `false` or throws)
   SHALL hand the ask back with no ping key kept, so a later delivery pass
@@ -2219,9 +2221,9 @@ the existing ADMIN subcommand. The columns that keep an ask open or closed
 are schema v15 (REQ-discord-606).
 
 Acceptance Criteria
-- A daemon-claimed run that makes 5 failures in a row pauses the schedule and stores `ask_reason` `stuck` with the pause question and `ask_posted_at` null; `onRunFinished` reports `autoPaused: true` and `askReason: "stuck"`; the bridge's next tick posts it once with the schedule prefix, the stuck headline, the pause line, the `failed (exit 1)` context and `mentionUserIds` [owner]; the 4 earlier failures record no ask and post nothing.
+- A daemon-claimed run that makes 5 failures in a row pauses the schedule and stores `ask_reason` `stuck` with the pause question and `ask_posted_at` null; `onRunFinished` reports `autoPaused: true` and `askReason: "stuck"`; the bridge's next tick posts it once with the schedule prefix, the stuck headline, the pause line, the run's DISCORD-3.b failed line as context (`That didn't work.` for someone else's schedule the daemon ran, which cannot DM the owner) and `mentionUserIds` [owner]; the 4 earlier failures record no ask and post nothing.
 - A stuck run that makes the 5th failure posts one ask: the pause line followed by `Last failure: <its question>`.
-- A bridge-claimed run that makes the 5th failure posts the pause ask with the owner ping and the `failed (exit 1)` context (not the run's output) instead of the `❌` line (the 4 earlier ones post `❌` with no ping), records the ping key and is not posted again.
+- A bridge-claimed run that makes the 5th failure posts the pause ask with the owner ping and the run's DISCORD-3.b failed line as context (not the run's output) instead of the `❌` line (the 4 earlier ones post `❌` with no ping), records the ping key and is not posted again.
 - A bridge-claimed pause ask whose post resolves `false` or throws stays pending with no ping key; the next tick posts it once with the owner ping.
 - A bridge run that throws and makes the 5th failure posts the pause ask at once with the owner ping and without the error text.
 - Refused runs that auto-pause the schedule spawn no agent and post nothing; once the creator is allowed again the next tick posts the pause ask with the owner ping.
@@ -3581,12 +3583,16 @@ line) when any tier has no usable model provider
 (`providerNotice(env)`, REQ-agent-179) and nothing when every tier has one.
 Runs it starts on such a tier (chat, button answers, `/session start`,
 `/work`, schedules) fail and call no model (REQ-agent-179): the run's result
-summary is the notice, while the channel gets the usual failed reply
-(`… failed (exit 1)`), as for any failed run; the start-up line and `/status`
-say why. No new slash command, setting or schema change.
+summary and `error` are the notice, while the channel gets the DISCORD-3.b
+failed reply like any failed run (REQ-discord-032): the owner's own run
+answers with the notice cut to one line, anyone else's with `That didn't
+work — the owner has been told.` (the owner DMed that line) or `That didn't
+work.`; the start-up line and `/status` say why too. No new slash command,
+setting or schema change.
 
 Acceptance Criteria
 - A dry-run bridge started with no model logs `[discord] No model provider is configured: CORVIDINHO_LLM_MODEL is not set. …` once; with `CORVIDINHO_LLM_MODEL=ollama:qwen3` it logs no no-provider line.
+- With no model, the owner's own failed chat run answers `No model provider is configured: …` as its one line (REQ-discord-032).
 
 ### REQ-discord-080
 
@@ -3981,4 +3987,75 @@ Acceptance Criteria
 - `ThinkingStatus`: components go out with the progress embed (or on a reused stub, by `editMessage` else `editEmbed`), working edits leave them, `done` and `fail` send `components: null`, the collapsed answer carries none or the answer's own; without components no call carries a `components` field and a reused stub's button is still cleared.
 - `parseStopRunCustomId`: `cvstop:run_7` gives `run_7`; `cvstop-schedule:run_7`, extra parts, a missing or malformed id, an ask's or a card's custom id give null.
 - With the base's sources these tests fail; they pass on the branch.
+
+### REQ-discord-032
+
+When a run fails, my own runs tell me why in one plain line; everyone else
+gets 'That didn't work — the owner has been told.', and the reason is always
+logged (DISCORD-3.b, captured with `hi` in this change from Leif's
+2026-09-30 decision, interview round 15). Every Discord surface that posts a
+failed run's answer — a chat message, an ask pick or Answer form resuming a
+talk, `/session start`, `/work` and a schedule's result post — SHALL build
+it with `failedRunOutcome` / `failedRunReply`
+(`src/discord/failure-reason.ts`) wherever it posted `session <id> failed
+(exit N)` / `failed (exit N)` (a failed run with no question to ask, not
+stopped) and wherever a run that threw posted its raw message. The reason
+SHALL be `failureReasonFor`: the result frame's `error` (REQ-agent-032),
+else the run tier's no-provider notice (AGENT-10), else the last meaningful
+line of the child's stderr, else the exit code — never the run's summary or
+a tool's output (SAFE-12/13, AGENT-9). It SHALL be secret-scrubbed first
+(SAFE-6), with ANSI codes, stack frames, source excerpts and runtime banners
+dropped and host paths cut to their last segment, then cut to one line of at
+most `FAILURE_REASON_MAX` (200) characters. Every failure SHALL log one line
+`[discord] run failed (<surface>, exit N): <reason>` (`[scheduler]` and
+`schedule <id>` for a schedule). The owner's own run (the DISCORD-15.a
+`isOwnerDiscord` check; for a schedule, the live owner's own schedule)
+SHALL answer with the reason. Anyone else's SHALL answer
+`FAILED_TOLD_OWNER_TEXT` only when the owner has been told: the bridge's one
+`createFailureOwnerDm` (on the gateway `sendDm`, shared by chat, the slash
+context and the bridge's scheduler) DMs the owner `❌ A run failed (<surface>
+in <#channel>): <reason>`, at most once per reason per
+`FAILURE_DM_DEDUP_MS` (1 hour); otherwise (no owner, no DM path, the daemon,
+a DM that did not go out — which is not remembered) it SHALL answer
+`FAILED_TEXT` and never claim the owner was told. The reply carries no spend
+amounts (SAFE-14.a); the `state=` / `verified=` / `attempts=` plumbing stays
+in the embed footer (DISCORD-3.a). A schedule run's row keeps the posted line
+as its `summary` and `failed (exit N): <reason>` as its `error`. Asks,
+stops and spend-cap stops are unchanged. No env var, config key, slash
+command or schema version is added.
+
+Acceptance Criteria
+- The owner's failed chat, ask-pick, `/session start`, `/work` and own-schedule answers are the one reason line; the footer still carries the plumbing and the body never does.
+- A team member's failed run answers `That didn't work — the owner has been told.` and the owner gets exactly one DM per reason per hour naming the surface and channel; with the DM failing, no owner or no DM path the answer is `That didn't work.`.
+- A key and a multi-line stack in stderr reach the owner as one scrubbed line with no host path; with no provider the owner sees the AGENT-10 notice.
+- Every failure logs `[discord] run failed (<surface>, exit N): <reason>` (`[scheduler] run failed (schedule <id>, exit N): …`).
+
+### REQ-discord-125
+
+AGENT-12 on Discord. The spawn client SHALL read the `result` frame's
+`stopReason` through `stopReasonFromUnknown` (only `turn-cap` and
+`idle-timeout`; anything else is dropped) into `AgentSpawnResult.task.stopReason`.
+Chat and reply answers, ask-pick and Answer-form answers, `/session start`
+and `/work` SHALL pass it to `formatTaskPlumbing`, so the answer footer and
+thinking embed end with `stopped=turn-cap` or `stopped=idle-timeout`; it
+SHALL never be in the channel body (AGENT-9, DISCORD-3.a): a turn-capped
+run's body is its best prose so far, and an idle-timed-out run is a failed
+run like any other: its result `error` is the one plain line DISCORD-3.b's
+`failureReasonFor` reads, so the owner's own run is answered with
+`Stopped: no output for 10 minutes (idle timeout).` and anyone else's with
+"That didn't work — the owner has been told." (the owner DMed the line). A
+schedule's post has no footer, so a turn-capped schedule post is only its
+best prose.
+`ApprovalStore.waitForDecision` SHALL hold the waiting run's idle watchdog
+(`pauseIdleWatchdog`) for the whole wait — the spend card, the must-ask
+gate and every other SAFE-18 card — and release it when the card is
+decided, lapses or the wait is aborted; the card's own expiry bounds that
+wait (REQ-agent-244).
+
+Acceptance Criteria
+- A fake child whose `result` frame has `stopReason: "turn-cap"` gives `task.stopReason: "turn-cap"` and its summary; `stopReason: "Stopped after 8 tool rounds"` gives none.
+- A fake child that exits 1 with an idle-timeout `result` frame gives `failureReason` = `Stopped: no output for 10 minutes (idle timeout).` and `task.stopReason: "idle-timeout"`; the owner's own mention on that run is answered with that line (DISCORD-3.b) and a footer that contains `state=failed verified=false attempts=1 stopped=idle-timeout`.
+- A mention whose run returns `task.stopReason: "turn-cap"` collapses into the answer `Here is what I found so far.` with a footer that contains `state=done verified=false verifySkipped attempts=1 stopped=turn-cap`; the body has no `stopped=` and no turn-cap text.
+- Inside a run with a 250 ms idle timeout, a `waitForDecision` the owner answers after 0.9 s returns `approved` without the watchdog firing; 0.6 s after it returns, it has fired.
+- Fixture: `tests/agent.limits.test.ts`.
 

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "a-failed-github-watch-run-s-comment-says-why-in-one-plain-line-which-model-call-failed-status-and-host-never-the",
+  "implementation_commit": "86e4acac1a2ddd8cf145053363079c1dd509b3e4",
+  "implementation_tree": "56ec2ef4c7f6327a2bbab44b3a0696c0ee454ea5",
+  "contract_digest": "7daa476a6978e54344616f5a4651198047d417fa959b5dd540a45796401faca0",
+  "workspace_digest": "24ee59ccfbbe6c88d0faceb8074dc413e52d1ff1a5c7b16d30c19d176b9342df",
+  "closing_digest": "6aca11538f9a3289de75f0533c4bc77ee5c7f5f8327856196c1189aac37e9e2e",
+  "review_digest": "186c30e92525ec80b8cc1dfcc4a5f5bfe6c9954b12dbae9726b386c84fde5e91",
+  "finalization_digest": "69fd2835054e24dcc7db171342d5714ca51a87125bf8da8214ba4adf91852658",
+  "timestamp": 1790819369
+}

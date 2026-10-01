@@ -20,6 +20,7 @@ import type { SpendAlertOutbox } from "../agent/spend-outbox.ts";
 import type { ChannelPost } from "./spend-post.ts";
 import type { SendPrivateDm } from "./private-reply.ts";
 import type { SpendDm } from "./spend-dm.ts";
+import type { FailureOwnerDm } from "./failure-reason.ts";
 import type { GithubUserLookup } from "../identity/github-user.ts";
 
 export type SlashOptionValue = string | number | boolean | null;
@@ -89,6 +90,12 @@ export type SlashContext = {
    * warning stays pending.
    */
   spendDm?: Pick<SpendDm, "deliver">;
+  /**
+   * DISCORD-3.b — a non-owner's failed `/session start` or `/work` DMs the
+   * owner its reason (src/discord/failure-reason.ts). Unset ⇒ nobody is
+   * told and the reply is only "That didn't work."
+   */
+  failureDm?: FailureOwnerDm;
   /**
    * Fresh channel post (bridge gateway reply) for owner notices after a slash
    * run: a deferred-reply edit may not notify a mention (spend-post.ts).

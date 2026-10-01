@@ -1,0 +1,249 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790816531,
+      "digest": "b79d6a9a1b96d55afee2b1c6967c0069b8f28d103dc9bd6c7ddddaa40156c2e3",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12",
+        "title": "An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12)",
+        "description": "An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "plugins",
+          "watch"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "README.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/WATCH.md",
+          "docs/discord.md",
+          "plugins/fledge/spawn.ts",
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/cli/cli.spec.md",
+          "specs/cli/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/testing.md",
+          "specs/watch/testing.md",
+          "specs/watch/watch.spec.md",
+          "src/agent/execute.ts",
+          "src/agent/index.ts",
+          "src/agent/limits.ts",
+          "src/agent/loop.ts",
+          "src/agent/task-summary.ts",
+          "src/agent/types.ts",
+          "src/agent/verify.ts",
+          "src/approvals/store.ts",
+          "src/autonomous/delegate.ts",
+          "src/cli.ts",
+          "src/discord/agent-client.ts",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "src/discord/types.ts",
+          "src/watch/agent-client.ts",
+          "src/watch/poller.ts",
+          "src/watch/summary.ts",
+          "src/watch/types.ts",
+          "tests/agent.limits.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "AGENT-12 (captured on main from Leif's 2026-09-28 interview, round 2) holds on every surface: CORVIDINHO_MAX_TURNS (optional, a positive whole number, default 8 = today's maxToolRounds) caps model/tool rounds per execute attempt so AGENT-4.a verify retries are kept, the capped attempt ends with its best prose so far (AGENT-9) and TaskResult.stopReason is turn-cap only when the final attempt hit it; CORVIDINHO_IDLE_TIMEOUT_MS (optional, default 600000) is a per-run watchdog reset by every run event (what the CLI prints or streams), tool process output (spawnCapped) and verify-lane output, held while a model call is in flight, while a delegate or council worker runs (workers inherit both limits) and while the run waits on an Approve card (#316/#319/#334 waits through ApprovalStore.waitForDecision); with no output for that long the run's abort signal kills tool and verify-lane process trees (reused proc-group kill) and the run ends failed (not cancelled, exit 1) with stopReason idle-timeout, a one-line result error 'Stopped: no output for 10 minutes (idle timeout).' (the field DISCORD-3.b reads) that also leads its summary; Discord shows only stopped=turn-cap / stopped=idle-timeout in the footer and thinking plumbing (formatTaskPlumbing), never in the channel body (AGENT-9, DISCORD-3.a); WATCH comments and the CLI's human output get a plain turn-cap note; an ignored setting is said in one operator line; both are documented in --help and .env.example with today's behaviour as default; tests/agent.limits.test.ts fails on the base sources and passes on the branch"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "517f32654d70879fb6f4ee01675b29e015af0a8d03d646bae041e3588ddface0",
+        "cli": "b39ab9c859d048a88835894a10a3444c8d314842f9bdce8e6f3a3929ba94a926",
+        "discord": "bc34f77861699803f3794e90241186ff138e8307220a7fdbd40d176827746ecd",
+        "plugins": "4243104ed060822238b63cd68820094f29447e57b5000752d1e192de4259e7ca",
+        "watch": "5bdf77b704f3d4f25e24b01163f8c9f19790530fcfd12bbca405a7a295bed231"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790818170,
+      "digest": "8d52af7507dd4a973d06664a2c7eb86e5381c036cbb1a9e9db2266ff160c0255",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12",
+        "title": "An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12)",
+        "description": "An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "plugins",
+          "watch"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "README.md",
+          "docs/DAEMON.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/WATCH.md",
+          "docs/discord.md",
+          "plugins/autonomous/commands.ts",
+          "plugins/fledge/spawn.ts",
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/cli/cli.spec.md",
+          "specs/cli/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/testing.md",
+          "specs/watch/testing.md",
+          "specs/watch/watch.spec.md",
+          "src/agent/execute.ts",
+          "src/agent/index.ts",
+          "src/agent/limits.ts",
+          "src/agent/loop.ts",
+          "src/agent/task-summary.ts",
+          "src/agent/types.ts",
+          "src/agent/verify.ts",
+          "src/approvals/store.ts",
+          "src/autonomous/delegate.ts",
+          "src/cli.ts",
+          "src/discord/agent-client.ts",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "src/discord/types.ts",
+          "src/scheduler/service.ts",
+          "src/watch/agent-client.ts",
+          "src/watch/poller.ts",
+          "src/watch/summary.ts",
+          "src/watch/types.ts",
+          "tests/agent.limits.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "AGENT-12 (captured on main from Leif's 2026-09-28 interview, round 2) holds on every surface: CORVIDINHO_MAX_TURNS (optional, a positive whole number, default 8 = today's maxToolRounds) caps model/tool rounds per execute attempt so AGENT-4.a verify retries are kept, the capped attempt ends with its best prose so far (AGENT-9) and TaskResult.stopReason is turn-cap only when the final attempt hit it; CORVIDINHO_IDLE_TIMEOUT_MS (optional, default 600000) is a per-run watchdog reset by every run event (what the CLI prints or streams), tool process output (spawnCapped) and verify-lane output, held while a model call is in flight, while a delegate or council worker runs (workers inherit both limits) and while the run waits on an Approve card (#316/#319/#334 waits through ApprovalStore.waitForDecision); with no output for that long the run's abort signal kills tool and verify-lane process trees (reused proc-group kill) and the run ends failed (not cancelled, exit 1) with stopReason idle-timeout, a one-line result error 'Stopped: no output for 10 minutes (idle timeout).' (the field DISCORD-3.b reads) that also leads its summary; Discord shows only stopped=turn-cap / stopped=idle-timeout in the footer and thinking plumbing (formatTaskPlumbing), never in the channel body (AGENT-9, DISCORD-3.a); WATCH comments and the CLI's human output get a plain turn-cap note; an ignored setting is said in one operator line; both are documented in --help and .env.example with today's behaviour as default; tests/agent.limits.test.ts fails on the base sources and passes on the branch"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "840298b149d259a0c5e0c8021d47169ef3313ecece24aa0f364bf0417ebf2b7f",
+        "cli": "b39ab9c859d048a88835894a10a3444c8d314842f9bdce8e6f3a3929ba94a926",
+        "discord": "bc34f77861699803f3794e90241186ff138e8307220a7fdbd40d176827746ecd",
+        "plugins": "4243104ed060822238b63cd68820094f29447e57b5000752d1e192de4259e7ca",
+        "watch": "5bdf77b704f3d4f25e24b01163f8c9f19790530fcfd12bbca405a7a295bed231"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790820660,
+      "digest": "8d52af7507dd4a973d06664a2c7eb86e5381c036cbb1a9e9db2266ff160c0255",
+      "note": "re-approve REQ-watch-125 wording after merging #343 (failed WATCH comment is one reason line)",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12",
+        "title": "An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12)",
+        "description": "An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "plugins",
+          "watch"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "README.md",
+          "docs/DAEMON.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/WATCH.md",
+          "docs/discord.md",
+          "plugins/autonomous/commands.ts",
+          "plugins/fledge/spawn.ts",
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/cli/cli.spec.md",
+          "specs/cli/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/testing.md",
+          "specs/watch/testing.md",
+          "specs/watch/watch.spec.md",
+          "src/agent/execute.ts",
+          "src/agent/index.ts",
+          "src/agent/limits.ts",
+          "src/agent/loop.ts",
+          "src/agent/task-summary.ts",
+          "src/agent/types.ts",
+          "src/agent/verify.ts",
+          "src/approvals/store.ts",
+          "src/autonomous/delegate.ts",
+          "src/cli.ts",
+          "src/discord/agent-client.ts",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/command-handlers/work.ts",
+          "src/discord/types.ts",
+          "src/scheduler/service.ts",
+          "src/watch/agent-client.ts",
+          "src/watch/poller.ts",
+          "src/watch/summary.ts",
+          "src/watch/types.ts",
+          "tests/agent.limits.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "AGENT-12 (captured on main from Leif's 2026-09-28 interview, round 2) holds on every surface: CORVIDINHO_MAX_TURNS (optional, a positive whole number, default 8 = today's maxToolRounds) caps model/tool rounds per execute attempt so AGENT-4.a verify retries are kept, the capped attempt ends with its best prose so far (AGENT-9) and TaskResult.stopReason is turn-cap only when the final attempt hit it; CORVIDINHO_IDLE_TIMEOUT_MS (optional, default 600000) is a per-run watchdog reset by every run event (what the CLI prints or streams), tool process output (spawnCapped) and verify-lane output, held while a model call is in flight, while a delegate or council worker runs (workers inherit both limits) and while the run waits on an Approve card (#316/#319/#334 waits through ApprovalStore.waitForDecision); with no output for that long the run's abort signal kills tool and verify-lane process trees (reused proc-group kill) and the run ends failed (not cancelled, exit 1) with stopReason idle-timeout, a one-line result error 'Stopped: no output for 10 minutes (idle timeout).' (the field DISCORD-3.b reads) that also leads its summary; Discord shows only stopped=turn-cap / stopped=idle-timeout in the footer and thinking plumbing (formatTaskPlumbing), never in the channel body (AGENT-9, DISCORD-3.a); WATCH comments and the CLI's human output get a plain turn-cap note; an ignored setting is said in one operator line; both are documented in --help and .env.example with today's behaviour as default; tests/agent.limits.test.ts fails on the base sources and passes on the branch"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "840298b149d259a0c5e0c8021d47169ef3313ecece24aa0f364bf0417ebf2b7f",
+        "cli": "b39ab9c859d048a88835894a10a3444c8d314842f9bdce8e6f3a3929ba94a926",
+        "discord": "bc34f77861699803f3794e90241186ff138e8307220a7fdbd40d176827746ecd",
+        "plugins": "4243104ed060822238b63cd68820094f29447e57b5000752d1e192de4259e7ca",
+        "watch": "c04b1262f682b9543361df4c85f5764c49c7f03e3ed91a101f03ed91a5853782"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790820934,
+      "digest": "f0c9b155eeef8323624939dc41f436f86fb34ece7419eb35c8ff3e89469ddd62",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

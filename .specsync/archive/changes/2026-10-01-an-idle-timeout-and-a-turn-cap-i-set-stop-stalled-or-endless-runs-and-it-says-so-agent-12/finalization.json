@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12",
+  "implementation_commit": "07000bae2fd3237bd7676fbfed2b9ee696820a20",
+  "implementation_tree": "a2abce4ee528f58eb220a4f70fede5b022b70d21",
+  "contract_digest": "8d52af7507dd4a973d06664a2c7eb86e5381c036cbb1a9e9db2266ff160c0255",
+  "workspace_digest": "01a5e4cf949e572a3c96893af2f93bc54e2a59eef1eceaf02781597a1d86927f",
+  "closing_digest": "f0c9b155eeef8323624939dc41f436f86fb34ece7419eb35c8ff3e89469ddd62",
+  "review_digest": "2aa1797022df39d5856e0e47aa8320918508768b5575f7c81374fd229be2c855",
+  "finalization_digest": "ef92ea0d11e41b702f7037478a5de2aed08d60f9fe87bb19b866c460378674cd",
+  "timestamp": 1790820934
+}

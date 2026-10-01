@@ -2032,4 +2032,17 @@ Acceptance Criteria
 - A review completion with no model failure (a spend-cap stop) makes `runPlugin` reject with `ReviewSpendStop` and records nothing.
 - Without a run model: no finished cycle, a finished cycle for another tree, or an open cycle refuse in one line; a finished cycle for the pushed tree opens with its findings listed. Live mode without a token fails before any review call.
 - `githubBranchTree` returns the head commit's tree, reads an `owner:branch` head on that owner's repo, and is null on a 404. `SCRUB_TARGETS` lists `pr_review_rounds` (`reviewer`; JSON `authors`, `findings`, `changed`) and `pr_change_authors` (`model`).
+### REQ-plugins-125
+
+AGENT-12: `spawnCapped` (`plugins/fledge/spawn.ts`, the bounded spawn of the
+shell, the language runners and Fledge commands) SHALL count each non-empty
+chunk its child writes on stdout or stderr — also past the byte cap — as
+the calling run's activity (`noteIdleActivity`, REQ-agent-244), so a tool
+that keeps printing is never stopped by the idle timeout and a tool that
+prints nothing for that long is. Outside a run it does nothing; the cap,
+timeout, abort and process-tree kill are unchanged (REQ-plugins-154).
+
+Acceptance Criteria
+- Inside a run with a 500 ms idle timeout, a `spawnCapped` child that prints every 0.1 s for 1.5 s exits 0 without the watchdog firing; a child that sleeps 1.2 s silently lets it fire.
+- Fixture: `tests/agent.limits.test.ts`.
 

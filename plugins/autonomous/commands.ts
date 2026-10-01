@@ -137,6 +137,8 @@ export function createDelegateCommand(deps: DelegateCommandDeps = {}): PluginCom
           ...(outcome.modelFallback ? { modelFallback: outcome.modelFallback } : {}),
           // GITHUB-9: the worker's models, authors of the change for the lead.
           ...(outcome.models ? { models: outcome.models } : {}),
+          // AGENT-12: a limit stopped the worker (turn-cap: its best answer so far).
+          ...(outcome.stopReason ? { stopReason: outcome.stopReason } : {}),
         };
         const label = parsed.value.skill ? ` [${parsed.value.skill}]` : "";
         return ok
