@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "before-a-pr-opens-a-second-model-reviews-the-diff-in-bounded-rounds-and-the-pr-lists-what-it-raised-and-what-changed",
+  "implementation_commit": "9fec635564101d7fdd39b10b4ada2f01fdf73c19",
+  "implementation_tree": "6c4e89cb00d8b66e8c5d084742510f8b1b331f7d",
+  "contract_digest": "a0e94f538161f60cf2c54bd6484f3fac7485f10303003198cfee8bf4ca84ac41",
+  "workspace_digest": "27a81fb0dc3a017c6632e7e821d77d1c478969d17aee3bb24cfb89c52359fe07",
+  "closing_digest": "0dee5726fb8447cf33cb877c375d070e4983521b3226507367732ea70d8f563f",
+  "review_digest": "e3f9f21fc3c8f53208672a313d19da252946e78385a1379dbfc2533c0b8b500c",
+  "finalization_digest": "8788233733e0028b9f6c7bbb9f5f981cfc8c58c6542a870ec2c20bd27ae21a9c",
+  "timestamp": 1790822349
+}

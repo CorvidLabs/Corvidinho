@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "before-a-pr-opens-a-second-model-reviews-the-diff-in-bounded-rounds-and-the-pr-lists-what-it-raised-and-what-changed",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "9fec635564101d7fdd39b10b4ada2f01fdf73c19",
+      "contract_digest": "a0e94f538161f60cf2c54bd6484f3fac7485f10303003198cfee8bf4ca84ac41",
+      "execution_digest": "fb0011e3ad26a144f19fa61c7ad213596ea2a88346a39c14825b32c193b2bf99",
+      "workspace_digest": "27a81fb0dc3a017c6632e7e821d77d1c478969d17aee3bb24cfb89c52359fe07",
+      "timestamp": 1790822333
+    }
+  ]
+}
