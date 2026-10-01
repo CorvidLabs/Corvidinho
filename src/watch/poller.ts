@@ -661,6 +661,7 @@ export async function startWatchPoller(
         let spawnSummary = "";
         let spawnInjection: AgentSpawnResult["injection"];
         let spawnAsk: AgentSpawnResult["ask"];
+        let spawnStopReason: AgentSpawnResult["stopReason"];
         let threw = false;
         try {
           const spawn = await agent.runChat({
@@ -677,6 +678,7 @@ export async function startWatchPoller(
           spawnSummary = spawn.summary;
           spawnInjection = spawn.injection;
           spawnAsk = spawn.ask;
+          spawnStopReason = spawn.stopReason;
           opts.onAction?.({
             kind: action.kind,
             event,
@@ -746,6 +748,8 @@ export async function startWatchPoller(
             summary: spawnSummary,
             exitCode: spawnExit,
             ...(spawnInjection ? { injection: spawnInjection } : {}),
+            // AGENT-12: a turn-capped run's comment says so.
+            ...(spawnStopReason ? { stopReason: spawnStopReason } : {}),
           },
           ackClient,
           successfulAcks,

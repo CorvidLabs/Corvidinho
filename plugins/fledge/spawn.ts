@@ -8,8 +8,11 @@
  * The child runs in its own process group; a timeout or abort kills its whole
  * tree (native plugins and their children included), and so does this
  * process exiting or being interrupted (src/plugins/proc-group.ts, AGENT-3).
+ * Each chunk of output it writes counts as the calling run's activity for
+ * the idle timeout (AGENT-12, src/agent/limits.ts).
  */
 
+import { noteIdleActivity } from "../../src/agent/limits.ts";
 import {
   collectProcessTree,
   killProcessTree,
@@ -84,6 +87,8 @@ async function readCapped(
       const { done, value } = await reader.read();
       if (done) break;
       if (!value || value.byteLength === 0) continue;
+      // AGENT-12: tool output resets the run's idle watchdog, even past the cap.
+      noteIdleActivity();
       if (size >= maxBytes) {
         truncated = true;
         continue;

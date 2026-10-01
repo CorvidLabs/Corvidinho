@@ -6,8 +6,11 @@
  * the comment is public on public repos, so it is secret-scrubbed first.
  * REQ-watch-734 / ROLES-CHAT-3 — the 1200-char clip keeps a closing
  * "(not allowed for your role)" note.
+ * AGENT-12 — a run that hit the turn cap I set says so in a plain line after
+ * the summary (an idle-timed-out run's summary already starts with its line).
  */
 
+import { TURN_CAP_NOTE } from "../agent/limits.ts";
 import { clipKeepingRoleNote } from "../agent/task-summary.ts";
 import { describeInjectionReasons } from "../agent/untrusted.ts";
 import { attribution } from "../attribution.ts";
@@ -141,9 +144,10 @@ export function buildSummaryBody(spawn: AgentSpawnResult, ownerLogin?: string): 
   const body = preview
     ? `Corvidinho WATCH run summary — ${status}\n\n${preview}`
     : `Corvidinho WATCH run summary — ${status}`;
+  const capped = spawn.stopReason === "turn-cap" ? `\n\n${TURN_CAP_NOTE}` : "";
   const notice = spawn.injection ? `\n\n${watchInjectionLine(spawn.injection, ownerLogin)}` : "";
   const foot = attribution("markdown");
-  return `${body}${notice}\n\n---\n${foot}`;
+  return `${body}${capped}${notice}\n\n---\n${foot}`;
 }
 
 function splitRepo(repo: string): { owner: string; name: string } | null {

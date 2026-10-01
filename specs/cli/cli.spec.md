@@ -142,6 +142,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 
 ## Invariants
 
+task run applies the run limits I set (AGENT-12, REQ-cli-125): the optional `CORVIDINHO_MAX_TURNS` (model/tool rounds per attempt, default 8, read by `createTaskExecute`) and `CORVIDINHO_IDLE_TIMEOUT_MS` (default 600000, passed to `runTask` as `idleTimeoutMs`); a set value that is not a positive whole number is ignored with one `[operator] AGENT-12: <KEY> is not a positive whole number, so the default <N> is used.` Text event (never the value); every event it prints or streams counts as the run's activity; an idle-timed-out run exits 1 with `stopReason: "idle-timeout"` and `error` on its result, and a turn-capped run prints `TURN_CAP_NOTE` after its summary in text mode (`stopReason: "turn-cap"` in `--json` / ndjson). `--help` and `.env.example` list both keys.
 task run honors --tier and agent config (`max_retries`); it has no verify skip (AGENT-14, REQ-cli-085): `--no-verify` read as a flag (not `--task` text, not a `plugins run` argument after `--`) is refused before anything runs with one `corvidinho: --no-verify was removed: verification can't be skipped (AGENT-14)` line or `{ ok: false, error }`, exit 1, and a `[corvidinho] verify_before_complete` key is ignored with a `[warn] verify-gate` doctor line. In a delegate or council worker (`CORVIDINHO_DELEGATE_DEPTH` above 0) task run starts the real diff with `{ nested: true }`, so the worker leaves its lead's talk verified marker alone (REQ-agent-015).
 plugins list/run load builtins and honor non-interactive deny; doctor reports plugin count.
 `specsync <list|read|check|brief|coverage|score|change-list|ship-status>` runs the matching `specsync-*` plugin through `plugins run`; `score` is `specsync-score`, the local `specsync score` report (SPECSYNC-3, REQ-cli-089).
@@ -227,6 +228,8 @@ Nightly backup (OPS-1/2, REQ-cli-680, `src/store/backup.ts`): with `CORVIDINHO_B
 | Condition | Behavior |
 |-----------|----------|
 | Unknown command | Print error + help; exit 1 |
+| `CORVIDINHO_MAX_TURNS` / `CORVIDINHO_IDLE_TIMEOUT_MS` set but not a positive whole number | ignored; one `[operator] AGENT-12: …` line names the key and the default used; the run goes on (REQ-cli-125) |
+| `task run` printed nothing for `CORVIDINHO_IDLE_TIMEOUT_MS` (no event, tool or lane output, outside a model call, worker or card wait) | the run is stopped (tool / lane trees killed): `failed` result with `stopReason: "idle-timeout"` and `error`; exit 1 (REQ-cli-125 / REQ-agent-244) |
 | `--project` path missing, not a directory, unreadable, or no path given | `corvidinho: --project …` + `hint: pass --project the path of an existing project directory`; exit 1; no command runs; `--json` → `{ok:false,error}` (REQ-cli-505) |
 | `--no-verify` read as a Corvidinho flag (any command) | `corvidinho: --no-verify was removed: verification can't be skipped (AGENT-14)` + `hint:`; exit 1 before anything runs; `--json` → `{ok:false,error}` (REQ-cli-085) |
 | `fledge.toml` still sets `[corvidinho] verify_before_complete` | Ignored: the gate still runs; doctor prints `[warn] verify-gate` naming the key, never fails (REQ-cli-085) |

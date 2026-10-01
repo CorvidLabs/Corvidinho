@@ -199,3 +199,10 @@ shows the pause). `tests/watch.stuck-ask.test.ts` passes unchanged (a
 clarify ask still never records one).
 - Fail on base: `noteWatchRunAsk` drops every non-stuck ask, so no row is
   recorded and the three tests fail.
+
+## Turn cap note on the run-summary comment (REQ-watch-125, AGENT-12)
+
+`tests/agent.limits.test.ts` ("WATCH: …"): the spawn client keeps
+`stopReason`; the comment has the prose, a blank line and `TURN_CAP_NOTE`,
+no `stopped=`; an idle-timed-out comment is `Failed (exit 1).` with its
+stop-line summary and no turn-cap line; a plain run has none. Fail on base.

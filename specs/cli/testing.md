@@ -193,3 +193,15 @@ test removes the worktrees and branches it made.
   dirty, talk branch only, both branches kept): with the first cut of
   `src/worktree/cli-run.ts` (4c20563) swapped in, 6 fail (the
   talk-branch-only case passes there too); restored, 25 of 25 pass.
+
+## Turn cap and idle timeout in task run (REQ-cli-125, AGENT-12)
+
+`tests/agent.limits.test.ts` ("corvidinho task run (CLI, AGENT-12)"):
+`CORVIDINHO_MAX_TURNS=2` with a fake model that always calls `files-list` →
+2 requests, `still listing` then `TURN_CAP_NOTE` on stdout, ndjson `result`
+with `stopReason: "turn-cap"`; `lots` / `off` → one `[operator] AGENT-12: …`
+line each, value not printed; `CORVIDINHO_IDLE_TIMEOUT_MS=4000` with a silent
+hung lane → exit 1, `failed` frame with `stopReason` / `error`, lane killed;
+`--help` and `.env.example` name both keys. Fail on base: all four (8
+requests and no line; no note; the lane still running at the 60 s timeout;
+no help lines).

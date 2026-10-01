@@ -153,6 +153,12 @@ comment keeps the run's closing `(model fallback: …)` note when it clips
 
 ## Invariants
 
+A WATCH run a limit I set stopped (AGENT-12, REQ-watch-125): the spawn client
+validates the result frame's `stopReason`; a turn-capped run's summary comment
+adds the plain line `TURN_CAP_NOTE` after the summary (no `stopped=`
+plumbing), and an idle-timed-out run's comment is a failed one whose summary
+starts with `Stopped: no output for … (idle timeout).`
+
 The spawn client runs `task run --here --task <prompt> --output ndjson`
 (REQ-watch-006 / REQ-watch-073): the run works in the watcher's cwd and never
 makes a worktree of its own (SESSION-WORKTREE-1.a, REQ-cli-122).

@@ -12,7 +12,9 @@
  * change, every changed meaningful path must be covered by one first
  * (AGENT-18, REQ-agent-518); on Corvidinho the run then approves and
  * archives the change it opened and verifies again (AGENT-18.a,
- * REQ-agent-519).
+ * REQ-agent-519). An idle timeout I set stops a run that went quiet, and
+ * the result says when a limit I set stopped it (AGENT-12, REQ-agent-244 /
+ * REQ-agent-312; src/agent/limits.ts).
  */
 
 import { relative, resolve } from "node:path";
@@ -44,6 +46,12 @@ import {
   VERIFY_FEEDBACK_MAX_CHARS,
   verifyFeedbackExcerpt,
 } from "./verify.ts";
+import {
+  DEFAULT_IDLE_TIMEOUT_MS,
+  idleTimeoutLine,
+  startIdleWatchdog,
+  withIdleWatchdog,
+} from "./limits.ts";
 import { judgeTestEvidence, startTestNameWalk, type TestDropCheck } from "./test-evidence.ts";
 import { startWorkspaceDiff, WORKSPACE_DIFF_MAX_FILES } from "./workspace-diff.ts";
 import type {
@@ -179,17 +187,48 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
   // AGENT-18.a: this run's SpecSync ledger (the changes it opened, and
   // whether its lane is green right now), for the approve and finalize tools.
   const sdd = beginSddRun(opts.cwd);
+  // AGENT-12 (REQ-agent-244): the run's idle watchdog. Every event the run
+  // emits, tool output and verify-lane output reset it (model calls, workers
+  // and Approve-card waits hold it); with no output for that long it aborts
+  // the run's signal, so tool and verify-lane process trees are killed.
+  const watchdog = startIdleWatchdog(opts.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS);
+  const signal = opts.signal
+    ? AbortSignal.any([opts.signal, watchdog.signal])
+    : watchdog.signal;
+  const onEvent = (e: AgentEvent) => {
+    watchdog.touch();
+    opts.onEvent?.(e);
+  };
+  // AGENT-12 (REQ-agent-312): whether the last attempt used up its turn cap.
+  let finalTurnCap = false;
+  const execute: RunTaskOptions["execute"] = async (ctx) => {
+    finalTurnCap = false;
+    const r = await opts.execute(ctx);
+    finalTurnCap = r.stopReason === "turn-cap";
+    return r;
+  };
   let result: TaskResult;
   try {
-    result = await gate(
-      opts,
-      (w) => {
-        workspace = w;
-      },
-      sdd,
+    result = await withIdleWatchdog(watchdog, () =>
+      gate(
+        { ...opts, signal, onEvent, execute },
+        (w) => {
+          workspace = w;
+        },
+        sdd,
+      ),
     );
   } finally {
+    watchdog.stop();
     endSddRun(sdd);
+  }
+  if (watchdog.fired && !opts.signal?.aborted && !(result.state === "done" && !result.cancelled)) {
+    // AGENT-12: stopped for no output — failed, never cancelled, and it says so.
+    result = idleTimeoutResult(result, watchdog.timeoutMs);
+    onEvent({ type: "Text", text: result.error ?? idleTimeoutLine(watchdog.timeoutMs) });
+    onEvent({ type: "StateChanged", state: "failed" });
+  } else if (finalTurnCap && !result.cancelled) {
+    result = { ...result, stopReason: "turn-cap" };
   }
   // AGENT-15.a (REQ-agent-015): only a `done` run (verified, or nothing to
   // verify) lets the next run in this talk worktree start from its own
@@ -198,6 +237,33 @@ export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
     result.state === "done" && !result.cancelled,
   );
   return result;
+}
+
+/** The tool loop's own placeholder for an attempt stopped mid-way (execute.ts). */
+const ABORTED_PLACEHOLDER_RE = /^tool loop aborted[^\n]*(?:\n\n|$)/;
+
+/**
+ * AGENT-12 (REQ-agent-244): the result of a run the idle watchdog stopped —
+ * failed (not cancelled, not verified) with `stopReason` `idle-timeout`, the
+ * one-line `error`, and a summary that leads with that line, then the best
+ * prose so far (closing notes kept last), and says when its changes were not
+ * verified.
+ */
+function idleTimeoutResult(r: TaskResult, timeoutMs: number): TaskResult {
+  const line = idleTimeoutLine(timeoutMs);
+  const unverified = r.filesChanged.length > 0 ? " Its changes so far were not verified." : "";
+  const prose = r.summary.trim().replace(ABORTED_PLACEHOLDER_RE, "").trim();
+  const { ask: _ask, ...rest } = r;
+  return {
+    ...rest,
+    summary: prose ? `${line}${unverified}\n\n${prose}` : `${line}${unverified}`,
+    verified: false,
+    verifySkipped: false,
+    cancelled: false,
+    state: "failed",
+    stopReason: "idle-timeout",
+    error: line,
+  };
 }
 
 /**

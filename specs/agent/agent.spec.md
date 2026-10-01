@@ -69,6 +69,8 @@ files:
   - tests/agent.safe3a-gate.test.ts
   - tests/agent.safe3a-owner-shell.test.ts
   - tests/agent.repo-ways.test.ts
+  - src/agent/limits.ts
+  - tests/agent.limits.test.ts
 
 db_tables: []
 depends_on:
@@ -143,6 +145,23 @@ once per run; a second stall stands with an operator note. Moving to a
 stronger model is not built yet.
 
 ## Public API
+
+Run limits (AGENT-12, REQ-agent-244 / REQ-agent-312): `src/agent/limits.ts`
+exports `MAX_TURNS_ENV` (`CORVIDINHO_MAX_TURNS`), `IDLE_TIMEOUT_ENV`
+(`CORVIDINHO_IDLE_TIMEOUT_MS`), `DEFAULT_MAX_TURNS` (8),
+`DEFAULT_IDLE_TIMEOUT_MS` (600000), `MAX_IDLE_TIMEOUT_MS` (2147483647),
+`maxTurnsFromEnv(env)` / `idleTimeoutFromEnv(env)` → `LimitSetting`
+(`{ value, invalid }`), `invalidLimitNote(key, fallback)`,
+`formatIdleDuration(ms)`, `idleTimeoutLine(ms)`, `TURN_CAP_NOTE`,
+`stopReasonFromUnknown(v)`, `startIdleWatchdog(ms, timers?)` →
+`IdleWatchdog` (`timeoutMs`, `signal`, `fired`, `touch()`, `pause()` →
+resume, `stop()`), and the current-run hooks `withIdleWatchdog(w, fn)`,
+`noteIdleActivity()`, `pauseIdleWatchdog()` and `whileIdlePaused(fn)`
+(AsyncLocalStorage; no-ops outside a run). Types: `TaskStopReason`
+(`"turn-cap" | "idle-timeout"`), `ExecuteResult.stopReason?: "turn-cap"`,
+`TaskResult.stopReason?` and `TaskResult.error?` (one plain line, set by an
+idle timeout; additive, protocol unchanged), `RunTaskOptions.idleTimeoutMs?`.
+`formatTaskPlumbing` input gains `stopReason?`.
 
 Loop guards (REQ-agent-086, AGENT-16): `src/agent/loop-guards.ts` exports
 `callSignature(name, rawArgs)` (JSON of the name and
@@ -633,6 +652,18 @@ of SAFE-3.a is not built yet)` (REQ-agent-503).
 
 ## Invariants
 
+A limit I set stops a stalled or endless run and the run says so (AGENT-12,
+REQ-agent-244 / REQ-agent-312). The turn cap is per execute attempt, so verify
+retries keep working; `stopReason` is `turn-cap` only when the final attempt
+hit it, and the stop reason reaches Discord only as `stopped=…` plumbing,
+never the channel body. Every `runTask` has an idle watchdog bound to it: run
+events, tool output and verify-lane output feed it; a model call, a
+`delegate` / `council` worker and an Approve-card wait hold it (each bounded
+by its own cap or expiry); when it fires, the run's abort kills tool and
+verify-lane process trees and the run ends failed (never cancelled, never
+done) with `stopReason` `idle-timeout` and the one-line `error`. The caller's
+own abort still wins (cancelled). No value turns either limit off.
+
 A failed run names why in harness text only (DISCORD-3.b, AGENT-9,
 REQ-agent-032): `runTask` sets `error` on a failed result from the attempt's
 `failureReason` (the no-provider notice, or `modelCallFailedLine` of the
@@ -1111,6 +1142,18 @@ A change the run did not open is never touched.
 - **When** `task run --output ndjson` runs
 - **Then** it calls `gone-model` once, then `fake-model`; a Text frame says `[operator] ollama:gone-model failed (HTTP 404); falling back to ollama:fake-model`; the result is `done`, its summary ends with `(model fallback: ollama:gone-model failed (HTTP 404), fell back to ollama:fake-model)`, and it carries `model` `ollama:fake-model`, `usageByModel` and `modelFallback` (REQ-agent-080)
 
+### Scenario: a verify lane hangs and prints nothing
+
+- **Given** `CORVIDINHO_IDLE_TIMEOUT_MS=4000` and a run whose verify lane stops printing and never exits
+- **When** 4 seconds pass with no event, tool output or lane output
+- **Then** the lane's process tree is killed and the run ends `failed` (exit 1) with `stopReason: "idle-timeout"`, `error` `Stopped: no output for 4 seconds (idle timeout).`, and that line first in its summary (REQ-agent-244)
+
+### Scenario: the model never stops calling tools
+
+- **Given** `CORVIDINHO_MAX_TURNS=2` and a model that calls a tool on every reply
+- **When** the attempt has made 2 model/tool rounds
+- **Then** it ends with its last prose, the `[operator] Stopped after 2 tool rounds …` event, and — as the run's final attempt — `stopReason: "turn-cap"`: `stopped=turn-cap` in the Discord footer, a plain turn-cap line on WATCH and in the CLI (REQ-agent-312)
+
 ### Scenario: the model repeats a failing call
 
 - **Given** a tool-tier run whose model calls `files-read` on a missing file
@@ -1219,6 +1262,9 @@ A change the run did not open is never touched.
 | Own change on a repo other than Corvidinho after a green lane | one Text line: it stays open for a human; nothing approved (REQ-agent-519) |
 | Own change on Corvidinho, approve or finalize not allowlisted, refused or failing | one Text line with the scrubbed reason; the change stays open for a human; the run stays verified (REQ-agent-519) |
 | Lane fails when re-run over what approve and finalize wrote | run failed, not verified, no retry; the summary says so (REQ-agent-519) |
+| No output (event, tool output, lane output) for `CORVIDINHO_IDLE_TIMEOUT_MS` outside a model call, worker or card wait | run aborted (tool / lane trees killed); `failed`, `stopReason: "idle-timeout"`, `error` = `Stopped: no output for … (idle timeout).` (REQ-agent-244) |
+| Final attempt used up `CORVIDINHO_MAX_TURNS` rounds | best prose so far; `stopReason: "turn-cap"`; verify still runs when files changed (REQ-agent-312) |
+| `CORVIDINHO_MAX_TURNS` / `CORVIDINHO_IDLE_TIMEOUT_MS` not a positive whole number | ignored with one `[operator] AGENT-12: …` line; the default applies (REQ-cli-125) |
 
 ## Dependencies
 

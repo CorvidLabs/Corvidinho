@@ -252,6 +252,10 @@ check`).
 
 ## Invariants
 
+`spawnCapped` counts each output chunk of its child as the calling run's
+activity for the idle timeout (AGENT-12, REQ-plugins-125, `noteIdleActivity`;
+a no-op outside a run), so a printing tool is never stopped as idle.
+
 Builtin plugin loaders MAY re-register after an in-process registry clear
 (test seam). Presence of an already-registered command name skips duplicate
 register. GitHub write commands (`github-issue-create`, `github-issue-comment`,

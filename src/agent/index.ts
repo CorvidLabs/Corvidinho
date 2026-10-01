@@ -11,6 +11,7 @@ export type {
   RunTaskOptions,
   SpendWarning,
   TaskResult,
+  TaskStopReason,
   TestDrop,
   VerifyResult,
   VerifyRunner,
@@ -26,6 +27,25 @@ export {
 } from "./config.ts";
 export { defaultVerifyRunner, VERIFY_ARGS } from "./verify.ts";
 export { runTask } from "./loop.ts";
+export {
+  DEFAULT_IDLE_TIMEOUT_MS,
+  DEFAULT_MAX_TURNS,
+  formatIdleDuration,
+  IDLE_TIMEOUT_ENV,
+  idleTimeoutFromEnv,
+  idleTimeoutLine,
+  MAX_IDLE_TIMEOUT_MS,
+  MAX_TURNS_ENV,
+  maxTurnsFromEnv,
+  noteIdleActivity,
+  pauseIdleWatchdog,
+  startIdleWatchdog,
+  stopReasonFromUnknown,
+  TURN_CAP_NOTE,
+  whileIdlePaused,
+  withIdleWatchdog,
+} from "./limits.ts";
+export type { IdleWatchdog, LimitSetting } from "./limits.ts";
 export {
   startWorkspaceDiff,
   startWorkspaceDiffFrom,

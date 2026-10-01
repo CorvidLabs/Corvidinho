@@ -10,6 +10,7 @@ import {
   trackChildProcess,
   type ProcEntry,
 } from "../plugins/proc-group.ts";
+import { noteIdleActivity } from "./limits.ts";
 import type { VerifyResult, VerifyRunner } from "./types.ts";
 
 export const VERIFY_ARGS = [
@@ -58,6 +59,37 @@ export function buildVerifyEnv(
  */
 const ABORT_PIPE_GRACE_MS = 250;
 
+type PipeReader = ReadableStreamDefaultReader<Uint8Array>;
+
+/**
+ * Read a lane pipe to its end as it is written: each chunk is output, which
+ * resets the run's idle watchdog (AGENT-12, REQ-agent-244), so only a lane
+ * that prints nothing for the idle timeout is stopped.
+ */
+async function readLanePipe(
+  stream: ReadableStream<Uint8Array> | number | undefined,
+  readers: PipeReader[],
+): Promise<string> {
+  if (!stream || typeof stream === "number") return "";
+  const reader = stream.getReader();
+  readers.push(reader);
+  const decoder = new TextDecoder();
+  let text = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value && value.byteLength > 0) {
+        noteIdleActivity();
+        text += decoder.decode(value, { stream: true });
+      }
+    }
+  } catch {
+    /* reader cancelled after an abort */
+  }
+  return text + decoder.decode();
+}
+
 export const defaultVerifyRunner: VerifyRunner = async (cwd, signal) => {
   const fledge = Bun.which("fledge");
   if (!fledge) {
@@ -86,10 +118,20 @@ export const defaultVerifyRunner: VerifyRunner = async (cwd, signal) => {
     return code;
   });
   const untrack = trackChildProcess(proc.pid, () => atExit);
+  // The pipes are read while the lane runs, so its output counts as the
+  // run's activity (AGENT-12).
+  const readers: PipeReader[] = [];
+  const read = Promise.all([
+    readLanePipe(proc.stdout, readers),
+    readLanePipe(proc.stderr, readers),
+  ]);
   // An abort stops waiting on the output pipes after a short grace (AGENT-3).
   let giveUp: () => void = () => {};
   const gaveUp = new Promise<null>((resolve) => {
-    giveUp = () => resolve(null);
+    giveUp = () => {
+      for (const r of readers) r.cancel().catch(() => {});
+      resolve(null);
+    };
   });
   let graceTimer: ReturnType<typeof setTimeout> | undefined;
   const onAbort = () => {
@@ -99,10 +141,6 @@ export const defaultVerifyRunner: VerifyRunner = async (cwd, signal) => {
   signal?.addEventListener("abort", onAbort, { once: true });
   try {
     const code = await exited;
-    const read = Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-    ]);
     const out = await Promise.race([read, gaveUp]);
     if (out === null) {
       return { success: false, output: "verify lane aborted" };

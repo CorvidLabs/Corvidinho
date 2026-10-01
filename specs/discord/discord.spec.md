@@ -920,6 +920,13 @@ shared `createFailureOwnerDm` on its gateway `sendDm`; the daemon none).
 
 ## Invariants
 
+A run a limit I set stopped (AGENT-12, REQ-discord-125) shows it only as
+`stopped=turn-cap` / `stopped=idle-timeout` at the end of the answer's footer
+and thinking plumbing (chat, ask answers, `/session start`, `/work`), from the
+validated `result` frame `stopReason`, never in the channel body; a waiting
+`ApprovalStore.waitForDecision` holds the run's idle watchdog until the card
+is decided, lapses or the wait is aborted.
+
 Empty channel allowlist fail-start; empty user/role = deny-all when checked;
 empty admin lists = nobody ADMIN; missing token clean exit; no ProcessManager;
 secrets out of repo; discord-post-message dangerous, and every post it makes

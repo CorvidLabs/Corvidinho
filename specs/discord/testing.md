@@ -1540,3 +1540,14 @@ base: both fail (no `--here`).
 - Fail on base: the schedule ask test cannot load
   (`SCHEDULE_ASK_CONTINUED_ACK` missing), the ask-block test gets
   `["Cancel"]`, and main's watch delivery never sees a spend-cap stop.
+
+## Turn cap / idle timeout plumbing and card waits (REQ-discord-125, AGENT-12)
+
+`tests/agent.limits.test.ts` ("it says so on each surface", "waiting on an
+Approve card …"): the spawn client keeps `stopReason: "turn-cap"` and drops an
+unknown value; a mention answer's footer ends `… attempts=1 stopped=turn-cap`
+and its body is only the prose; an idle-timed-out frame gives `failureReason`
+= the stop line and `task.stopReason: "idle-timeout"`, and the owner's own
+mention is answered with that line (DISCORD-3.b) and `stopped=idle-timeout`
+in the footer; `waitForDecision` answered after 0.9 s does not fire a 250 ms
+watchdog, which fires once the card is decided. Fail on base: all four.

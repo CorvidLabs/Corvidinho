@@ -22,6 +22,17 @@ import {
   type TaskResult,
 } from "./agent/index.ts";
 import { loadLlmEnv } from "./agent/execute.ts";
+import {
+  DEFAULT_IDLE_TIMEOUT_MS,
+  DEFAULT_MAX_TURNS,
+  IDLE_TIMEOUT_ENV,
+  idleTimeoutFromEnv,
+  invalidLimitNote,
+  MAX_TURNS_ENV,
+  maxTurnsFromEnv,
+  noteIdleActivity,
+  TURN_CAP_NOTE,
+} from "./agent/limits.ts";
 import type { ModelFallback, ModelUsage, TaskWorkspaceReport } from "./agent/types.ts";
 import type { InjectionNotice } from "./agent/untrusted.ts";
 import { startWorkspaceDiff } from "./agent/workspace-diff.ts";
@@ -129,6 +140,8 @@ Usage:
                                     In a git repo it works in its own new worktree made from HEAD (uncommitted and
                                     untracked files are not in it); a clean one is removed at the end, one with
                                     changes is kept and named. --here runs it in this checkout (SESSION-WORKTREE-1.a)
+                                    A turn cap and an idle timeout stop endless or stalled runs and say so
+                                    (CORVIDINHO_MAX_TURNS / CORVIDINHO_IDLE_TIMEOUT_MS below, AGENT-12)
   corvidinho --non-interactive ...  Deny dangerous plugins unless allowlisted (SAFE-1 / CLI-3)
   corvidinho --project <path> ...   Run as if started in <path>, without cd: its fledge.toml, specs
                                     and .env files, as Bun loads them there (CLI-5)
@@ -158,6 +171,11 @@ Env / allowlists (ALLOW-4; default-deny, never Merlin BASIC):
   ANTHROPIC_API_KEY                                     key for anthropic: models (never commit)
   CORVIDINHO_LLM_TIER=read|tool|code                    capability tier (AGENT-5; default tool)
   CORVIDINHO_LLM_MODEL_READ / _TOOL / _CODE             optional model per tier (AGENT-5; else CORVIDINHO_LLM_MODEL)
+  CORVIDINHO_MAX_TURNS                                  optional turn cap: model/tool rounds per attempt (default 8); a run whose
+                                                        last attempt hits it ends with its best answer so far and says so (AGENT-12)
+  CORVIDINHO_IDLE_TIMEOUT_MS                            optional idle timeout (default 600000 = 10 min): a run with no output for this
+                                                        long is stopped (its tools and verify lane killed) and fails saying so; model
+                                                        calls, delegate/council workers and Approve-card waits do not count (AGENT-12)
   CORVIDINHO_DAILY_SPEND_CAP_USD                        optional USD cap on provider calls per rolling 24h: warn at 80%, stop and ask at 100% (SAFE-8)
   CORVIDINHO_PROVIDER_SPEND_CAPS_USD                    optional per-provider rolling 24h caps, provider=USD comma list keyed on the
                                                         provider id (endpoint host, e.g. api.openai.com=5); each warns at 80% and
@@ -866,6 +884,8 @@ async function taskRun(opts: {
       ? createNdjsonWriter((line) => console.log(line))
       : null;
   const handleEvent = (e: AgentEvent) => {
+    // AGENT-12: what the CLI prints or streams is the run's activity.
+    noteIdleActivity();
     events.push(e);
     ndjson?.event(e);
     if (quiet) return;
@@ -976,6 +996,16 @@ async function taskRunIn(
   // it too, for the machine modes whose stderr stays quiet).
   const noProvider = loadLlmEnv(process.env, opts.tier).notice;
   if (noProvider && !quiet) console.error(noProvider);
+  // AGENT-12: the turn cap (read by createTaskExecute) and the idle timeout I
+  // set; a value that is not a positive whole number is ignored, and said.
+  const turns = maxTurnsFromEnv(process.env);
+  if (turns.invalid) {
+    handleEvent({ type: "Text", text: invalidLimitNote(MAX_TURNS_ENV, DEFAULT_MAX_TURNS) });
+  }
+  const idle = idleTimeoutFromEnv(process.env);
+  if (idle.invalid) {
+    handleEvent({ type: "Text", text: invalidLimitNote(IDLE_TIMEOUT_ENV, DEFAULT_IDLE_TIMEOUT_MS) });
+  }
   // AUTONOMY-9/10: the must-ask gate's "waiting for the owner's OK" and
   // outcome lines ride the event stream (a Text frame in ndjson, stderr in
   // text mode), so bridges and the CLI say why a call is held.
@@ -1037,6 +1067,8 @@ async function taskRunIn(
         ? { workspaceDiff: (dir: string) => startWorkspaceDiff(dir, {}, { nested: true }) }
         : {}),
       signal: io.signal,
+      // AGENT-12 (REQ-agent-244): no output for this long stops the run.
+      idleTimeoutMs: idle.value,
       onEvent: handleEvent,
       execute: async (ctx) => {
         if (ctx.verifyFeedback && !quiet) {
@@ -1069,6 +1101,9 @@ async function taskRunIn(
       `state=${result.state} verified=${result.verified} verifySkipped=${result.verifySkipped} cancelled=${result.cancelled} attempts=${result.attempts}`,
     );
     console.log(result.summary);
+    // AGENT-12: a turn-capped run says so in a plain line (an idle-timed-out
+    // run's summary already starts with its line).
+    if (result.stopReason === "turn-cap") console.log(TURN_CAP_NOTE);
     // SAFE-8: a spend-cap summary is generic; the operator details are in the ask.
     if (result.ask && !result.summary.includes(result.ask.question)) {
       console.log(result.ask.question);

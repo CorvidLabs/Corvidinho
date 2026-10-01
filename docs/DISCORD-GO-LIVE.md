@@ -631,3 +631,28 @@ hour; `That didn't work.` when no DM could go out). Every failure logs `[discord
 
 Keys stay in the environment and are never printed; `ANTHROPIC_API_KEY` is scrubbed from
 error lines like the other LLM keys and never reaches the verify lane or a shell (SAFE-6).
+
+### E.10 Turn cap and idle timeout (AGENT-12)
+
+Two optional env keys, read by every run (`task run` is the child of the bridge, `github
+watch`, the daemon and schedules; delegate and council workers inherit them). Restart the
+bridge/daemon after changing them.
+
+- `CORVIDINHO_MAX_TURNS` (default 8): model/tool rounds per attempt. Each verify retry is its
+  own attempt, so AGENT-4.a retries are kept. When the run's last attempt hits it, the answer is
+  its best prose so far (AGENT-9), and the run says so: `stopped=turn-cap` in the Discord answer
+  footer and thinking embed (never the channel body), a plain `Stopped: it reached the turn cap
+  …` line on WATCH comments and after the summary of `task run`, and `stopReason: "turn-cap"` in
+  `--json` / ndjson results.
+- `CORVIDINHO_IDLE_TIMEOUT_MS` (default 600000, 10 minutes): a run with no output for that long
+  — no event, no tool output, no verify-lane output — is stopped. Its tools and the verify lane
+  are killed with their process trees, and the run ends failed with `stopReason:
+  "idle-timeout"` and the one-line `error` `Stopped: no output for 10 minutes (idle timeout).`,
+  which also starts its summary (WATCH comments, `task run`); on Discord your
+  own run's reply is that line (DISCORD-3.b), anyone else's says it didn't
+  work and that you have been told, and the footer shows `stopped=idle-timeout`. A model call (it keeps its own 10-minute request cap), a
+  delegate or council worker (bounded by its own limits and its worker time cap) and a wait
+  on an Approve card (bounded by the card's expiry) do not count as idle.
+
+There is no value that turns either off; a value that is not a positive whole number is
+ignored, with one `[operator] AGENT-12: …` line, and the default is used.
