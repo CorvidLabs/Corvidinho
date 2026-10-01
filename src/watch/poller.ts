@@ -23,7 +23,8 @@
  * REQ-watch-009 (DISCORD-3.b on GitHub): a failed run without an ask of its
  * own logs `[watch] run failed (<repo>#<n> id=<id>, exit N): <reason>`, and
  * its summary comment and its kept conversation turn are that one plain
- * reason line, never the run's summary (a provider's reply body).
+ * reason line without the provider's host (`watchPublicFailureLine`), never
+ * the run's summary (a provider's reply body).
  */
 
 import type { Database } from "bun:sqlite";
@@ -103,6 +104,7 @@ import {
   SuccessfulAckStore,
   SummarizedIdStore,
   watchFailureReason,
+  watchPublicFailureLine,
 } from "./summary.ts";
 import type { AgentSpawnResult, DetectedEvent, WatchConfig } from "./types.ts";
 
@@ -705,7 +707,8 @@ export async function startWatchPoller(
 
         // REQ-watch-009 (DISCORD-3.b on GitHub): what a failed run without an
         // ask of its own shows — one plain reason line, never its summary
-        // (for a model failure `LLM HTTP <status>: <provider body>`).
+        // (for a model failure `LLM HTTP <status>: <provider body>`). The log
+        // line names the provider's host; the comment and the kept turn don't.
         const runFacts: Pick<
           AgentSpawnResult,
           "ok" | "exitCode" | "ask" | "failureReason" | "stderrTail"
@@ -762,8 +765,13 @@ export async function startWatchPoller(
               ...conversation.turns,
               { role: "human", content: action.prompt, createdAt: startedAtMs },
               // REQ-watch-009: a failed run's turn is the reason its comment
-              // shows, so a later run never replays a provider's reply body.
-              { role: "agent", content: failedReason ?? spawnSummary, createdAt: finishedAtMs },
+              // shows, so a later run never replays a provider's reply body
+              // or host (the model could repeat it on the public thread).
+              {
+                role: "agent",
+                content: failedReason !== null ? watchPublicFailureLine(failedReason) : spawnSummary,
+                createdAt: finishedAtMs,
+              },
             ],
             participants: [
               ...(retained?.participants ?? []),

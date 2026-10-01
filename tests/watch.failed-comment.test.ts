@@ -1,7 +1,7 @@
 /**
  * REQ-watch-009 (DISCORD-3.b on GitHub) — a failed WATCH run's public summary
- * comment says why in one plain line (which model call failed: status and
- * host), never the provider's raw error body.
+ * comment says why in one plain line (which model call failed: its status,
+ * not the provider's host), never the provider's raw error body.
  *
  * Found in #340's review: a failed run's comment posted the run summary,
  * which for a model failure is `LLM HTTP <status>: <provider body>` —
@@ -14,6 +14,14 @@
  * for budget.", SAFE-14.a) are unchanged. The operator-only spawn log keeps
  * the scrubbed summary.
  *
+ * Found in this PR's review: the reason names the provider's host (`… from
+ * <host>)`), which can be the account's own resource name
+ * (`<resource>.openai.azure.com`), a private gateway or an Ollama server's
+ * address. On Discord only the owner sees it (#340); here the thread is
+ * public, so the comment and the kept turn drop the host
+ * (`watchPublicFailureLine`) and only the `[watch] run failed` log line keeps
+ * it.
+ *
  * The end-to-end case spawns the real `task run` through the WATCH spawn
  * client against a localhost model that answers 429 with an org name and a
  * request id. Fixtures only: the echo ack client, in-memory SQLite, stub
@@ -23,14 +31,23 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { NO_PROVIDER_NOTICE } from "../src/agent/providers.ts";
+import {
+  modelCallFailedLine,
+  NO_PROVIDER_NOTICE,
+  type ModelFailure,
+} from "../src/agent/providers.ts";
+import { failureReasonFor } from "../src/discord/failure-reason.ts";
 import { attribution } from "../src/attribution.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 import { createEchoAckClient } from "../src/watch/ack.ts";
 import { createSpawnAgentClient, type AgentClient } from "../src/watch/agent-client.ts";
 import { startWatchPoller } from "../src/watch/poller.ts";
 import { createMemorySpawnOutcomeStore } from "../src/watch/spawn-log.ts";
-import { buildSummaryBody, watchFailureReason } from "../src/watch/summary.ts";
+import {
+  buildSummaryBody,
+  watchFailureReason,
+  watchPublicFailureLine,
+} from "../src/watch/summary.ts";
 import type { AgentSpawnResult, DetectedEvent } from "../src/watch/types.ts";
 
 const ROOT = join(import.meta.dir, "..");
@@ -146,25 +163,29 @@ describe("a failed WATCH run's comment says which model call failed, never the p
       env: llm.env,
     });
     const { posts, logs, outcomes, turns } = await runOnce(agent, "comment-failed-e2e");
+    // The owner's log line names the provider's host; the public line doesn't.
     const reason = `The model call failed (429 Too Many Requests from ${llm.host})`;
+    const shown = "The model call failed (429 Too Many Requests)";
 
     // The ack, then the summary: the status line, the one plain line, the footer.
     expect(posts).toHaveLength(2);
-    expect(posts[1]!.body).toBe(`Corvidinho WATCH run summary — Failed (exit 1).\n\n${reason}${FOOT}`);
+    expect(posts[1]!.body).toBe(`Corvidinho WATCH run summary — Failed (exit 1).\n\n${shown}${FOOT}`);
     for (const p of posts) {
       expect(p.body).not.toContain(ORG);
       expect(p.body).not.toContain(REQUEST_ID);
       expect(p.body).not.toContain("LLM HTTP");
       expect(p.body).not.toContain("Rate limit reached");
+      expect(p.body).not.toContain(llm.host);
     }
-    // The reason is logged; no log line carries the provider body.
+    // The reason is logged with the host; no log line carries the provider body.
     expect(logs).toContain(`[watch] run failed (CorvidLabs/Corvidinho#42 id=comment-failed-e2e, exit 1): ${reason}`);
     for (const secret of [ORG, REQUEST_ID, "LLM HTTP"]) expect(logs.join("\n")).not.toContain(secret);
-    // The thread's kept agent turn is the posted reason, so a follow-up run
-    // never replays the provider body to the model (REQ-watch-472).
+    // The thread's kept agent turn is the posted line, so a follow-up run
+    // never replays the provider body or host to the model (REQ-watch-472).
     expect(turns.map((t) => t.role)).toEqual(["human", "agent"]);
-    expect(turns[1]!.content).toBe(reason);
+    expect(turns[1]!.content).toBe(shown);
     expect(JSON.stringify(turns)).not.toContain(ORG);
+    expect(JSON.stringify(turns)).not.toContain(llm.host);
     // Operator-only: the spawn log keeps the scrubbed summary for diagnosis.
     expect(outcomes).toHaveLength(1);
     expect(outcomes[0]!.ok).toBe(false);
@@ -266,24 +287,64 @@ describe("watchFailureReason / buildSummaryBody (REQ-watch-009)", () => {
     ).toBeNull();
   });
 
-  test("a failed run's body is the reason line, with the SAFE-13 owner line and the footer kept", () => {
+  test("a failed run's body is the reason line without the host, with the SAFE-13 owner line and the footer kept", () => {
     const body = buildSummaryBody(
       {
         ok: false,
         sessionId: "s",
         summary: `LLM HTTP 429: {"error":{"message":"quota for ${ORG}"},"request_id":"${REQUEST_ID}"}`,
         exitCode: 1,
-        failureReason: "The model call failed (429 Too Many Requests from api.openai.com)",
+        failureReason: "The model call failed (429 Too Many Requests from acme-prod.openai.azure.com)",
         injection: { source: "web-fetch", reasons: ["ignore-rules"] },
       },
       "0xLeif",
       model,
     );
     expect(body).toStartWith(
-      "Corvidinho WATCH run summary — Failed (exit 1).\n\nThe model call failed (429 Too Many Requests from api.openai.com)\n\n@0xLeif heads-up: a web-fetch result",
+      "Corvidinho WATCH run summary — Failed (exit 1).\n\nThe model call failed (429 Too Many Requests)\n\n@0xLeif heads-up: a web-fetch result",
     );
     expect(body.endsWith(FOOT)).toBe(true);
     expect(body).not.toContain(ORG);
     expect(body).not.toContain(REQUEST_ID);
+    expect(body).not.toContain("acme-prod");
+  });
+
+  test("the public line drops the provider's host from every model-call shape and leaves every other reason as is", () => {
+    // A host that is the account's own name (an Azure resource), with a port.
+    const host = "acme-prod.openai.azure.com:8443";
+    const provider = { baseUrl: `https://key:secret@${host}/openai/v1`, entry: { kind: "openai" as const, model: "gpt-5" } };
+    const cases: Array<[ModelFailure | null, string]> = [
+      [{ kind: "http", status: 429 }, "The model call failed (429 Too Many Requests)"],
+      [{ kind: "http", status: 599 }, "The model call failed (599)"],
+      [{ kind: "timeout" }, "The model call timed out"],
+      [{ kind: "network" }, "The model call failed (network error)"],
+      [{ kind: "malformed" }, "The model call failed (malformed reply)"],
+      [null, "The model call failed"],
+    ];
+    for (const [failure, shown] of cases) {
+      // What the run's `error` says, as the comment's reason reads it.
+      const reason = failureReasonFor({ exitCode: 1, failureReason: modelCallFailedLine(failure, provider) }, model);
+      expect(reason).toContain(host);
+      expect(watchPublicFailureLine(reason)).toBe(shown);
+    }
+    // A host long enough for the 200-char cap to cut it is dropped too.
+    const long = `${Array.from({ length: 5 }, () => "a".repeat(50)).join(".")}.example.com`;
+    const cut = failureReasonFor(
+      { exitCode: 1, failureReason: modelCallFailedLine({ kind: "http", status: 503 }, { ...provider, baseUrl: `https://${long}/v1` }) },
+      model,
+    );
+    expect(cut.endsWith("…")).toBe(true);
+    expect(watchPublicFailureLine(cut)).toBe("The model call failed (503 Service Unavailable)");
+    // Lines with no host are left as they are.
+    for (const kept of [
+      modelCallFailedLine({ kind: "no-key", keyEnv: "OPENAI_API_KEY" }, provider),
+      `${NO_PROVIDER_NOTICE}: CORVIDINHO_LLM_MODEL is not set.`,
+      "Verification failed after 2 retries",
+      "error: boom",
+      "The run failed (exit 2) without saying why",
+      "The run was interrupted before it finished",
+    ]) {
+      expect(watchPublicFailureLine(kept)).toBe(kept);
+    }
   });
 });

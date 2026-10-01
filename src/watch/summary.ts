@@ -8,9 +8,11 @@
  * "(not allowed for your role)" note.
  * REQ-watch-009 / DISCORD-3.b on GitHub — a failed run without an ask of its
  * own shows one plain reason line (`watchFailureReason`: which model call
- * failed as status and host, the no-provider notice, which verify failed),
- * never the run's summary, so a provider's reply body (account or org names,
- * request ids, quota details) never lands on a public thread.
+ * failed and how, the no-provider notice, which verify failed), never the
+ * run's summary, so a provider's reply body (account or org names, request
+ * ids, quota details) never lands on a public thread; the comment names the
+ * model call's status but not the provider's host (`watchPublicFailureLine`),
+ * which only the `[watch] run failed` log line keeps.
  */
 
 import { clipKeepingRoleNote } from "../agent/task-summary.ts";
@@ -133,11 +135,13 @@ export async function maybePostWatchInjectionNotice(opts: {
 }
 
 /**
- * REQ-watch-009 / DISCORD-3.b on GitHub: why a WATCH run failed, as the one
- * plain line its summary comment shows in place of the run's summary — the
- * same reason the Discord surfaces give (`failureReasonFor`): the result
- * frame's `error` (which model call failed and how — status and host, never
- * the provider's reply body; the no-provider notice; which verify failed),
+ * REQ-watch-009 / DISCORD-3.b on GitHub: why a WATCH run failed, as one
+ * plain line — what the `[watch] run failed` log line says, and (without the
+ * provider's host, `watchPublicFailureLine`) what its summary comment shows in
+ * place of the run's summary. The same reason the Discord surfaces give
+ * (`failureReasonFor`): the result frame's `error` (which model call failed
+ * and how — status and host, never the provider's reply body; the
+ * no-provider notice; which verify failed),
  * else the no-provider notice for the run's tier in `env`, else the last
  * meaningful line of the run's stderr, else the exit code; SAFE-6 scrubbed,
  * host paths and stack frames dropped, at most 200 characters. Null for a
@@ -160,9 +164,38 @@ export function watchFailureReason(
 }
 
 /**
+ * A model-call reason as `modelCallFailedLine` (src/agent/providers.ts)
+ * words it: `The model call failed|timed out (…)`, ending in the provider's
+ * host (`… from <host>)`, `… reaching <host>)` or `(<host>)` alone), or in
+ * the start of a host the 200-char cap cut (`…`). The no-key line (`(<model>
+ * needs <ENV>, which is not set)`) has spaces where a host has none, so it
+ * never matches.
+ */
+const MODEL_CALL_HOST_RE =
+  /^(The model call (?:failed|timed out)) \((?:(.*?) (?:from|reaching) )?[^\s()]+(?:\)|…)$/;
+
+/**
+ * REQ-watch-009: a failed run's reason as the public thread and the thread's
+ * kept agent turn show it — a model-call line without the provider's host
+ * (`The model call failed (429 Too Many Requests)`), since a host can be the
+ * account's own resource name (`<resource>.openai.azure.com`), a private
+ * gateway or an Ollama server's address, and a kept turn is replayed to the
+ * model, which could repeat it in a later public comment. The owner's
+ * `[watch] run failed` log line keeps the host. Any other reason (the no-key
+ * line, the no-provider notice, a stderr line, the exit-code line) is
+ * returned as is.
+ */
+export function watchPublicFailureLine(reason: string): string {
+  const m = MODEL_CALL_HOST_RE.exec(reason);
+  if (!m) return reason;
+  return m[2] ? `${m[1]} (${m[2]})` : m[1]!;
+}
+
+/**
  * The run-summary comment: the status line, then the run's summary (SAFE-6
  * scrubbed, clipped to 1200) — or, for a failed run without an ask of its
- * own, its one plain reason line (`watchFailureReason`, read with `env`) —
+ * own, its one plain reason line without the provider's host
+ * (`watchFailureReason` read with `env`, then `watchPublicFailureLine`) —
  * then the SAFE-13 owner line when the run reports one, then the footer.
  */
 export function buildSummaryBody(
@@ -176,13 +209,15 @@ export function buildSummaryBody(
   // Scrub before clipping so a token cut at the cap leaks no prefix. The clip
   // keeps a closing "(not allowed for your role)" note (ROLES-CHAT-3,
   // REQ-watch-734).
+  const reason = watchFailureReason(spawn, env);
   const preview =
-    watchFailureReason(spawn, env) ??
-    clipKeepingRoleNote(
-      scrubSecrets(spawn.summary || "").trim(),
-      1200,
-      (head, max) => head.slice(0, max),
-    );
+    reason !== null
+      ? watchPublicFailureLine(reason)
+      : clipKeepingRoleNote(
+          scrubSecrets(spawn.summary || "").trim(),
+          1200,
+          (head, max) => head.slice(0, max),
+        );
   const body = preview
     ? `Corvidinho WATCH run summary — ${status}\n\n${preview}`
     : `Corvidinho WATCH run summary — ${status}`;

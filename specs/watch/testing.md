@@ -202,16 +202,17 @@ clarify ask still never records one).
 
 ## A failed run's comment says why in one plain line (REQ-watch-009, REQ-watch-472, REQ-watch-080 modified; DISCORD-3.b's reason on GitHub)
 
-`tests/watch.failed-comment.test.ts` (7 tests; `startWatchPoller` with the
+`tests/watch.failed-comment.test.ts` (7 tests, 8 with the host case below; `startWatchPoller` with the
 echo ack client and an in-memory DB, stub agents, and the real `task run`
 through the WATCH spawn client against a localhost model that answers 429
 with an org name and a request id in its body; no network, no real key):
 
 - End to end: the summary comment is exactly `Corvidinho WATCH run summary —
-  Failed (exit 1).`, `The model call failed (429 Too Many Requests from
-  127.0.0.1:<port>)` and the footer; no comment or log line has the org name,
-  the request id or `LLM HTTP`; `[watch] run failed (CorvidLabs/Corvidinho#42
-  id=…, exit 1): <that line>` is logged; the thread's kept agent turn is that
+  Failed (exit 1).`, `The model call failed (429 Too Many Requests)` and the
+  footer (no host, below); no comment or log line has the org name, the
+  request id or `LLM HTTP`; `[watch] run failed (CorvidLabs/Corvidinho#42
+  id=…, exit 1): The model call failed (429 Too Many Requests from
+  127.0.0.1:<port>)` is logged; the thread's kept agent turn is the comment's
   line; the operator-only spawn log's `summaryPreview` keeps `LLM HTTP 429: …`
   (scrubbed).
 - No result `error`: a crash's scrubbed stderr end (`…/x.ts`, the token
@@ -238,3 +239,30 @@ with an org name and a request id in its body; no network, no real key):
   HTTP 429: {"error":{"message":"Rate limit reached … in organization
   org-acme-widgets-7731 …"},"request_id":"req_7f3c9a1b2d4e5f60"}`); the two
   unchanged-behaviour cases pass. Restored: 7 pass.
+
+## A failed run's public line drops the provider's host (REQ-watch-009, REQ-watch-472 modified)
+
+`tests/watch.failed-comment.test.ts` (8 tests):
+
+- End to end (the real `task run` against a localhost model answering 429):
+  the comment's line is `The model call failed (429 Too Many Requests)` and no
+  comment has the host `127.0.0.1:<port>`; the `[watch] run failed` log line
+  keeps `… from 127.0.0.1:<port>)`; the kept agent turn is the comment's line
+  and the stored turns never hold the host.
+- `buildSummaryBody` with a reason naming `acme-prod.openai.azure.com`: the
+  body's line is `The model call failed (429 Too Many Requests)`, the SAFE-13
+  owner line and the footer kept.
+- `watchPublicFailureLine` over `modelCallFailedLine` for a host of
+  `acme-prod.openai.azure.com:8443` (through `failureReasonFor`, as the
+  comment reads it): an HTTP status (429, and 599 with no status name), a
+  timeout, a network error, a malformed reply and no failure detail each lose
+  the host; a 266-char host the 200-char cap cut (`…`) is dropped too; the
+  no-key line, the no-provider notice, a verify line, a stderr line and the
+  exit-code lines come back unchanged.
+- Fail on the branch head before this change (58c327f): with its
+  `src/watch/{summary,poller}.ts` swapped in the file does not load
+  (`watchPublicFailureLine` is missing); with a pass-through stub export
+  added, 3 of 8 fail (the end-to-end comment is `The model call failed (429
+  Too Many Requests from 127.0.0.1:<port>)`, the `buildSummaryBody` line names
+  `acme-prod.openai.azure.com`, the shapes keep the host). Restored: 8 pass.
+

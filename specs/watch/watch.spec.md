@@ -157,9 +157,12 @@ A failed run's reason (DISCORD-3.b's reason on GitHub, REQ-watch-009):
 `failureReasonFromUnknown`) and `stderrTail?` (a failed run's stderr end);
 `summary.ts` exports `watchFailureReason(spawn, env?)` → the one plain line
 (`failureReasonFor` from `src/discord/failure-reason.ts`), or null for a run
-that did not fail or stopped on an ask of its own; `buildSummaryBody(spawn,
-ownerLogin?, env?)` and `maybePostWatchSummary({ env })` take the watcher's
-env for its no-provider fallback.
+that did not fail or stopped on an ask of its own, and
+`watchPublicFailureLine(reason)` → that line without the provider's host for
+a model-call line (`The model call failed (429 Too Many Requests)`), any
+other line as it is; `buildSummaryBody(spawn, ownerLogin?, env?)` and
+`maybePostWatchSummary({ env })` take the watcher's env for its no-provider
+fallback.
 
 ## Invariants
 
@@ -259,13 +262,15 @@ nothing is recorded and one line says it could not be sent. Any other outcome
 (REQ-watch-086).
 A failed run without an ask of its own (a non-zero exit, or a spawn that
 threw) never posts its run summary: its comment carries only
-`watchFailureReason` — the result's `error` (which model call failed: status
-and host, never the provider's reply body; the no-provider notice; which
-verify failed), else the tier's no-provider notice, else the stderr end, else
-the exit code; SAFE-6 scrubbed, one line of at most 200 characters — the
-poller logs `[watch] run failed (<repo>#<n> id=<id>, exit N): <reason>`, and
-the thread's kept agent turn is that line; only the operator-only spawn JSONL
-keeps the scrubbed summary (REQ-watch-009).
+`watchFailureReason` — the result's `error` (which model call failed and how,
+never the provider's reply body; the no-provider notice; which verify
+failed), else the tier's no-provider notice, else the stderr end, else the
+exit code; SAFE-6 scrubbed, one line of at most 200 characters — through
+`watchPublicFailureLine`, so a model-call line names its status but never the
+provider's host. The poller logs `[watch] run failed (<repo>#<n> id=<id>,
+exit N): <reason>` with the host, and the thread's kept agent turn is the
+comment's line (no host); only the operator-only spawn JSONL keeps the
+scrubbed summary (REQ-watch-009).
 
 ## Behavioral Examples
 
@@ -296,9 +301,10 @@ owner the question with the thread link; with no bridge running, one log line
 says the Discord ping could not be sent (REQ-watch-086).
 An issue comment whose run's model call answers 429 with the provider's org
 name and request id in its body → the summary comment is `Failed (exit 1).`
-and `The model call failed (429 Too Many Requests from <host>)`, with neither
-the org name nor the request id, and the watcher logs `[watch] run failed
-(…, exit 1): …` with that line (REQ-watch-009).
+and `The model call failed (429 Too Many Requests)`, with neither the
+provider's host, the org name nor the request id, and the watcher logs
+`[watch] run failed (…, exit 1): The model call failed (429 Too Many Requests
+from <host>)` (REQ-watch-009).
 An issue comment whose run stops at a spend cap → the summary comment says
 only "Work is paused for budget.", one `spend-cap` row for the thread, one
 log line with no amount, and the bridge DMs the owner the stop's details once
@@ -316,8 +322,8 @@ record (REQ-watch-472); a stuck run with no owner Discord id, no DB or no live
 bridge logs that the owner's Discord ping could not be sent, and a failure to
 record it is logged (scrubbed) and never stops the cycle (REQ-watch-086); a
 failed run (a model call that failed, no provider, a failed verify, a crash or
-a spawn that threw) posts one plain reason line, never the run's summary or a
-provider's reply body (REQ-watch-009).
+a spawn that threw) posts one plain reason line, never the run's summary, a
+provider's reply body or its host (REQ-watch-009).
 
 ## Dependencies
 
