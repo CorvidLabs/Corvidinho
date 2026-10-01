@@ -481,3 +481,15 @@ refusal holds mid-run.
 - Fail on base (b84c75f's `plugins/files/commands.ts` and
   `protectedPaths.ts` swapped in): the three file-tool cases fail (the writes
   go through); restored they pass.
+
+## github-pr-create inside a run opens no PR while hi/ changed (REQ-plugins-521, AGENT-18 hi guard)
+
+`tests/agent.hi-guard.test.ts`: inside a `runTask` in a temp hi repo, a
+criterion committed through the shell makes a dry-run `github-pr-create`
+(`CORVIDINHO_GITHUB_DRY_RUN=1`, a temp repo allowlist) refuse with
+`refused (AGENT-18)`, exit 2, naming `criteria AGENT-23` and "this run opens
+no PR", before any review; with hi/ untouched inside a run, and with a dirty
+hi/ edit but no run in progress, the hi guard does not refuse (GITHUB-9
+answers next).
+- Fail on base (b84c75f's `plugins/github/commands.ts` swapped in): the
+  refusal case fails (no AGENT-18 refusal); restored it passes.

@@ -12,4 +12,5 @@ artifact: tasks
 - [x] `plugins/files/protectedPaths.ts` (`isHiPath`, `hiRefuseMessage`) and `plugins/files/commands.ts` (`refuseHi` in write, edit, delete).
 - [x] `tests/agent.hi-guard.test.ts` (17 tests); fail-on-base proof recorded in testing.md.
 - [x] docs/discord.md, docs/DISCORD-GO-LIVE.md, spec prose (agent, plugins, discord), deltas and module testing evidence.
+- [x] Review: `github-pr-create` inside a run refuses while hi/ changed (REQ-plugins-521); `hiChangesSince` sees assume-unchanged / skip-worktree edits and skips fsmonitor; the note says to undo only its own change; "outside a run is never checked" wording corrected; 20 tests.
 - [x] `specsync check --require-coverage 100`, `hi check`, `bunx tsc --noEmit`, `bun test`, `fledge lanes run verify --non-interactive` green.

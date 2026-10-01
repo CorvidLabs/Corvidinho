@@ -34,9 +34,8 @@ import {
   endSddRun,
   formatRepoWaysLine,
   HI_GUARD_UNREADABLE_NOTE,
-  hiChangesFromSnapshot,
-  hiChangesSince,
   hiGuardNote,
+  hiRunChanges,
   hiSnapshot,
   mergeScans,
   repoWaysBase,
@@ -382,11 +381,7 @@ function sddGateNote(cwd: string, scan: RepoWaysScan, paths: string[] | null): s
  */
 async function hiGateNote(cwd: string, sdd: SddRun, scan: RepoWaysScan): Promise<string | null> {
   if (!scan.ways.hi) return null;
-  const changes = sdd.base
-    ? await hiChangesSince(cwd, sdd.base)
-    : sdd.hiStart
-    ? await hiChangesFromSnapshot(cwd, sdd.hiStart)
-    : null;
+  const changes = await hiRunChanges(cwd, sdd);
   return changes === null ? HI_GUARD_UNREADABLE_NOTE : hiGuardNote(changes);
 }
 

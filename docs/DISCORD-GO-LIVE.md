@@ -292,8 +292,12 @@ directly in `.specsync/changes/<id>/`: state, approvals, review, verification), 
 path under `hi/` (`refused (AGENT-18): '<path>' is under hi/, …`; reads still work): the agent
 never changes a repo's criteria itself. Criteria change only through a capture the owner
 approves, and no run can make one yet, so any `hi/` change since the session base, however it
-was made, also keeps a run from being verified and `/work` from opening a PR. Captures a
-person makes with the `hi` CLI outside a Corvidinho run are not checked.
+was made, also keeps a run from being verified, `/work` from opening a PR, and the run's own
+`github-pr-create` from opening one (`refused (AGENT-18): … so this run opens no PR`). The
+session base is where the run's branch left the remote's default branch (HEAD at planning
+when there is none): a capture a person made with the `hi` CLI outside any run that is already
+there never blocks, but a `hi/` commit on the run's own branch that is not yet on the default
+branch counts whoever made it, since the run can't tell.
 
 `minTier` is the capability tier the model needs to see the tool: `1` = `tool`, `2` = `code`
 (`CORVIDINHO_LLM_TIER`). `mutating` = dangerous or explicitly marked mutating (ROLES-CHAT-5).
@@ -366,7 +370,9 @@ What an entry unlocks **today**:
   configured model that did not write the change (no reviewer setting, GITHUB-9.a), in at most 3
   rounds, and the PR body lists what it raised and what changed. An agent run starts the rounds
   itself; `/work` and `plugins run` have no run model, so they open only a tree a run already had
-  reviewed (the `/work` round driver is a later change) and otherwise say why on one line.
+  reviewed (the `/work` round driver is a later change) and otherwise say why on one line. In a
+  repo that uses hi, a `github-pr-create` from inside a run is refused before any review while
+  `hi/` differs from the run's session base (AGENT-18 hi guard).
 
 ### E.4 `corvidinho daemon` under systemd (CLI-8, AUTONOMOUS-4)
 

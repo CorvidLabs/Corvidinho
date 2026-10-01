@@ -17,7 +17,9 @@ artifact: requirements
   GITHUB-5 / GITHUB-6 / GITHUB-9 (the /work PR gates unchanged), PROCESS-1
   (criteria change only through a confirmed capture).
 - Added: REQ-agent-520 (the gate, the parse, the prompt block),
-  REQ-plugins-520 (file tools refuse hi/ in hi repos), REQ-discord-520
+  REQ-plugins-520 (file tools refuse hi/ in hi repos), REQ-plugins-521
+  (`github-pr-create` inside a run refuses while hi/ differs from the run's
+  session base), REQ-discord-520
   (`/work` refuses its PR with `hi-changed` before commit, push and the
   fallback re-verify).
 - No env var, config key, flag, NDJSON field, protocol or schema change.

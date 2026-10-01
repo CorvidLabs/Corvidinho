@@ -432,7 +432,10 @@ diffstat, commits) plus the verify result, with repo/model text in code fences
 and secrets scrubbed. Allowlisting these plugins also offers them to the owner's
 spawned agent (`task run` offers allowlisted dangerous tools to ADMIN runs, CLI-3), so
 the model can commit, push or open a PR itself before the run's verify; this step
-still opens the PR only after verify passes. Non-owner runs never get them.
+still opens the PR only after verify passes. In a repo that uses hi, the model's own
+`github-pr-create` is refused (`refused (AGENT-18): … so this run opens no PR`) while
+anything under `hi/` differs from the run's session base, the same check the verify gate
+makes. Non-owner runs never get them.
 
 ### Second-model review before every PR (GITHUB-9 / GITHUB-9.a)
 

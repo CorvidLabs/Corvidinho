@@ -9,8 +9,9 @@ artifact: docs
   verify gate (`hi guard: …`, the file tools refuse hi/); the /work PR gate
   table gains the `hi/` row (`PR: not opened — this repo's hi/ changed …`).
 - `docs/DISCORD-GO-LIVE.md`: `files-delete` row, the mutating file tools
-  paragraph (hi/ refused in hi repos; captures made with the `hi` CLI outside
-  a run are not checked) and the /work PR step list.
+  paragraph (hi/ refused in hi repos; `github-pr-create` inside a run; what
+  the session base means for captures made with the `hi` CLI outside a run)
+  and the /work PR step list.
 - Specs: `agent.spec.md` (files list, Public API, invariants, scenario,
   error rows), `plugins.spec.md` (invariant, scenario, error row),
   `discord.spec.md` (`hi-changed`, error row), each module's `testing.md`.

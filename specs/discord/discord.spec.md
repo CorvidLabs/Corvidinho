@@ -703,7 +703,9 @@ before anything is committed or pushed (AGENT-18, REQ-discord-518), and
 `hi-changed`: in a repo that uses hi (read from the merge-base, HEAD and the
 work tree), anything under `hi/` that differs from the merge-base, committed
 on the branch or left in the tree (`hiChangesSince`: a criterion, a retired
-entry or any other `hi/` file), or a hi/ diff that cannot be read, keeps the
+entry or any other `hi/` file, an assume-unchanged or skip-worktree edit
+included; a `hi/` commit on the branch counts whoever made it, since the PR
+would carry it), or a hi/ diff that cannot be read, keeps the
 PR from opening before the pre-push lane (so a trusted and a re-run verify
 both hold to it) and before anything is committed or pushed: no run can make
 an approved capture yet (AGENT-18 hi guard, REQ-discord-520), and

@@ -187,6 +187,35 @@ describe("what changed under hi/ since the session base (AGENT-18 hi guard, REQ-
     expect(gone?.retired).toEqual(["AGENT-2"]);
   });
 
+  test("an edit git is told not to look at (assume-unchanged, skip-worktree) still counts; a sparse-checkout gap does not", async () => {
+    const repo = makeRepo();
+    const base = head(repo);
+    const agent = join(repo, "hi", "agent.md");
+    writeFileSync(join(repo, "hi", "extra.md"), "# Extra\n");
+    gitIn(repo, "add", "-A");
+    gitIn(repo, "commit", "-q", "-m", "extra");
+    const base2 = head(repo);
+    expect(await hiChangesSince(repo, base2)).toEqual({ criteria: [], retired: [], files: [] });
+
+    // assume-unchanged: git diff no longer shows the dirty edit.
+    gitIn(repo, "update-index", "--assume-unchanged", "hi/agent.md");
+    edit(agent, "a second promise", "a hidden promise");
+    expect(gitIn(repo, "diff", "--name-only", base2, "--", "hi").trim()).toBe("");
+    expect(await hiChangesSince(repo, base2)).toEqual({ criteria: ["AGENT-19"], retired: [], files: [] });
+    writeFileSync(agent, HI_AGENT);
+    expect(await hiChangesSince(repo, base2)).toEqual({ criteria: [], retired: [], files: [] });
+    gitIn(repo, "update-index", "--no-assume-unchanged", "hi/agent.md");
+
+    // skip-worktree: the same; a skip-worktree file missing from disk (sparse) is no change.
+    gitIn(repo, "update-index", "--skip-worktree", "hi/agent.md", "hi/extra.md");
+    edit(agent, "## Retired", "- **AGENT-22**  Hidden.\n\n## Retired");
+    rmSync(join(repo, "hi", "extra.md"));
+    expect(gitIn(repo, "diff", "--name-only", base2, "--", "hi").trim()).toBe("");
+    expect(await hiChangesSince(repo, base2)).toEqual({ criteria: ["AGENT-22"], retired: [], files: [] });
+    // Against the first base, the committed extra.md is a change too.
+    expect((await hiChangesSince(repo, base))?.files).toEqual(["hi/extra.md"]);
+  });
+
   test("a run with no git base compares hi/ with the snapshot taken at planning", async () => {
     const dir = makeNonGit();
     const start = hiSnapshot(dir)!;
@@ -208,6 +237,8 @@ describe("what changed under hi/ since the session base (AGENT-18 hi guard, REQ-
     expect(note).toContain("criteria AGENT-19; retired entries AGENT-2; other hi/ files hi/notes.txt");
     expect(note).toContain("no approved capture made the change");
     expect(note).toContain("no run can make one yet");
+    // It can't tell who made a change that was already there, so it undoes only its own.
+    expect(note).toContain("Undo a hi/ change this run made; leave one that was already there for the owner");
     expect(note).toContain("(AGENT-18)");
   });
 });
@@ -456,6 +487,91 @@ describe("the verify gate blocks done on any hi/ change since the session base (
     expect(block).toContain("keeps the run from being verified and /work from opening a PR");
     expect(block).toContain("no run can make one yet");
     expect(renderRepoWaysBlock({ sdd: true, hi: false, trust: false })).not.toContain("under hi/");
+  });
+});
+
+// ------------------------------------------------------------------ github-pr-create
+
+describe("github-pr-create inside a run opens no PR while hi/ differs from the session base (REQ-plugins-521)", () => {
+  /** Missing allowlist file: the gate never reads an operator's real file (ALLOW-4). */
+  const ghEnv = {
+    CORVIDINHO_GITHUB_DRY_RUN: "1",
+    CORVIDINHO_GITHUB_ALLOW_REPOS: "acme/widget",
+    CORVIDINHO_ALLOWLIST_FILE: join(tempBase(), "no-allowlist.toml"),
+  };
+
+  async function withGhEnv<T>(fn: () => Promise<T>): Promise<T> {
+    const prev: Record<string, string | undefined> = {};
+    for (const [k, v] of Object.entries(ghEnv)) {
+      prev[k] = process.env[k];
+      process.env[k] = v;
+    }
+    try {
+      return await fn();
+    } finally {
+      for (const [k, v] of Object.entries(prev)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  }
+
+  function prCreate(cwd: string): Promise<PluginHandlerResult> {
+    return tool(
+      "github-pr-create",
+      ["--repo", "acme/widget", "--title", "bump x", "--head", "main", "--base", "main"],
+      cwd,
+      { allowlist: new Set(["github-pr-create"]) },
+    );
+  }
+
+  test("a hi/ change since the session base refuses it with the AGENT-18 line before any review; untouched hi/ is not refused", async () => {
+    await withGhEnv(async () => {
+      const repo = makeRepo();
+      const tries: PluginHandlerResult[] = [];
+      const blocked = await runTask({
+        cwd: repo,
+        maxRetries: 0,
+        verifyRunner: lane().runner,
+        execute: async () => {
+          // A shell edit the file tools would refuse, committed as a PR would carry it.
+          edit(join(repo, "hi", "agent.md"), "## Retired", "- **AGENT-23**  Made up for a PR.\n\n## Retired");
+          gitIn(repo, "commit", "-q", "-am", "criteria");
+          tries.push(await prCreate(repo));
+          return { summary: "opened?", filesChanged: [] };
+        },
+      });
+      expect(tries[0]!.ok).toBe(false);
+      expect(tries[0]!.exitCode).toBe(2);
+      expect(tries[0]!.error).toContain("refused (AGENT-18)");
+      expect(tries[0]!.error).toContain("criteria AGENT-23");
+      expect(tries[0]!.error).toContain("this run opens no PR");
+      expect(blocked.state).toBe("failed");
+
+      // hi/ untouched in a run: the hi guard lets it through to the next gate (GITHUB-9 here).
+      const clean = makeRepo();
+      const ok: PluginHandlerResult[] = [];
+      await runTask({
+        cwd: clean,
+        maxRetries: 0,
+        verifyRunner: lane().runner,
+        execute: async () => {
+          writeFileSync(join(clean, "src", "app.ts"), "export const x = 6;\n");
+          ok.push(await prCreate(clean));
+          return { summary: "edited", filesChanged: ["src/app.ts"] };
+        },
+      });
+      expect(ok[0]!.error ?? "").not.toContain("AGENT-18");
+    });
+  });
+
+  test("no run in progress (an operator's own call, the /work step): the hi guard does not apply here", async () => {
+    await withGhEnv(async () => {
+      const repo = makeRepo();
+      edit(join(repo, "hi", "agent.md"), "a second promise", "an operator's promise");
+      const r = await prCreate(repo);
+      expect(r.error ?? "").not.toContain("AGENT-18");
+    });
   });
 });
 

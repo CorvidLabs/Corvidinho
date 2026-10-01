@@ -670,7 +670,9 @@ The hi guard (AGENT-18 hi clause, guard half, REQ-agent-520):
 `files`), `HiSnapshot`, `parseHiEntries(text)`, `hiChangesSince(root, base)`,
 `hiSnapshot(root)`, `hiChangesFromSnapshot(root, start)`,
 `hiChangeCount(changes)`, `hiChangeSummary(changes)`, `hiGuardNote(changes)`,
-`HI_GUARD_UNREADABLE_NOTE` and `HI_NO_CAPTURE_YET`; `SddRun` gains
+`HI_GUARD_UNREADABLE_NOTE`, `HI_NO_CAPTURE_YET`, `hiRunChanges(cwd, run)` (the
+gate's comparison for a run) and `hiPrRefusal(cwd)` (`github-pr-create`
+inside a run, REQ-plugins-521); `SddRun` gains
 `hiStart` (hi/ at planning for a run with no git session base). No env var,
 config key, flag or schema.
 
@@ -1065,18 +1067,24 @@ uses hi (the start scan merged with a scan now), the agent never changes the
 criteria itself. Before the lane runs, everything under `hi/` is compared
 with the session base (`hiChangesSince`: tracked paths that differ from the
 base commit, committed or not, and untracked ones, ignored files included;
-for a run with no git session base, hi/ as it was at planning,
-`hiSnapshot`). Any difference — a criterion added, removed or reworded, a
+git never asks a configured fsmonitor, and an assume-unchanged or
+skip-worktree `hi/` entry whose file is not its index blob counts too; for a
+run with no git session base, hi/ as it was at planning, `hiSnapshot`). Any difference — a criterion added, removed or reworded, a
 retired entry changed, or any other `hi/` file (intent prose, notes) — made
 by this run or left by an earlier one, is a failed verify whose `hi guard:`
-note (what changed, and that no run can make an approved capture yet) is the
-retry's feedback, with no lane run; after the retries the run fails with the
+note (what changed, that no run can make an approved capture yet, and to undo
+a hi/ change this run made but leave one that was already there for the
+owner) is the retry's feedback, with no lane run; after the retries the run fails with the
 stuck ask. What cannot be read fails closed. No run can make an approved
 capture yet (drafting criteria and the capture card come later), so every
 `hi/` change blocks. The tool loop's hi block says the file tools refuse
-`hi/` and that any `hi/` change blocks done and the PR. A run that changed
-nothing is not checked, and commits made outside a Corvidinho run never meet
-this gate.
+`hi/` and that any `hi/` change blocks done and the PR; the run's own
+`github-pr-create` holds to the same comparison (REQ-plugins-521). A run that
+changed nothing is not checked. The guard runs only inside Corvidinho runs
+and `/work`'s PR step: a capture made with the `hi` CLI outside any run that
+is already in the session base never blocks, but a `hi/` commit on the run's
+own branch that is not yet on the remote's default branch counts whoever
+made it, since the run cannot tell.
 
 Own SpecSync change (AGENT-18.a, REQ-agent-519): `runTask` keeps a per-cwd
 ledger for the run. `specsync-change-new` records the ids its own spawn added
@@ -1357,6 +1365,7 @@ A change the run did not open is never touched.
 | Git diff unreadable in a repo whose SpecSync workflow requires a change | failed verify with the "could not read what changed" `SpecSync gate:` note (REQ-agent-518) |
 | In a hi repo, anything under `hi/` differs from the session base (made by the run, left by an earlier one, or committed mid-run) | `hi guard:` note naming the criteria, retired entries and other `hi/` files; failed verify with no lane run, retry with the note, then failed with the stuck ask (REQ-agent-520) |
 | hi/ cannot be read or diffed in a hi repo | failed verify with the "could not read what changed under hi/" `hi guard:` note (REQ-agent-520) |
+| A `hi/` file marked assume-unchanged or skip-worktree is edited on disk (git diff shows nothing) | still a `hi/` change: `hi guard:` note, failed verify; a skip-worktree file missing from disk (sparse checkout) is not (REQ-agent-520) |
 | Own change on a repo other than Corvidinho after a green lane | one Text line: it stays open for a human; nothing approved (REQ-agent-519) |
 | Own change on Corvidinho, approve or finalize not allowlisted, refused or failing | one Text line with the scrubbed reason; the change stays open for a human; the run stays verified (REQ-agent-519) |
 | Lane fails when re-run over what approve and finalize wrote | run failed, not verified, no retry; the summary says so (REQ-agent-519) |

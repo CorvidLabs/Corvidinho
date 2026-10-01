@@ -811,7 +811,6 @@ export function citedHiIds(text: string, families: ReadonlySet<string>): string[
   return [...out];
 }
 
-
 // ------------------------------------------------------------------ hi guard
 
 /**
@@ -944,25 +943,86 @@ function zList(out: string): string[] {
 }
 
 /**
+ * git never asks a configured fsmonitor here (like the AGENT-15 workspace
+ * diff): one could report hi/ edits as unchanged, and it runs a program.
+ */
+const NO_FSMONITOR = ["-c", "core.fsmonitor=false"];
+
+/**
+ * hi/ index entries git is told not to look at — assume-unchanged (a
+ * lowercase `ls-files -v` tag) or skip-worktree (`S` / `s`) — whose file on
+ * disk is not their index blob: `git diff` trusts the index for them, so a
+ * dirty edit there would not show. A skip-worktree entry with no file on
+ * disk is a sparse checkout, not a change. Null when unreadable.
+ */
+async function hiHiddenEdits(root: string): Promise<string[] | null> {
+  const r = await runGit(root, [...NO_FSMONITOR, "ls-files", "-v", "-s", "-z", "--", HI_DIR], {
+    maxStdoutBytes: HI_LIST_MAX_BYTES,
+  });
+  if (!ok(r)) return null;
+  const out: string[] = [];
+  for (const rec of zList(r.stdout)) {
+    const m = rec.match(/^(\S) (\d{6}) ([0-9a-f]+) \d\t([\s\S]+)$/);
+    if (!m) return null;
+    const [, tag, mode, oid, path] = m as unknown as [string, string, string, string, string];
+    const assumed = tag !== tag.toUpperCase();
+    const skipped = tag === "S" || tag === "s";
+    if (!assumed && !skipped) continue;
+    const abs = join(root, path);
+    let st: Stats;
+    try {
+      st = lstatSync(abs);
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException)?.code !== "ENOENT") return null;
+      if (!skipped) out.push(path);
+      continue;
+    }
+    const want = await runGit(root, ["cat-file", "blob", oid], { maxStdoutBytes: READ_MAX_BYTES });
+    let have: string | null = null;
+    try {
+      have = mode === "120000" ? (st.isSymbolicLink() ? readlinkSync(abs) : null) : readHiText(abs);
+    } catch {
+      have = null;
+    }
+    if (!ok(want) || have === null || have !== want.stdout) out.push(path);
+  }
+  return out;
+}
+
+/**
  * AGENT-18 hi guard: what changed under hi/ between commit `base` and the
  * working tree of `root` (a git work tree top): tracked paths that differ
- * (`git diff --name-only base -- hi`, committed or not) and untracked ones,
- * ignored files included (`git ls-files --others -- hi`). Null when git
- * can't tell (the caller fails closed). Never throws.
+ * (`git diff --name-only base -- hi`, committed or not; an assume-unchanged
+ * or skip-worktree entry whose file differs from the index, too) and
+ * untracked ones, ignored files included (`git ls-files --others -- hi`).
+ * Null when git can't tell (the caller fails closed). Never throws.
  */
 export async function hiChangesSince(root: string, base: string): Promise<HiChanges | null> {
   try {
     const diff = await runGit(
       root,
-      ["diff", "--name-only", "-z", "--no-renames", "--no-ext-diff", "--no-textconv", base, "--", HI_DIR],
+      [
+        ...NO_FSMONITOR,
+        "diff",
+        "--name-only",
+        "-z",
+        "--no-renames",
+        "--no-ext-diff",
+        "--no-textconv",
+        base,
+        "--",
+        HI_DIR,
+      ],
       { maxStdoutBytes: HI_LIST_MAX_BYTES },
     );
     if (!ok(diff)) return null;
-    const others = await runGit(root, ["ls-files", "--others", "-z", "--", HI_DIR], {
+    const others = await runGit(root, [...NO_FSMONITOR, "ls-files", "--others", "-z", "--", HI_DIR], {
       maxStdoutBytes: HI_LIST_MAX_BYTES,
     });
     if (!ok(others)) return null;
-    const paths = [...zList(diff.stdout), ...zList(others.stdout)];
+    const hidden = await hiHiddenEdits(root);
+    if (hidden === null) return null;
+    const paths = [...zList(diff.stdout), ...zList(others.stdout), ...hidden];
     return await classifyHiChanges(
       paths,
       (p) => blob(root, base, p),
@@ -1071,17 +1131,65 @@ export const HI_NO_CAPTURE_YET =
 
 /**
  * The one line the verify gate and the model get when hi/ changed since the
- * session base; null when nothing did.
+ * session base; null when nothing did. The run can't tell who made a change
+ * that was already there (an earlier run, or a commit on its branch not yet
+ * on the base branch), so it undoes only its own and leaves the rest to the
+ * owner.
  */
 export function hiGuardNote(c: HiChanges): string | null {
   if (hiChangeCount(c) === 0) return null;
   return (
     `hi guard: this repo's hi/ changed since the session base (${hiChangeSummary(c)}) ` +
     `and no approved capture made the change, so the run is not verified and /work opens no PR; ` +
-    `${HI_NO_CAPTURE_YET}. Undo the hi/ change and leave criteria to the owner (AGENT-18).`
+    `${HI_NO_CAPTURE_YET}. Undo a hi/ change this run made; leave one that was already there ` +
+    `for the owner and say so in your reply (AGENT-18).`
   );
 }
 
 /** The gate's line when what changed under hi/ can't be read (fail closed). */
 export const HI_GUARD_UNREADABLE_NOTE =
   "hi guard: could not read what changed under hi/ since the session base, so the run is not verified (AGENT-18).";
+
+/**
+ * AGENT-18 hi guard for the run `run` in `cwd`: what changed under hi/
+ * since its git session base, else since hi/ at planning (a run with no git
+ * base); null when that can't be read or there is nothing to compare
+ * against (the callers fail closed). Never throws.
+ */
+export async function hiRunChanges(cwd: string, run: SddRun): Promise<HiChanges | null> {
+  try {
+    if (run.base) return await hiChangesSince(cwd, run.base);
+    if (run.hiStart) return await hiChangesFromSnapshot(cwd, run.hiStart);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * AGENT-18 hi guard (REQ-plugins-521): why `github-pr-create`, called while
+ * a Corvidinho run is in progress in `cwd`, may not open a PR — the repo
+ * uses hi (`repoWaysNow`) and hi/ changed since the run's session base, or
+ * that can't be read. Null when it may, and when no run is in progress
+ * there: an operator's own `plugins run`, or the `/work` PR step, which
+ * holds hi/ to the merge-base itself (REQ-discord-520). Never throws; any
+ * doubt refuses.
+ */
+export async function hiPrRefusal(cwd: string): Promise<string | null> {
+  const run = currentSddRun(cwd);
+  if (!run) return null;
+  const unreadable =
+    "refused (AGENT-18): could not read what changed under hi/ since the session base, so this run opens no PR";
+  try {
+    if (!(await repoWaysNow(cwd)).ways.hi) return null;
+    const changes = await hiRunChanges(cwd, run);
+    if (changes === null) return unreadable;
+    if (hiChangeCount(changes) === 0) return null;
+    return (
+      `refused (AGENT-18): this repo's hi/ changed since the session base (${hiChangeSummary(changes)}) ` +
+      `and no approved capture made the change, so this run opens no PR; ${HI_NO_CAPTURE_YET}`
+    );
+  } catch {
+    return unreadable;
+  }
+}

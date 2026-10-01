@@ -940,11 +940,19 @@ seen; a non-git hi project is blocked the same way. No false block: hi/
 untouched, a repo whose `hi/` has no front matter, and a capture committed on
 main outside any run before the talk branched all end verified. The hi block
 of `renderRepoWaysBlock` says the file tools refuse hi/ and any hi/ change
-blocks done and the PR.
+blocks done and the PR. Review round: an assume-unchanged and a
+skip-worktree `hi/agent.md` edited on disk (which `git diff` no longer shows)
+still count and a sparse skip-worktree gap does not; the note says to undo
+only a change this run made; `github-pr-create` inside a run refuses while
+hi/ changed (REQ-plugins-521). 20 tests.
 - Fail on base (b84c75f's `src/agent/loop.ts`, `src/work/pr.ts`,
   `plugins/files/commands.ts` and `plugins/files/protectedPaths.ts` swapped
   in, the new `src/agent/repo-ways.ts` kept so the file loads): 11 of 17 fail
   (every gate, file-tool and /work case); the 6 that pass are the
   repo-ways units, the prompt block and the no-false-block case. With
   b84c75f's `repo-ways.ts` too, the file does not load (the hi guard exports
-  are missing). Restored: 17 of 17 pass.
+  are missing). Restored: 17 of 17 pass. Review round, with b84c75f's
+  `plugins/github/commands.ts` swapped in as well: 12 of 20 fail (the 11
+  plus the `github-pr-create` refusal); with the pre-review 82630d9
+  `repo-ways.ts` and `loop.ts`, the hidden-edit and note-advice tests fail
+  too. Restored: 20 of 20 pass.
