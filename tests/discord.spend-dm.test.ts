@@ -62,7 +62,7 @@ function pendingWarningDb() {
 }
 
 describe("the public spend text (src/agent/spend-notice.ts, SAFE-14.a)", () => {
-  const window = (spent: number) => ({ spentMicroUsd: spent, calls: 3, estimatedCalls: 0 });
+  const window = (spent: number) => ({ spentMicroUsd: spent, calls: 3, estimatedCalls: 0, unknownCalls: 0 });
   const cap = (spent: number, priced = true): SpendSnapshot => ({
     kind: "cap",
     capMicroUsd: 5_000_000,

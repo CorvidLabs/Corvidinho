@@ -22,7 +22,7 @@ import {
   type TaskResult,
 } from "./agent/index.ts";
 import { loadLlmEnv } from "./agent/execute.ts";
-import type { ModelFallback, ModelUsage } from "./agent/types.ts";
+import type { ModelFallback, ModelUsage, TaskWorkspaceReport } from "./agent/types.ts";
 import type { InjectionNotice } from "./agent/untrusted.ts";
 import { startWorkspaceDiff } from "./agent/workspace-diff.ts";
 import { delegateDepthFromEnv } from "./autonomous/delegate.ts";
@@ -42,6 +42,12 @@ import {
   startWatchPoller,
 } from "./watch/index.ts";
 import { runDaemon } from "./daemon/index.ts";
+import {
+  CLI_HERE_HINT,
+  cliWorkspaceStartLine,
+  enterCliTaskWorkspace,
+  finishCliTaskWorkspace,
+} from "./worktree/cli-run.ts";
 import {
   backupDoctorCheck,
   dataDirDoctorCheck,
@@ -115,11 +121,14 @@ Usage:
   corvidinho specsync <list|read|check|brief|coverage|score|change-list|ship-status> [...]
                                     SpecSync agent tools (SPECSYNC-1..6; local binary)
   corvidinho task run [--task TEXT] [--tier read|tool|code] [--max-retries N]
-                    [--output text|json|ndjson] [--json]
+                    [--output text|json|ndjson] [--json] [--here]
                                     LLM tool loop (plugins) when key set; prove-before-done verify gate (AGENT-3/4/5):
                                     always on, runs the verify lane when the run's real git diff changed (AGENT-14/15)
                                     --json = --output json (one result); ndjson = live event stream
                                     for bridges, one versioned frame per line (AGENT-8 / CLI-7)
+                                    In a git repo it works in its own new worktree made from HEAD (uncommitted and
+                                    untracked files are not in it); a clean one is removed at the end, one with
+                                    changes is kept and named. --here runs it in this checkout (SESSION-WORKTREE-1.a)
   corvidinho --non-interactive ...  Deny dangerous plugins unless allowlisted (SAFE-1 / CLI-3)
   corvidinho --project <path> ...   Run as if started in <path>, without cd: its fledge.toml, specs
                                     and .env files, as Bun loads them there (CLI-5)
@@ -775,7 +784,33 @@ async function pluginsRun(
 }
 
 const TASK_RUN_USAGE =
-  "usage: corvidinho task run [--task TEXT] [--tier read|tool|code] [--max-retries N] [--output text|json|ndjson] [--json]";
+  "usage: corvidinho task run [--task TEXT] [--tier read|tool|code] [--max-retries N] [--output text|json|ndjson] [--json] [--here]";
+
+/**
+ * SESSION-WORKTREE-1.a (REQ-cli-122): `--here` is read only from `task run`'s
+ * own args (`rest` after `task run`, which never holds the `--task` value)
+ * before the first `--`, so task text or an argument after `--` never turns
+ * it on, and it is no global flag of any other command.
+ */
+export function parseTaskHere(args: readonly string[]): boolean {
+  for (const a of args) {
+    if (a === "--") return false;
+    if (a === "--here") return true;
+  }
+  return false;
+}
+
+/** A local task run's workspace could not be made (REQ-cli-122); carries its hint and exit code. */
+export class TaskWorkspaceError extends Error {
+  constructor(
+    message: string,
+    readonly hint: string,
+    readonly exitCode: number,
+  ) {
+    super(message);
+    this.name = "TaskWorkspaceError";
+  }
+}
 
 /**
  * `--output text|json|ndjson` for `task run` (CLI-7). Parsed only here so a
@@ -819,9 +854,9 @@ async function taskRun(opts: {
   taskText: string | undefined;
   tier: CapabilityTier | undefined;
   nonInteractive: boolean;
+  /** SESSION-WORKTREE-1.a: run in this checkout instead of a new worktree. */
+  here: boolean;
 }): Promise<number> {
-  const cwd = process.cwd();
-  const config = loadAgentConfig(cwd);
   const events: AgentEvent[] = [];
   const json = opts.output === "json";
   // Machine modes keep stderr quiet; ndjson writes each frame as it happens.
@@ -848,6 +883,95 @@ async function taskRun(opts: {
       console.error(`verify: ${e.success ? "pass" : "fail"}`);
     }
   };
+  // AGENT-3 (REQ-cli-244): SIGINT / SIGTERM abort the run so the verify lane
+  // and tool loop stop and the cancelled result below is still printed (exit
+  // 130). `once`: a second signal takes the default action. A signal this
+  // process started with ignored (a background job's SIGINT) is not hooked:
+  // a listener would replace SIG_IGN and removing it restores SIG_DFL.
+  // Hooked before the worktree is made, so a signal then cancels too
+  // (REQ-cli-122).
+  const abort = new AbortController();
+  const onSignal = () => abort.abort();
+  const hooked = forwardedSignals().filter(
+    (sig) => sig === "SIGINT" || sig === "SIGTERM",
+  );
+  for (const sig of hooked) process.once(sig, onSignal);
+  try {
+    // SESSION-WORKTREE-1.a (REQ-cli-122): in a git repo the run works in its
+    // own worktree unless --here; creation fails closed (never the checkout).
+    const startDir = process.cwd();
+    const entered = await enterCliTaskWorkspace({
+      cwd: startDir,
+      here: opts.here,
+      signal: abort.signal,
+    });
+    if (!entered.ok) {
+      return reportCliError(
+        entered.cancelled
+          ? new TaskWorkspaceError(entered.error, "nothing ran and nothing was left behind; run it again", 130)
+          : new TaskWorkspaceError(entered.error, CLI_HERE_HINT, 1),
+        { json },
+      );
+    }
+    const ws = entered.workspace;
+    if (ws.kind !== "worktree") {
+      return await taskRunIn(ws.cwd, opts, { events, handleEvent, quiet, json, ndjson, signal: abort.signal });
+    }
+    handleEvent({ type: "Text", text: cliWorkspaceStartLine(ws) });
+    let workspace: TaskWorkspaceReport | undefined;
+    const finish = async () => {
+      if (workspace) return workspace;
+      try {
+        process.chdir(startDir);
+      } catch {
+        // The checkout is gone; the worktree is still cleaned from its repo.
+      }
+      const done = await finishCliTaskWorkspace(ws);
+      if (done.note && !quiet) console.error(done.note);
+      workspace = done.report;
+      return workspace;
+    };
+    try {
+      process.chdir(ws.cwd);
+      return await taskRunIn(ws.cwd, opts, {
+        events,
+        handleEvent,
+        quiet,
+        json,
+        ndjson,
+        signal: abort.signal,
+        beforeReport: finish,
+      });
+    } finally {
+      await finish();
+    }
+  } finally {
+    for (const sig of hooked) process.off(sig, onSignal);
+  }
+}
+
+/** The body of {@link taskRun}, in the directory the run works in. */
+async function taskRunIn(
+  cwd: string,
+  opts: {
+    maxRetries: number | undefined;
+    taskText: string | undefined;
+    tier: CapabilityTier | undefined;
+    nonInteractive: boolean;
+  },
+  io: {
+    events: AgentEvent[];
+    handleEvent: (e: AgentEvent) => void;
+    quiet: boolean;
+    json: boolean;
+    ndjson: ReturnType<typeof createNdjsonWriter> | null;
+    signal: AbortSignal;
+    /** Runs after the run ends and before the result is printed (REQ-cli-122). */
+    beforeReport?: () => Promise<TaskWorkspaceReport | undefined>;
+  },
+): Promise<number> {
+  const { events, handleEvent, quiet, json, ndjson } = io;
+  const config = loadAgentConfig(cwd);
   // AGENT-10: say up front that no provider is set (the failed result says
   // it too, for the machine modes whose stderr stays quiet).
   const noProvider = loadLlmEnv(process.env, opts.tier).notice;
@@ -900,17 +1024,6 @@ async function taskRun(opts: {
   let answeredBy: string | undefined;
   let usageByModel: ModelUsage[] | undefined;
   const modelFallback: ModelFallback[] = [];
-  // AGENT-3 (REQ-cli-244): SIGINT / SIGTERM abort the run so the verify lane
-  // and tool loop stop and the cancelled result below is still printed (exit
-  // 130). `once`: a second signal takes the default action. A signal this
-  // process started with ignored (a background job's SIGINT) is not hooked:
-  // a listener would replace SIG_IGN and removing it restores SIG_DFL.
-  const abort = new AbortController();
-  const onSignal = () => abort.abort();
-  const hooked = forwardedSignals().filter(
-    (sig) => sig === "SIGINT" || sig === "SIGTERM",
-  );
-  for (const sig of hooked) process.once(sig, onSignal);
   let result: TaskResult;
   try {
     result = await runTask({
@@ -923,7 +1036,7 @@ async function taskRun(opts: {
       ...(delegateDepthFromEnv() > 0
         ? { workspaceDiff: (dir: string) => startWorkspaceDiff(dir, {}, { nested: true }) }
         : {}),
-      signal: abort.signal,
+      signal: io.signal,
       onEvent: handleEvent,
       execute: async (ctx) => {
         if (ctx.verifyFeedback && !quiet) {
@@ -933,9 +1046,10 @@ async function taskRun(opts: {
       },
     });
   } finally {
-    for (const sig of hooked) process.off(sig, onSignal);
     setMustAskNotifier(prevNotifier);
   }
+  const workspace = await io.beforeReport?.();
+  if (workspace) result.workspace = workspace;
   if (spendWarning) result.spendWarning = spendWarning;
   if (injection) result.injection = injection;
   // Bounded (count, scrubbed then cut with a marker, REQ-cli-710) so a run of
@@ -1254,6 +1368,7 @@ export async function main(argv: string[]): Promise<number> {
         taskText,
         tier,
         nonInteractive,
+        here: parseTaskHere(rest.slice(2)),
       });
     }
     console.error(`${TASK_RUN_USAGE}\n`);
@@ -1271,7 +1386,9 @@ export function cliErrorHint(err: unknown): string {
   if (err instanceof PluginNotFoundError) {
     return "run `corvidinho plugins list` for the available commands";
   }
-  if (err instanceof ProjectDirError || err instanceof RemovedFlagError) return err.hint;
+  if (err instanceof ProjectDirError || err instanceof RemovedFlagError || err instanceof TaskWorkspaceError) {
+    return err.hint;
+  }
   const e = err as { code?: unknown; path?: unknown } | null;
   const code = e && typeof e === "object" && typeof e.code === "string" ? e.code : "";
   if (

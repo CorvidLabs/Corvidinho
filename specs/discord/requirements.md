@@ -309,7 +309,9 @@ Discord/WATCH spawn agent clients SHALL build subprocess argv with
 `buildCorvidinhoArgv` so `.ts` entrypoints always run under `bun`. When
 `task run` stdout is present (ndjson result frame or legacy `--json`), the
 Discord chat reply SHALL surface a parsed summary (state / verified /
-attempts + summary) rather than dumping raw JSON. Spawns SHALL NOT pass
+attempts + summary) rather than dumping raw JSON. Spawns SHALL pass `--here` right after `task run`, so the run works in the
+talk's worktree (the cwd given) and never makes a worktree of its own
+(REQ-cli-122). Spawns SHALL NOT pass
 `--no-verify` (the flag is removed and refused, REQ-cli-085) —
 prove-before-done (AGENT-4 / FLEDGE-2 / AGENT-14) always applies; a run whose
 real git diff is empty and that claimed no change ends with "no changes,
@@ -319,7 +321,7 @@ without a live Discord token.
 
 Acceptance Criteria
 - `.ts` bin → `["bun", "--no-env-file", bin, "task", "run", ...]`; non-`.ts` → `[bin, ...]`.
-- Spawn argv for Discord chat is `task run --task <prompt> --output ndjson` with **no** `--no-verify`.
+- Spawn argv for Discord chat is `task run --here --task <prompt> --output ndjson` with **no** `--no-verify`.
 - Valid result/json stdout → Discord body includes state and summary text.
 - Unparseable stdout falls back to truncated stdout/stderr.
 - No ProcessManager; allowlists unchanged; secrets out of repo.
@@ -891,7 +893,7 @@ Acceptance Criteria
 ### REQ-discord-073
 
 The Discord spawn agent client SHALL run
-`task run --task <prompt> --output ndjson`, read stdout line by
+`task run --here --task <prompt> --output ndjson` (`--here`, REQ-cli-122), read stdout line by
 line while the child runs, and forward each frame's live state, current tool,
 and token counts to `onStatus` so the thinking embed shows what the agent is
 doing (AGENT-8 / DISCORD-3). The reply summary SHALL come from the stream's
@@ -914,6 +916,7 @@ Acceptance Criteria
 - A protocol-3 frame's tool output never reaches the reply; the reply is the protocol-mismatch notice.
 - Spawn argv ends with `--output ndjson` (no `--json`) and has no `--no-verify`.
 - `checkProtocolVersion` treats a protocol-1 binary as a mismatch; `--protocol-version` prints 2.
+- Spawn argv is exactly `task run --here --task <prompt> --output ndjson` (REQ-cli-122).
 
 ### REQ-discord-025
 
@@ -2714,7 +2717,7 @@ When a clarify or stuck ask's choices cannot be listed (the free-text ask of REQ
 - The live gateway SHALL route a MODAL_SUBMIT to the component handler with the form's text input values by input custom_id (`modalValues`); its replies parse no mentions and an ephemeral reply is flag 64. Only the form's `answer` custom_id with typed text is taken; a press id with typed text or the form id without it is ignored.
 - The submit SHALL pass, in order, the channel gate (REQ-discord-212), the actor gate with deny lists and a non-empty user/role allowlist (REQ-discord-201), mute/rate (REQ-discord-010), the not-yours / already-answered check and the expiry check, exactly as a press; every refusal is ephemeral only (zero-width ack, the admin allowlist tip, `MUTED` / `RATE_LIMITED`, "This choice isn't for you (or it was already answered)", `ASK_CHOICE_EXPIRED`), with no agent run, nothing posted or edited and the ask left pending (DISCORD-DENY). A submit on a Choose ask gets the not-for-you reply.
 - A submit whose scrubbed text is thin or an explicit cancel SHALL be handled as the same text in a reply is (AUTONOMY-5/6): a thin or blank answer (`isThinAck`: `ok`, `sure`, emoji-only, whitespace and similar) SHALL NOT clear the ask or run the agent — the question is restated once, privately (an ephemeral `formatAskReply` with `ASK_ANSWER_HINT` and the Answer button); an explicit cancel (`isCancelAsk`: `cancel`, `never mind`, `forget it`, `stop asking`, `nm`) SHALL clear every open ask of the session, as a cancel reply does (SESSION-MULTI-3), with the ephemeral `ASK_CANCELLED_ACK` and no run. Neither posts or edits anything in the channel.
-- An accepted submit SHALL be SAFE-6 scrubbed, control characters dropped, trimmed and cut at `ASK_ANSWER_MAX` (`normalizeAskAnswer`); the ask SHALL be cleared first (a reply or second submit cannot resume twice); the submit gets the ephemeral `ASK_ANSWER_ACK`, deleted when the resumed run ends (DISCORD-ASK-8); the session SHALL resume (`resume: true`) with its thread replayed and the prompt `[Prior clarifying question you asked (the human is answering it now):\n<question>]\n\nHuman answer:\n<answer>` — the block a reply that answers the ask gets, `<answer>` being the answer as the same words in a reply reach the model: inside the `fenceSpeakerText` untrusted-data fence (header naming the role, `source=ask-answer`) for a team or community requester, unchanged for the owner (SAFE-12, REQ-discord-071) — with `humanText`, the memory query and the recorded human turn the scrubbed answer (not the fence), the presser's identity, memory and acting role as on a button pick, and the stub as the progress surface (content and button cleared) edited into the answer (DISCORD-ASK-7). The typed text SHALL NOT be posted.
+- An accepted submit SHALL be SAFE-6 scrubbed, control characters dropped, trimmed and cut at `ASK_ANSWER_MAX` (`normalizeAskAnswer`); the ask SHALL be cleared first (a reply or second submit cannot resume twice); the submit gets the ephemeral `ASK_ANSWER_ACK`, deleted when the resumed run ends (DISCORD-ASK-8); the session SHALL resume (`resume: true`) with its thread replayed and the prompt `[Prior clarifying question you asked (the human is answering it now):\n<question>]\n\nHuman answer:\n<answer>` — the block a reply that answers the ask gets, `<answer>` being the answer as the same words in a reply reach the model: inside the `fenceSpeakerText` untrusted-data fence (header naming the role, `source=ask-answer`) for a team or community requester, unchanged for the owner (SAFE-12, REQ-discord-071) — with `humanText`, the memory query and the recorded human turn the scrubbed answer (not the fence), the presser's identity, memory and acting role as on a button pick, and the stub as the progress surface (content cleared, its Answer button replaced by the run's Stop button while the run goes, REQ-discord-303) edited into the answer (DISCORD-ASK-7), which clears the Stop button. The typed text SHALL NOT be posted.
 - Before the ask is cleared, a team or community requester's scrubbed answer (not thin, not a cancel) SHALL be scanned by `inboundInjection` exactly as the same words in a chat reply in that session are, and a hit SHALL be refused as that reply is (SAFE-13, REQ-discord-071; `refuseInjectedAnswer`): no agent run, the ask left pending and the session live, nothing added to the thread; the submit gets an ephemeral refusal (`injectionRefusalHead` plus "I've flagged it to the owner", never the text; without an owner or a post function the `formatInjectionRefusal` line, ephemeral); the owner gets one fresh post in the session's channel (thread first), replying to the ask's stub, that pings only them (allowed mentions the owner only) and says an answer typed in the private Answer form looked like a prompt-injection attempt and why; that post is tracked on the session as a chat refusal is; and one `injection-suspected` / `denied` SAFE-5 row is appended (actor the requester, surface `discord:<session>`, digest of `ask-answer` and the reason ids). The owner's own answer is neither scanned nor fenced. The presser's acting role SHALL be resolved before this check by `resolveDiscordActingRole` with the presser's Discord role ids, as on the chat path (the same role a button pick runs with), so a declared team member allowlisted only by a Discord role is team on the form as in chat (REQ-discord-065).
 - A button pick's answer is the label of the pressed option, which the model wrote but may have copied from a non-owner's own (fenced) words: for a team or community presser it SHALL reach the resumed run as their words, inside the same `fenceSpeakerText` untrusted-data fence as their typed answer (header naming the role, `source=ask-pick`), the role being the presser's, resolved at press time by `resolveDiscordActingRole` with their Discord role ids as on the Answer form (SAFE-12.a, REQ-discord-071); the label is fenced, not scanned. `humanText`, the memory query and the recorded human turn stay the plain label. The owner's pick SHALL reach the run byte-identical to before (`[Prior clarifying question you asked (the human answered via Discord button):\n<question>]\n\nHuman answer:\n<label>`). The pick's claim of the ask and resume (DISCORD-ASK-3), expiry (DISCORD-ASK-5) and the option buttons cleared at once with "Got it — **<label>**" (DISCORD-ASK-8) are unchanged.
 - A pick whose option id matches none of the pressed ask's options (a forged or stale id, or a pick id on a free-text ask) SHALL be treated as expired once it has passed the gates above: the ephemeral `ASK_CHOICE_EXPIRED` only, no agent run, nothing posted or edited, the ask left pending (a real pick, answer or reply still answers it) and the raw option id in no prompt and no thread turn (SAFE-12.a).
@@ -2724,7 +2727,7 @@ When a clarify or stuck ask's choices cannot be listed (the free-text ask of REQ
 Acceptance Criteria
 - A chat clarify ask without listable options: the collapsed stub quotes the question, carries `ASK_ANSWER_HINT` (not `ASK_REPLY_HINT`), exactly one Answer button (`open` custom_id) and a footer embed; the pending ask is free text with the stub as `stubMessageId`. A spend-cap stop has no button and no pending ask.
 - The requester's Answer press calls `showModal` with `buildAnswerModal` (title ≤45, one type 18 label ≤45 with the question as description, one required type 4 paragraph input, `max_length` `ASK_ANSWER_MAX` ≤ 4000); nothing is posted, no run, the ask stays. Another user's press gets the not-for-you reply and no form.
-- The requester's submit resumes the same session with the reply's prior-question block and the trimmed answer (a community requester's inside the untrusted-data fence, `source=ask-answer`); ephemeral `ASK_ANSWER_ACK` then deleted; the stub is thin-updated and edited into the answer; the typed text is never posted; the ask is cleared and a second submit is "already answered". A secret in the text never reaches the run or the thread.
+- The requester's submit resumes the same session with the reply's prior-question block and the trimmed answer (a community requester's inside the untrusted-data fence, `source=ask-answer`); ephemeral `ASK_ANSWER_ACK` then deleted; the stub is thin-updated (content cleared, the Answer button replaced by the run's Stop button, REQ-discord-303) and edited into the answer, which clears the Stop button; the typed text is never posted; the ask is cleared and a second submit is "already answered". A secret in the text never reaches the run or the thread.
 - Another user's, a muted, a deny-listed (user or role), an off-channel, a rate-limited and a late submit (and the same presses) are refused ephemerally with no run and the ask kept; after the late one a thin reply restates without a button and a reply still answers it.
 - A reply to the stub answers the ask as before; a later Answer press or submit is "already answered". A thin reply restates with the live Answer button.
 - A thin or blank submit (`ok`, whitespace, `👍`, `sure!`) gets only the private restatement with the Answer button: no run, nothing posted, ask kept, nothing added to the thread; a real submit afterwards resumes. A `never mind` / `cancel` submit gets only the ephemeral `ASK_CANCELLED_ACK`, clears the free-text ask and an earlier open Choose ask of the session, runs nothing, and a later Answer press is "already answered".
@@ -3253,9 +3256,10 @@ stuck asks (AGENT-16.a, captured with `hi` in this change from Leif's
 cards; one pass at a time, never rejecting) over the asks the watch process
 recorded (REQ-watch-086). An ask older than `WATCH_OWNER_ASK_TTL_MS` (a day)
 SHALL be taken and given up with a log line, never sent. With the gateway's
-`sendDm` and an owner Discord id, each other ask SHALL be taken
+`sendDm` and an owner Discord id, each other stuck ask SHALL be taken
 (compare-and-delete, so two bridges never both send it) and sent to the owner
-only, by direct message, as `formatWatchStuckAskDm`: the `formatAskReply`
+only, by direct message, as `formatWatchStuckAskDm` (a spend-cap stop the
+watch process recorded is delivered as REQ-discord-199 says): the `formatAskReply`
 stuck post (`⚠️ I'm stuck and need a human.`, the question quoted, SAFE-6
 scrubbed and mass mentions defanged) with no mention (the DM notifies), led by
 `GitHub <owner/repo>#<n> — answer on the thread: <link>`; never posted to a
@@ -3278,6 +3282,7 @@ Acceptance Criteria
 - With no owner or no `sendDm` the ask stays pending; past a day it is given up (`expired`) with a log line and never sent.
 - A stop while the DM hangs: `settle` returns false after the grace and the ask is pending again.
 - A dry-run bridge whose gateway stub captures `sendDm` marks itself running, DMs the owner once for a recorded assignment ask within a few ticks (not again on later ticks), takes it, and clears its mark on stop.
+- A recorded spend-cap stop is DMed as REQ-discord-199 says (once per cap episode), not as a stuck ask.
 
 ### REQ-discord-096
 
@@ -3416,9 +3421,11 @@ answer or an explicit cancel").
   question, stored scrubbed in `ask_options`), else **Answer** (the same
   `open` custom id, opening the private form of REQ-discord-548), and
   **Cancel** (`cvask:cancel:srun_<id>`, a new `cancel` kind of
-  `parseAskCustomId`). A `spend-cap` stop SHALL carry **Cancel** only
-  (continuing past the cap is not a choice here) and its post SHALL stay
-  "💸 Work is paused for budget." (SAFE-14.a). The post's hint line
+  `parseAskCustomId`). A `spend-cap` stop SHALL carry **Continue**
+  (`SCHEDULE_ASK_CONTINUE_LABEL`, the same `open` custom id) and
+  **Cancel** (AUTONOMY-8: continuing past the cap goes through the owner's
+  spend card) and its post SHALL stay "💸 Work is paused for budget."
+  (SAFE-14.a). The post's hint line
   (`SCHEDULE_ASK_CHOOSE_HINT` / `SCHEDULE_ASK_ANSWER_HINT`, none for a
   spend-cap stop) SHALL name its buttons and never invite a reply: a
   channel reply SHALL NOT answer a schedule ask (schedule posts are not
@@ -3449,9 +3456,17 @@ answer or an explicit cancel").
   ask `answered`. Cancel SHALL close it `cancelled` with no answer. When the
   schedule is paused (the auto-pause, a SAFE-13 refusal, `/schedule pause`)
   the private ack of a pick, a typed answer or a Cancel SHALL add
-  `SCHEDULE_ASK_PAUSED_NOTE`: closing the question does not resume it. A
-  `spend-cap` ask SHALL refuse Choose, Answer and a form submit like
-  someone else's press. Closing is a compare-and-set on `ask_closed_at IS
+  `SCHEDULE_ASK_PAUSED_NOTE`: closing the question does not resume it. On a
+  `spend-cap` ask, the live owner's **Continue** (its `open` press) SHALL
+  close it `continued` with no answer handed on (so the stop's amounts never
+  reach a run's prompt) and ack privately `SCHEDULE_ASK_CONTINUED_ACK` (no
+  amount; plus `SCHEDULE_ASK_PAUSED_NOTE` on a paused schedule): the next
+  due run goes ahead and any call it makes past a cap, or at an unknown
+  price, asks the owner on a spend card with a one-time code first
+  (REQ-agent-198, REQ-agent-199). Anyone else's Continue — the creator's
+  included, since only the owner approves spend — and a pick or a form
+  submit on a `spend-cap` ask SHALL be refused like someone else's press;
+  Cancel stays open to the creator and the owner. Closing is a compare-and-set on `ask_closed_at IS
   NULL` recording `ask_outcome`, `ask_answer` (scrubbed) and
   `ask_closed_by`; nothing runs at the press.
 - No lapse. A schedule ask's controls SHALL NOT expire while it is open
@@ -3464,7 +3479,7 @@ answer or an explicit cancel").
   answerer's words (`fenceSpeakerText`, `ask-answer` for a typed answer,
   `ask-pick` for a pick; SAFE-12 / SAFE-12.a). Only while the answered run
   is the schedule's newest finished run (`ScheduleStore.answeredAsk`), so no
-  later run gets it again. A cancelled ask hands nothing on.
+  later run gets it again. A cancelled or continued ask hands nothing on.
 - Schema v15 (forward-only, idempotent). `schedule_runs` SHALL gain
   `ask_options`, `ask_blocking` (default 0), `ask_closed_at`,
   `ask_outcome`, `ask_answer`, `ask_closed_by`, `ask_skip_at` and
@@ -3488,13 +3503,14 @@ Acceptance Criteria
 - The auto-pause ask blocks; `/schedule resume` leaves it open and the next due slot waits with one note; once the owner answers, the next slot runs.
 - An ask claimed for posting whose post never went out (a crash between the claim and the post): the next due slot waits and its one wait note carries the ask's Choose + Cancel, which close it.
 - A daemon's due run waits too, stamping `ask_skip_at`; the bridge posts the ask, then the one note.
-- Listed choices post Choose + Cancel (`cvask:open:srun_…`, `cvask:cancel:srun_…`) with `SCHEDULE_ASK_CHOOSE_HINT`; free text Answer + Cancel with `SCHEDULE_ASK_ANSWER_HINT`; neither carries the reply hint; a spend-cap stop Cancel only (its note too), its post only "💸 Work is paused for budget." and its note no amount.
+- Listed choices post Choose + Cancel (`cvask:open:srun_…`, `cvask:cancel:srun_…`) with `SCHEDULE_ASK_CHOOSE_HINT`; free text Answer + Cancel with `SCHEDULE_ASK_ANSWER_HINT`; neither carries the reply hint; a spend-cap stop Continue + Cancel (its note too), its post only "💸 Work is paused for budget." and its note no amount.
 - An in-process ask post that resolves `false` is posted, with its controls, by the next tick.
 - A schedule with no channel DMs the ask with its controls and the one note (with the same controls) to the owner and posts nothing in a channel; with no owner nothing is sent and the ask stays pending.
 - The owner's pick reaches the next run unfenced and only that run; the creator's typed answer is stored scrubbed and reaches the next run fenced (`role: community`); a closed ask cannot be closed again.
-- Through `startBridge` with a memory DB and fake interactions: Choose shows the creator the choices privately and a pick closes the ask `picked` (a re-press is "isn't for you"); an unknown option id is `ASK_CHOICE_EXPIRED`; Answer opens the form, a thin submit restates privately with Cancel and keeps it open, a typed submit closes it `answered` with the secret redacted, `cancel` typed cancels; someone else's Cancel or submit is refused and the ask stays open, the owner's and the creator's Cancel close it; a spend-cap ask refuses Choose and a submit and takes Cancel; an ask three days old still takes a pick; a press outside the allowlisted channel, or once the schedule's channel left the allowlist, gets the zero-width ack (the tip for the owner); a deny-listed creator gets the zero-width ack and a muted one `MUTED`; a channel-less schedule's ask is answered in the owner's DM and refused from a guild channel; the creator's injection-like typed answer closes nothing and pings the owner in the schedule's channel; a Cancel id on a session ask is refused; on a paused schedule the ack of a Cancel, a typed answer or a pick ends with `SCHEDULE_ASK_PAUSED_NOTE`, on an active one it does not.
+- Through `startBridge` with a memory DB and fake interactions: Choose shows the creator the choices privately and a pick closes the ask `picked` (a re-press is "isn't for you"); an unknown option id is `ASK_CHOICE_EXPIRED`; Answer opens the form, a thin submit restates privately with Cancel and keeps it open, a typed submit closes it `answered` with the secret redacted, `cancel` typed cancels; someone else's Cancel or submit is refused and the ask stays open, the owner's and the creator's Cancel close it; a spend-cap ask refuses the creator's Continue and a submit, takes the owner's Continue (closed `continued`, no answer, nothing handed to the next run, the ack naming no amount) and the creator's Cancel; an ask three days old still takes a pick; a press outside the allowlisted channel, or once the schedule's channel left the allowlist, gets the zero-width ack (the tip for the owner); a deny-listed creator gets the zero-width ack and a muted one `MUTED`; a channel-less schedule's ask is answered in the owner's DM and refused from a guild channel; the creator's injection-like typed answer closes nothing and pings the owner in the schedule's channel; a Cancel id on a session ask is refused; on a paused schedule the ack of a Cancel, a typed answer or a pick ends with `SCHEDULE_ASK_PAUSED_NOTE`, on an active one it does not.
 - Through the bridge's own scheduler: the ask post carries Choose + Cancel, a channel reply to it leaves it open and the creator's Cancel closes it; a channel-less schedule DMs its ask and controls to the owner.
 - A v14 DB migrates to v15: the eight columns exist; asks recorded before that were posted, or are moot, are closed `superseded`, are neither open nor pending and are not posted again, and that schedule's next due run goes; a still-pending ask on its schedule's newest run becomes open and blocking, its schedule's next due run waits and that ask is posted with Answer + Cancel, then the one note; a re-run changes nothing; `ask_answer` and `ask_options` are re-scrubbed.
+
 ### REQ-discord-185
 
 /work none-deleted check (AGENT-15, REQ-agent-185). Before `openWorkPr`
@@ -3686,8 +3702,10 @@ Acceptance Criteria
 In Discord I can stop a run by saying stop or cancel, and so can the person
 who asked (AGENT-3.a; AGENT-3: it actually stops instead of finishing in the
 background); after I stop a run, messages that were waiting still run, in
-order (AGENT-3.b). This change builds the stop words; the Stop button
-(AGENT-3.a) and stopping a schedule's run from Discord are later slices. A
+order (AGENT-3.b). This requirement is the stop words; the Stop button
+(AGENT-3.a) on the progress message is REQ-discord-303, which stops a run
+through the same stop, and stopping a schedule's run from Discord is a later
+slice. A
 message whose whole text (mentions and the IDENTITY-5 mention trailer left
 out, any case, trailing `.` / `!` allowed; `isStopRunText`) is 'stop' or
 'cancel' SHALL stop the run in flight when it comes (a) from the requester in
@@ -3744,6 +3762,8 @@ Acceptance Criteria
 - A fake agent bin that raised a must-ask Approve card (itself the waiting process) and waits: after the stop the card's request is `expired` (closed as a no).
 - `routeMessage`: a reply 'stop' / '<@bot> cancel' to a running progress message that is also a tracked bot message gives `stop_run` for the requester and the owner; 'stop it', a third user, the same reply in another allowlisted channel, or a finished run route as before; a deny-listed requester is refused quietly.
 - `isStopRunText`: true for `stop`, `Stop`, ` STOP. `, `cancel`, `Cancel!`, `stop!!`; false for `stop it`, `please stop`, `cancel that`, `stopped`, empty, `nevermind`, `don't stop`.
+- A Stop press (REQ-discord-303) and a 'stop' reply to the same running progress message go through the same `SessionRunControl.stop`: the run is aborted once and the reply still gets its `⏹ Stopping the run.` ack.
+
 ### REQ-discord-741
 
 A schedule the owner creates runs as the owner; schedules other people create
@@ -3828,7 +3848,8 @@ apart; only the right code typed into the form, for that card and the exact
 action it shows, before it expires, approves it (SAFE-19) — audit prefix
 `spend-cap` (`spend-cap-card`, `-approve`, `-deny`, `-expire` SAFE-5 rows),
 "nothing was spent" as what a no leaves undone, and `SPEND_CARD_APPROVED` as
-the approved outcome. Approve SHALL only record the decision: the waiting
+the approved outcome (`SPEND_CARD_UNKNOWN_APPROVED` for a card whose amount
+is unknown, REQ-discord-199). Approve SHALL only record the decision: the waiting
 run reads it, uses it once and sends exactly the call the card showed, at
 that amount (SAFE-8.a). Any process on the data dir SHALL be able to raise
 the card (chat and slash runs, schedules, WATCH, the daemon, delegate and
@@ -3849,6 +3870,113 @@ Acceptance Criteria
 - A pending spend card whose waiting process is gone is closed on the next pass as a no, with no card sent.
 - The bridge (fake gateway, owner from the allowlist file) DMs a spend card another process recorded, with its `cvok:spend:approve:<id>` button, and Approve answers with the code step (not "This card is no longer handled.") and DMs an 8-character code.
 - These tests fail on main's sources.
+- A card whose amount is unknown (SAFE-16.a) answers Approve plus the code with `SPEND_CARD_UNKNOWN_APPROVED` (REQ-discord-199).
+
+### REQ-discord-199
+
+It asks before any spend that would go over a cap (AUTONOMY-8), and an
+unknown price shows as unknown, never as free (SAFE-16 / SAFE-16.a), on the
+bridge's side:
+
+- WATCH spend-cap stops. `createWatchAskDelivery` SHALL also deliver the
+  `spend-cap` stops the watch process records (REQ-watch-099): each is taken
+  (compare-and-delete) and, once per episode of the caps it names
+  (`claimCapPing(spendScopesOf(ask))` on the spend alert outbox —
+  `createSpendAlertOutbox` over the bridge's DB unless one is passed — the
+  same once-per-episode claim as a chat or schedule stop's owner ping), DMed
+  to the owner only as `formatWatchSpendStopDm`: the SAFE-14.a spend-stop DM
+  (`SPEND_STOP_DM_HEAD`, then the quoted, scrubbed and defanged question with
+  the amounts, caps and what the card came to) with `GitHub <owner/repo>#<n>:
+  <link>` as its second line and no mention. A stop whose episode was already
+  told SHALL be taken and dropped with one log line, not DMed. A DM that does
+  not go out SHALL hand back both the episode claim and the ask (retried after
+  `WATCH_ASK_RETRY_MS`), and so SHALL a stop that hands back a DM still in
+  flight after its grace, so the next start DMs it instead of dropping it as
+  already told (a DM that then goes out after all takes both again). The
+  GitHub side, the one-day limit, the no-owner and no-gateway waits and the
+  stop grace are as for stuck asks (REQ-discord-086);
+  log lines say `WATCH spend-cap stop` and `AUTONOMY-8` and name no amount.
+- Unknown-price card. The `spend` kind SHALL answer an approved card whose
+  amount is unknown (`isUnknownSpendAmount`) with
+  `SPEND_CARD_UNKNOWN_APPROVED` ("… sends exactly this one call; its cost
+  stays unknown (never $0), and the next call at an unknown price asks
+  again (SAFE-16.a)"); other cards keep `SPEND_CARD_APPROVED`.
+
+No new env var, config key, slash command, table or schema version.
+
+Acceptance Criteria
+- A recorded WATCH spend-cap stop: a failed DM hands back the ask (still pending) and the episode claim; the next pass DMs the owner once: the first line is `SPEND_STOP_DM_HEAD`, the second `GitHub CorvidLabs/Corvidinho#7: <link>`, then the quoted `Daily spend cap reached (SAFE-8): $4.9990 spent …`, with no `<@` mention.
+- Another thread's spend-cap stop in the same cap episode is taken and not DMed; the log says the owner was already told about this cap episode.
+- A stop while the spend-cap DM is in flight hands back the ask and its episode claim: the next start DMs the owner once (not dropped as already told), and a later stop in that episode is then not DMed.
+- The engine DMs an unknown-price card with `Amount: unknown (…)` and answers Approve plus the code with `SPEND_CARD_UNKNOWN_APPROVED`.
+- These tests fail on main's sources.
+
+### REQ-discord-303
+
+In Discord I can stop a run with a Stop button, and so can the person who
+asked (AGENT-3.a, captured in `hi/agent.md` from Leif's 2026-09-28
+interview); after I stop a run, messages that were waiting still run, in
+order (AGENT-3.b). The progress message of every chat run, ask pick or Answer
+form resume, `/session start` and `/work` run SHALL carry, while the run
+goes, one message component row with exactly one danger-style (red, style 4)
+button labelled `Stop` whose custom id is `cvstop:<runId>` (the run's
+`SessionRunControl` turn id; `buildStopComponents`, `stopRunCustomId`,
+`parseStopRunCustomId`, `src/discord/run-control.ts`), through the optional
+`components` of `ThinkingStatus`, `ThinkingOutbound.sendEmbed` and the live
+gateway's `sendEmbed` (the in-memory outbound records them); on a reused
+Choose or Answer stub (DISCORD-ASK-7) the Stop button SHALL take that
+button's place for the run. Working edits SHALL leave it. The button SHALL be
+cleared when the run is done, failed or stopped: the answer's edit
+(`finalizeContent`: no components, or the answer's own Choose / Answer
+button), the done / fail status edit (`editEmbed` with `components: null`,
+which the live gateway sends as an empty list; also when the run throws), a
+discarded progress message, and the restart's interrupted notice for a
+progress message a dead process left (REQ-discord-311). A progress message
+without components is edited exactly as before.
+
+A press of the Stop button SHALL be handled in its own `onComponent` branch
+(apart from the Approve cards' `cvok:`, the asks' `cvask:` and any other
+prefix such as a later `cvstop-…`); a form submit carrying a Stop custom id is
+ignored. The press SHALL pass, in order, the channel gate
+(`componentChannelAllowlisted`, REQ-discord-212: the press channel and the
+pressed message's talk — the session of the run that message shows while it
+runs, else the session its finished answer is tracked on, else the press
+channel alone), the actor gate (REQ-discord-201) and the mute / rate gate
+(REQ-discord-010), with the same ephemeral refusals as an ask press (the
+zero-width ack, the owner's allowlist tip, `MUTED` / `RATE_LIMITED`);
+refused, it stops nothing. The run it may stop is the one the pressed message
+shows running (`byProgressMessage`), in the press's channel, with the pressed
+id; for anything else (a finished or stopped run's button, another run's id,
+another channel, a button from before a restart) the press SHALL get only
+the ephemeral `Nothing is running.` and stop nothing. From anyone but that
+run's requester or the configured owner (IDENTITY-1) it SHALL get only the
+ephemeral `This Stop button isn't for you.` and the run goes on. From the
+requester or the owner it SHALL stop the run through the same
+`SessionRunControl.stop` as the stop words (REQ-discord-302: its signal
+aborted once, the process tree killed, idempotent) and answer with the
+ephemeral `⏹ Stopping the run.`; the stopped run then ends as REQ-discord-302
+says (`⏹ Stopped` with the DISCORD-15 / 15.a footer, no question, a stopped
+`/work` failed with no PR, the card pass). A second press, or a 'stop' reply,
+while it winds down aborts nothing more and gets the same ack. Messages that
+were waiting still run afterwards, in order, each with its own button
+(AGENT-3.b). Stopping a schedule's run from Discord (Leif, round 13 of the
+2026-09-28 record) is not part of this requirement. No new env var, config
+key, slash command, table or schema change.
+
+Acceptance Criteria
+- A chat run's progress message is sent with one row holding one red `Stop` button (`cvstop:run_<n>`); working edits carry no components; the requester's press gets only the ephemeral `⏹ Stopping the run.`, aborts the run once, posts nothing public, and the progress message becomes `⏹ Stopped` with `<model> | <time>` in the error colour and its components cleared; a later press gets `Nothing is running.`.
+- A third user's press gets only `This Stop button isn't for you.` and the run goes on; the owner's press on someone else's run stops it and starts no session of the owner's.
+- A finished run's answer clears its button; its button afterwards, the live run's id on another message, another run's id on the live message, the live button pressed in another allowlisted channel and a pre-restart button in the allowlisted channel all get `Nothing is running.` and abort nothing; a pre-restart button in a thread no session is known for gets the zero-width ack.
+- A failed run's answer clears the button, and so does the failure status when the run throws.
+- With the run's thread deny-listed, a press gets the zero-width ack (the owner: the allowlist tip); deny-listed, the zero-width ack; muted, `MUTED`; none of them stops the run; a form submit with the Stop id gets nothing and stops nothing; past the gates the press stops it.
+- A second press, and a 'stop' reply, while the run winds down get the ack and abort nothing more: one abort, one `⏹ Stopped`.
+- After a Stop press two waiting messages run in order, each with its own Stop button (three distinct ids), and every progress message ends with its components cleared.
+- A pick's resumed run: the stub's Choose button is replaced by the Stop button, a press stops the run, and `⏹ Stopped` clears it.
+- `/session start` and `/work`: the progress message carries the button; a press stops the run; a stopped `/work` says `PR: not opened — the run was stopped.` and is `failed` / `stopped`.
+- The restart's interrupted notice edits the progress message with `components: null`.
+- `ThinkingStatus`: components go out with the progress embed (or on a reused stub, by `editMessage` else `editEmbed`), working edits leave them, `done` and `fail` send `components: null`, the collapsed answer carries none or the answer's own; without components no call carries a `components` field and a reused stub's button is still cleared.
+- `parseStopRunCustomId`: `cvstop:run_7` gives `run_7`; `cvstop-schedule:run_7`, extra parts, a missing or malformed id, an ask's or a card's custom id give null.
+- With the base's sources these tests fail; they pass on the branch.
 
 ### REQ-discord-032
 

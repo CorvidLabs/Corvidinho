@@ -136,7 +136,7 @@ describe("verification can't be switched off (AGENT-14, REQ-agent-003)", () => {
     const calls = join(base, "fledge.calls");
     writeFileSync(join(bin, "fledge"), `#!/bin/sh\necho "$*" >> '${calls}'\necho 'app.ts: syntax error'\nexit 1\n`);
     chmodSync(join(bin, "fledge"), 0o755);
-    const proc = Bun.spawn(["bun", join(root, "src/cli.ts"), "task", "run", "--task", "demo", "--json"], {
+    const proc = Bun.spawn(["bun", join(root, "src/cli.ts"), "task", "run", "--here", "--task", "demo", "--json"], {
       cwd: work,
       stdout: "pipe",
       stderr: "pipe",
@@ -406,7 +406,7 @@ describe("delegate and council workers leave the marker to their lead (REQ-agent
     const calls = join(base, "fledge.calls");
     writeFileSync(join(bin, "fledge"), `#!/bin/sh\necho "$*" >> '${calls}'\nexit 0\n`);
     chmodSync(join(bin, "fledge"), 0o755);
-    const proc = Bun.spawn(["bun", join(root, "src/cli.ts"), "task", "run", "--task", "demo", "--json"], {
+    const proc = Bun.spawn(["bun", join(root, "src/cli.ts"), "task", "run", "--here", "--task", "demo", "--json"], {
       cwd: work,
       stdout: "pipe",
       stderr: "pipe",

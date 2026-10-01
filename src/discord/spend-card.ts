@@ -18,10 +18,16 @@
  * waiting run that is gone (its `<pid>:<proc start>`) is a no (SAFE-20):
  * nothing is spent. Amounts stay on the owner's DM card; channels and the
  * requester only ever see "Work is paused for budget." (SAFE-14.a).
+ *
+ * SAFE-16.a: a call whose model has no known price, under a cap that covers
+ * it, raises the same card with the amount shown as unknown (never $0) and
+ * the covering cap(s) as its target; Approve plus the code lets exactly that
+ * call through (recorded `unknown` in the ledger), and the next such call
+ * asks again. There is no price override.
  */
 
 import type { Database } from "bun:sqlite";
-import { SPEND_CARD_CLASS, SPEND_CARD_KIND } from "../agent/spend.ts";
+import { isUnknownSpendAmount, SPEND_CARD_CLASS, SPEND_CARD_KIND } from "../agent/spend.ts";
 import type { ApprovalRequest } from "../approvals/store.ts";
 import { storedApprovalKind, type ApprovalKind } from "./approval-cards.ts";
 
@@ -32,6 +38,10 @@ export const SPEND_CARD_NOTHING_DONE = "nothing was spent";
 export const SPEND_CARD_APPROVED =
   "Approved by you — the waiting run sends exactly this one call; the next call past the cap asks again (SAFE-8.a).";
 
+/** The outcome line of an unknown-price card (SAFE-16.a) after Approve and the right code. */
+export const SPEND_CARD_UNKNOWN_APPROVED =
+  "Approved by you — the waiting run sends exactly this one call; its cost stays unknown (never $0), and the next call at an unknown price asks again (SAFE-16.a).";
+
 /** The `spend` card kind (class money) for the bridge's card engine. */
 export function spendApprovalKind(opts: { db: Database; now?: () => number }): ApprovalKind<ApprovalRequest, void> {
   return storedApprovalKind({
@@ -40,7 +50,7 @@ export function spendApprovalKind(opts: { db: Database; now?: () => number }): A
     class: SPEND_CARD_CLASS,
     audit: "spend-cap",
     nothingDone: SPEND_CARD_NOTHING_DONE,
-    approvedOutcome: () => SPEND_CARD_APPROVED,
+    approvedOutcome: (req) => (isUnknownSpendAmount(req.amount) ? SPEND_CARD_UNKNOWN_APPROVED : SPEND_CARD_APPROVED),
     ...(opts.now ? { now: opts.now } : {}),
   });
 }

@@ -313,8 +313,9 @@ REQ-discord-019: `tests/discord.session-store.durable.test.ts` + `tests/store.*.
   description) with no post and no run; another user's press gets
   not-for-you. The submit resumes the same session (`resume: true`) with the
   reply's prior-question block, `humanText` the trimmed answer, ephemeral
-  `ASK_ANSWER_ACK` then deleted, the stub thin-updated and edited into the
-  answer, the typed text never posted, the thread turn recorded, the ask
+  `ASK_ANSWER_ACK` then deleted, the stub thin-updated (its Answer button
+  replaced by the run's Stop button, REQ-discord-303) and edited into the
+  answer (the Stop button cleared), the typed text never posted, the thread turn recorded, the ask
   cleared, a second submit a no-op; the text is scrubbed before the run and
   the thread; `normalizeAskAnswer` cuts and trims; a thin or blank submit
   (`ok`, whitespace, emoji, `sure!`) is restated privately with the Answer
@@ -1334,6 +1335,44 @@ only the two words.
   the two gate-after-waiting tests fail (the waiting message and the waiting
   pick still run); with its `work.ts`, the late-stop `/work` test fails (the PR
   step runs and the task is `completed`).
+
+## The Stop button on a run's progress message (REQ-discord-303; AGENT-3.a, AGENT-3.b)
+
+`tests/discord.stop-run.test.ts` ("the Stop button on a run's progress
+message") — dry-run bridge, stub agents, in-memory outbound, fake LLM fixture
+model: a chat run's progress message goes out with one row holding one red
+`Stop` button (`cvstop:run_<n>`) and working edits carry no components; the
+requester's press gets only the ephemeral `⏹ Stopping the run.`, aborts the
+run once, posts nothing public, and `⏹ Stopped` (footer `<model> | <time>`,
+error colour) clears the button, after which a press gets `Nothing is
+running.`; a third user's press gets `This Stop button isn't for you.` and the
+owner's press stops someone else's run without a session of theirs; a
+finished run's answer clears its button and its button, another run's id, the
+live button in another allowlisted channel and a pre-restart button all get
+`Nothing is running.` (in an unknown thread, the zero-width ack) and abort
+nothing; a failed answer and the failure status of a run that throws clear it;
+a deny-listed thread (zero-width, the owner the allowlist tip), a deny-listed
+requester and a muted requester are refused and stop nothing, a form submit
+with the Stop id is ignored; a second press and a 'stop' reply while it winds
+down abort nothing more; after a press two waiting messages run in order,
+each with its own button; a pick's resumed run shows the button on its stub
+and stops by it; `/session start` and `/work` show it and stop by it (the
+`/work` answer says `PR: not opened — the run was stopped.`); the restart's
+interrupted notice edits with `components: null`; `parseStopRunCustomId`
+refuses every other id. `tests/discord.thinking-status.test.ts` ("the
+progress message's Stop button") — `ThinkingStatus` sends the components with
+the progress embed (a reused stub: `editMessage`, else `editEmbed`), working
+edits leave them, `done` / `fail` send `components: null`, the collapsed
+answer carries none or its own; without components no call has a
+`components` field. `tests/discord.ask-answer-modal.test.ts`: the Answer
+form's resumed run shows the Stop button on the stub and its answer clears it.
+- Fail on base: with the base's (9ea4005) sources swapped in for the six
+  modified files (`bridge.ts`, `thinking-status.ts`, `gateway.ts`,
+  `inflight-replies.ts`, `command-handlers/session.ts`,
+  `command-handlers/work.ts`; the branch's `run-control.ts` kept so imports
+  resolve), 14 of the 17 new or changed tests fail; the 3 that pass are the
+  custom-id unit (new module), "the collapsed answer replaces it" and
+  "without components nothing changes", which hold on the base.
 ## The owner's own schedule runs as the owner (REQ-discord-741; DISCORD-SCHEDULE-1.a)
 
 `tests/scheduler.owner-role.test.ts` — with `loadOwner` returning the owner,
@@ -1468,3 +1507,36 @@ that answers 401; no live Discord, no network):
   7 pass, 15 fail; restored, 22 pass. The 7 that pass on the base are the pure
   units of the new module; every surface, spawn-client, `task run` and
   `modelCallFailedLine` case fails on the base.
+## The spawn client passes --here (REQ-discord-014 / REQ-discord-073 modified; SESSION-WORKTREE-1.a)
+
+`tests/agent.ndjson-spawn.test.ts` (Discord spawn client) and
+`tests/cli.task-worktree.test.ts` › "Discord and WATCH clients spawn task
+run --here" — the fake bin records exactly `task run --here --task <prompt>
+--output ndjson`, the prompt `--tier=code hi` staying task text. Fail on
+base: both fail (no `--here`).
+## WATCH spend-cap stops, the unknown-price card, a schedule's Continue (REQ-discord-199; REQ-discord-086 / 198 / 606 modified; SAFE-16.a, AUTONOMY-8)
+
+- `tests/spend.surfaces.test.ts` ("the bridge DMs the owner the stop's
+  details …") — `createWatchAskDelivery` over a recorded spend-cap stop: a
+  failed DM hands back the ask and the episode claim; the next pass DMs the
+  owner once (`SPEND_STOP_DM_HEAD`, then `GitHub CorvidLabs/Corvidinho#7:
+  <link>`, then the quoted details, no mention); another thread's stop in the
+  same cap episode is taken and not DMed, with a log line. ("a stop while the
+  owner's DM is in flight …") — a DM that hangs past the stop grace hands back
+  the ask and its episode claim, so the next start DMs the owner once instead
+  of dropping it as already told; a later stop in that episode is not DMed.
+  Fails on the pre-review branch source (the episode stayed claimed).
+- `tests/agent.spend-unknown.test.ts` ("the unknown-price card on the
+  bridge's engine") — the owner is DMed `Amount: unknown (…)` (never `$0`);
+  Approve plus the code sends the call once and answers
+  `SPEND_CARD_UNKNOWN_APPROVED`.
+- `tests/discord.schedule-ask.test.ts` ("a spend-cap stop takes the owner's
+  Continue or Cancel …") — through `startBridge`: the creator's Continue and
+  an Answer submit are refused ("isn't for you"); the owner's Continue closes
+  the ask `continued` with no answer (`answeredAsk` undefined) and acks
+  `SCHEDULE_ASK_CONTINUED_ACK` (no amount); the creator's Cancel still works.
+  `tests/scheduler.ask-block.test.ts` — the spend-cap post and its wait note
+  carry Continue + Cancel and still name no amount.
+- Fail on base: the schedule ask test cannot load
+  (`SCHEDULE_ASK_CONTINUED_ACK` missing), the ask-block test gets
+  `["Cancel"]`, and main's watch delivery never sees a spend-cap stop.

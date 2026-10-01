@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "a-cli-task-run-in-a-git-repo-works-in-its-own-worktree-by-default-here-runs-it-in-my-checkout-session-worktree-1-a",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "710d20c6a7316f43dd812ab22f4cd57fca5e7d81",
+  "contract_digest": "a73b53b0d5101d8ab8211fab3e6898bb48b8e8df80e115bddaf808f3566cdde9",
+  "execution_digest": "6e277dfec346cf5934130b3bf05f724be090c632313736676cf412f6d7b11f94",
+  "workspace_digest": "3251222ca9fc873874ed19f399ea5c70351a945d33cba123f589684d4c26e3d7",
+  "timestamp": 1790813584
+}

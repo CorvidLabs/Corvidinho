@@ -65,8 +65,10 @@ on the same data dir:
   spend cap it first waits up to 4 minutes on the owner's spend card
   (SAFE-8 / SAFE-8.a, when an owner is configured): the daemon cannot DM
   it, a bridge on the same data dir does; Approve plus the one-time code
-  lets that one call through. With only the daemon running the card lapses,
-  which is a no, and nothing is spent. A schedule with no channel
+  lets that one call through. A call to a model with no known price under a
+  cap asks on the same card with the amount shown as unknown (SAFE-16.a).
+  With only the daemon running the card lapses, which is a no, and nothing
+  is spent. A schedule with no channel
   gets its question by DM to the owner instead. Only the newest ask of a
   schedule is posted, and not at all once it was cancelled or a later run of
   that schedule has finished. With only the daemon running, the question
@@ -74,7 +76,8 @@ on the same data dir:
 - Every such question blocks its schedule (AUTONOMY-6.a) until the
   schedule's creator or the owner answers or cancels it on Discord (the
   **Choose** / **Answer** and **Cancel** buttons on its post; a spend-cap
-  stop has **Cancel** only). Until then each due run is skipped, in the
+  stop has **Continue** — the owner's only: the next due run goes ahead and
+  asks on a spend card before any call past a cap — and **Cancel**). Until then each due run is skipped, in the
   daemon as in the bridge, and not made up later, and the bridge posts one
   note saying the schedule is waiting (no ping; it carries the same
   buttons). `/schedule resume` does

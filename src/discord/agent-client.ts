@@ -129,7 +129,9 @@ export function warnModelFallback(hops: ModelFallback[], sessionId: string): voi
 }
 
 /**
- * Spawns: `<bin> task run --task <prompt> --output ndjson` (no --no-verify;
+ * Spawns: `<bin> task run --here --task <prompt> --output ndjson` (--here:
+ * the run works in the given cwd, never a worktree of its own, REQ-cli-122;
+ * no --no-verify;
  * REQ-discord-085 / AGENT-4) and reads stdout line by line; the summary comes
  * from the `result` frame, uncut up to DISCORD_ANSWER_MAX (DISCORD-16; the
  * bridge splits it), with the last `usage` frame for the answer footer
@@ -171,6 +173,9 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       const cmd = buildCorvidinhoArgv(opts.bin, [
         "task",
         "run",
+        // SESSION-WORKTREE-1.a (REQ-cli-122): the run works in the cwd given
+        // here, never in a new worktree of its own.
+        "--here",
         "--task",
         prompt,
         "--output",

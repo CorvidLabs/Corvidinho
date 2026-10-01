@@ -175,13 +175,15 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   author, or the schedule creator for a scheduled run); a stuck run (AUTONOMY-2, or a repeated
   failing call, AGENT-16) and a spend-cap stop (SAFE-8) ping the owner. A stuck WATCH (GitHub)
   run is sent to the owner by **direct message** on the bridge's next tick (AGENT-16.a; the watch
-  process must share the bridge's data dir, and the owner must accept DMs from server members). With no owner a stuck question (or a spend-cap stop's "💸 Work is paused for budget.") still posts and the
+  process must share the bridge's data dir, and the owner must accept DMs from server members), and
+  so are a WATCH run's spend-cap stop details, once per cap episode (AUTONOMY-8). With no owner a stuck question (or a spend-cap stop's "💸 Work is paused for budget.") still posts and the
   bridge logs
   `[discord] run needs a human but no owner is configured — owner ping skipped (AUTONOMY-2 / IDENTITY-3)`.
 - A scheduled run's question blocks its schedule (AUTONOMY-6.a): its post carries **Choose** /
-  **Answer** and **Cancel** buttons (a spend-cap stop: **Cancel** only) that the schedule's
-  creator or the owner presses; a reply does not answer it, and the buttons do not expire while
-  it is open. Until then the schedule's due runs are skipped (not made up) and one note says it
+  **Answer** and **Cancel** buttons (a spend-cap stop: **Continue**, the owner's only, and
+  **Cancel**; after Continue the next due run's calls past a cap, or at an unknown price, ask on
+  the spend card first) that the schedule's creator or the owner presses; a reply does not
+  answer it, and the buttons do not expire while it is open. Until then the schedule's due runs are skipped (not made up) and one note says it
   is waiting. A schedule with no channel sends its question and buttons to the owner by **direct
   message** (same DM rule as above). See [`discord.md`](discord.md) "Scheduled questions wait for
   an answer".
@@ -208,8 +210,10 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   4 minutes, a late code or a stopped run sends and spends nothing, and the run ends paused as
   above. The card needs the bridge running on the same data dir (WATCH, schedules, the daemon and
   delegate workers raise it too); with no bridge the run waits out the 4 minutes and the lapse is
-  a no. With no owner configured, or for an unpriced model or a bad cap setting, the run stops and
-  asks the operator as before. See [`discord.md`](discord.md) "The spend card".
+  a no. A model with no known price asks on the same card with the amount shown as unknown while
+  a cap covers its call (SAFE-16.a; no price override), and the owner's spend lines then read
+  `$X + unknown`. With no owner configured, or a bad cap setting, the run stops and asks the
+  operator as before. See [`discord.md`](discord.md) "The spend card".
 
 ### E.2 Protocol 2: restart the bridge, WATCH and daemon together (DISCORD-10)
 
@@ -317,8 +321,9 @@ What an entry unlocks **today**:
   - the run's directory is that talk's own linked git worktree (`talk-…` under the worktree
     base). A non-git project (its scoped folder), the main checkout and another talk's
     worktree are refused.
-  A local `corvidinho task run` does not get them yet: it runs in the current checkout, not a
-  talk worktree of its own. When the allowlist names one of them and the run is refused, the
+  A local `corvidinho task run` does not get them yet (the CLI half of SAFE-3.a is not built):
+  it has no role session, whether it works in its own worktree (the default in a git repo) or,
+  with `--here`, in the current checkout. When the allowlist names one of them and the run is refused, the
   run's event stream carries one `[operator] SAFE-3.a: … allowlisted but not offered: <why>`
   line (never part of the reply). Every call still goes through the role re-check, SAFE-1,
   the must-ask Approve card for prod and deploy commands (AUTONOMY-9), the SAFE-5 audit trail
@@ -386,7 +391,8 @@ enabled = true
 counts; a missing file, section or key, or any other value, means off.
 
 - Each `task run` reads `fledge.toml` from its working directory. In a git project, Discord,
-  `/work` and schedule runs work in a git worktree made from the project checkout's `HEAD`, so
+  `/work` and schedule runs, and a local `corvidinho task run` without `--here`
+  (SESSION-WORKTREE-1.a), work in a git worktree made from the project checkout's `HEAD`, so
   **commit** the change there; an uncommitted edit is not seen by those runs.
 - `fledge.toml` is protected infra (SAFE-2): the agent's file tools cannot flip the switch.
 - Today the gate controls two tools, `delegate` and `council`. The model sees them only when all of these hold:

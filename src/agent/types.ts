@@ -204,6 +204,28 @@ export type TaskResult = {
    * fail, and on a failure that names no reason. Additive: no protocol bump.
    */
   error?: string;
+  /**
+   * SESSION-WORKTREE-1.a (REQ-cli-122): the worktree a local `task run`
+   * worked in and whether it and its branch were kept (additive; no protocol
+   * change). Absent when the run worked in place: `--here`, a directory that
+   * is not in a git repo, or a child a product surface spawned.
+   */
+  workspace?: TaskWorkspaceReport;
+};
+
+/** What became of a local `task run`'s own worktree at the end of the run (REQ-cli-122). */
+export type TaskWorkspaceReport = {
+  /** The linked worktree the run worked in. */
+  dir: string;
+  /**
+   * The branch the worktree was on at the end: its own `talk/cli_…`, or a
+   * branch the run made and switched to (`git-branch-create`).
+   */
+  branch: string;
+  /** The worktree is still there (not clean, or it could not be removed). */
+  kept: boolean;
+  /** The branch is still there (it has commits of its own, or its worktree was kept). */
+  branchKept: boolean;
 };
 
 /**
@@ -221,6 +243,12 @@ export type SpendWarning = {
    * provider's spend against its cap); absent for the total cap.
    */
   scope?: string;
+  /**
+   * SAFE-16 / SAFE-16.a: calls in the same window whose price is unknown
+   * (each approved on a spend card); the owner's line then reads
+   * "$X + unknown", never a plain $X. Absent when there are none.
+   */
+  unknownCalls?: number;
 };
 
 /**

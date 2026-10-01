@@ -17,13 +17,67 @@
  * `stop` is idempotent. A stop never drops waiting turns: they still run
  * after it, in order (AGENT-3.b). `close` (bridge stop) aborts every run in
  * flight and lets no waiting turn start. In-memory only: nothing is stored.
+ *
+ * AGENT-3.a Stop button (REQ-discord-303): each run's progress message
+ * carries one danger-style **Stop** button (`buildStopComponents`, custom id
+ * `cvstop:<runId>`) while the run goes; a press takes the same `stop` as the
+ * stop words, from the requester or the owner only (bridge.ts `onComponent`).
  */
+
+import type { DiscordActionRow } from "./ask-buttons.ts";
 
 /** The final post of a run that was stopped (with the DISCORD-15/15.a footer). */
 export const RUN_STOPPED_TEXT = "⏹ Stopped";
 
 /** The one short ack to a 'stop' / 'cancel' that reached a run in flight. */
 export const RUN_STOP_ACK = "⏹ Stopping the run.";
+
+/** custom_id prefix of a run's Stop button (Discord custom_id ≤ 100). */
+export const RUN_STOP_PREFIX = "cvstop";
+
+/** The Stop button's label. */
+export const RUN_STOP_LABEL = "Stop";
+
+/** Ephemeral reply to a Stop press from anyone but the requester or the owner. */
+export const RUN_STOP_NOT_YOURS = "This Stop button isn't for you.";
+
+/** Ephemeral reply to a Stop press whose run is no longer going (a stale button). */
+export const RUN_STOP_NOTHING_RUNNING = "Nothing is running.";
+
+/** A run id as `enqueue` makes it (`run_<n>`). */
+const RUN_ID_RE = /^run_[0-9]{1,15}$/;
+
+/** `cvstop:<runId>`. Throws on a run id the parser would refuse. */
+export function stopRunCustomId(runId: string): string {
+  if (!RUN_ID_RE.test(runId)) throw new Error("run id is not a safe custom_id part");
+  return `${RUN_STOP_PREFIX}:${runId}`;
+}
+
+/**
+ * The run id of a Stop button's custom id (`cvstop:<runId>`); null for
+ * anything else (an ask or card id, another prefix such as `cvstop-…`).
+ */
+export function parseStopRunCustomId(raw: string): string | null {
+  const parts = raw.split(":");
+  if (parts.length !== 2 || parts[0] !== RUN_STOP_PREFIX) return null;
+  const runId = parts[1]!;
+  return RUN_ID_RE.test(runId) ? runId : null;
+}
+
+/**
+ * AGENT-3.a (REQ-discord-303): the progress message's one row — a single
+ * danger-style (red, style 4) **Stop** button for run `runId`.
+ */
+export function buildStopComponents(runId: string): DiscordActionRow[] {
+  return [
+    {
+      type: 1,
+      components: [
+        { type: 2, style: 4, label: RUN_STOP_LABEL, custom_id: stopRunCustomId(runId) },
+      ],
+    },
+  ];
+}
 
 /** 'stop' or 'cancel' as the whole message (any case, trailing `.` / `!` allowed). */
 const STOP_RE = /^(stop|cancel)\s*[.!]*$/i;

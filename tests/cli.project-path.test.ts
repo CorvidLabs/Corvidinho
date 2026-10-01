@@ -178,9 +178,9 @@ describe("corvidinho --project <path> (CLI-5, REQ-cli-505)", () => {
     const llm = startFakeLlm({ model: "gpt-4o-mini" });
     try {
       for (const args of [
-        ["--project", f.p, "task", "run", "--task", "touch widget", "--json"],
+        ["--project", f.p, "task", "run", "--here", "--task", "touch widget", "--json"],
         // After the command, relative to the start dir.
-        ["task", "run", "--task", "touch widget", "--json", "--project=../P"],
+        ["task", "run", "--here", "--task", "touch widget", "--json", "--project=../P"],
       ]) {
         const r = await cli(args, f.a, { ...f.env, ...llm.env });
         expect(r.code).toBe(0);

@@ -41,8 +41,14 @@
  *    so the count errs high.
  *  - A model missing from the table has no known price: while a cap covers
  *    its call (the total cap, or its provider's cap) it stops and asks —
- *    never counted as free, never guessed. A call no cap covers runs and is
- *    not recorded (its cost is unknown, SAFE-16).
+ *    never counted as free, never guessed. With an owner configured and
+ *    `approval` given, it asks on the owner's spend card showing the amount
+ *    as unknown (SAFE-16.a): Approve plus the one-time code lets exactly that
+ *    call through, recorded with status `unknown` (no amount, never $0;
+ *    `SpendWindow.unknownCalls`), and the next such call asks again; any no
+ *    stops it with the unpriced ask. Otherwise it stops with the operator
+ *    ask. A call no cap covers runs and is not recorded (its cost is unknown,
+ *    SAFE-16). There is no price override (SAFE-16.a).
  *  - A provider cap key is the configured provider id (the endpoint host,
  *    `providerId`); a malformed entry, or a key that names no configured
  *    provider, makes the whole setting invalid: every call stops and asks, and
@@ -80,6 +86,7 @@ import { scrubSecrets } from "../store/scrub.ts";
 import { parseModelChain, providerForTier, providerId, resolveEntry } from "./providers.ts";
 import { ensureSpendAlerts, rearmSpendAlerts, recordSpendWarning } from "./spend-alerts.ts";
 import {
+  formatSpend,
   formatSpendDoctorLine,
   formatSpendDoctorLines,
   formatUsd,
@@ -326,20 +333,33 @@ export function ensureSpendLedger(db: Database): void {
   ensureSpendAlerts(db);
 }
 
-/** reserved → in flight; actual → provider usage; estimated → no usage, estimate kept; failed → HTTP error, 0. */
-export type SpendStatus = "reserved" | "actual" | "estimated" | "failed";
+/**
+ * reserved → in flight; actual → provider usage; estimated → no usage,
+ * estimate kept; failed → HTTP error, 0; unknown → a call at an unknown price
+ * the owner approved on a spend card (SAFE-16.a): no amount (cost 0 in the
+ * sum, never shown as $0), counted in `unknownCalls`.
+ */
+export type SpendStatus = "reserved" | "actual" | "estimated" | "failed" | "unknown";
 
 export type SpendSettlement =
   | { status: "actual"; usage: AgentTokenUsage; costMicroUsd: number }
   | { status: "estimated" }
-  | { status: "failed" };
+  | { status: "failed" }
+  /** A call at an unknown price went out: its row stays `unknown`, with its token usage when reported. */
+  | { status: "unknown"; usage: AgentTokenUsage | null };
 
 export type SpendWindow = {
+  /** Priced spend (calls at an unknown price add nothing here; see `unknownCalls`). */
   spentMicroUsd: number;
   /** Provider calls counted in the window (HTTP-failed calls excluded). */
   calls: number;
   /** Calls still counted at their estimate (in flight or no usage reported). */
   estimatedCalls: number;
+  /**
+   * SAFE-16: calls at an unknown price in the window (approved on a spend
+   * card, SAFE-16.a). While above 0 the spend reads "$X + unknown".
+   */
+  unknownCalls: number;
 };
 
 /** One call to check against the caps and reserve (SpendLedger.reserve). */
@@ -367,6 +387,11 @@ export type SpendReservation =
       trips: SpendTrip[];
     };
 
+/** A trip with its scope's unknown-price call count, when there are any (SAFE-16). */
+function withUnknown(t: SpendTrip, unknownCalls: number): SpendTrip {
+  return unknownCalls > 0 ? { ...t, unknownCalls } : t;
+}
+
 /** Rolling 24 h spend ledger over the shared DB. */
 export class SpendLedger {
   constructor(private readonly db: Database) {
@@ -384,18 +409,20 @@ export class SpendLedger {
       .query(
         `SELECT COALESCE(SUM(cost_micro_usd), 0) AS spent,
                 COALESCE(SUM(CASE WHEN status != 'failed' THEN 1 ELSE 0 END), 0) AS calls,
-                COALESCE(SUM(CASE WHEN status IN ('reserved', 'estimated') THEN 1 ELSE 0 END), 0) AS estimated
+                COALESCE(SUM(CASE WHEN status IN ('reserved', 'estimated') THEN 1 ELSE 0 END), 0) AS estimated,
+                COALESCE(SUM(CASE WHEN status = 'unknown' THEN 1 ELSE 0 END), 0) AS unknown
            FROM spend_ledger WHERE ${byProvider ? "provider = ? AND " : ""}ts > ?`,
       )
       .get(
         ...(byProvider
           ? [scrubSecrets(provider), now - SPEND_WINDOW_MS]
           : [now - SPEND_WINDOW_MS]),
-      ) as { spent: number; calls: number; estimated: number };
+      ) as { spent: number; calls: number; estimated: number; unknown: number };
     return {
       spentMicroUsd: row.spent,
       calls: row.calls,
       estimatedCalls: row.estimated,
+      unknownCalls: row.unknown,
     };
   }
 
@@ -455,22 +482,70 @@ export class SpendLedger {
 
   /** Spend against each cap given and the caps the estimate would pass (inside a transaction). */
   private fit(opts: SpendReserveInput): { spentMicroUsd: number; trips: SpendTrip[] } {
-    const { spentMicroUsd } = this.window(opts.now);
+    const { spentMicroUsd, unknownCalls } = this.window(opts.now);
     const trips: SpendTrip[] = [];
     if (opts.capMicroUsd !== undefined) {
       rearmSpendAlerts(this.db, { spentMicroUsd, capMicroUsd: opts.capMicroUsd, now: opts.now });
       if (spentMicroUsd + opts.estimateMicroUsd > opts.capMicroUsd) {
-        trips.push({ scope: TOTAL_SPEND_SCOPE, spentMicroUsd, capMicroUsd: opts.capMicroUsd });
+        trips.push(withUnknown({ scope: TOTAL_SPEND_SCOPE, spentMicroUsd, capMicroUsd: opts.capMicroUsd }, unknownCalls));
       }
     }
     if (opts.providerCapMicroUsd !== undefined) {
       const cap = opts.providerCapMicroUsd;
-      const spent = this.window(opts.now, opts.provider).spentMicroUsd;
+      const w = this.window(opts.now, opts.provider);
       const scope = providerSpendScope(scrubSecrets(opts.provider));
-      rearmSpendAlerts(this.db, { spentMicroUsd: spent, capMicroUsd: cap, now: opts.now, scope });
-      if (spent + opts.estimateMicroUsd > cap) trips.push({ scope, spentMicroUsd: spent, capMicroUsd: cap });
+      rearmSpendAlerts(this.db, { spentMicroUsd: w.spentMicroUsd, capMicroUsd: cap, now: opts.now, scope });
+      if (w.spentMicroUsd + opts.estimateMicroUsd > cap) {
+        trips.push(withUnknown({ scope, spentMicroUsd: w.spentMicroUsd, capMicroUsd: cap }, w.unknownCalls));
+      }
     }
     return { spentMicroUsd, trips };
+  }
+
+  /**
+   * SAFE-16.a: the caps that cover a call at an unknown price — the total cap
+   * (if given) and the call's provider cap (if given), `total` first — each
+   * with its 24 h spend, for the owner's spend card. Nothing is checked or
+   * recorded (there is no amount to fit).
+   */
+  covering(opts: Omit<SpendReserveInput, "estimateMicroUsd" | "model">): SpendTrip[] {
+    const out: SpendTrip[] = [];
+    if (opts.capMicroUsd !== undefined) {
+      const w = this.window(opts.now);
+      out.push(withUnknown({ scope: TOTAL_SPEND_SCOPE, spentMicroUsd: w.spentMicroUsd, capMicroUsd: opts.capMicroUsd }, w.unknownCalls));
+    }
+    if (opts.providerCapMicroUsd !== undefined) {
+      const w = this.window(opts.now, opts.provider);
+      out.push(
+        withUnknown(
+          {
+            scope: providerSpendScope(scrubSecrets(opts.provider)),
+            spentMicroUsd: w.spentMicroUsd,
+            capMicroUsd: opts.providerCapMicroUsd,
+          },
+          w.unknownCalls,
+        ),
+      );
+    }
+    return out;
+  }
+
+  /**
+   * SAFE-16.a: record exactly one call at an unknown price that the owner
+   * approved on a spend card: one `unknown` row (no amount: estimate and cost
+   * 0, so it never counts as spend — it is counted in `unknownCalls` and
+   * shown as "+ unknown", never as $0). Settles like any other call (an HTTP
+   * error makes it `failed`).
+   */
+  recordUnknown(opts: { provider: string; model: string; now: number }): string {
+    const id = crypto.randomUUID();
+    this.db.run(
+      `INSERT INTO spend_ledger
+         (id, ts, provider, model, status, estimate_micro_usd, cost_micro_usd)
+       VALUES (?, ?, ?, ?, 'unknown', 0, 0)`,
+      [id, opts.now, scrubSecrets(opts.provider), scrubSecrets(opts.model)],
+    );
+    return id;
   }
 
   /** Record one `reserved` row at the estimate (inside a transaction). */
@@ -506,8 +581,8 @@ export class SpendLedger {
    */
   noteWarning(opts: { capMicroUsd: number; now: number; provider?: string }): SpendWarning | null {
     const run = this.db.transaction((): SpendWarning | null => {
-      const { spentMicroUsd } = this.window(opts.now, opts.provider);
-      return recordSpendWarning(this.db, {
+      const { spentMicroUsd, unknownCalls } = this.window(opts.now, opts.provider);
+      const w = recordSpendWarning(this.db, {
         spentMicroUsd,
         capMicroUsd: opts.capMicroUsd,
         now: opts.now,
@@ -515,13 +590,21 @@ export class SpendLedger {
           ? { scope: providerSpendScope(scrubSecrets(opts.provider)) }
           : {}),
       });
+      // SAFE-16: the warning's spend reads "$X + unknown" while the window holds such a call.
+      return w && unknownCalls > 0 ? { ...w, unknownCalls } : w;
     });
     return run.immediate();
   }
 
   /** Replace a reservation with what the call actually cost. */
   settle(id: string, s: SpendSettlement, now: number): void {
-    if (s.status === "actual") {
+    if (s.status === "unknown") {
+      // SAFE-16: still no price — keep the row `unknown`, with its tokens.
+      this.db.run(
+        `UPDATE spend_ledger SET prompt_tokens = ?, completion_tokens = ?, settled_at = ? WHERE id = ?`,
+        [s.usage?.promptTokens ?? null, s.usage?.completionTokens ?? null, now, id],
+      );
+    } else if (s.status === "actual") {
       this.db.run(
         `UPDATE spend_ledger SET status = 'actual', cost_micro_usd = ?,
            prompt_tokens = ?, completion_tokens = ?, settled_at = ? WHERE id = ?`,
@@ -651,11 +734,27 @@ function taskExcerpt(task: string): string {
   return `${t.slice(0, SPEND_CARD_TASK_MAX)}\n[… ${t.length - SPEND_CARD_TASK_MAX} more characters not shown]`;
 }
 
-/** What a spend card shows (SAFE-18): the paused call, the tripped cap(s), that call's estimate. */
+/**
+ * SAFE-16.a: the start of a spend card's amount when the call's price is
+ * unknown (the card engine's outcome line and tests key on it).
+ */
+export const SPEND_CARD_UNKNOWN_AMOUNT = "unknown";
+
+/** True for a spend card whose amount is unknown (SAFE-16.a). */
+export function isUnknownSpendAmount(amount: string | undefined): boolean {
+  return (amount ?? "").startsWith(SPEND_CARD_UNKNOWN_AMOUNT);
+}
+
+/**
+ * What a spend card shows (SAFE-18): the paused call, the tripped cap(s),
+ * that call's estimate. With `estimateMicroUsd` null (SAFE-16.a: the model
+ * has no known price) the target is every cap that covers the call and the
+ * amount is shown as unknown, never as $0.
+ */
 export function spendCardFields(o: {
   model: string;
   provider: string;
-  estimateMicroUsd: number;
+  estimateMicroUsd: number | null;
   trips: readonly SpendTrip[];
   surface: string;
   requester: string;
@@ -664,19 +763,31 @@ export function spendCardFields(o: {
 }): { title: string; action: string; target: string; amount: string; text: string } {
   const provider = scrubSecrets(o.provider).replace(/\s+/g, "") || "(unknown)";
   const model = scrubSecrets(o.model).replace(/\s+/g, " ").trim() || "(none)";
+  const unknown = o.estimateMicroUsd === null;
   const context = [
     `Asked by ${o.requester} on ${o.surface}${o.project ? `, project ${o.project}` : ""}.`,
     `24h spend when it paused: ${o.trips
-      .map((t) => `${spendScopeLabel(t.scope)} ${formatUsd(t.spentMicroUsd)} of ${formatUsd(t.capMicroUsd)}`)
+      .map((t) => `${spendScopeLabel(t.scope)} ${formatSpend(t.spentMicroUsd, t.unknownCalls)} of ${formatUsd(t.capMicroUsd)}`)
       .join("; ")}.`,
-    "Approve lets only this one call through, at this amount; the next call past the cap asks again (SAFE-8.a).",
+    unknown
+      ? "This model has no known price, so this call's cost is unknown: it is never counted as $0. Approve " +
+        "lets only this one call through; the next call at an unknown price asks again (SAFE-16.a)."
+      : "Approve lets only this one call through, at this amount; the next call past the cap asks again (SAFE-8.a).",
   ];
   const task = o.taskText?.trim();
   return {
-    title: shortLine(`Spend past a cap — asks first (SAFE-8) · from ${o.surface}`, 100),
+    title: shortLine(
+      unknown
+        ? `Spend at an unknown price — asks first (SAFE-16.a) · from ${o.surface}`
+        : `Spend past a cap — asks first (SAFE-8) · from ${o.surface}`,
+      100,
+    ),
     action: shortLine(`send one model call to ${model} via ${provider}`, 500),
     target: shortLine(o.trips.map((t) => spendScopeLabel(t.scope)).join(", "), 500),
-    amount: `~${formatUsd(o.estimateMicroUsd)} (this one call's estimate)`,
+    amount:
+      o.estimateMicroUsd === null
+        ? `${SPEND_CARD_UNKNOWN_AMOUNT} (no known price for this model; never counted as free)`
+        : `~${formatUsd(o.estimateMicroUsd)} (this one call's estimate)`,
     text: [...context, ...(task ? ["", "Task:", taskExcerpt(task)] : [])].join("\n"),
   };
 }
@@ -729,8 +840,10 @@ export type SpendGuard = {
  * estimate the card showed (`reserveApproved`); every later call is checked
  * again (SAFE-8.a). A no throws SpendCapRefusal whose ask says what the card
  * came to. The call's own abort signal ends the wait (the card closes as a
- * no). Unpriced, invalid-setting and ledger stops never raise a card (there
- * is no price to approve).
+ * no). An unpriced model's call under a cap that covers it asks the same way
+ * on a card whose amount is unknown (SAFE-16.a): approved, it is sent and
+ * recorded `unknown` (never $0); a no stops it with the unpriced ask.
+ * Invalid-setting and ledger stops never raise a card.
  */
 export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): SpendGuard {
   const env = opts.env ?? process.env;
@@ -756,6 +869,97 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
     }
   };
 
+  /** The configured owner (nobody can approve a card without one). */
+  const ownerConfigured = async (): Promise<boolean> => {
+    try {
+      return Boolean(await getOwner({ env: ownerEnv(env) }));
+    } catch {
+      return false;
+    }
+  };
+
+  /**
+   * Record one spend card (SAFE-18: kind `spend`, class `money`, so Approve
+   * also needs the SAFE-19 one-time code) and wait for it: `approved` only
+   * when the owner approved it and the approval was used once while the
+   * call's signal was not aborted; otherwise how it came to no (SAFE-20).
+   * `what` names the call in the wait note (no amounts). Never throws.
+   */
+  const waitOnCard = async (
+    fields: ReturnType<typeof spendCardFields>,
+    what: string,
+    signal: AbortSignal | undefined,
+  ): Promise<{ approved: true; requestId: string } | { approved: false; card: SpendCardNo }> => {
+    let requestId: string | undefined;
+    try {
+      const store = new ApprovalStore({ db: db! });
+      const { actor } = auditContextFromEnv(env);
+      const req = store.request({
+        kind: SPEND_CARD_KIND,
+        class: SPEND_CARD_CLASS,
+        ...fields,
+        textLabel: "text",
+        requester: actor,
+        waiter: scheduleRunnerId(),
+        ttlMs: spendCardHooks.ttlMs ?? SPEND_CARD_TTL_MS,
+      });
+      requestId = req.id;
+      note(
+        `[operator] AUTONOMY-8: waiting for the owner's OK on an Approve card with the one-time code ` +
+          `(${what}; request ${req.id}; no answer by ` +
+          `${new Date(req.expiresAt).toISOString()} means no, and nothing is spent — the running Discord ` +
+          "bridge DMs the card to the owner; with no bridge running it lapses).",
+      );
+      spendCardHooks.onRequest?.(req, db!);
+      const decided = await store.waitForDecision(req.id, {
+        pollMs: spendCardHooks.pollMs ?? SPEND_CARD_POLL_MS,
+        ...(signal ? { signal } : {}),
+      });
+      // A stop that lands as the owner approves wins: the approval is left unused.
+      if (decided?.status === "approved" && !signal?.aborted && store.consume(req.id)) {
+        return { approved: true, requestId: req.id };
+      }
+      return {
+        approved: false,
+        card: {
+          requestId,
+          outcome: decided?.status === "denied" ? "denied" : signal?.aborted ? "aborted" : "expired",
+        },
+      };
+    } catch (err) {
+      return {
+        approved: false,
+        card: {
+          ...(requestId ? { requestId } : {}),
+          outcome: "unavailable",
+          error: err instanceof Error ? err.message : String(err),
+        },
+      };
+    }
+  };
+
+  /** The run's project label for a card, read only when a card is raised. */
+  const projectForCard = (): string | undefined => {
+    try {
+      return opts.approval?.project?.();
+    } catch {
+      return undefined;
+    }
+  };
+
+  /** Card fields for this run (who asked, where, the project and the task as data). */
+  const cardFields = (o: { model: string; provider: string; estimateMicroUsd: number | null; trips: SpendTrip[] }) => {
+    const { actor, surface } = auditContextFromEnv(env);
+    const project = projectForCard();
+    return spendCardFields({
+      ...o,
+      surface,
+      requester: actor,
+      ...(project ? { project } : {}),
+      ...(opts.approval?.taskText ? { taskText: opts.approval.taskText } : {}),
+    });
+  };
+
   /**
    * SAFE-8 / SAFE-8.a / SAFE-19: a priced call past a cap waits for the
    * owner's spend card. Resolves the reservation of exactly that call when
@@ -772,13 +976,7 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
     const reached = (card?: SpendCardNo) =>
       stop(spendCapReachedAsk({ estimateMicroUsd: call.estimateMicroUsd, trips, ...(card ? { card } : {}) }));
     if (!opts.approval) return reached();
-    let owner = null;
-    try {
-      owner = await getOwner({ env: ownerEnv(env) });
-    } catch {
-      owner = null;
-    }
-    if (!owner) return reached();
+    if (!(await ownerConfigured())) return reached();
     if (signal?.aborted) return reached({ outcome: "aborted" });
     const turn = cardTurn.then(async (): Promise<string> => {
       // Re-fit first: the window may have moved while an earlier card of
@@ -792,79 +990,100 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
       if (again.ok) return again.id;
       trips = again.trips;
       if (signal?.aborted) return reached({ outcome: "aborted" });
-      let requestId: string | undefined;
+      let fields: ReturnType<typeof spendCardFields>;
       try {
-        const store = new ApprovalStore({ db: db! });
-        const { actor, surface } = auditContextFromEnv(env);
-        let project: string | undefined;
-        try {
-          project = opts.approval?.project?.();
-        } catch {
-          project = undefined;
-        }
-        const fields = spendCardFields({
-          model: call.model,
-          provider: call.provider,
-          estimateMicroUsd: call.estimateMicroUsd,
-          trips,
-          surface,
-          requester: actor,
-          ...(project ? { project } : {}),
-          ...(opts.approval?.taskText ? { taskText: opts.approval.taskText } : {}),
-        });
-        const req = store.request({
-          kind: SPEND_CARD_KIND,
-          class: SPEND_CARD_CLASS,
-          ...fields,
-          textLabel: "text",
-          requester: actor,
-          waiter: scheduleRunnerId(),
-          ttlMs: spendCardHooks.ttlMs ?? SPEND_CARD_TTL_MS,
-        });
-        requestId = req.id;
-        note(
-          `[operator] AUTONOMY-8: waiting for the owner's OK on an Approve card with the one-time code ` +
-            `(one model call past a spend cap, SAFE-8.a; request ${req.id}; no answer by ` +
-            `${new Date(req.expiresAt).toISOString()} means no, and nothing is spent — the running Discord ` +
-            "bridge DMs the card to the owner; with no bridge running it lapses).",
-        );
-        spendCardHooks.onRequest?.(req, db!);
-        const decided = await store.waitForDecision(req.id, {
-          pollMs: spendCardHooks.pollMs ?? SPEND_CARD_POLL_MS,
-          ...(signal ? { signal } : {}),
-        });
-        // A stop that lands as the owner approves wins: the approval is left unused.
-        if (decided?.status === "approved" && !signal?.aborted && store.consume(req.id)) {
-          const passed = ledger!.reserveApproved({
-            ...call,
-            approvedMicroUsd: call.estimateMicroUsd,
-            approvedScopes: trips.map((t) => t.scope),
-            now: now(),
-          });
-          if (!passed.ok) {
-            // Not the call the card showed (it would now pass a cap the card
-            // did not name): the used approval does not stretch to it.
-            if (passed.trips.length > 0) trips = passed.trips;
-            return reached({ requestId, outcome: "changed" });
-          }
-          note(
-            `[operator] AUTONOMY-8: the owner approved request ${req.id}; sending that one call ` +
-              "(SAFE-8.a: the next call past the cap asks again).",
-          );
-          return passed.id;
-        }
-        return reached({
-          requestId,
-          outcome: decided?.status === "denied" ? "denied" : signal?.aborted ? "aborted" : "expired",
+        fields = cardFields({ model: call.model, provider: call.provider, estimateMicroUsd: call.estimateMicroUsd, trips });
+      } catch (err) {
+        return reached({ outcome: "unavailable", error: err instanceof Error ? err.message : String(err) });
+      }
+      const waited = await waitOnCard(fields, "one model call past a spend cap, SAFE-8.a", signal);
+      if (!waited.approved) return reached(waited.card);
+      let passed: ReturnType<SpendLedger["reserveApproved"]>;
+      try {
+        passed = ledger!.reserveApproved({
+          ...call,
+          approvedMicroUsd: call.estimateMicroUsd,
+          approvedScopes: trips.map((t) => t.scope),
+          now: now(),
         });
       } catch (err) {
-        if (err instanceof SpendCapRefusal) throw err;
         return reached({
-          ...(requestId ? { requestId } : {}),
+          requestId: waited.requestId,
           outcome: "unavailable",
           error: err instanceof Error ? err.message : String(err),
         });
       }
+      if (!passed.ok) {
+        // Not the call the card showed (it would now pass a cap the card
+        // did not name): the used approval does not stretch to it.
+        if (passed.trips.length > 0) trips = passed.trips;
+        return reached({ requestId: waited.requestId, outcome: "changed" });
+      }
+      note(
+        `[operator] AUTONOMY-8: the owner approved request ${waited.requestId}; sending that one call ` +
+          "(SAFE-8.a: the next call past the cap asks again).",
+      );
+      return passed.id;
+    });
+    cardTurn = turn.catch(() => undefined);
+    return turn;
+  };
+
+  /**
+   * SAFE-16.a: a call whose model has no known price, under a cap that
+   * covers it (the total cap and/or its provider's cap), stops and asks on
+   * the owner's spend card with the amount shown as unknown. Resolves the
+   * id of its `unknown` ledger row when the owner approved that one call
+   * (Approve + one-time code, used once); throws SpendCapRefusal with the
+   * unpriced ask otherwise — no `approval` hook or no owner (the operator
+   * ask at once, before the ledger opens), or the card came to no (the ask
+   * names the card). One card at a time per run, like priced cards. There
+   * is no price override.
+   */
+  const passUnknownOnCard = async (
+    call: { provider: string; model: string; capMicroUsd?: number; providerCapMicroUsd?: number },
+    signal: AbortSignal | undefined,
+  ): Promise<string> => {
+    const scope =
+      call.capMicroUsd !== undefined ? TOTAL_SPEND_SCOPE : providerSpendScope(scrubSecrets(call.provider));
+    const cap = call.capMicroUsd ?? call.providerCapMicroUsd!;
+    const unpriced = (card?: SpendCardNo) =>
+      stop(spendCapUnpricedAsk(call.model, cap, opts.modelKey, scope, card));
+    if (!opts.approval) return unpriced();
+    if (!(await ownerConfigured())) return unpriced();
+    try {
+      db ??= opts.db ?? openCorvidinhoDb({ env });
+      ledger ??= new SpendLedger(db);
+    } catch (err) {
+      return stop(spendCapLedgerAsk(err instanceof Error ? err.message : String(err)));
+    }
+    if (signal?.aborted) return unpriced({ outcome: "aborted" });
+    const turn = cardTurn.then(async (): Promise<string> => {
+      if (signal?.aborted) return unpriced({ outcome: "aborted" });
+      let fields: ReturnType<typeof spendCardFields>;
+      try {
+        const trips = ledger!.covering({ ...call, now: now() });
+        fields = cardFields({ model: call.model, provider: call.provider, estimateMicroUsd: null, trips });
+      } catch (err) {
+        return unpriced({ outcome: "unavailable", error: err instanceof Error ? err.message : String(err) });
+      }
+      const waited = await waitOnCard(fields, "one model call at an unknown price under a spend cap, SAFE-16.a", signal);
+      if (!waited.approved) return unpriced(waited.card);
+      let id: string;
+      try {
+        id = ledger!.recordUnknown({ provider: call.provider, model: call.model, now: now() });
+      } catch (err) {
+        return unpriced({
+          requestId: waited.requestId,
+          outcome: "unavailable",
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+      note(
+        `[operator] AUTONOMY-8: the owner approved request ${waited.requestId}; sending that one call at an ` +
+          "unknown price (SAFE-16.a: never counted as $0; the next call at an unknown price asks again).",
+      );
+      return id;
     });
     cardTurn = turn.catch(() => undefined);
     return turn;
@@ -905,11 +1124,35 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
     if (!price) {
       // No cap covers this call: its unknown cost counts against nothing.
       if (total === undefined && providerCap === undefined) return fetchImpl(input, init);
-      return stop(
-        total !== undefined
-          ? spendCapUnpricedAsk(model, total, opts.modelKey)
-          : spendCapUnpricedAsk(model, providerCap!, opts.modelKey, providerSpendScope(scrubSecrets(provider))),
+      // SAFE-16.a: under a cap it stops and asks on a card showing the amount as unknown.
+      const unknownId = await passUnknownOnCard(
+        {
+          provider,
+          model,
+          ...(total !== undefined ? { capMicroUsd: total } : {}),
+          ...(providerCap !== undefined ? { providerCapMicroUsd: providerCap } : {}),
+        },
+        init?.signal ?? undefined,
       );
+      let sent: Response;
+      try {
+        sent = await fetchImpl(input, init);
+      } catch (err) {
+        settle(unknownId, { status: "unknown", usage: null }, provider, providerCap);
+        throw err;
+      }
+      if (!sent.ok) {
+        settle(unknownId, { status: "failed" }, provider, providerCap);
+        return sent;
+      }
+      let used: AgentTokenUsage | null = null;
+      try {
+        used = opts.readUsage(await sent.clone().json());
+      } catch {
+        used = null;
+      }
+      settle(unknownId, { status: "unknown", usage: used }, provider, providerCap);
+      return sent;
     }
     const estimate = estimateCallMicroUsd(price, Buffer.byteLength(body, "utf8"));
     const call: PausedCall = {

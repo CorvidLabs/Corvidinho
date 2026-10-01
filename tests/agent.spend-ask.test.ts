@@ -478,7 +478,7 @@ describe("spend notices (spend-notice.ts)", () => {
     const snap = (spent: number, priced = true): SpendSnapshot => ({
       kind: "cap",
       capMicroUsd: 5_000_000,
-      window: { spentMicroUsd: spent, calls: 3, estimatedCalls: 0 },
+      window: { spentMicroUsd: spent, calls: 3, estimatedCalls: 0, unknownCalls: 0 },
       model: "gpt-4o-mini",
       priced,
     });
@@ -545,7 +545,7 @@ describe("task run CLI at 80% and at the cap (localhost mock LLM)", () => {
     });
     try {
       const proc = Bun.spawn(
-        ["bun", "--no-env-file", join(root, "src/cli.ts"), "task", "run", "--task", "hi", "--output", output],
+        ["bun", "--no-env-file", join(root, "src/cli.ts"), "task", "run", "--here", "--task", "hi", "--output", output],
         {
           // A scratch non-git project: never the repo's own snapshot or lane.
           cwd: dir,

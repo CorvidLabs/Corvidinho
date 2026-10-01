@@ -33,6 +33,7 @@ Safety has to fire even when the model is having a bad day. Guards live in the t
   - **SAFE-14.a**  Only I see spend amounts and cap settings; everyone else only sees that work is paused for budget.
 - **SAFE-15**  It warns at 80% of a cap and stops and asks at 100%, for each cap.
 - **SAFE-16**  An unknown model price counts as unknown and shows as unknown, never as free.
+  - **SAFE-16.a**  A call whose price is unknown stops and asks on a card that shows the amount as unknown when a cap covers it; with no cap covering it, it just runs; there is no price override.
 - **SAFE-18**  When it needs my OK, it DMs me an Approve/Deny card with the exact action, target, amount, and diff or text.
 - **SAFE-19**  Destructive actions and money actions also need a one-time code I type back; the code is valid once, only for that action, and expires quickly.
 - **SAFE-20**  No answer, or an answer after the card expires, means no.

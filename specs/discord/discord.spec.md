@@ -274,8 +274,9 @@ deny | code | submit`), `buildApproveDenyComponents`,
 `spendApprovalKind(opts)` (the `spend` kind, class `money`, over
 `approval_requests`: audit prefix `spend-cap`; Approve only records the
 decision, the waiting run uses it once — REQ-discord-198, SAFE-8 / SAFE-8.a),
-`SPEND_CARD_NOTHING_DONE` ("nothing was spent") and `SPEND_CARD_APPROVED`
-(the card's outcome line). `src/memory/forget.ts` adds
+`SPEND_CARD_NOTHING_DONE` ("nothing was spent"), `SPEND_CARD_APPROVED`
+(the card's outcome line) and `SPEND_CARD_UNKNOWN_APPROVED` (the outcome line
+of a card whose amount is unknown, SAFE-16.a, REQ-discord-199). `src/memory/forget.ts` adds
 `previewForgetTargets` (`ForgetCounts`) and `ForgetRequestStore.resetCard`.
 `StartBridgeResult.deliverApprovalCards` (and `deliverForgetCards`, the same
 pass); `StartBridgeOptions.approvalPollMs`. `src/discord/gateway.ts` exports
@@ -630,6 +631,28 @@ session, deps)` (both `message-router.ts`: channel, actor and mute gates, no
 rate count). `/work` exports `WORK_STOPPED_PR_REASON` (the stopped run's PR
 line, also used when a stop lands after the agent exited, before the PR step).
 
+The Stop button (AGENT-3.a, REQ-discord-303): `run-control.ts` also exports
+`buildStopComponents(runId)` (one row, one danger-style `Stop` button),
+`stopRunCustomId(runId)` (`cvstop:<runId>`), `parseStopRunCustomId(raw)`
+(the run id, or null for any other id), `RUN_STOP_PREFIX` (`cvstop`),
+`RUN_STOP_LABEL`, `RUN_STOP_NOT_YOURS` (`This Stop button isn't for you.`)
+and `RUN_STOP_NOTHING_RUNNING` (`Nothing is running.`). `ThinkingStatusOpts`
+takes optional `components` (the chat, pick / Answer, `/session start` and
+`/work` runs pass `buildStopComponents(turn.runId)`): they go out with the
+progress embed (`ThinkingOutbound.sendEmbed` and the gateway's `sendEmbed`
+take optional `components`), or replace a reused stub's button; working edits
+leave them; `done` / `fail` edit with `components: null`
+(`ThinkingOutbound.editEmbed` and the gateway's `editEmbed` take optional
+`components`, `null` sent as an empty list), and `finalizeContent` / `discard`
+replace them. `recoverInterruptedReplies` edits the interrupted embed with
+`components: null`. `memoryThinkingOutbound` records `components` on `sends`
+and on `edits` that set them. The bridge's `onComponent` handles a
+`cvstop:` press in its own branch (before the ask ids, after the Approve
+cards), through `pressPassesGates` — the channel, actor and mute / rate gates
+the ask presses use, shared with them — then the run the pressed message
+shows (`byProgressMessage`, same channel and id), the requester-or-owner
+check and the stop words' `SessionRunControl.stop`.
+
 Outbound mention safety (REQ-discord-205, DISCORD-8):
 `src/discord/allowed-mentions.ts` exports `outboundAllowedMentions({ users,
 repliedUser })` (always `parse: []`) and `defangMassMentions` (re-exported by
@@ -719,7 +742,10 @@ bridge's chat path passes `chat`, its ask continuation (button pick or
 Answer form) `ask`, `/session start` `session`, `/work` `work` and the
 scheduler's `runOne` `schedule`. The agent's shell gate (REQ-agent-503)
 offers the allowlisted shell, runners and Fledge runs only on the first four,
-for the owner, in the talk's own worktree. Community can't start `/work` (IDENTITY-11.a): right after the SAFE-13
+for the owner, in the talk's own worktree. The spawn client runs
+`task run --here --task <prompt> --output ndjson` (REQ-discord-014 /
+REQ-discord-073): the run works in the cwd it is given and never makes a
+worktree of its own (SESSION-WORKTREE-1.a, REQ-cli-122). Community can't start `/work` (IDENTITY-11.a): right after the SAFE-13
 inbound check the handler refuses a community caller (declared community, no
 role, undeclared; muted or deny-listed callers too, though the dispatcher's
 mute and actor gates stop them first) with the ephemeral `not authorized` of
@@ -869,9 +895,14 @@ DISCORD-16), `auditInboundInjection(recordAudit, …)` and
 Stuck WATCH asks (AGENT-16.a, REQ-discord-086): `src/discord/watch-ask.ts`
 exports `formatWatchStuckAskDm(ask)` (the `formatAskReply` stuck post with no
 mention, led by `GitHub <repo>#<n> — answer on the thread: <link>`),
-`createWatchAskDelivery({ db, owner, sendDm, now?, log? })` →
+`createWatchAskDelivery({ db, owner, sendDm, now?, log?, spendAlerts? })` →
 `WatchAskDelivery` (`deliver()` → `{ sent, failed, expired }`, `stop()`,
-`settle(timeoutMs)`) and `WATCH_ASK_RETRY_MS` (10 min).
+`settle(timeoutMs)`) and `WATCH_ASK_RETRY_MS` (10 min). WATCH spend-cap stops
+(AUTONOMY-8, REQ-discord-199): `formatWatchSpendStopDm(ask)` (the SAFE-14.a
+spend-stop DM with `GitHub <repo>#<n>: <link>` as its second line) and
+`formatWatchOwnerAskDm(ask)` (by reason); a spend-cap stop is DMed once per
+cap episode (`claimCapPing` on the spend alert outbox; an already told
+episode is taken and dropped).
 
 Failed-run replies (DISCORD-3.b, REQ-discord-032):
 `src/discord/failure-reason.ts` exports `FAILED_TOLD_OWNER_TEXT` ("That
@@ -917,7 +948,10 @@ a Discord session runs one turn at a time (chat, ask pick / Answer submit,
 out, and a stop never drops it; sessions run in parallel; only the
 requester (in their session or by a reply to the progress message) or the
 owner (by that reply) stops a run, and the stop kills its process tree
-(REQ-discord-301 / REQ-discord-302);
+(REQ-discord-301 / REQ-discord-302); the run's progress message carries a
+`Stop` button while it runs that only its requester or the owner can press
+to stop it, past the channel, actor and mute / rate gates, and that is gone
+once the run is done, failed or stopped (REQ-discord-303);
 a run summary's closing `(not allowed for your role)` note survives every cap
 between the agent and the post: schedule run rows and posts, `/work` and
 `/session start` answers (fitted under 1900), and an appended SAFE-13 line or
@@ -976,6 +1010,8 @@ bridge records itself in `schema_meta` (`markBridgeRunning`, a
 (`ABANDONED_SETTLE_MS`) for a DM in flight (handing its ask back after that).
 Schedules never stop or fail to start silently (REQ-discord-353, AUTONOMY-2): a run whose project cannot be resolved or whose worktree cannot be created (also when that step throws) is still recorded failed with the full error (`project resolve failed: …` / `worktree failed: …`), and `failBeforeRun` also records a `stuck` ask whose question is fixed, path-free text (`PROJECT_RESOLVE_FAILED_QUESTION` / `WORKTREE_FAILED_QUESTION`, exported from `src/scheduler/service.ts`; REQ-discord-418). `ScheduleStore.markRunFinished` takes an optional `autoPause: { at, ask }` and, when the run failed and the SQL `consecutive_failures` reaches `at` in the same transaction, stores that ask instead of the run's own; `finish()` passes `{ at: FAILURE_AUTO_PAUSE, ask: autoPauseAsk(runAsk) }` (`autoPauseAsk(last?)`: `Paused after 5 failed runs in a row. Fix the cause, then resume it with /schedule resume.` plus `Last failure: <question>`) and returns the run's effective ask (the pause ask when `maybeAutoPause` paused), which `onRunFinished.askReason` reports. The bridge posts it through `postOwnRunAsk` (the REQ-discord-347 in-process gate, take and `postRunAsk`; the pausing run's ask replaces its `❌` post and, when the run had no ask of its own, carries only its DISCORD-3.b failed line (REQ-discord-032) as context; a run that throws posts its pause ask at once with no context; an ask whose in-process post did not go out is handed back for the next delivery pass, since a paused or waiting schedule has no next run to post it, REQ-discord-606) and a daemon run's through the next delivery pass; a DISCORD-SCHEDULE-3 refusal records no ask of its own, and the pause ask of refused runs waits for the gate. No schema change.
 A schedule's question blocks it until the creator or the owner answers or cancels it (AUTONOMY-6.a, REQ-discord-606): schema v15 (`SCHEMA_VERSION` 15) adds `schedule_runs.ask_options` (JSON, scrubbed labels), `ask_blocking`, `ask_closed_at`, `ask_outcome` (`answered` | `picked` | `cancelled` | `superseded`), `ask_answer` (scrubbed), `ask_closed_by`, `ask_skip_at` and `ask_note_at` (partial index `idx_schedule_runs_open_ask`; `ask_answer` and `ask_options` are in `SCRUB_TARGETS`; the migration makes an ask recorded before it that is still pending on its schedule's newest run blocking, so it is posted with its controls, and closes every other one as `superseded`). `markRunFinished` stores every ask open and blocking with its resolved choices (`resolveAskOptions`; none for a spend-cap stop). `ScheduleStore` gains `openAsk(scheduleId)` / `openRunAsk(runId)` (the newest finished run's ask while nobody closed it: `OpenScheduleAsk`), `closeRunAsk(runId, { outcome, answer?, closedBy })` (compare-and-set on `ask_closed_at IS NULL`, the answer scrubbed), `skipForOpenAsk(schedule, ask)` (the claim's compare-and-set on `next_run_at` without a run row; stamps `ask_skip_at`), `pendingWaitNotes()` / `claimWaitNote(runId)` / `releaseWaitNote(runId)` and `answeredAsk(scheduleId)` (`AnsweredScheduleAsk`, only while that run is the newest finished one); `pendingAsks` and `claimRunAsk` skip closed asks. `SchedulerService.tick()` skips each due run of a schedule with an open ask (listed in `skipped`, no catch-up); its delivery pass posts each open ask's one wait note after the ask, with the ask's controls; every ask post carries `scheduleAskComponents(runId, ask)` and `scheduleAskHint(ask)` (`src/discord/schedule-ask.ts`; `ASK_CANCEL_LABEL`, `cancelCustomId` and the `cancel` kind of `parseAskCustomId` in `src/discord/ask-buttons.ts`; `formatAskReply` takes `hint`); `SchedulerOutbound` gains `components` on `post` and an optional `dm` (the bridge wires `sendDm`), used for a schedule with no channel (the owner's DM; none without an owner); the next run's prompt gets the answered question and the answer (`fenceSpeakerText` for anyone but the owner). The bridge routes every `srun_` ask id to `handleScheduleAskPress(interaction, parsed, deps)` (channel or owner-DM gate, actor gate, mute / rate, creator or live owner, never expiring; `SCHEDULE_ASK_*` texts, `SCHEDULE_ASK_PAUSED_NOTE` on the ack when the schedule is paused, `isScheduleAskId`, `formatScheduleWaitNote`), and a `cancel` press on a session ask gets the not-for-you reply.
+Schedules never stop or fail to start silently (REQ-discord-353, AUTONOMY-2): a run whose project cannot be resolved or whose worktree cannot be created (also when that step throws) is still recorded failed with the full error (`project resolve failed: …` / `worktree failed: …`), and `failBeforeRun` also records a `stuck` ask whose question is fixed, path-free text (`PROJECT_RESOLVE_FAILED_QUESTION` / `WORKTREE_FAILED_QUESTION`, exported from `src/scheduler/service.ts`; REQ-discord-418). `ScheduleStore.markRunFinished` takes an optional `autoPause: { at, ask }` and, when the run failed and the SQL `consecutive_failures` reaches `at` in the same transaction, stores that ask instead of the run's own; `finish()` passes `{ at: FAILURE_AUTO_PAUSE, ask: autoPauseAsk(runAsk) }` (`autoPauseAsk(last?)`: `Paused after 5 failed runs in a row. Fix the cause, then resume it with /schedule resume.` plus `Last failure: <question>`) and returns the run's effective ask (the pause ask when `maybeAutoPause` paused), which `onRunFinished.askReason` reports. The bridge posts it through `postOwnRunAsk` (the REQ-discord-347 in-process gate, take and `postRunAsk`; the pausing run's ask replaces its `❌` post and, when the run had no ask of its own, carries only its `failed (exit N)` line as context; a run that throws posts its pause ask at once with no context; an ask whose in-process post did not go out is handed back for the next delivery pass, since a paused or waiting schedule has no next run to post it, REQ-discord-606) and a daemon run's through the next delivery pass; a DISCORD-SCHEDULE-3 refusal records no ask of its own, and the pause ask of refused runs waits for the gate. No schema change.
+A schedule's question blocks it until the creator or the owner answers or cancels it (AUTONOMY-6.a, REQ-discord-606): schema v15 (`SCHEMA_VERSION` 15) adds `schedule_runs.ask_options` (JSON, scrubbed labels), `ask_blocking`, `ask_closed_at`, `ask_outcome` (`answered` | `picked` | `cancelled` | `continued` | `superseded`), `ask_answer` (scrubbed), `ask_closed_by`, `ask_skip_at` and `ask_note_at` (partial index `idx_schedule_runs_open_ask`; `ask_answer` and `ask_options` are in `SCRUB_TARGETS`; the migration makes an ask recorded before it that is still pending on its schedule's newest run blocking, so it is posted with its controls, and closes every other one as `superseded`). `markRunFinished` stores every ask open and blocking with its resolved choices (`resolveAskOptions`; none for a spend-cap stop). `ScheduleStore` gains `openAsk(scheduleId)` / `openRunAsk(runId)` (the newest finished run's ask while nobody closed it: `OpenScheduleAsk`), `closeRunAsk(runId, { outcome, answer?, closedBy })` (compare-and-set on `ask_closed_at IS NULL`, the answer scrubbed; outcome `continued` — the owner's Continue on a spend-cap stop, AUTONOMY-8 — hands no answer on, like `cancelled`), `skipForOpenAsk(schedule, ask)` (the claim's compare-and-set on `next_run_at` without a run row; stamps `ask_skip_at`), `pendingWaitNotes()` / `claimWaitNote(runId)` / `releaseWaitNote(runId)` and `answeredAsk(scheduleId)` (`AnsweredScheduleAsk`, only while that run is the newest finished one); `pendingAsks` and `claimRunAsk` skip closed asks. `SchedulerService.tick()` skips each due run of a schedule with an open ask (listed in `skipped`, no catch-up); its delivery pass posts each open ask's one wait note after the ask, with the ask's controls; every ask post carries `scheduleAskComponents(runId, ask)` and `scheduleAskHint(ask)` (`src/discord/schedule-ask.ts`; `ASK_CANCEL_LABEL`, `cancelCustomId` and the `cancel` kind of `parseAskCustomId` in `src/discord/ask-buttons.ts`; `formatAskReply` takes `hint`); `SchedulerOutbound` gains `components` on `post` and an optional `dm` (the bridge wires `sendDm`), used for a schedule with no channel (the owner's DM; none without an owner); the next run's prompt gets the answered question and the answer (`fenceSpeakerText` for anyone but the owner). The bridge routes every `srun_` ask id to `handleScheduleAskPress(interaction, parsed, deps)` (channel or owner-DM gate, actor gate, mute / rate, creator or live owner, never expiring; `SCHEDULE_ASK_*` texts, `SCHEDULE_ASK_PAUSED_NOTE` on the ack when the schedule is paused, `isScheduleAskId`, `formatScheduleWaitNote`), and a `cancel` press on a session ask gets the not-for-you reply. A spend-cap stop's controls are **Continue** (`SCHEDULE_ASK_CONTINUE_LABEL`, its `open` custom id; the live owner's only, closing it `continued` with `SCHEDULE_ASK_CONTINUED_ACK`) and **Cancel** (AUTONOMY-8, REQ-discord-606).
 
 Every schedule post — the `✅` / `❌` result line and each ask post (in-process or from the delivery pass, including these stuck asks) — starts with `scheduleTitle` (`Schedule **<name>** (<id>) on <project>`; an ask about a non-owner's schedule whose stored name trips the SAFE-13 detector leaves the name out, REQ-discord-713), where the project is `projectLabel(schedule.project)` (`src/discord/list-scope.ts`: the last segment of an absolute path, a relative name as given), never an absolute host path, since the whole channel reads it (REQ-discord-353, REQ-discord-418, SAFE-6). The run row keeps the full error and the model's prompt keeps the stored project.
 Schedule ticks are safe with a bridge and `corvidinho daemon` on one data dir: each tick `refresh()`es the schedules table, `claimRun()` compare-and-sets a due run so it fires once, and store updates write only their own columns so a finishing run never undoes a pause/resume made elsewhere; each run outcome is recorded once (`onRunFinished`, `drain`, `abandonInFlight` for shutdown) and an abandoned run's spawned agent is killed with its whole process tree through `AgentRunChatOpts.signal` (the spawn client runs each agent in its own process group, AGENT-3) (CLI-8 / AUTONOMOUS-4 / REQ-discord-108). A run never stays "running" forever (REQ-discord-346): `finish()` counts a run recorded only after `markRunFinished` (one IMMEDIATE transaction) succeeds, retrying a throwing write once and otherwise logging `[scheduler] run failed: could not record run …` and counting it failed; the bridge's `stop()` abandons in-flight runs like the daemon (`interrupted: bridge shutdown`); both stops wait ≤3 s (`settleAbandoned`, `ABANDONED_SETTLE_MS`) for aborted runs to park their worktree; each claimed run records its runner (`schedule_runs.runner` = `<pid>:<proc start>`, schema v10, `SCHEMA_VERSION` 10), and the bridge and daemon start with `recoverAbandoned()`, which fails runs whose runner is gone (`interrupted: process restarted`, `RUN_INTERRUPTED_BY_RESTART`) and parks leftover `talk-schedule_<schedule>_<run>` worktrees of runs this data dir recorded as no longer running, deleting a branch only when it has no commits of its own; a live runner's run and worktree are left alone, and a schedule-run worktree whose run this data dir does not know (another data dir's, e.g. `bun test` run inside it) is never touched.
@@ -1126,7 +1162,7 @@ the `state=` / `verified=` / `attempts=` plumbing stays in the footer.
 
 - **Given** an hourly schedule in an allowlisted channel whose run stopped with a clarify question listing two choices
 - **When** the next hours come due before anyone answers, and then the schedule's creator presses **Choose** and picks one
-- **Then** the question's post carries **Choose** and **Cancel**; each due hour is skipped (no run, not made up later) and one note says the schedule is waiting, pinging nobody; a reply to the post does not answer it; the pick closes the question privately ("Got it — **SQLite**…"), and the next hour's run gets the question and the pick; someone else's press gets "This choice isn't for you (or it was already answered)", and a spend-cap stop would have offered **Cancel** only
+- **Then** the question's post carries **Choose** and **Cancel**; each due hour is skipped (no run, not made up later) and one note says the schedule is waiting, pinging nobody; a reply to the post does not answer it; the pick closes the question privately ("Got it — **SQLite**…"), and the next hour's run gets the question and the pick; someone else's press gets "This choice isn't for you (or it was already answered)", and a spend-cap stop would have offered the owner's **Continue** and **Cancel**
 
 ### Scenario: A schedule on a nested checkout off the allowlist is refused (DISCORD-SCHEDULE-3.a)
 
@@ -1139,6 +1175,12 @@ the `state=` / `verified=` / `attempts=` plumbing stays in the footer.
 - **Given** a user's thread session whose run is going, and a second message they sent in the thread meanwhile
 - **When** they send `stop` in the thread
 - **Then** the second message is still waiting (no second run, no second progress message); the run's process tree is killed, the stop gets `⏹ Stopping the run.`, the first progress message becomes `⏹ Stopped` with the model and time in its footer (tokens and cost too if they are the owner); then the second message runs in the same session with its own progress message, and `⏹ Stopped` is in the thread it replays
+
+### Scenario: Press Stop on a run's progress message (AGENT-3.a)
+
+- **Given** a user's run whose progress message shows a red `Stop` button
+- **When** someone else presses it, and then the user (or the owner) presses it
+- **Then** the other person gets only the private `This Stop button isn't for you.` and the run goes on; the user's press gets the private `⏹ Stopping the run.`, the run's process tree is killed, the progress message becomes `⏹ Stopped` with its footer and no button, and a message they sent meanwhile then runs with its own progress message and button
 
 ### Scenario: Spawn with seeded identity
 
@@ -1319,6 +1361,10 @@ the `state=` / `verified=` / `attempts=` plumbing stays in the footer.
 | 'stop' / 'cancel' with no run of the session in flight | Unchanged: 'cancel' clears the open asks with the short ack; 'stop' is an ordinary message (REQ-discord-302) |
 | 'stop' reply to a running progress message from anyone but its requester or the owner, or in another channel | Not a stop: routed as before (no mention ⇒ ignored) and the run goes on (REQ-discord-302) |
 | A second 'stop' while the run winds down | Same short ack; nothing aborted again; one `⏹ Stopped` (REQ-discord-302) |
+| Stop button pressed by anyone but the run's requester or the owner | Ephemeral `This Stop button isn't for you.`; the run goes on (REQ-discord-303) |
+| Stop button of a run that is not running on that message (finished or stopped run, another run's id, another channel, a button from before a restart) | Ephemeral `Nothing is running.`; nothing stopped (REQ-discord-303) |
+| Stop button pressed off the allowlist, by a deny-listed or unlisted user, or while muted / rate-limited | The ask press refusals (zero-width ack, the owner's allowlist tip, `MUTED` / `RATE_LIMITED`), all ephemeral; nothing stopped (REQ-discord-303) |
+| A form submit carrying a `cvstop:` id | Ignored: no reply, nothing stopped (REQ-discord-303) |
 | A waiting message's session ended, idled out or its requester was forgotten before its turn | Nothing runs or is posted; its in-flight row is cleared (REQ-discord-301) |
 | A waiting message's author (or a waiting pick's presser) was muted or deny-listed, or its channel dropped from the allowlist or deny-listed, before its turn | Nothing runs or is posted; its in-flight row is cleared; the rate limit is not counted again (REQ-discord-301) |
 | A 'stop' lands after the `/work` agent exited, before its PR step | Short ack; no PR (`PR: not opened — the run was stopped.`), task `failed` / `stopped` (REQ-discord-302) |
@@ -1494,3 +1540,6 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-30 | rolling-24-hour-spend-caps-per-provider-plus-the-total-cap-each-warning-the-owner-at-80-and-stopping-to-ask-at-100-safe: Rolling 24-hour spend caps per provider plus the total cap, each warning the owner at 80% and stopping to ask at 100% (SAFE-14, SAFE-15): CORVIDINHO_PROVIDER_SPEND_CAPS_USD (provider=USD keyed on the configured provider id; a malformed or unknown key stops every call, value never echoed) next to CORVIDINHO_DAILY_SPEND_CAP_USD (the total cap); every provider call is recorded while any cap is set; SpendLedger.window(now, provider?) with a (provider, ts) index; reserve() checks the total and the call's provider cap in one IMMEDIATE transaction and names each tripped scope (total, provider:<id>) in owner-only text; spend_alerts gains a scope column (idempotent ALTER, scrubbed) so each cap warns once per crossing and pings once per episode; a cap stop is never a model failure; doctor and the owner's /status show each cap |
 | 2026-09-30 | at-a-spend-cap-the-run-asks-the-owner-on-a-dm-spend-approve-card-with-a-one-time-code-instead-of-refusing-approve-lets: At a spend cap the run asks the owner on a DM spend Approve card with a one-time code instead of refusing; Approve lets only the paused call through at the amount shown and the next call past the cap asks again (SAFE-8, SAFE-8.a, SAFE-15, SAFE-19 money) |
 | 2026-09-30 | a-failed-run-tells-the-owner-why-in-one-plain-line-and-everyone-else-that-it-didn-t-work-and-the-owner-has-been-told: A failed run tells the owner why in one plain line, and everyone else that it didn't work and the owner has been told (DISCORD-3.b) |
+| 2026-09-30 | a-cli-task-run-in-a-git-repo-works-in-its-own-worktree-by-default-here-runs-it-in-my-checkout-session-worktree-1-a: A CLI task run in a git repo works in its own worktree by default; --here runs it in my checkout (SESSION-WORKTREE-1.a) |
+| 2026-09-30 | a-call-whose-price-is-unknown-stops-and-asks-on-the-owner-s-spend-card-showing-the-amount-as-unknown-when-a-cap-covers: A call whose price is unknown stops and asks on the owner's spend card showing the amount as unknown when a cap covers it (recorded unknown, owner lines read $X + unknown, no price override), and every surface asks before spending over a cap: WATCH spend-cap stops reach the owner by DM and a schedule's spend-cap stop can go on through the card (SAFE-16, SAFE-16.a, AUTONOMY-8) |
+| 2026-09-30 | a-stop-button-on-the-run-s-progress-message-lets-me-or-the-person-who-asked-stop-it-agent-3-a: A Stop button on the run's progress message lets me or the person who asked stop it (AGENT-3.a) |

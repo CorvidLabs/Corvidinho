@@ -455,7 +455,7 @@ describe("task run CLI: a repeated failing call ends blocked with a stuck ask (l
     });
     try {
       const proc = Bun.spawn(
-        ["bun", join(root, "src/cli.ts"), "task", "run", "--task", "read the notes", "--output", "ndjson"],
+        ["bun", join(root, "src/cli.ts"), "task", "run", "--here", "--task", "read the notes", "--output", "ndjson"],
         {
           // A scratch non-git project: never the repo's own snapshot or lane.
           cwd: mkdtempSync(join(tmpdir(), "corvidinho-loop-guards-cli-")),

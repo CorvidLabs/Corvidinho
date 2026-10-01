@@ -27,8 +27,10 @@
  * the schedule and tells the owner once) and the prompt reaches the model
  * inside the untrusted-data fence. The owner's own schedules are unchanged.
  * AUTONOMY-6.a (REQ-discord-606): every ask a run records blocks the
- * schedule. Its post carries Choose / Answer and Cancel controls (Cancel only
- * for a spend-cap stop; src/discord/schedule-ask.ts), a schedule with no
+ * schedule. Its post carries Choose / Answer and Cancel controls (for a
+ * spend-cap stop, the owner's Continue — its next run asks on a spend card
+ * before any call past a cap, AUTONOMY-8 — and Cancel;
+ * src/discord/schedule-ask.ts), a schedule with no
  * channel sends it to the owner by DM, and until the creator or the owner
  * answers or cancels it each due run is skipped (no catch-up) and one wait
  * note goes out, pinging nobody. The answer reaches the next run once.
@@ -1138,7 +1140,7 @@ export class SchedulerService {
    * episode's ping, the stop's details go to the owner by DM, once per run
    * (`runId`: a post retried every tick after it failed DMs them once).
    * AUTONOMY-6.a: a recorded ask (`runId`) carries its controls — Choose or
-   * Answer, and Cancel (Cancel only for a spend-cap stop) — and the hint
+   * Answer, and Cancel (Continue and Cancel for a spend-cap stop) — and the hint
    * says a reply does not answer it; a schedule with no channel sends it to
    * the owner by DM.
    * Resolves true when the post went out (a poster returning void counts as

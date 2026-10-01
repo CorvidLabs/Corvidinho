@@ -12,6 +12,14 @@
  * no (SAFE-20). An ask pick's run, `/session start` and `/work` stop the same
  * way; a stopped `/work` opens no PR.
  *
+ * The Stop button (AGENT-3.a, REQ-discord-303): each run's progress message
+ * carries one red **Stop** button (`cvstop:<runId>`); a press by the requester
+ * or the owner, past the channel, actor and mute/rate gates, stops the run
+ * through the same stop path (ephemeral ack); anyone else gets "This Stop
+ * button isn't for you.", a stale button "Nothing is running."; the button is
+ * cleared when the run is done, failed or stopped, and waiting messages still
+ * run after a stop (AGENT-3.b).
+ *
  * Dry-run bridge, fake gateway, in-memory outbound; stub agents (the
  * configured model comes from the fake LLM fixture; no model is called) and,
  * for the process tree and the card, the real spawn client over fake agent
@@ -28,21 +36,29 @@ import {
   type AgentClient,
   type AgentRunChatOpts,
 } from "../src/discord/agent-client.ts";
-import { pickCustomId } from "../src/discord/ask-buttons.ts";
+import { answerCustomId, openCustomId, pickCustomId } from "../src/discord/ask-buttons.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
 import { routeMessage, type RouterDeps } from "../src/discord/message-router.ts";
 import {
   RUN_STOP_ACK,
+  RUN_STOP_NOTHING_RUNNING,
+  RUN_STOP_NOT_YOURS,
   RUN_STOPPED_TEXT,
   SessionRunControl,
+  buildStopComponents,
   isStopRunText,
+  parseStopRunCustomId,
+  stopRunCustomId,
 } from "../src/discord/run-control.ts";
+import { InflightReplyStore, recoverInterruptedReplies } from "../src/discord/inflight-replies.ts";
+import type { ComponentInteraction } from "../src/discord/gateway.ts";
+import { approveCardCustomId } from "../src/discord/approve-card.ts";
 import { SessionStore } from "../src/discord/session-store.ts";
 import type { SlashInteraction } from "../src/discord/slash-types.ts";
 import { ASK_CANCELLED_ACK } from "../src/discord/thin-ack.ts";
 import { THINKING_COLORS } from "../src/discord/thinking-status.ts";
-import type { InboundMessage } from "../src/discord/types.ts";
+import { ALLOWLIST_DENY_TIP, EPHEMERAL_SILENT_ACK, MUTED, type InboundMessage } from "../src/discord/types.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 import { useConfiguredModel } from "./fixtures/fake-llm.ts";
 import { teamPeopleFile } from "./fixtures/team-people.ts";
@@ -682,5 +698,399 @@ describe("the stop_run route and the stop words (REQ-discord-302)", () => {
     );
     expect(action).toEqual({ kind: "refuse", reason: "user_not_allowlisted" });
     turn.done();
+  });
+});
+
+type PressReply = Parameters<ComponentInteraction["reply"]>[0];
+
+/** The Stop button's custom id on a progress message's components. */
+function stopIdOf(components: unknown): string {
+  const rows = components as Array<{ components: Array<{ custom_id: string }> }>;
+  return rows[0]!.components[0]!.custom_id;
+}
+
+/** One red **Stop** button, `cvstop:run_<n>`, alone on its row. */
+const STOP_ROW = [
+  {
+    type: 1,
+    components: [{ type: 2, style: 4, label: "Stop", custom_id: expect.stringMatching(/^cvstop:run_\d+$/) }],
+  },
+];
+
+let pressSeq = 0;
+/** Press a button (or submit a form, with `modalValues`) and collect its replies. */
+async function press(
+  b: { handlers: GatewayHandlers },
+  opts: { customId: string; userId: string; messageId?: string; channelId: string; modalValues?: Record<string, string> },
+): Promise<PressReply[]> {
+  const replies: PressReply[] = [];
+  pressSeq += 1;
+  await b.handlers.onComponent!({
+    id: `ixs_${pressSeq}`,
+    customId: opts.customId,
+    channelId: opts.channelId,
+    userId: opts.userId,
+    ...(opts.messageId ? { messageId: opts.messageId } : {}),
+    ...(opts.modalValues ? { modalValues: opts.modalValues } : {}),
+    reply: async (o) => {
+      replies.push(o);
+    },
+    deleteReply: async () => {},
+  });
+  return replies;
+}
+
+describe("the Stop button on a run's progress message (AGENT-3.a, REQ-discord-303)", () => {
+  test("a chat run's progress message carries one red Stop button; the requester's press stops the run once, acks privately, and '⏹ Stopped' clears the button", async () => {
+    const { agent, runs } = gatedAgent();
+    const b = await bridgeWith(agent);
+    const first = b.handlers.onMessage(inThread("m1", ALICE, "long job", { mention: true }));
+    expect(await until(() => runs.length === 1)).toBe(true);
+    const sent = b.outbound.sends[0]!;
+    expect(sent.components).toEqual(STOP_ROW);
+    const stopId = stopIdOf(sent.components);
+    // Working edits leave the button alone.
+    expect(b.outbound.edits.filter((e) => e.messageId === sent.messageId).every((e) => e.components === undefined)).toBe(true);
+
+    const acks = await press(b, { customId: stopId, userId: ALICE, messageId: sent.messageId, channelId: "thr-1" });
+    await first;
+    expect(acks).toEqual([{ content: RUN_STOP_ACK, ephemeral: true }]);
+    expect(runs[0]!.aborts).toBe(1);
+    expect(runs).toHaveLength(1);
+    // Nothing public besides the stopped answer.
+    expect(b.replies).toEqual([]);
+    const done = finalEdit(b, sent.messageId)!;
+    expect(done.content).toBe(RUN_STOPPED_TEXT);
+    expect(done.components).toBeNull();
+    expect(done.embed).toStrictEqual({ color: THINKING_COLORS.error, footer: { text: footer("gpt-4o-mini") } });
+    // The stopped run's answer is in the thread; the press added nothing.
+    const session = b.result.store.getByThread("thr-1", ALICE)!;
+    const turns = b.result.store.threadFor(session).map((t) => t.content);
+    expect(turns.filter((t) => t === RUN_STOPPED_TEXT)).toHaveLength(1);
+    expect(turns).toHaveLength(2);
+    // Once it is stopped the button stops nothing.
+    expect(await press(b, { customId: stopId, userId: ALICE, messageId: sent.messageId, channelId: "thr-1" })).toEqual([
+      { content: RUN_STOP_NOTHING_RUNNING, ephemeral: true },
+    ]);
+    await b.result.stop();
+  });
+
+  test("the owner's press stops someone else's run; anyone else gets 'This Stop button isn't for you.' and the run goes on", async () => {
+    const { agent, runs } = gatedAgent();
+    const b = await bridgeWith(agent);
+    const first = b.handlers.onMessage({
+      id: "m1",
+      channelId: "chan-1",
+      authorId: ALICE,
+      authorBot: false,
+      content: "<@999> long job",
+      mentionedBot: true,
+    });
+    expect(await until(() => runs.length === 1)).toBe(true);
+    const sent = b.outbound.sends[0]!;
+    const stopId = stopIdOf(sent.components);
+    expect(await press(b, { customId: stopId, userId: BOB, messageId: sent.messageId, channelId: "chan-1" })).toEqual([
+      { content: RUN_STOP_NOT_YOURS, ephemeral: true },
+    ]);
+    await settle();
+    expect(runs[0]!.aborts).toBe(0);
+    expect(await press(b, { customId: stopId, userId: OWNER, messageId: sent.messageId, channelId: "chan-1" })).toEqual([
+      { content: RUN_STOP_ACK, ephemeral: true },
+    ]);
+    await first;
+    expect(runs[0]!.aborts).toBe(1);
+    expect(finalEdit(b, sent.messageId)!.content).toBe(RUN_STOPPED_TEXT);
+    // The owner's press started no session of theirs.
+    expect(b.result.store.list().map((s) => s.userId)).toEqual([ALICE]);
+    await b.result.stop();
+  });
+
+  test("a finished run's button is cleared with its answer, and a stale or mismatched button gets 'Nothing is running.' and stops nothing", async () => {
+    const { agent, runs } = gatedAgent();
+    const b = await bridgeWith(agent);
+    const first = b.handlers.onMessage(inThread("m1", ALICE, "one", { mention: true }));
+    expect(await until(() => runs.length === 1)).toBe(true);
+    const old = b.outbound.sends[0]!;
+    runs[0]!.finish();
+    await first;
+    // Cleared on done: the collapsed answer carries no button.
+    const answer = finalEdit(b, old.messageId)!;
+    expect(answer.content).toBe("answer to: one");
+    expect(answer.components).toBeNull();
+
+    const second = b.handlers.onMessage(inThread("m2", ALICE, "two"));
+    expect(await until(() => runs.length === 2)).toBe(true);
+    const live = b.outbound.sends[1]!;
+    expect(stopIdOf(live.components)).not.toBe(stopIdOf(old.components));
+    const nothing = [{ content: RUN_STOP_NOTHING_RUNNING, ephemeral: true }];
+    // The finished run's own button.
+    expect(await press(b, { customId: stopIdOf(old.components), userId: ALICE, messageId: old.messageId, channelId: "thr-1" })).toEqual(nothing);
+    // The live run's id on another message, another run's id on the live message.
+    expect(await press(b, { customId: stopIdOf(live.components), userId: ALICE, messageId: old.messageId, channelId: "thr-1" })).toEqual(nothing);
+    expect(await press(b, { customId: stopIdOf(old.components), userId: ALICE, messageId: live.messageId, channelId: "thr-1" })).toEqual(nothing);
+    // The live run's button pressed in another allowlisted channel.
+    b.result.config.allowlist.discord.channels.push("chan-2");
+    expect(await press(b, { customId: stopIdOf(live.components), userId: ALICE, messageId: live.messageId, channelId: "chan-2" })).toEqual(nothing);
+    // A button from before a restart names no running run here (in the
+    // allowlisted channel; in a thread no session is known for, the quiet
+    // channel-gate ack).
+    expect(await press(b, { customId: stopRunCustomId("run_99"), userId: ALICE, messageId: "progress_old", channelId: "chan-1" })).toEqual(nothing);
+    expect(await press(b, { customId: stopRunCustomId("run_99"), userId: ALICE, messageId: "progress_old", channelId: "thr-9" })).toEqual([
+      { content: EPHEMERAL_SILENT_ACK, ephemeral: true },
+    ]);
+    await settle();
+    expect(runs[1]!.aborts).toBe(0);
+    runs[1]!.finish();
+    await second;
+    expect(finalEdit(b, live.messageId)!.components).toBeNull();
+    await b.result.stop();
+  });
+
+  test("a failed run's answer clears the button too, and so does the failure status when the run throws", async () => {
+    let n = 0;
+    const agent: AgentClient = {
+      async runChat(input) {
+        n += 1;
+        if (n === 1) return { ok: false, sessionId: input.sessionId, summary: "", exitCode: 1 };
+        throw new Error("spawn failed");
+      },
+    };
+    const b = await bridgeWith(agent);
+    await b.handlers.onMessage(inThread("m1", ALICE, "one", { mention: true }));
+    const failed = b.outbound.sends[0]!;
+    expect(failed.components).toEqual(STOP_ROW);
+    expect(finalEdit(b, failed.messageId)!.components).toBeNull();
+    await expect(b.handlers.onMessage(inThread("m2", ALICE, "two"))).rejects.toThrow("spawn failed");
+    const thrown = b.outbound.sends[1]!;
+    expect(thrown.components).toEqual(STOP_ROW);
+    const last = b.outbound.edits.filter((e) => e.messageId === thrown.messageId).at(-1)!;
+    expect((last.embed as { description: string }).description).toBe("❌ spawn failed");
+    expect(last.components).toBeNull();
+    await b.result.stop();
+  });
+
+  test("a press passes the channel, actor and mute gates first: off the allowlist, deny-listed or muted, it stops nothing", async () => {
+    const { agent, runs } = gatedAgent();
+    const b = await bridgeWith(agent);
+    const first = b.handlers.onMessage(inThread("m1", ALICE, "long job", { mention: true }));
+    expect(await until(() => runs.length === 1)).toBe(true);
+    const sent = b.outbound.sends[0]!;
+    const at = { customId: stopIdOf(sent.components), messageId: sent.messageId, channelId: "thr-1" };
+    const deny = b.result.config.allowlist.discord;
+
+    // The run's thread deny-listed: zero-width for the requester, the tip for the owner.
+    deny.denyChannels.push("thr-1");
+    expect(await press(b, { ...at, userId: ALICE })).toEqual([{ content: EPHEMERAL_SILENT_ACK, ephemeral: true }]);
+    expect(await press(b, { ...at, userId: OWNER })).toEqual([{ content: ALLOWLIST_DENY_TIP, ephemeral: true }]);
+    deny.denyChannels.pop();
+    // The requester deny-listed: zero-width.
+    deny.denyUsers.push(ALICE);
+    expect(await press(b, { ...at, userId: ALICE })).toEqual([{ content: EPHEMERAL_SILENT_ACK, ephemeral: true }]);
+    deny.denyUsers.pop();
+    // The requester muted: the mute reply.
+    b.result.muteUser(ALICE);
+    expect(await press(b, { ...at, userId: ALICE })).toEqual([{ content: MUTED, ephemeral: true }]);
+    b.result.unmuteUser(ALICE);
+    await settle();
+    expect(runs[0]!.aborts).toBe(0);
+
+    // A forged form submit with a Stop id is ignored (no reply, no stop).
+    expect(await press(b, { ...at, userId: ALICE, modalValues: { answer: "x" } })).toEqual([]);
+    expect(runs[0]!.aborts).toBe(0);
+
+    // Past the gates, the press stops it; a second press while it winds down aborts nothing more.
+    expect(await press(b, { ...at, userId: ALICE })).toEqual([{ content: RUN_STOP_ACK, ephemeral: true }]);
+    await first;
+    expect(runs[0]!.aborts).toBe(1);
+    await b.result.stop();
+  });
+
+  test("a second press (or a 'stop' reply) while the run winds down gets the same ack and aborts nothing more", async () => {
+    const runs: Array<{ aborts: number }> = [];
+    const agent: AgentClient = {
+      runChat(input) {
+        return new Promise((resolveRun) => {
+          const r = { aborts: 0 };
+          runs.push(r);
+          input.signal?.addEventListener("abort", () => {
+            r.aborts += 1;
+            setTimeout(() => resolveRun({ ok: false, sessionId: input.sessionId, summary: "", exitCode: 137 }), 50);
+          });
+        });
+      },
+    };
+    const b = await bridgeWith(agent);
+    const first = b.handlers.onMessage(inThread("m1", ALICE, "long job", { mention: true }));
+    expect(await until(() => runs.length === 1)).toBe(true);
+    const sent = b.outbound.sends[0]!;
+    const at = { customId: stopIdOf(sent.components), messageId: sent.messageId, channelId: "thr-1" };
+    const ack = [{ content: RUN_STOP_ACK, ephemeral: true }];
+    expect(await press(b, { ...at, userId: ALICE })).toEqual(ack);
+    expect(await press(b, { ...at, userId: OWNER })).toEqual(ack);
+    // The stop words take the same stop (REQ-discord-302): a 'stop' reply to
+    // the same progress message aborts nothing more and gets its ack.
+    await b.handlers.onMessage(inThread("s1", ALICE, "stop", { replyTo: sent.messageId }));
+    await first;
+    expect(runs[0]!.aborts).toBe(1);
+    expect(b.replies).toEqual([{ channelId: "thr-1", content: RUN_STOP_ACK, replyToMessageId: "s1" }]);
+    expect(b.outbound.contentEdits.filter((e) => e.content === RUN_STOPPED_TEXT)).toHaveLength(1);
+    await b.result.stop();
+  });
+
+  test("after a Stop press, messages that were waiting still run, in order, each with its own button (AGENT-3.b)", async () => {
+    const { agent, runs } = gatedAgent();
+    const b = await bridgeWith(agent);
+    const all = [b.handlers.onMessage(inThread("m1", ALICE, "one", { mention: true }))];
+    expect(await until(() => runs.length === 1)).toBe(true);
+    all.push(b.handlers.onMessage(inThread("m2", ALICE, "two")));
+    all.push(b.handlers.onMessage(inThread("m3", ALICE, "three")));
+    await settle();
+    // Waiting messages get no progress message (and no button) yet.
+    expect(b.outbound.sends).toHaveLength(1);
+    const sent = b.outbound.sends[0]!;
+    expect(await press(b, { customId: stopIdOf(sent.components), userId: ALICE, messageId: sent.messageId, channelId: "thr-1" })).toEqual([
+      { content: RUN_STOP_ACK, ephemeral: true },
+    ]);
+    expect(runs[0]!.aborts).toBe(1);
+    expect(await until(() => runs.length === 2)).toBe(true);
+    expect(runs[1]!.input.humanText).toBe("two");
+    runs[1]!.finish();
+    expect(await until(() => runs.length === 3)).toBe(true);
+    expect(runs[2]!.input.humanText).toBe("three");
+    runs[2]!.finish();
+    await Promise.all(all);
+    expect(runs[1]!.aborts + runs[2]!.aborts).toBe(0);
+    const ids = b.outbound.sends.map((x) => stopIdOf(x.components));
+    expect(new Set(ids).size).toBe(3);
+    const bodies = b.outbound.contentEdits.map((e) => e.content).filter((c) => typeof c === "string");
+    expect(bodies).toEqual([RUN_STOPPED_TEXT, "answer to: two", "answer to: three"]);
+    for (const x of b.outbound.sends) expect(finalEdit(b, x.messageId)!.components).toBeNull();
+    await b.result.stop();
+  });
+
+  test("a pick's resumed run: the Stop button takes the Choose button's place on the stub, and pressing it stops the run", async () => {
+    const { agent: gated, runs } = gatedAgent();
+    let first = true;
+    const agent: AgentClient = {
+      runChat(input) {
+        if (first) {
+          first = false;
+          return Promise.resolve({
+            ok: true,
+            sessionId: input.sessionId,
+            summary: "Pick",
+            exitCode: 0,
+            ask: { reason: "clarify", question: "Which?", options: [{ id: "a", label: "Alpha" }, { id: "b", label: "Beta" }] },
+          });
+        }
+        return gated.runChat(input);
+      },
+    };
+    const b = await bridgeWith(agent);
+    await b.handlers.onMessage(inThread("m1", ALICE, "choose", { mention: true }));
+    const session = b.result.store.getByThread("thr-1", ALICE)!;
+    const stubId = session.pendingAsk!.stubMessageId!;
+    const pick = b.handlers.onComponent!({
+      id: "ix1",
+      customId: pickCustomId(session.pendingAsk!.askId, "a"),
+      channelId: "thr-1",
+      userId: ALICE,
+      messageId: stubId,
+      reply: async () => {},
+      deleteReply: async () => {},
+    });
+    expect(await until(() => runs.length === 1)).toBe(true);
+    const onStub = b.outbound.contentEdits.filter((e) => e.messageId === stubId).at(-1)!;
+    expect(onStub.content).toBeNull();
+    expect(onStub.components).toEqual(STOP_ROW);
+    expect(await press(b, { customId: stopIdOf(onStub.components), userId: ALICE, messageId: stubId, channelId: "thr-1" })).toEqual([
+      { content: RUN_STOP_ACK, ephemeral: true },
+    ]);
+    await pick;
+    expect(runs[0]!.aborts).toBe(1);
+    const done = finalEdit(b, stubId)!;
+    expect(done.content).toBe(RUN_STOPPED_TEXT);
+    expect(done.components).toBeNull();
+    await b.result.stop();
+  });
+
+  test("/session start and /work: their progress message carries the button and a press stops the run; a stopped /work opens no PR", async () => {
+    for (const command of ["session", "work"] as const) {
+      const { agent, runs } = gatedAgent();
+      const b = await bridgeWith(agent, { allowlistFile: teamPeopleFile(ALICE) });
+      const ix: SlashInteraction = {
+        id: `ix_${command}`,
+        commandName: command,
+        ...(command === "session" ? { subcommand: "start" } : {}),
+        channelId: "chan-1",
+        userId: ALICE,
+        options: command === "session" ? { topic: "plan it" } : { description: "do it" },
+        reply: async () => {},
+        deferReply: async () => {},
+        editReply: async () => {},
+        deleteReply: async () => {},
+      };
+      const slash = b.handlers.onSlash!(ix);
+      expect(await until(() => runs.length === 1)).toBe(true);
+      const sent = b.outbound.sends[0]!;
+      expect({ command, components: sent.components }).toEqual({ command, components: STOP_ROW });
+      expect(
+        await press(b, { customId: stopIdOf(sent.components), userId: ALICE, messageId: sent.messageId, channelId: "chan-1" }),
+      ).toEqual([{ content: RUN_STOP_ACK, ephemeral: true }]);
+      await slash;
+      expect({ command, aborts: runs[0]!.aborts }).toEqual({ command, aborts: 1 });
+      const done = finalEdit(b, sent.messageId)!;
+      expect(done.content).toContain(RUN_STOPPED_TEXT);
+      expect(done.components).toBeNull();
+      if (command === "work") {
+        expect(done.content).toContain("PR: not opened — the run was stopped.");
+        expect(b.result.workStore.list()[0]).toMatchObject({ status: "failed", summary: "stopped" });
+      }
+      await b.result.stop();
+    }
+  });
+
+  test("a restart's interrupted notice clears the dead run's Stop button", async () => {
+    const dir = tempDir("corvidinho-stop-recover-");
+    const db = openCorvidinhoDb({ path: join(dir, "corvidinho.db") });
+    const inflight = new InflightReplyStore(db);
+    const row = inflight.begin({ sessionId: "sess_1", channelId: "chan-1", requestMessageId: "m1" });
+    inflight.setProgressMessage(row.id, "progress_1");
+    const edits: Array<{ messageId: string; components?: unknown[] | null }> = [];
+    const r = await recoverInterruptedReplies({
+      store: inflight,
+      rows: inflight.list(),
+      editEmbed: async (o) => {
+        edits.push({ messageId: o.messageId, components: o.components });
+        return true;
+      },
+    });
+    expect(r.edited).toBe(1);
+    expect(edits).toEqual([{ messageId: "progress_1", components: null }]);
+    db.close();
+  });
+});
+
+describe("the Stop button's custom id (REQ-discord-303)", () => {
+  test("cvstop:<runId> round-trips; other prefixes, card and ask ids, and malformed ids parse as null", () => {
+    expect(stopRunCustomId("run_7")).toBe("cvstop:run_7");
+    expect(parseStopRunCustomId("cvstop:run_7")).toBe("run_7");
+    expect(buildStopComponents("run_7")).toEqual([
+      { type: 1, components: [{ type: 2, style: 4, label: "Stop", custom_id: "cvstop:run_7" }] },
+    ]);
+    for (const raw of [
+      "cvstop-schedule:run_7",
+      "cvstop:run_7:x",
+      "cvstop:",
+      "cvstop:7",
+      "cvstop:run_x",
+      "cvstop",
+      openCustomId("abc123"),
+      answerCustomId("abc123"),
+      approveCardCustomId("spend", "approve", "req_1"),
+    ]) {
+      expect({ raw, v: parseStopRunCustomId(raw) }).toEqual({ raw, v: null });
+    }
+    expect(() => stopRunCustomId("run_7:x")).toThrow();
   });
 });
