@@ -12,7 +12,7 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Octokit } from "@octokit/rest";
 import { githubBranchTree } from "../plugins/github/commands.ts";
@@ -213,6 +213,37 @@ describe("reviewTree stages the work tree's tracked files into a temporary index
     git(fx.dir, "commit", "-q", "-m", "tracked");
     expect(headTree(fx.dir)).toBe(tree!);
     expect(git(fx.dir, "status", "--porcelain")).toBe("?? src/untracked.ts\n");
+  });
+
+  test("a same-size edit made in the same second as the last index write counts when the review runs a second later (racy git)", async () => {
+    // The fixture commits src/app.ts (…41) and the edit (…42) has the same
+    // size; when both land in one second, the index entry's whole-second
+    // times and size match the edited file, and only git's racy-entry check
+    // (entry not older than the index file) makes it re-read the content. A
+    // copy of the index stamped a second later turned that check off.
+    let fx: ReviewRepo | null = null;
+    for (let i = 0; i < 20 && !fx; i++) {
+      const candidate = makeReviewRepo({ branch: nextBranch() });
+      const file = join(candidate.dir, "src", "app.ts");
+      writeFileSync(file, "export const answer = 42;\n");
+      const entry = git(candidate.dir, "ls-files", "--debug", "src/app.ts");
+      const field = (re: RegExp) => Number(re.exec(entry)?.[1]);
+      const st = statSync(file);
+      const sameStat =
+        field(/ctime: (\d+):/) === Math.floor(st.ctimeMs / 1000) &&
+        field(/mtime: (\d+):/) === Math.floor(st.mtimeMs / 1000) &&
+        field(/size: (\d+)/) === st.size;
+      if (sameStat) fx = candidate;
+    }
+    expect(fx).not.toBeNull();
+    const before = headTree(fx!.dir);
+    // The review runs in a later second than the index was written.
+    await Bun.sleep(1000 - (Date.now() % 1000) + 50);
+    const tree = await reviewTree(fx!.dir);
+    expect(tree).not.toBe(before);
+    git(fx!.dir, "add", "--update");
+    git(fx!.dir, "commit", "-q", "-m", "the answer");
+    expect(headTree(fx!.dir)).toBe(tree!);
   });
 });
 

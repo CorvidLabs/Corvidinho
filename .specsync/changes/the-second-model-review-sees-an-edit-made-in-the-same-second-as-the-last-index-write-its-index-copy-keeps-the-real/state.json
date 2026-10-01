@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "the-second-model-review-sees-an-edit-made-in-the-same-second-as-the-last-index-write-its-index-copy-keeps-the-real",
+  "slug": "the-second-model-review-sees-an-edit-made-in-the-same-second-as-the-last-index-write-its-index-copy-keeps-the-real",
+  "title": "The second-model review sees an edit made in the same second as the last index write: its index copy keeps the real index's time (GITHUB-9)",
+  "description": "The second-model review sees an edit made in the same second as the last index write: its index copy keeps the real index's time (GITHUB-9)",
+  "kind": "bug_fix",
+  "state": "approved",
+  "base_commit": "5ea21feedeecd51e4058d2892d86ce30ec573959",
+  "created_at": 1790823279,
+  "updated_at": 1790823396,
+  "affected_specs": [
+    "plugins"
+  ],
+  "affected_paths": [
+    "src/work/review.ts",
+    "tests/fixtures/review-cycle.ts",
+    "tests/work.review.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "reviewTree's temporary index copy keeps the real index's modification time, so a tracked file rewritten with the same size in the same second as the last index write (entry times and size equal the file's) is in the reviewed tree when the review runs a second later; with the pre-fix source that tree is still HEAD's tree (3 of 3 runs fail, 3 of 3 pass with the fix); the test fixture's fullWorkTree copy keeps the time too; tests/work.review.test.ts, work.pr, github.write.plugin and roles.chat.gates pass; the full suite and verify pass"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

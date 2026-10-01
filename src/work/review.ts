@@ -48,7 +48,7 @@
  */
 
 import type { Database } from "bun:sqlite";
-import { copyFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, rmSync, statSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { GIT_WRITE_TIMEOUT_MS, gitRoot, runGit } from "../../plugins/git/exec.ts";
@@ -169,7 +169,11 @@ const OBJECT_ID_RE = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
  * changes. Untracked files never count: they are not what the PR carries, a
  * scratch file must not hold the PR back, and their content must not reach
  * the reviewer (an untracked `.env.local` or key file the commit tools refuse
- * would otherwise be sent and could never be pushed). Null when git cannot
+ * would otherwise be sent and could never be pushed). The copy keeps the
+ * real index's modification time: git trusts a file whose size and times
+ * match its index entry unless the entry is not older than the index file
+ * ("racily clean"), so a fresh copy time would let a same-size edit made in
+ * the same second as the last index write go unseen. Null when git cannot
  * say.
  */
 export async function reviewTree(root: string): Promise<string | null> {
@@ -180,7 +184,11 @@ export async function reviewTree(root: string): Promise<string | null> {
     const realPath = real.code === 0 ? real.stdout.trim() : "";
     if (realPath) {
       const abs = isAbsolute(realPath) ? realPath : resolve(root, realPath);
-      if (existsSync(abs)) copyFileSync(abs, index);
+      if (existsSync(abs)) {
+        copyFileSync(abs, index);
+        const st = statSync(abs);
+        utimesSync(index, st.atime, st.mtime);
+      }
     }
     if (!existsSync(index)) {
       const head = await runGit(root, ["rev-parse", "--verify", "--quiet", "HEAD^{tree}"]);

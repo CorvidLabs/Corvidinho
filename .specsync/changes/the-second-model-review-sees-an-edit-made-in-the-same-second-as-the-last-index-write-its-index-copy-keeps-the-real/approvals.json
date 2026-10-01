@@ -1,0 +1,41 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790823396,
+      "digest": "ebd6a7be248e872c61ee4f2c3006aca6eff67862c0989e6c41bd1d5d9e1ee7cc",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "the-second-model-review-sees-an-edit-made-in-the-same-second-as-the-last-index-write-its-index-copy-keeps-the-real",
+        "title": "The second-model review sees an edit made in the same second as the last index write: its index copy keeps the real index's time (GITHUB-9)",
+        "description": "The second-model review sees an edit made in the same second as the last index write: its index copy keeps the real index's time (GITHUB-9)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          "src/work/review.ts",
+          "tests/fixtures/review-cycle.ts",
+          "tests/work.review.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "reviewTree's temporary index copy keeps the real index's modification time, so a tracked file rewritten with the same size in the same second as the last index write (entry times and size equal the file's) is in the reviewed tree when the review runs a second later; with the pre-fix source that tree is still HEAD's tree (3 of 3 runs fail, 3 of 3 pass with the fix); the test fixture's fullWorkTree copy keeps the time too; tests/work.review.test.ts, work.pr, github.write.plugin and roles.chat.gates pass; the full suite and verify pass"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "f9c527f7984fbd93520fdc55f76731b30dc331692889351e489f739f20f61cac"
+      }
+    }
+  ],
+  "reopenings": []
+}

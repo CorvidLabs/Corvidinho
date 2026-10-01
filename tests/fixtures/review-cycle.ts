@@ -5,7 +5,7 @@
  * cycle seeded in the test data dir's shared DB for an exact tree.
  */
 
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { openCorvidinhoDb } from "../../src/store/db.ts";
@@ -94,7 +94,11 @@ export function fullWorkTree(dir: string): string {
   const index = join(tmp, "index");
   try {
     const real = git(dir, "rev-parse", "--git-path", "index").trim();
-    copyFileSync(isAbsolute(real) ? real : join(dir, real), index);
+    const realPath = isAbsolute(real) ? real : join(dir, real);
+    copyFileSync(realPath, index);
+    // Keep the index's time so git still re-reads a same-second edit (racy git).
+    const st = statSync(realPath);
+    utimesSync(index, st.atime, st.mtime);
     gitWith(dir, { GIT_INDEX_FILE: index }, "add", "--all");
     return gitWith(dir, { GIT_INDEX_FILE: index }, "write-tree").trim();
   } finally {
