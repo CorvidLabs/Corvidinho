@@ -466,3 +466,16 @@ the four files 82 of 82.
 prints every 0.1 s for 1.5 s keeps a 500 ms idle watchdog from firing; a
 silent 1.2 s child lets it fire. Fail on base: the printing child lets it
 fire.
+
+## Non-git root instructions and read-only others (REQ-plugins-110, REQ-plugins-115, AGENT-1.b, AGENT-1.a)
+
+`tests/plugins.nongit-project-dir.test.ts` (6 tests): in a non-git folder
+`files-write` / `files-edit` / `files-delete` refuse the root `AGENTS.md` and
+`CLAUDE.md` (the names, the absolute path, a path under the name, a missing
+file, a symlink's target, a hard link) with `refused (AGENT-1.b)` for the CLI
+and the owner, other files and `sub/AGENTS.md` are written, SAFE-2 still
+refuses, a git project's root copy stays writable; `actingWorkTask` needs a
+git work tree; a team member's `/work` writes there get the role refusal and
+work in a git repo; the owner writes there. Fail on base: 4 of 6 fail; the
+SAFE-2 and git-project cases hold on both. `tests/roles.team.test.ts` now runs
+in a git fixture dir.

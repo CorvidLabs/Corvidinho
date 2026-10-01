@@ -59,6 +59,7 @@ files:
   - tests/autonomous.worker-failure.test.ts
   - tests/agent.verify-gate.test.ts
   - tests/fixtures/talk-worktree.ts
+  - tests/agent.nongit-project-dir.test.ts
   - tests/agent.loop-guards.test.ts
   - tests/agent.stall-nudge.test.ts
   - tests/agent.test-evidence.test.ts
@@ -499,6 +500,18 @@ git plugins' `gitEnv`) and `working-tree` otherwise. A loaded file carries
 `uncommitted: true` when its working-tree copy differs from `HEAD`.
 `LoadProjectInstructionsOptions.exactRoot` reads at the given directory
 instead of walking up to the nearest `.git` (the persona file).
+In a working-tree (non-git) project the file tools never change the root
+`AGENTS.md` / `CLAUDE.md` (AGENT-1.b, REQ-plugins-110), so a run cannot plant
+instructions for later runs there.
+
+Non-git project folder (REQ-agent-110, AGENT-1.a): a run whose cwd is a
+project folder that isn't a git repo works there. `createTaskExecute` passes
+the run's cwd to `actingWorkTask(env, cwd)` for the catalog's `workTask` and
+for `refusedForRole`, so a team member's `/work` run there gets no work tools
+and a call to one gets the role refusal (REQ-plugins-115); the owner's run
+keeps SAFE-2, the AGENT-1.b refusal, the SAFE-3.a withholding of the shell,
+runners and Fledge runs (the cwd is no talk worktree, REQ-agent-503) and the
+verify gate (REQ-agent-002 / REQ-agent-185).
 
 Persona file (REQ-agent-069, PERSONA-1/2/3, issue #69): `src/agent/persona.ts`
 exports `PERSONA_FILE` (`persona.md`), `PERSONA_MAX_BYTES` (8 KiB),
@@ -1416,3 +1429,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |
 | 2026-10-01 | my-local-cli-task-run-may-use-the-allowlisted-shell-and-runners-inside-its-own-worktree-safe-3-a-local-cli-half: My local CLI task run may use the allowlisted shell and runners inside its own worktree (SAFE-3.a, local CLI half) |
 | 2026-10-01 | a-failed-delegate-worker-or-council-voice-hands-its-lead-one-plain-failure-line-the-worker-s-result-error-without-the: A failed delegate worker or council voice hands its lead one plain failure line (the worker's result error without the provider's host, the no-provider notice, or the exit code), never the worker's summary or stderr, which for a model failure is the provider's raw error body |
+| 2026-10-01 | in-a-non-git-project-my-runs-work-in-the-folder-itself-its-file-tools-leave-the-root-agents-md-and-claude-md-alone: In a non-git project my runs work in the folder itself, its file tools leave the root AGENTS.md and CLAUDE.md alone, schedules keep their own folder, and others only read there (AGENT-1.a, AGENT-1.b, AGENT-1.c) |

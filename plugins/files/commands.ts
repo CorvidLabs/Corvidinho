@@ -21,10 +21,12 @@ import type {
 } from "../../src/plugins/types.ts";
 import { MAX_IMAGE_SIZE_BYTES, sniffImageFile } from "./image.ts";
 import {
+  isNonGitRootInstructionPath,
   isProtectedPath,
   isSddRecordPath,
   isSecretPath,
   protectedRefuseMessage,
+  rootInstructionRefuseMessage,
   sddRecordRefuseMessage,
   secretPathsRefused,
   secretRefuseMessage,
@@ -62,6 +64,10 @@ function refuseProtected(
   // AGENT-18 / AGENT-18.a: SpecSync's own records in a change folder.
   if (isSddRecordPath(userPath) || isSddRecordPath(relative(root, absPath))) {
     return { ok: false, error: sddRecordRefuseMessage(userPath), exitCode: 2 };
+  }
+  // AGENT-1.b: a non-git project's root AGENTS.md / CLAUDE.md.
+  if (isNonGitRootInstructionPath(absPath, cwd)) {
+    return { ok: false, error: rootInstructionRefuseMessage(userPath), exitCode: 2 };
   }
   return null;
 }

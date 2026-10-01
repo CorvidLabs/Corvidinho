@@ -1601,3 +1601,18 @@ stamp, one real `task run` against the fake model; no network):
 - Fail on base: 17 of 28 fail with the base's ten modified source files
   (the gate's own units and "outside a public thread" pass on both);
   `tests/must-ask.boundary.test.ts` fails on the base's `send-file.ts`.
+## Non-git project talks in the folder itself (REQ-discord-110, REQ-discord-013, AGENT-1.a, AGENT-1.c)
+
+`tests/discord.nongit-project-dir.test.ts` (8 tests): `ensureTalkWorkspace`
+with `nonGit: "project_dir"` returns the folder and makes no
+`.corvid-worktrees`; without it (and with `scoped_dir`) a non-git project gets
+its own scoped folder (AGENT-1.c); park / remove with every kind on the
+project folder, its parent and a git main checkout delete nothing; the session
+store binds in place, re-binds after a restart, and an end, a TTL purge and an
+expired row at start leave the folder; a legacy scoped row is parked and
+re-bound; a switch is refused; a folder that became git gets a worktree; the
+bridge writes the owner's image under
+`<project>/.corvidinho/attachments/<session id>/`, removed at the talk's end,
+and keeps another person's URL-only. Fail on base (cf7f61b, shims for the new
+exports): 7 of 8 fail; the scoped-folder case holds on both.
+`tests/scheduler.owner-role.test.ts` keeps the owner schedule's scoped folder.
