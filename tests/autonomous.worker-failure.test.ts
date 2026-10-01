@@ -16,6 +16,11 @@
  * own, the `models` / `stopReason` fields and the SAFE-12/13 fence are
  * unchanged.
  *
+ * #349's review: a worker that streamed another protocol gets the
+ * protocol-mismatch notice back (it had become `the worker failed (exit 0)`),
+ * and a worker that could not start goes through the same line (`worker
+ * failed to start: <why>`, host paths cut), not Bun's raw spawn message.
+ *
  * Fake bins and the real `task run` against the localhost fake provider
  * (tests/fixtures/fake-llm.ts) in mkdtemp dirs; no network, no real key.
  */
@@ -23,12 +28,19 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resultFrame, serializeFrame } from "../src/agent/events-ndjson.ts";
+import {
+  CORVIDINHO_PROTOCOL_VERSION,
+  protocolMismatchSummary,
+  resultFrame,
+  serializeFrame,
+} from "../src/agent/events-ndjson.ts";
 import { createTaskExecute } from "../src/agent/index.ts";
 import { modelCallFailedLine, withoutProviderHost } from "../src/agent/providers.ts";
+import { SPEND_CAP_SUMMARY, spendCapReachedAsk } from "../src/agent/spend-notice.ts";
 import type { TaskResult } from "../src/agent/types.ts";
 import {
   WORKER_INTERRUPTED_LINE,
+  WORKER_START_FAILED_LINE,
   WORKER_TIMED_OUT_LINE,
   workerFailureLine,
 } from "../src/autonomous/delegate.ts";
@@ -134,6 +146,34 @@ describe("workerFailureLine (REQ-agent-117)", () => {
     expect(workerFailureLine({ exitCode: 137, error: 42 }, MODEL_ENV, "read")).toBe("the worker failed (exit 137)");
   });
 
+  test("a worker that streamed another protocol: the protocol-mismatch notice, after its result error", () => {
+    const mismatch = protocolMismatchSummary(3, CORVIDINHO_PROTOCOL_VERSION);
+    expect(mismatch).toBe("protocol mismatch: binary 3, bridge 2 — restart the bridge");
+    expect(workerFailureLine({ exitCode: 0, protocolMismatch: 3 }, MODEL_ENV, "code")).toBe(mismatch);
+    // It is why the worker failed, so it comes before the no-provider notice.
+    expect(workerFailureLine({ exitCode: 0, protocolMismatch: 3 }, BASE_ENV, "code")).toBe(mismatch);
+    expect(
+      workerFailureLine({ exitCode: 1, protocolMismatch: 3, error: `The model call failed (429 from ${AZURE_HOST})` }, MODEL_ENV, "code"),
+    ).toBe("The model call failed (429)");
+    expect(workerFailureLine({ exitCode: 0, protocolMismatch: 3, aborted: true }, MODEL_ENV, "code")).toBe(
+      WORKER_INTERRUPTED_LINE,
+    );
+  });
+
+  test("a worker that could not start: one plain line, scrubbed, host paths cut, at most 200 chars", () => {
+    const spawned = (e: unknown) => workerFailureLine({ exitCode: 127, spawnError: e }, MODEL_ENV, "code");
+    expect(spawned(new Error("ENOENT: no such file or directory, posix_spawn '/home/op/secret/bin/corvidinho'"))).toBe(
+      `${WORKER_START_FAILED_LINE}: ENOENT: no such file or directory, posix_spawn '…/corvidinho'`,
+    );
+    const long = spawned(`spawn failed:\n  at x (/home/op/secret/x.ts:1:2)\nEACCES: permission denied ${TOKEN} ${"x".repeat(400)}`);
+    expect(long).toStartWith(`${WORKER_START_FAILED_LINE}: EACCES: permission denied`);
+    expect(long).not.toContain(TOKEN);
+    expect(long).not.toContain("/home/op");
+    expect(long).not.toContain("\n");
+    expect(long.length).toBeLessThanOrEqual(200);
+    expect(spawned(new Error("   "))).toBe(WORKER_START_FAILED_LINE);
+  });
+
   test("one host-free helper: WATCH's public line is withoutProviderHost", () => {
     const provider = { baseUrl: `https://${AZURE_HOST}/v1`, entry: "openai:gpt-4o-mini" } as const;
     for (const failure of [
@@ -198,6 +238,57 @@ describe("a failed delegate worker hands its lead one plain line (REQ-agent-117,
     const noModel = await createDelegateCommand({ bin: fakeBin(body), env: BASE_ENV }).handler(ctx({ cwd: project() }));
     expect((noModel.data as { summary: string }).summary).toStartWith("No model provider is configured");
     expectNoProviderDetail(JSON.stringify(noModel), AZURE_HOST);
+  });
+
+  test("a worker that streamed another protocol hands over the protocol-mismatch notice, never its frames", async () => {
+    const other = JSON.stringify({
+      protocol: CORVIDINHO_PROTOCOL_VERSION + 1,
+      type: "result",
+      result: {
+        summary: `LLM HTTP 429: ${providerBody(AZURE_HOST)}`,
+        error: `The model call failed (429 Too Many Requests from ${AZURE_HOST})`,
+        filesChanged: [],
+        verified: true,
+        verifySkipped: false,
+        cancelled: false,
+        state: "done",
+        attempts: 1,
+      },
+    });
+    const bin = fakeBin(`cat <<'EOF'\n${other}\nEOF\nexit 0`);
+    const r = await createDelegateCommand({ bin, env: MODEL_ENV }).handler(ctx({ cwd: project() }));
+    const notice = protocolMismatchSummary(CORVIDINHO_PROTOCOL_VERSION + 1, CORVIDINHO_PROTOCOL_VERSION);
+    expect(r.ok).toBe(false);
+    expect(r.data).toMatchObject({ state: "failed", exitCode: 0, summary: notice });
+    expect(r.error).toBe(`worker (tier code, depth 1) did not finish (state failed, exit 0):\n${notice}`);
+    expectNoProviderDetail(JSON.stringify(r), AZURE_HOST);
+  });
+
+  test("a worker that could not start: the plain line with its host path cut, exit 127", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-worker-failure-nobin-"));
+    const bin = join(dir, "operator-private", "corvidinho");
+    const r = await createDelegateCommand({ bin, env: MODEL_ENV }).handler(ctx({ cwd: project() }));
+    const line = `${WORKER_START_FAILED_LINE}: ENOENT: no such file or directory, posix_spawn '…/corvidinho'`;
+    expect(r.ok).toBe(false);
+    expect(r.exitCode).toBe(127);
+    expect(r.data).toMatchObject({ state: "failed", exitCode: 127, summary: line });
+    expect(r.error).toBe(`worker (tier code, depth 1) did not finish (state failed, exit 127):\n${line}`);
+    expect(JSON.stringify(r)).not.toContain(dir);
+    expect(JSON.stringify(r)).not.toContain("operator-private");
+  });
+
+  test("a worker stopped by the spend cap: the lead gets only that work is paused for budget (SAFE-14.a)", async () => {
+    const ask = spendCapReachedAsk({ spentMicroUsd: 4_870_000, estimateMicroUsd: 210_000, capMicroUsd: 5_000_000 });
+    expect(ask.question).toContain("$4.87");
+    const bin = fakeBin(frame({ summary: SPEND_CAP_SUMMARY, state: "blocked", ask }));
+    const r = await createDelegateCommand({ bin, env: MODEL_ENV }).handler(ctx({ cwd: project() }));
+    expect(r.ok).toBe(false);
+    expect(r.data).toMatchObject({ state: "blocked", summary: "Work is paused for budget." });
+    expect(r.error).toEndWith(":\nWork is paused for budget.");
+    const text = JSON.stringify(r);
+    for (const leak of ["$4.87", "$5.00", "$0.21", "CORVIDINHO_DAILY_SPEND_CAP_USD", "SAFE-8"]) {
+      expect(text).not.toContain(leak);
+    }
   });
 
   test("a successful worker and one that stopped on an ask of its own are unchanged", async () => {

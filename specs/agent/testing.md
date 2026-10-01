@@ -879,6 +879,11 @@ a status and the provider's own raw body; temp dirs only):
   characters; the timeout / interrupt lines win; with no error the
   no-provider notice for the worker's tier, else `the worker failed (exit
   N)`. `watchPublicFailureLine` is `withoutProviderHost` for every shape.
+  #349's review: a worker that streamed another protocol gets `protocol
+  mismatch: binary 3, bridge 2 — restart the bridge` (after a result error,
+  before the no-provider notice); one that could not start gets `worker
+  failed to start: <why>` — a host path cut to `…/<last segment>`, a token
+  scrubbed, stack frames dropped, one line of at most 200 characters.
 - Fake bins: a worker whose result `error` is a 429 from
   `acme-prod.openai.azure.com:8443`, whose summary and stderr are `LLM HTTP
   429: <body with an org name, a request id and the host>` → the tool's
@@ -888,7 +893,16 @@ a status and the provider's own raw body; temp dirs only):
   `stopReason: "idle-timeout"` and its line; a worker with no result frame
   never hands over its stdout or stderr (the no-provider notice, else the exit
   code); a successful worker and one that stopped on an ask of its own are
-  unchanged.
+  unchanged. A worker whose only frame is a protocol-3 result (`done`, exit
+  0, an `LLM HTTP 429` summary) → `state failed`, exit 0, `data.summary` the
+  protocol-mismatch notice, no frame content; a worker bin that does not
+  exist → exit 127, `worker failed to start: ENOENT: no such file or
+  directory, posix_spawn '…/corvidinho'`, its directory nowhere in the
+  result; a worker stopped by the spend cap (`spendCapReachedAsk`) →
+  `state blocked`, `data.summary` `Work is paused for budget.`, no amount,
+  cap setting or SAFE id anywhere in the result (SAFE-14.a). The first two
+  fail on #349's head 9aff1fc (`the worker failed (exit 0)`; the raw spawn
+  message with the full path).
 - The lead's tool loop: a failed worker that reported an injection is still
   `injectionWorkerNote` + the SAFE-12 fence, with the plain line inside.
 - End to end: a lead's `delegate` worker whose model answers 429 → the lead

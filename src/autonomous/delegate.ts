@@ -31,9 +31,10 @@
  *   comes back with its `stopReason`;
  * - a worker that failed (not `done` with exit 0, and not stopped on an ask
  *   of its own) comes back to its lead — and a council voice to its
- *   transcript — as one plain line ({@link workerFailureLine}): its result's
- *   `error` without the provider's host, else the no-provider notice for its
- *   tier, else its exit code. Never its summary, its result's summary or its
+ *   transcript — as one plain line ({@link workerFailureLine}): why it could
+ *   not start, its result's `error` without the provider's host, the
+ *   protocol-mismatch notice, the no-provider notice for its tier, or its
+ *   exit code. Never its summary, its result's summary or its
  *   stderr, which for a model failure is `LLM HTTP <status>: <provider body>`
  *   (org / account names, request ids, the provider's host) that a lead could
  *   quote into a public reply or GitHub comment. The lead keeps no copy of
@@ -43,7 +44,11 @@
 
 import { join } from "node:path";
 import { askFromUnknown } from "../agent/ask.ts";
-import { collectTaskRunStream } from "../agent/events-ndjson.ts";
+import {
+  CORVIDINHO_PROTOCOL_VERSION,
+  collectTaskRunStream,
+  protocolMismatchSummary,
+} from "../agent/events-ndjson.ts";
 import { pauseIdleWatchdog, stopReasonFromUnknown } from "../agent/limits.ts";
 import {
   modelFallbackFromUnknown,
@@ -67,7 +72,11 @@ import {
   trackChildProcess,
   type ProcEntry,
 } from "../plugins/proc-group.ts";
-import { failureReasonFromUnknown, plainFailureLine } from "../discord/failure-reason.ts";
+import {
+  FAILURE_REASON_MAX,
+  failureReasonFromUnknown,
+  plainFailureLine,
+} from "../discord/failure-reason.ts";
 import { roleSessionActive } from "../plugins/roles.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 
@@ -464,17 +473,24 @@ export const WORKER_TIMED_OUT_LINE = "worker timed out and was stopped";
 /** A worker stopped because its lead run was interrupted (AGENT-3). */
 export const WORKER_INTERRUPTED_LINE = "worker stopped: lead run was interrupted";
 
+/** A worker the lead could not start: this, then `: <why>` when there is one. */
+export const WORKER_START_FAILED_LINE = "worker failed to start";
+
 /**
  * REQ-agent-117: a failed worker's one plain line for its lead (and a
  * council voice's transcript entry), from harness text only — the timeout or
- * interrupt line; else the worker's result `error` (which model call failed
- * and how, which verify failed, the idle-timeout line) as one plain line
- * (`plainFailureLine`: SAFE-6 scrubbed, at most 200 chars) without the
- * provider's host (`withoutProviderHost`, the same helper WATCH's public
- * comment uses); else the no-provider notice for the worker's tier in its
- * `env` (AGENT-10); else `the worker failed (exit N)`. Never the worker's
- * summary, its result's summary or its stderr, which for a model failure is
- * `LLM HTTP <status>: <provider body>`.
+ * interrupt line; else, for a worker that could not start, `worker failed to
+ * start: <why>` (the spawn error as one plain line: SAFE-6 scrubbed, host
+ * paths cut to their last segment, the whole line at most 200 chars); else
+ * the worker's result `error` (which model call failed and how, which verify
+ * failed, the idle-timeout line) as one plain line (`plainFailureLine`:
+ * SAFE-6 scrubbed, at most 200 chars) without the provider's host
+ * (`withoutProviderHost`, the same helper WATCH's public comment uses); else,
+ * when the worker streamed another protocol, the protocol-mismatch notice
+ * (`protocolMismatchSummary`, DISCORD-10); else the no-provider notice for
+ * the worker's tier in its `env` (AGENT-10); else `the worker failed (exit
+ * N)`. Never the worker's summary, its result's summary or its stderr, which
+ * for a model failure is `LLM HTTP <status>: <provider body>`.
  */
 export function workerFailureLine(
   facts: {
@@ -483,15 +499,30 @@ export function workerFailureLine(
     error?: unknown;
     timedOut?: boolean;
     aborted?: boolean;
+    /** What `Bun.spawn` threw, when the worker could not start. */
+    spawnError?: unknown;
+    /** The protocol the worker streamed, when it was not this one's. */
+    protocolMismatch?: number;
   },
   env: NodeJS.ProcessEnv,
   tier: CapabilityTier,
 ): string {
   if (facts.timedOut) return WORKER_TIMED_OUT_LINE;
   if (facts.aborted) return WORKER_INTERRUPTED_LINE;
+  if (facts.spawnError !== undefined) {
+    const e = facts.spawnError;
+    const why = plainFailureLine(
+      e instanceof Error ? e.message : String(e),
+      FAILURE_REASON_MAX - WORKER_START_FAILED_LINE.length - 2,
+    );
+    return why ? `${WORKER_START_FAILED_LINE}: ${why}` : WORKER_START_FAILED_LINE;
+  }
   const reason = failureReasonFromUnknown(facts.error);
   const line = reason ? plainFailureLine(reason) : "";
   if (line) return withoutProviderHost(line);
+  if (Number.isSafeInteger(facts.protocolMismatch)) {
+    return protocolMismatchSummary(facts.protocolMismatch!, CORVIDINHO_PROTOCOL_VERSION);
+  }
   const notice = providerNotice(env, [tier]);
   const noticeLine = notice ? plainFailureLine(notice) : "";
   if (noticeLine) return noticeLine;
@@ -594,11 +625,12 @@ export async function runDelegateChild(opts: {
   try {
     proc = spawnWorker(cmd, opts.cwd, env);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    // REQ-agent-117: the same one plain line as any failed worker (scrubbed,
+    // host paths cut), never Bun's raw spawn message.
     return {
       exitCode: 127,
       state: "failed",
-      summary: scrubSecrets(`worker failed to start: ${msg}`).slice(0, DELEGATE_SUMMARY_MAX),
+      summary: workerFailureLine({ exitCode: 127, spawnError: e }, env, opts.tier),
       filesChanged: [],
       timedOut: false,
       aborted: false,
@@ -671,7 +703,17 @@ export async function runDelegateChild(opts: {
     const failed =
       timedOut || aborted || (!(out.exitCode === 0 && state === "done") && !askFromUnknown(r?.ask));
     const summary = failed
-      ? workerFailureLine({ exitCode: out.exitCode, error: r?.error, timedOut, aborted }, env, opts.tier)
+      ? workerFailureLine(
+          {
+            exitCode: out.exitCode,
+            error: r?.error,
+            timedOut,
+            aborted,
+            ...(out.protocolMismatch !== undefined ? { protocolMismatch: out.protocolMismatch } : {}),
+          },
+          env,
+          opts.tier,
+        )
       : scrubSecrets(out.summary).slice(0, DELEGATE_SUMMARY_MAX);
     const outcome: DelegateChildOutcome = {
       exitCode: out.exitCode,

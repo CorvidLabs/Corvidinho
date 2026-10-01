@@ -44,6 +44,51 @@
         "agent": "6cee98b10fbee71cc61cf958f2c54dbb8718e67a18293a290e1882521148e932",
         "watch": "311e108b6d424f81881c30dd16624586ef8643ca912281bde00b309d61b73c75"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790829532,
+      "digest": "14d6d570302ff5ca4bd5c3b294d9195ee5cf6e53ad5832dbc574cc9ec5a93a6a",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "a-failed-delegate-worker-or-council-voice-hands-its-lead-one-plain-failure-line-the-worker-s-result-error-without-the",
+        "title": "A failed delegate worker or council voice hands its lead one plain failure line (the worker's result error without the provider's host, the no-provider notice, or the exit code), never the worker's summary or stderr, which for a model failure is the provider's raw error body",
+        "description": "A failed delegate worker or council voice hands its lead one plain failure line (the worker's result error without the provider's host, the no-provider notice, or the exit code), never the worker's summary or stderr, which for a model failure is the provider's raw error body",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent",
+          "watch"
+        ],
+        "affected_paths": [
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/watch/watch.spec.md",
+          "src/agent/providers.ts",
+          "src/autonomous/council.ts",
+          "src/autonomous/delegate.ts",
+          "src/watch/summary.ts",
+          "tests/autonomous.delegate.test.ts",
+          "tests/autonomous.worker-failure.test.ts",
+          "tests/fixtures/fake-llm.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "Through a lead tool loop and the real task run against the localhost fake provider answering 429 with an org name, a request id and its own host, a failed delegate worker's tool message to the lead model has data.summary 'The model call failed (429 Too Many Requests)' and error 'worker (tier code, depth 1) did not finish (state failed, exit 1):' plus that line, with no org name, request id, provider host, 'LLM HTTP' or provider message; a council whose voice 3 gets that 429 keeps that same line as the voice's transcript entry, the other voices' entries and the chair's decision are their own replies, and no result or later-phase prompt holds the provider detail. workerFailureLine gives the timeout / interrupt line, else the worker's result error as one scrubbed plain line without the provider's host (withoutProviderHost, the helper watchPublicFailureLine now is), else the no-provider notice for the worker's tier, else 'the worker failed (exit N)', never the worker's summary, stdout or stderr. A successful worker, a worker that stopped on an ask of its own, the models and stopReason fields and the SAFE-12/13 fence of a worker that reported an injection are unchanged. The new tests fail on main's src/autonomous/delegate.ts and pass on the branch; WATCH's public line is unchanged."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "d503b8f2f1c9aa67e652a5087b836bb2c35afc307474160ea78c2f155138e0af",
+        "watch": "311e108b6d424f81881c30dd16624586ef8643ca912281bde00b309d61b73c75"
+      }
     }
   ],
   "reopenings": []

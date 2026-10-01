@@ -446,8 +446,9 @@ only on a worker spawn), `DELEGATE_AUTHORS_MAX` (32),
 `DelegateChildOutcome.models?` lists the worker's models.
 A failed worker's line for its lead (REQ-agent-117, REQ-agent-118):
 `src/autonomous/delegate.ts` exports `workerFailureLine({ exitCode, error?,
-timedOut?, aborted? }, env, tier)`, `WORKER_TIMED_OUT_LINE` and
-`WORKER_INTERRUPTED_LINE`; `src/agent/providers.ts` exports
+timedOut?, aborted?, spawnError?, protocolMismatch? }, env, tier)`,
+`WORKER_TIMED_OUT_LINE`, `WORKER_INTERRUPTED_LINE` and
+`WORKER_START_FAILED_LINE`; `src/agent/providers.ts` exports
 `withoutProviderHost(reason)` (a `modelCallFailedLine` line without the
 provider's host, any other line as is — WATCH's `watchPublicFailureLine` is
 it). For a worker that failed, `DelegateChildOutcome.summary` is that line
@@ -899,9 +900,12 @@ These are safety defaults, not HI (draft AUTONOMOUS-10 left for capture).
 A worker that failed (not `done` with exit 0, and not stopped on an ask of
 its own) comes back to its lead — and a council voice into its transcript —
 as one plain line of harness text (`workerFailureLine`, REQ-agent-117): the
-timeout or interrupt line, else its result `error` as one scrubbed line
-without the provider's host (`withoutProviderHost`), else the no-provider
-notice for its tier, else `the worker failed (exit N)`. Never its summary,
+timeout or interrupt line, else for a worker that could not start `worker
+failed to start: <why>` (scrubbed, host paths cut), else its result `error`
+as one scrubbed line without the provider's host (`withoutProviderHost`),
+else for a worker that streamed another protocol the protocol-mismatch
+notice, else the no-provider notice for its tier, else `the worker failed
+(exit N)`. Never its summary,
 stdout or stderr, which for a model failure is `LLM HTTP <status>: <provider
 body>` (org or account names, request ids, the provider's host) that a lead
 could quote into a public reply or comment; the lead keeps no other copy of
@@ -1311,7 +1315,7 @@ A change the run did not open is never touched.
 | `persona.md` over 8 KiB | cut on a UTF-8 boundary with a truncation marker; one Text note (REQ-agent-069) |
 | `persona.md` text tries to close its `<persona>` block or override the rules | the close tag is escaped; the block stays first and the PERSONA-3 rules after it say the rules win (REQ-agent-069) |
 | A tool result in `INJECTION_SCAN_TOOLS` looks like an injection attempt (SAFE-13) | note in front of that tool message; no mutating tool and no `memory-store` offered or run for the rest of the run (refused with `injectionToolRefusal`, exit 2); `onInjection` once; `injection-suspected` audit row; summary ends with `injectionSummaryNote`; `TaskResult.injection` set (REQ-agent-071) |
-| A `delegate` worker or `council` voice fails (a model call, verify, the idle timeout, a crash with no result frame) | its lead's tool result (`data.summary`, `error`) or transcript entry is `workerFailureLine`: the result `error` without the provider's host, else the no-provider notice, else `the worker failed (exit N)` — never its summary, stdout or stderr (REQ-agent-117/118) |
+| A `delegate` worker or `council` voice fails (a model call, verify, the idle timeout, a crash with no result frame) | its lead's tool result (`data.summary`, `error`) or transcript entry is `workerFailureLine`: `worker failed to start: <why>` (host paths cut) for one that could not start, else the result `error` without the provider's host, else the protocol-mismatch notice for one that streamed another protocol, else the no-provider notice, else `the worker failed (exit N)` — never its summary, stdout or stderr (REQ-agent-117/118) |
 | A `delegate` / `council` result carries its worker's own hit (`data.injection`) | counts as this run's hit: `injectionWorkerNote` and the fenced result in its tool message, then the same drop, report, row and note; the worker itself records no row (REQ-agent-071) |
 | Audit trail unavailable when a tool result trips the detector | one `[audit] could not record injection-suspected` line; mutating tools still dropped (REQ-agent-071) |
 | SpecSync workflow requires a change and a changed meaningful path has none | `SpecSync gate:` note, failed verify with no lane run, retry with the note, then failed with the stuck ask (REQ-agent-518) |

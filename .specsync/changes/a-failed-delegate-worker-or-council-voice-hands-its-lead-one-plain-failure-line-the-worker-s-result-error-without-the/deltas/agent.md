@@ -67,14 +67,19 @@ and not stopped on an ask of its own (a valid result `ask`) — SHALL come back
 to its lead as one plain line of harness text, `workerFailureLine` (both the
 tool's `data.summary` and the end of its `error`): the timeout line (`worker
 timed out and was stopped`) or the interrupt line (`worker stopped: lead run
-was interrupted`); else the worker's result `error` (which model call failed
-and how, which verify failed, the idle-timeout line) as one plain line
+was interrupted`); else, for a worker that could not start, `worker failed
+to start: <why>`, the spawn error made one plain line like the result
+`error` below (host paths cut, the whole line at most 200 characters), never
+the spawn message as is; else the worker's result `error` (which model call
+failed and how, which verify failed, the idle-timeout line) as one plain line
 (`plainFailureLine`: SAFE-6 scrubbed, stack frames and host paths dropped, at
 most 200 characters) without the provider's host (`withoutProviderHost`,
 `src/agent/providers.ts`, the helper WATCH's public comment uses,
-REQ-watch-009: `The model call failed (429 Too Many Requests)`); else the
-no-provider notice for the worker's tier in its env (AGENT-10); else `the
-worker failed (exit N)`. It SHALL NOT hand over the worker's summary, its
+REQ-watch-009: `The model call failed (429 Too Many Requests)`); else, for a
+worker that streamed another protocol, the protocol-mismatch notice
+(`protocol mismatch: binary X, bridge Y — restart the bridge`, DISCORD-10);
+else the no-provider notice for the worker's tier in its env (AGENT-10); else
+`the worker failed (exit N)`. It SHALL NOT hand over the worker's summary, its
 result's summary (`resultText` is set only for a worker that did not fail)
 or its stdout / stderr, which for a model failure is `LLM HTTP <status>:
 <provider body>` — org or account names, request ids, the provider's host —
@@ -105,6 +110,7 @@ Acceptance Criteria
 - Spawn argv has `--here` right after `task run` (REQ-cli-122): a worker never makes a worktree of its own.
 - GITHUB-9: `buildDelegateSpawn` sets `CORVIDINHO_DELEGATE_AUTHORS` from `authors` and drops an inherited value when none is given; `delegateAuthorsFromEnv` trims, dedupes and bounds; `workerModelsFromResult` lists the answering model, usage models and failover ends, scrubbed, and nothing for an empty frame.
 - A worker whose result `error` is a 429 from `acme-prod.openai.azure.com:8443` and whose summary and stderr are `LLM HTTP 429: <body>` (an org name, a request id, the host) comes back with `data.summary` `The model call failed (429 Too Many Requests)` and `error` `worker (tier code, depth 1) did not finish (state failed, exit 1):` plus that line, its `models` kept, and no provider detail anywhere in the tool result; an idle-timed-out worker keeps `stopReason: "idle-timeout"` and its line; a worker with no result frame hands over the no-provider notice, else `the worker failed (exit N)`, never its stdout or stderr; a successful worker and one that stopped on an ask of its own are unchanged; a failed worker that reported an injection is still fenced for the lead with the line inside.
+- A worker that streamed another protocol comes back with the protocol-mismatch notice (`protocol mismatch: binary 3, bridge 2 — restart the bridge`), never `the worker failed (exit 0)` or its frames; a worker bin that does not exist comes back with exit 127 and `worker failed to start: ENOENT: no such file or directory, posix_spawn '…/corvidinho'`, its host path cut; a worker stopped by the spend cap comes back `blocked` with `Work is paused for budget.` and no amounts.
 - Through a lead tool loop and the real `task run` against the localhost fake provider answering 429 with an org name, a request id and its own host, the lead model's tool message has the plain line and none of them; with a 200 reply the worker's answer comes back as before (`tests/autonomous.worker-failure.test.ts`, which fails on main's `src/autonomous/delegate.ts`).
 
 ### REQUIREMENT REQ-agent-118

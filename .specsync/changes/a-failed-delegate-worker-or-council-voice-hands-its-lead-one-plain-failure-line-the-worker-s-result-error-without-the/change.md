@@ -1,6 +1,6 @@
 ---
 id: a-failed-delegate-worker-or-council-voice-hands-its-lead-one-plain-failure-line-the-worker-s-result-error-without-the
-state: implementing
+state: verifying
 type: bug_fix
 base_commit: cf7f61b2d624fd9b26f4b21f74fd691185f4284d
 ---
