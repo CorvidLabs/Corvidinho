@@ -102,6 +102,31 @@ function failed(extra: Partial<AgentSpawnResult> = {}): Omit<AgentSpawnResult, "
   };
 }
 
+/**
+ * Every `crypto.randomUUID()` in one test starts with `401`, so the session,
+ * work-task and schedule ids a reply shows carry "401" every run. By chance
+ * they did in about 1 run in 100 (a v4 UUID's 13th hex digit is always `4`):
+ * CI run 36805663978 failed on `sess_e096e6401b2c480a`.
+ */
+function idsWith401(): void {
+  const real = crypto.randomUUID.bind(crypto);
+  const spy = spyOn(crypto, "randomUUID").mockImplementation(
+    () => `401${real().slice(3)}` as ReturnType<typeof crypto.randomUUID>,
+  );
+  restores.push(() => spy.mockRestore());
+}
+
+/**
+ * A reply with the run's own random ids masked (session, work-task and
+ * schedule ids, and the worktree path made from the session id), so a check
+ * that the reason's "401" never reaches it is not tripped by an id.
+ */
+function withoutRunIds(body: string): string {
+  return body
+    .replace(/`[^`\n]*\/\.corvid-worktrees\/[^`\n]*`/g, "`<worktree>`")
+    .replace(/\b(?:sess|work|sched)_[0-9a-f]+\b/g, "<id>");
+}
+
 // ─── The reason (src/discord/failure-reason.ts) ──────────────────────────────
 
 describe("failureReasonFor / plainFailureLine (DISCORD-3.b, AGENT-9, SAFE-6)", () => {
@@ -598,6 +623,7 @@ describe("/session start and /work (DISCORD-3.b)", () => {
   for (const command of ["session", "work"] as const) {
     test(`/${command}: the owner's run shows the reason; a team member's says the owner was told (DMed once)`, async () => {
       const warns = captureWarn();
+      idsWith401();
       const { handlers, outbound, dms } = await bridgeWith(stubAgent(() => failed({ failureReason: REASON_401 })));
       const own = slash(command, OWNER_ID);
       await handlers.onSlash!(own.ix);
@@ -610,7 +636,8 @@ describe("/session start and /work (DISCORD-3.b)", () => {
       await handlers.onSlash!(team.ix);
       const teamBody = lastBody(outbound) || String(team.edits.at(-1)?.content ?? "");
       expect(teamBody).toContain(FAILED_TOLD_OWNER_TEXT);
-      expect(teamBody).not.toContain("401");
+      expect(teamBody).toContain("sess_401");
+      expect(withoutRunIds(teamBody)).not.toContain("401");
       expect(dms).toEqual([{ userId: OWNER_ID, content: `❌ A run failed (${command} in <#${CHANNEL}>): ${REASON_401}` }]);
       expect(warns.filter((l) => l.startsWith(`[discord] run failed (${command}, exit 1)`))).toHaveLength(2);
     });
@@ -659,6 +686,7 @@ describe("schedule result posts (DISCORD-3.b)", () => {
 
   test("the owner's schedule posts the reason; someone else's says the owner was told (DMed), or only that it didn't work", async () => {
     const warns = captureWarn();
+    idsWith401();
     const own = await scheduleRun({ creator: OWNER_ID, failureDm: true });
     expect(own.posts).toHaveLength(1);
     expect(own.posts[0]!.content).toBe(`❌ Schedule **Nightly** (\`${own.schedule.id.slice(0, 12)}\`) on \`proj-a\`:\n${REASON_401}`);
@@ -667,7 +695,8 @@ describe("schedule result posts (DISCORD-3.b)", () => {
 
     const other = await scheduleRun({ creator: TEAM_ID, failureDm: true });
     expect(other.posts[0]!.content).toEndWith(`:\n${FAILED_TOLD_OWNER_TEXT}`);
-    expect(other.posts[0]!.content).not.toContain("401");
+    expect(other.posts[0]!.content).toContain("sched_401");
+    expect(withoutRunIds(other.posts[0]!.content)).not.toContain("401");
     expect(other.dms).toEqual([
       { userId: OWNER_ID, content: `❌ A run failed (schedule ${other.schedule.id} in <#${CHANNEL}>): ${REASON_401}` },
     ]);
