@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 63
+version: 64
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -1267,3 +1267,4 @@ and current rows for plugins host evolution.
 | 2026-10-01 | before-a-pr-opens-a-second-model-reviews-the-diff-in-bounded-rounds-and-the-pr-lists-what-it-raised-and-what-changed: Before a PR opens, a second model reviews the diff in bounded rounds, and the PR lists what it raised and what changed (GITHUB-9, GITHUB-9.a) |
 | 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |
 | 2026-10-01 | the-second-model-review-sees-an-edit-made-in-the-same-second-as-the-last-index-write-its-index-copy-keeps-the-real: The second-model review sees an edit made in the same second as the last index write: its index copy keeps the real index's time (GITHUB-9) |
+| 2026-10-01 | in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent: In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard) |
