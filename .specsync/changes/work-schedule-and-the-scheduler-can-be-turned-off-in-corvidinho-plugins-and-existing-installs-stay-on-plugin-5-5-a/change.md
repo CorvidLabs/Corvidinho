@@ -1,6 +1,6 @@
 ---
 id: work-schedule-and-the-scheduler-can-be-turned-off-in-corvidinho-plugins-and-existing-installs-stay-on-plugin-5-5-a
-state: implementing
+state: verifying
 type: feature
 base_commit: cf7f61b2d624fd9b26f4b21f74fd691185f4284d
 ---

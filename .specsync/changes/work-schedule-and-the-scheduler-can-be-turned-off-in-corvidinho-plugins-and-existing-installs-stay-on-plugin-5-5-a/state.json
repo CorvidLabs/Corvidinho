@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "cf7f61b2d624fd9b26f4b21f74fd691185f4284d",
   "created_at": 1790830571,
-  "updated_at": 1790830818,
+  "updated_at": 1790832029,
   "affected_specs": [
     "agent",
     "discord",
@@ -23,6 +23,7 @@
     "src/discord/slash-types.ts",
     "src/discord/work-store.ts",
     "src/discord/bridge.ts",
+    "src/discord/message-router.ts",
     "src/scheduler/service.ts",
     "src/daemon/daemon.ts",
     "fledge.toml",
