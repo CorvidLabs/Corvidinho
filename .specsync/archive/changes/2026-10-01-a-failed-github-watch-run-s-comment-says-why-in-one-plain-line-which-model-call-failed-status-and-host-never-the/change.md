@@ -1,6 +1,6 @@
 ---
 id: a-failed-github-watch-run-s-comment-says-why-in-one-plain-line-which-model-call-failed-status-and-host-never-the
-state: verifying
+state: archived
 type: bug_fix
 base_commit: aeb2de3407acd0990897121ac68caf1553be0118
 ---
