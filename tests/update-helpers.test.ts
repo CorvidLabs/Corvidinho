@@ -966,10 +966,10 @@ describe("release tagging helpers", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.38", () => {
+  test("package.json is 0.0.39", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.38");
+    expect(pkg.version).toBe("0.0.39");
   });
 });
