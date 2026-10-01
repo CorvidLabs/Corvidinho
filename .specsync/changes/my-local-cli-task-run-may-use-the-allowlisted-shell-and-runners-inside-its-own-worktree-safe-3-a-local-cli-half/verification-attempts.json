@@ -133,6 +133,25 @@
         "REQ-agent-503",
         "REQ-cli-681"
       ]
+    },
+    {
+      "timestamp": 1790829642,
+      "commit": "00184c7ac200898cd5558c213f14b1919fdbe3b4",
+      "contract_digest": "e7a63bff893cc3635dd96c1f7e786811776f04d0314fe9af32a4c5446e5fb58c",
+      "execution_digest": "4e52549bccc994e158fe545d4c51fdcd8356a3234e460568d880a769bf9f70a3",
+      "workspace_digest": "cec981336ea9142cae3dd7cfacdd6e902c0f014c9f53700b111138928d780cc6",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-503",
+        "REQ-cli-681"
+      ]
     }
   ]
 }
