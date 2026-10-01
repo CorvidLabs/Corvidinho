@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "its-first-20-replies-in-public-threads-each-wait-for-my-ok-on-an-approve-card-even-text-i-dictated-and-replies-to-me",
+  "implementation_commit": "d45f5e8a52e0347d7fedf479c6f2903e9a976662",
+  "implementation_tree": "5f776a0f10a23e7751da552890df25676f3233b9",
+  "contract_digest": "dc7ddf69249e1a59a1927e11cd76cdf57f33af6485d13edb948033ebc004970f",
+  "workspace_digest": "8029d204ec2c1ec5f7c592bb9d9023d4f22f010a9c43562bb3d700f90ea3ebcb",
+  "closing_digest": "85007736e271db9dbfd0be546c9df3768833cab5af0971123ff9330c8366b485",
+  "review_digest": "ac7f0a420d46eb4585cffe62a5352a322f89a3f1bbdc027a6cdf9a4623295c91",
+  "finalization_digest": "f73f4b7fe06bbe9eb855abd9386f1ad83ef7d269adb9abc90327712743e67dd9",
+  "timestamp": 1790831113
+}

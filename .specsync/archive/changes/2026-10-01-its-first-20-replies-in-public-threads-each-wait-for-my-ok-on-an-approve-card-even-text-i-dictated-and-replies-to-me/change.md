@@ -1,6 +1,6 @@
 ---
 id: its-first-20-replies-in-public-threads-each-wait-for-my-ok-on-an-approve-card-even-text-i-dictated-and-replies-to-me
-state: implementing
+state: archived
 type: feature
 base_commit: b84c75fc3e98ce9d51c30ea215f538d53c18ded8
 ---
