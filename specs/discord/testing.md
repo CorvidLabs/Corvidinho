@@ -1570,3 +1570,33 @@ watchdog, which fires once the card is decided. Fail on base: all four.
 Review (REQ-agent-312): an owner's schedule whose run hit the turn cap posts only its prose
 and the scheduler logs one `[scheduler] schedule <id>: run stopped=turn-cap
 …` line (none for a plain run beside it); fails on base and on 05f7a6c.
+
+## Its first 20 public-thread replies wait for the owner's OK (REQ-discord-099 added; REQ-discord-097 / 741 modified; AUTONOMY-10 / 10.a)
+
+`tests/discord.public-reply-gate.test.ts` (28 tests; stub agents, a dry-run
+`startBridge` whose fake gateway answers `isPublicThread`, in-memory SQLite,
+the real card engine, a recording schedule poster, a fake bin for the spawn
+stamp, one real `task run` against the fake model; no network):
+
+- The gate: Discord types 11 / 10 are public threads (12, channels and an
+  unknown type are not); the `schema_meta` count (`public_thread_replies_approved`)
+  goes up by one per used approval and stops the waiting at 20; a lookup
+  that throws is public; a plain `reply` card with the text verbatim and the
+  hold note; Approve posts exactly the card's (scrubbed) text and counts;
+  Deny, a lapse, a stop and `close()` post nothing and count nothing; no
+  owner, no card; on the engine the text DM (fence-safe) precedes the card
+  and one owner press approves it.
+- The surfaces: a chat answer (even the owner's), an ask pick's answer, a
+  thin ack's restatement, `/session start` and `/work` answers and a
+  schedule's result in a public thread wait; a clarify question is pending
+  only once posted; Deny leaves the fixed `Not posted — …` line and no
+  question; a plain channel, a private thread or 20 approved never wait;
+  a failed run's line, a spend-cap stop and `⏹ Stopped` never wait; the Stop
+  button ends the wait; the schedule poster gets `modelText` and a denied
+  schedule post is not retried.
+- Files: the spawn stamp (`replyPublicThread`, written `1` or empty, never
+  inherited) and `discord-send-file`'s `mustAsk` (a `mustask-post` card with
+  the caption and the file, only while stamped and under 20).
+- Fail on base: 17 of 28 fail with the base's ten modified source files
+  (the gate's own units and "outside a public thread" pass on both);
+  `tests/must-ask.boundary.test.ts` fails on the base's `send-file.ts`.

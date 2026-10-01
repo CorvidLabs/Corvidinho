@@ -501,6 +501,27 @@ export class ThinkingStatus {
   }
 
   /**
+   * AUTONOMY-10 / 10.a (REQ-discord-099): the run is over but its reply
+   * waits for the owner's OK — show `description` on the progress message
+   * now (not debounced; the Stop button stays). True when it was shown.
+   */
+  async hold(description: string): Promise<boolean> {
+    if (this.closed || !this.messageId) return false;
+    this.description = description;
+    this.phase = "working";
+    this.lastEditAt = this.now();
+    try {
+      return await this.outbound.editEmbed({
+        channelId: this.channelId,
+        messageId: this.messageId,
+        embed: buildThinkingEmbed(this.snapshot()),
+      });
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Edit the progress embed. `final` (done / fail) also clears the Stop
    * button (AGENT-3.a) when the message carries one; a working edit leaves
    * the message's components as they are.

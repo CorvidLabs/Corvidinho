@@ -1,0 +1,24 @@
+---
+id: its-first-20-replies-in-public-threads-each-wait-for-my-ok-on-an-approve-card-even-text-i-dictated-and-replies-to-me
+state: draft
+type: feature
+base_commit: b84c75fc3e98ce9d51c30ea215f538d53c18ded8
+---
+
+# Its first 20 replies in public threads each wait for my OK on an Approve card, even text I dictated and replies to me (AUTONOMY-10, AUTONOMY-10.a)
+
+## Intent
+
+Its first 20 replies in public threads each wait for my OK on an Approve card, even text I dictated and replies to me (AUTONOMY-10, AUTONOMY-10.a)
+
+## Affected Canonical Specs
+
+- `discord`
+
+## Acceptance Criteria
+
+- AUTONOMY-10 and AUTONOMY-10.a (already captured in hi/autonomy.md; Leif's 2026-09-28 interview, round 13 on 2026-09-30) hold for public-thread replies: while fewer than 20 held replies were approved (schema_meta key public_thread_replies_approved, no schema change), every post the bridge makes that carries model text in a public thread (a Discord PublicThread including forum and media posts, or an AnnouncementThread, asked of the gateway at post time; a lookup that fails counts as public) — a chat answer, an ask pick or Answer form answer, a question restated after a thin ack, a /session start or /work answer, a schedule's result or question — shows only the fixed line 'waiting for the owner's OK before replying here' and waits for the owner's plain 'reply' Approve card on the #316 engine (the reply text verbatim before the card, scrubbed and fence-safe, SAFE-18); Approve posts exactly the text the card showed and counts toward 20; Deny, a lapse (5 min), a stop or the bridge closing posts none of it, leaves no question pending and does not count (SAFE-20); with no owner nothing that waits is posted; even the owner's own messages and text the owner dictated wait; fixed harness text (progress embed, Stop, DISCORD-3.b failed-run lines, the spend-cap paused line, pings, acks, notices, wait notes) never waits; a held clarify question is set pending only once it is posted; a per-spawn CORVIDINHO_DISCORD_REPLY_PUBLIC_THREAD stamp makes discord-send-file ask on a plain channel-post card there; the Stop button, failed-run and spend-card paths keep working; tests/discord.public-reply-gate.test.ts (including one real task run against the fake model) fails on the base sources and passes on the branch
+
+## No-spec Rationale
+
+Not applicable

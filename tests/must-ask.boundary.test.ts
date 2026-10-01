@@ -3,8 +3,9 @@
  * its guardrails it just does and tells me.
  *
  * - Boundary: only the must-ask builtins carry a must-ask class
- *   (discord-post-message, shell-exec, git-push, fledge-run,
- *   fledge-lanes-run and the language runners); every other builtin runs
+ *   (discord-post-message, discord-send-file in a public thread whose replies
+ *   still wait — AUTONOMY-10.a, REQ-discord-099 — shell-exec, git-push,
+ *   fledge-run, fledge-lanes-run and the language runners); every other builtin runs
  *   through runPlugin with no card, and each must-ask builtin's everyday call
  *   (a feature-branch push, `ls`, a dry-run post) runs with no card too.
  * - The model's instructions carry the one AUTONOMY-11 sentence.
@@ -29,6 +30,8 @@ import { answerMustAsk } from "./fixtures/must-ask.ts";
 /** The builtins that carry a must-ask class (the runners only when their toolchain loaded). */
 const MUST_ASK_BUILTINS = new Set([
   "discord-post-message",
+  // AUTONOMY-10.a: only with the bridge's public-thread stamp (REQ-discord-099).
+  "discord-send-file",
   "shell-exec",
   "git-push",
   "fledge-run",
@@ -103,6 +106,8 @@ describe("AUTONOMY-11: every non-must-ask builtin runs with no ask", () => {
       ["fledge-run", ["test"]],
       ["fledge-lanes-run", ["verify"]],
       ["discord-post-message", ["--channel", "999", "--content", "dry run"]],
+      // No public-thread stamp: an attachment asks nothing (REQ-discord-099).
+      ["discord-send-file", ["notes.md", "--caption", "kubectl notes"]],
       ["node-exec", ["-e", "console.log(1)"]],
     ];
     for (const [name, args] of plain) {

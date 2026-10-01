@@ -34,6 +34,7 @@ import {
 export { summarizeTaskRunOutput } from "../agent/task-summary.ts";
 import { failureReasonFromUnknown } from "./failure-reason.ts";
 import { privateRepliesFromUnknown } from "./private-reply.ts";
+import { REPLY_PUBLIC_THREAD_ENV } from "./public-reply-gate.ts";
 import { DISCORD_ANSWER_MAX } from "./rich-reply.ts";
 import type { AgentSpawnResult } from "./types.ts";
 import type { ThinkingTokens } from "./thinking-status.ts";
@@ -104,6 +105,13 @@ export type AgentRunChatOpts = {
   replyChannelId?: string;
   /** The thread's parent channel, which the channel allowlist names (DISCORD-5). */
   replyParentChannelId?: string;
+  /**
+   * AUTONOMY-10.a (REQ-discord-099): the reply channel is a public thread
+   * whose replies still wait for the owner's OK, so `discord-send-file` asks
+   * there too (`CORVIDINHO_DISCORD_REPLY_PUBLIC_THREAD`: `1`, else empty;
+   * always written, never inherited).
+   */
+  replyPublicThread?: boolean;
 };
 
 export type AgentClient = {
@@ -146,7 +154,9 @@ export function warnModelFallback(hops: ModelFallback[], sessionId: string): voi
  * when the caller named none) for the SAFE-3.a shell gate,
  * and the conversation's reply channel for `discord-send-file`
  * (CORVIDINHO_DISCORD_REPLY_CHANNEL_ID / _PARENT_CHANNEL_ID, empty when none;
- * REQ-discord-476). The GitHub commenter keys (CORVIDINHO_ACTING_GITHUB_*,
+ * REQ-discord-476) with CORVIDINHO_DISCORD_REPLY_PUBLIC_THREAD (`1` while
+ * replies in that public thread still wait for the owner's OK, else empty;
+ * REQ-discord-099). The GitHub commenter keys (CORVIDINHO_ACTING_GITHUB_*,
  * MEMORY-8) are always cleared. A result frame's `privateReplies`
  * (MEMORY-7.a) come back validated for the bridge to send by DM only.
  */
@@ -166,6 +176,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       signal,
       replyChannelId,
       replyParentChannelId,
+      replyPublicThread,
     }) {
       if (signal?.aborted) {
         return { ok: false, sessionId, summary: "interrupted before start", exitCode: 130 };
@@ -201,6 +212,9 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
           // Always overwritten, never inherited from the bridge env.
           CORVIDINHO_DISCORD_REPLY_CHANNEL_ID: replyChannelId ?? "",
           CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID: replyParentChannelId ?? "",
+          // AUTONOMY-10.a: replies in this public thread still wait for the
+          // owner's OK, so a file attached here asks too. Always overwritten.
+          [REPLY_PUBLIC_THREAD_ENV]: replyPublicThread ? "1" : "",
           // MEMORY-8: a Discord (or schedule) run never acts for a GitHub
           // commenter — always cleared, never inherited.
           CORVIDINHO_ACTING_GITHUB_LOGIN: "",

@@ -24,6 +24,13 @@
  * - `--git-diff` attaches the worktree diff as a `.diff` file (secret paths
  *   excluded, scrubbed), so a large diff is a file, not a wall of text.
  * - `CORVIDINHO_DISCORD_DRY_RUN=1` posts nothing.
+ * - AUTONOMY-10 / 10.a (REQ-discord-099): while replies in this
+ *   conversation's public thread still wait for the owner's OK (the bridge
+ *   stamps `CORVIDINHO_DISCORD_REPLY_PUBLIC_THREAD=1` per spawn) and fewer
+ *   than 20 were approved, the call asks on the must-ask gate's plain
+ *   channel-post card first (class `public`), showing the caption and the
+ *   file it would attach; a no attaches nothing (SAFE-20). A dry run asks
+ *   nothing.
  */
 
 import {
@@ -66,6 +73,13 @@ import {
   resolveProjectPath,
 } from "../files/resolvePath.ts";
 import { gitRoot, runGit, scrubGitOutput } from "../git/exec.ts";
+import { openCorvidinhoDb } from "../../src/store/db.ts";
+import {
+  PUBLIC_THREAD_REPLY_LIMIT,
+  REPLY_PUBLIC_THREAD_ENV,
+  publicRepliesStillWait,
+} from "../../src/discord/public-reply-gate.ts";
+import type { MustAskVerdict } from "../../src/plugins/types.ts";
 
 export const DISCORD_SEND_FILE_NAME = "discord-send-file";
 
@@ -617,12 +631,67 @@ async function handle(ctx: { args: string[]; cwd: string }): Promise<PluginHandl
   return upload({ token, channelId, attachment, caption: args.caption });
 }
 
+/**
+ * AUTONOMY-10 / 10.a (REQ-discord-099): a file attached to a reply in a public
+ * thread whose replies still wait for the owner's OK (the bridge's per-spawn
+ * stamp, then the approved count read now; an unreadable count waits) asks
+ * on a plain channel-post card showing the caption and the file. Anything
+ * else — no stamp, a dry run, 20 already approved, args the handler refuses
+ * — asks nothing here.
+ */
+export async function sendFileMustAsk(ctx: {
+  args: readonly string[];
+  env: NodeJS.ProcessEnv;
+}): Promise<MustAskVerdict> {
+  if (ctx.env[REPLY_PUBLIC_THREAD_ENV]?.trim() !== "1") return null;
+  if (ctx.env.CORVIDINHO_DISCORD_DRY_RUN === "1") return null;
+  const channelId = ctx.env[REPLY_CHANNEL_ENV]?.trim() ?? "";
+  if (!channelId) return null;
+  let args: ParsedArgs;
+  try {
+    args = parseArgs(ctx.args);
+  } catch {
+    return null; // the handler refuses it, attaching nothing
+  }
+  // A call the handler refuses anyway (no file, no acting user, a channel off
+  // the allowlist) raises no card.
+  if (!args.gitDiff && args.path === undefined) return null;
+  if (!ctx.env.CORVIDINHO_ACTING_DISCORD_USER_ID?.trim()) return null;
+  const loaded = await tryLoadAllowlist({ env: ctx.env });
+  if (!loaded.ok) return null;
+  const parent = ctx.env[REPLY_PARENT_CHANNEL_ENV]?.trim() ?? "";
+  if (conversationChannelRefusal(channelId, parent, loaded.config, ctx.env) !== null) return null;
+  let waits = true;
+  try {
+    const db = openCorvidinhoDb({ env: ctx.env });
+    try {
+      waits = publicRepliesStillWait(db);
+    } finally {
+      db.close();
+    }
+  } catch {
+    waits = true;
+  }
+  if (!waits) return null;
+  const file = args.gitDiff ? (args.staged ? "staged.diff (the index diff)" : "changes.diff (the worktree diff)") : args.path!;
+  const caption = args.caption?.trim();
+  return {
+    ask: {
+      class: "public",
+      why: `attaches a file to its reply in a public thread (its first ${PUBLIC_THREAD_REPLY_LIMIT} public-thread replies wait for the owner's OK)`,
+      target: `Discord thread ${channelId}`,
+      text: `${caption ? `${caption}\n` : ""}[attachment: ${file}]`,
+    },
+  };
+}
+
 export const discordSendFile: PluginCommand = {
   name: DISCORD_SEND_FILE_NAME,
   description: SEND_FILE_DESCRIPTION,
   dangerous: true,
   mutating: true,
   minTier: 1,
+  mustAsk: sendFileMustAsk,
   async handler(ctx) {
     try {
       return await handle(ctx);

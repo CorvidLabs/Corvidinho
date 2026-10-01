@@ -44,7 +44,10 @@
  * the run with a blocking ask naming the refused action. Anyone else's
  * schedule stays read-only (community); a schedule is never stamped team.
  * The schedule's own posts to its channel (result, ask, wait note) are not
- * announcements it starts (AUTONOMY-10): they go out without a card.
+ * announcements it starts (AUTONOMY-10): they go out without a card — except
+ * that a result or ask carrying model text is marked `modelText`, so in a
+ * public thread, while fewer than 20 replies were approved, the bridge holds
+ * it for the owner's OK (AUTONOMY-10.a, REQ-discord-099).
  */
 
 import { basename } from "node:path";
@@ -272,6 +275,14 @@ export type SchedulerOutbound = {
     mentionUserIds?: string[];
     /** A run ask's Choose / Answer and Cancel buttons (AUTONOMY-6.a). */
     components?: unknown[];
+    /**
+     * AUTONOMY-10 / 10.a (REQ-discord-099): the post carries model text (a
+     * run's result summary or its question). The bridge holds such a post
+     * in a public thread for the owner's OK while fewer than 20 replies were
+     * approved; it resolves `true` for a post the owner denied or let lapse
+     * (final: not posted, not retried) and `false` when it stopped waiting.
+     */
+    modelText?: boolean;
   }) => Promise<void | boolean>;
   /**
    * AUTONOMY-6.a — DM one user (the owner): the ask, its controls and the
@@ -985,9 +996,9 @@ export class SchedulerService {
         if (gate.ok) {
           const status = result.ok ? "✅" : "❌";
           const head = `${status} ${scheduleTitle(schedule)}:\n`;
-          await this.outbound.post(
+          await this.outbound.post({
             // SAFE-13: a tool result that looked like an injection tells the owner.
-            withInjectionNotice(
+            ...withInjectionNotice(
               {
                 channelId: schedule.channelId,
                 content: `${head}${clipPostSummary(summary, head.length)}`,
@@ -995,7 +1006,10 @@ export class SchedulerService {
               result.injection,
               this.owner,
             ),
-          );
+            // AUTONOMY-10.a: the result is model text; the ❌ line
+            // (DISCORD-3.b) is harness text.
+            ...(result.ok ? { modelText: true } : {}),
+          });
         }
       }
       // SAFE-14.a: this run's 80% warning (or one another run recorded)
@@ -1126,7 +1140,7 @@ export class SchedulerService {
    */
   private async sendToSchedule(
     schedule: Schedule,
-    msg: { content: string; mentionUserIds?: string[]; components?: unknown[] },
+    msg: { content: string; mentionUserIds?: string[]; components?: unknown[]; modelText?: boolean },
   ): Promise<boolean> {
     if (schedule.channelId) {
       if (!this.outbound?.post) return false;
@@ -1135,6 +1149,7 @@ export class SchedulerService {
         content: msg.content,
         ...(msg.mentionUserIds ? { mentionUserIds: msg.mentionUserIds } : {}),
         ...(msg.components ? { components: msg.components } : {}),
+        ...(msg.modelText ? { modelText: true } : {}),
       });
       return sent !== false;
     }
@@ -1215,6 +1230,9 @@ export class SchedulerService {
         content: withNotice.content,
         ...(withNotice.mentionUserIds ? { mentionUserIds: withNotice.mentionUserIds } : {}),
         ...(runId ? { components: scheduleAskComponents(runId, ask) } : {}),
+        // AUTONOMY-10.a: the question is model text (a spend-cap stop posts
+        // only the fixed "Work is paused for budget." line).
+        modelText: ask.reason !== "spend-cap",
       });
       // A ping that never went out is not remembered (AUTONOMY-2).
       if (posted !== false && reply.pinged) {

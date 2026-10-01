@@ -11,6 +11,7 @@ import type { ChannelPost } from "./spend-post.ts";
 import type { PendingAsk } from "./ask-buttons.ts";
 import type { SessionStore } from "./session-store.ts";
 import type { SessionStub } from "./types.ts";
+import type { PublicReplyGate, PublicReplyOutcome } from "./public-reply-gate.ts";
 
 export type SlashFinishThinkingOpts = {
   thinking: ThinkingStatus | null;
@@ -187,4 +188,44 @@ export function recordSlashStub(
   } catch (err) {
     console.warn(`[discord] slash ask stub for ${session.id} not recorded:`, err);
   }
+}
+
+/**
+ * AUTONOMY-10 / 10.a (REQ-discord-099): a `/session start` or `/work` answer
+ * that carries model text (`modelText`: the run's answer or question; never
+ * "⏹ Stopped", a failed run's line or a spend-cap stop) waits for the owner's
+ * OK when the command's channel is a public thread and fewer than 20 replies
+ * were approved. The hold line shows on the progress message (else on the
+ * deferred reply, else in a short note) while the owner's `reply` card is
+ * open; a stop of the run ends the wait. Without a gate, or for fixed text,
+ * the body goes out as it is.
+ */
+export async function holdSlashReply(opts: {
+  gate: PublicReplyGate | undefined;
+  thinking: ThinkingStatus | null;
+  interaction: SlashInteraction;
+  body: string;
+  modelText: boolean;
+  surface: "session" | "work";
+  signal?: AbortSignal;
+}): Promise<PublicReplyOutcome> {
+  if (!opts.gate || !opts.modelText) return { post: true, held: false, text: opts.body };
+  const { interaction, thinking } = opts;
+  return opts.gate.hold({
+    channelId: interaction.channelId,
+    text: opts.body,
+    requester: interaction.userId,
+    surface: opts.surface,
+    ...(opts.signal ? { signal: opts.signal } : {}),
+    showHold: async (line) => {
+      if (thinking && (await thinking.hold(line))) return true;
+      if (!interaction.editReply) return false;
+      try {
+        await interaction.editReply({ content: line });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  });
 }

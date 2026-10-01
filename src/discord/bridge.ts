@@ -104,6 +104,12 @@ import {
 } from "./approval-cards.ts";
 import { forgetApprovalKind } from "./forget-card.ts";
 import { spendApprovalKind } from "./spend-card.ts";
+import {
+  createPublicReplyGate,
+  publicReplyApprovalKind,
+  publicReplyNotPostedText,
+  type PublicReplyOutcome,
+} from "./public-reply-gate.ts";
 import { createWatchAskDelivery } from "./watch-ask.ts";
 import { clearBridgeRunning, markBridgeRunning } from "../watch/owner-ask.ts";
 import { deliverPrivateReplies, withPrivateNote } from "./private-reply.ts";
@@ -148,6 +154,7 @@ import {
   RUN_STOPPED_TEXT,
   SessionRunControl,
   buildStopComponents,
+  type RunStopReason,
   isStopRunText,
   parseStopRunCustomId,
 } from "./run-control.ts";
@@ -612,6 +619,9 @@ export async function startBridge(
           ...mustAskApprovalKinds({ db }),
           // SAFE-8 / SAFE-8.a: one model call past a spend cap (money: code).
           spendApprovalKind({ db }),
+          // AUTONOMY-10 / 10.a: one of its first 20 public-thread replies
+          // (plain), held by the reply gate below (REQ-discord-099).
+          publicReplyApprovalKind({ db }),
         ],
       })
     : undefined;
@@ -654,6 +664,50 @@ export async function startBridge(
     editMessage?: GatewayHandlers["editMessage"];
     deleteMessage?: GatewayHandlers["deleteMessage"];
   } = {};
+  const publicThreadRef: { fn?: GatewayHandlers["isPublicThread"] } = {};
+
+  // AUTONOMY-10 / 10.a (REQ-discord-099): its first 20 replies in public
+  // threads each wait for the owner's OK on a `reply` card. Every post that
+  // carries model text goes through `hold` (chat and ask answers, a restated
+  // question, `/session start` and `/work` answers, a schedule's result and
+  // ask posts); fixed harness text never does.
+  const publicReplies = createPublicReplyGate({
+    ...(db ? { db } : {}),
+    owner: () => config.owner ?? null,
+    lookup: () => publicThreadRef.fn,
+    post: () => replyRef.fn,
+    edit: () => embedRef.editMessage,
+    remove: () => embedRef.deleteMessage,
+    deliver: () => {
+      void approvals?.deliver();
+    },
+  });
+
+  /**
+   * AUTONOMY-10 / 10.a (REQ-discord-099): a run's answer that carries model
+   * text waits on its progress message for the owner's OK while the gate
+   * holds it (a public thread, fewer than 20 approved); a stop of the run
+   * ends the wait.
+   */
+  function holdRunReply(input: {
+    thinking: ThinkingStatus;
+    channelId: string;
+    content: string;
+    modelText: boolean;
+    requester: string;
+    surface: "chat" | "ask";
+    signal: AbortSignal;
+  }): Promise<PublicReplyOutcome> {
+    if (!input.modelText) return Promise.resolve({ post: true, held: false, text: input.content });
+    return publicReplies.hold({
+      channelId: input.channelId,
+      text: input.content,
+      requester: input.requester,
+      surface: input.surface,
+      signal: input.signal,
+      showHold: (line) => input.thinking.hold(line),
+    });
+  }
 
   const fallbackOutbound = memoryThinkingOutbound();
 
@@ -831,6 +885,9 @@ export async function startBridge(
       spendAlerts,
       spendDm,
       failureDm,
+      // AUTONOMY-10 / 10.a: `/session start` and `/work` answers in a public
+      // thread wait for the owner's OK (REQ-discord-099).
+      publicReplies,
       ...(replyRef.fn ? { post: replyRef.fn } : {}),
       // MEMORY-7.a: /session start and /work send private replies by DM.
       ...(sendDmRef.fn ? { sendDm: sendDmRef.fn } : {}),
@@ -1029,15 +1086,31 @@ export async function startBridge(
                 answerButton,
               });
           if (replyRef.fn) {
+            const askId = session.pendingAsk.askId;
+            // AUTONOMY-10 / 10.a (REQ-discord-099): the restated question is
+            // model text — in a public thread it waits for the owner's OK
+            // (a note holds its place); a no posts none of it.
+            const held = await publicReplies.hold({
+              channelId,
+              text: restated.content,
+              requester: msg.authorId,
+              surface: "chat",
+              signal: turn.signal,
+              replyToMessageId: msg.id,
+            });
+            if (!held.post) {
+              store.trackBotMessage(held.noteMessageId ?? `bot_reply_for_${msg.id}`, session);
+              return;
+            }
             const sent = await replyRef.fn({
               channelId,
-              content: restated.content,
+              content: held.text,
               replyToMessageId: msg.id,
               mentionUserIds: restated.mentionUserIds,
               ...(hasButtons
-                ? { components: buildOpenStubComponents(session.pendingAsk.askId) }
+                ? { components: buildOpenStubComponents(askId) }
                 : answerButton
-                ? { components: buildAnswerStubComponents(session.pendingAsk.askId) }
+                ? { components: buildAnswerStubComponents(askId) }
                 : {}),
             });
             if (sent?.messageId) store.trackBotMessage(sent.messageId, session);
@@ -1237,6 +1310,10 @@ export async function startBridge(
           }
 
 
+          // AUTONOMY-10.a (REQ-discord-099): while replies in this public
+          // thread wait for the owner's OK, `discord-send-file` asks too.
+          const replyPublicThread = await publicReplies.mustHold(channelId);
+
           // Busy while the agent runs: the soft-TTL purge must not park this
           // worktree mid-run (REQ-discord-204).
           result = await store.runActive(session, () =>
@@ -1259,6 +1336,7 @@ export async function startBridge(
               // DISCORD-17: files attach in this conversation's channel only.
               replyChannelId: channelId,
               ...(msg.threadId ? { replyParentChannelId: msg.channelId } : {}),
+              replyPublicThread,
               onStatus: (u) => {
                 void thinking.update({
                   tool: u.tool,
@@ -1293,7 +1371,7 @@ export async function startBridge(
         }
         // AGENT-3.a (REQ-discord-302): a stopped run's answer is only
         // "⏹ Stopped" with the DISCORD-15/15.a footer — no question, no body.
-        const stopped = turn.stopReason === "stopped";
+        let stopped = turn.stopReason === "stopped";
 
         const plumbing = result.task
           ? formatTaskPlumbing({
@@ -1386,11 +1464,84 @@ export async function startBridge(
           pendingToStore = answer?.pending ?? null;
         }
 
+        // MEMORY-7.a (REQ-discord-710): the run's private replies (private
+        // notes, a profile, the owner's view of someone) go to the asker by
+        // DM only; the channel gets the "sent privately" note, never the text.
+        const privateOutcome = await deliverPrivateReplies({
+          replies: result.privateReplies,
+          userId: msg.authorId,
+          sendDm: sendDmRef.fn,
+        });
+        // DISCORD-3.a — final chat reply is human text only (no plumbing lines).
+        let body = withPrivateNote(
+          stopped
+            ? RUN_STOPPED_TEXT
+            : askBody
+            ? askBody.content
+            : result.ok
+              ? // DISCORD-16: the whole answer; it is split into messages when long.
+                result.summary
+              : // DISCORD-3.b: why (the owner's run), else "the owner has been told".
+                await failedRunReply({ run: result, ownerRun, surface: "chat", channelId, ownerDm: failureDm }),
+          privateOutcome,
+        );
+        // SAFE-14.a: no spend amounts ride the post; the 80% warning and a
+        // cap stop's details go to the owner by DM (after the post, below).
+        // SAFE-13: a tool result that looked like an injection pings the owner
+        // on the same post.
+        let out: { content: string; mentionUserIds?: string[] } = withInjectionNotice(
+          {
+            content: body,
+            ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
+          },
+          result.injection,
+          config.owner,
+          // DISCORD-16: the answer is split into messages, so the SAFE-13
+          // line never cuts it down to one message.
+          DISCORD_ANSWER_MAX,
+        );
+
+        // AUTONOMY-10 / 10.a (REQ-discord-099): an answer or question (model
+        // text) in a public thread, while fewer than 20 were approved, waits
+        // on the progress message for the owner's OK; Approve posts exactly
+        // what the card showed. "⏹ Stopped", a failed run's line and a
+        // spend-cap stop are fixed text and never wait.
+        const held = await holdRunReply({
+          thinking,
+          channelId,
+          content: out.content,
+          modelText: !stopped && (askBody ? !spendCap : result.ok),
+          requester: msg.authorId,
+          surface: "chat",
+          signal: turn.signal,
+        });
+        // The bridge stopped while it waited: as above, nothing is posted.
+        if (!held.post && (turn.stopReason as RunStopReason | undefined) === "closed") {
+          inflight.keep();
+          thinking.dispose();
+          return;
+        }
+        // A no (SAFE-20), or a stop while it waited: none of the reply goes
+        // out — no question, no ping, and its ask is never pending.
+        let notPosted: string | null = null;
+        if (!held.post) {
+          stopped = turn.stopReason === "stopped";
+          notPosted = stopped ? RUN_STOPPED_TEXT : publicReplyNotPostedText(held.outcome);
+          askBody = null;
+          pendingToStore = null;
+          body = notPosted;
+          out = { content: notPosted };
+        } else if (held.held) {
+          out = { ...out, content: held.text };
+        }
+        const failedLook = stopped || notPosted !== null || (askBody ? askBody.failed : !result.ok);
+
         // Pending ask (AUTONOMY-5/6, SESSION-MULTI-3): a new ask is stored
         // beside any open button ask, never in its place; a turn that leaves
         // none (a finished turn, or a SAFE-8 spend-cap stop, which a reply
         // cannot answer) clears a free-text pending ask while a button ask
-        // survives until it is picked or times out.
+        // survives until it is picked or times out. Set only now: a held
+        // question is pending once it is posted (AUTONOMY-10.a).
         if (pendingToStore) {
           store.setPendingAsk(session, pendingToStore);
         } else if (session.pendingAsk && !session.pendingAsk.options?.length) {
@@ -1405,46 +1556,13 @@ export async function startBridge(
         ) {
           console.warn(ASK_NO_OWNER_WARNING);
         }
-
-        // MEMORY-7.a (REQ-discord-710): the run's private replies (private
-        // notes, a profile, the owner's view of someone) go to the asker by
-        // DM only; the channel gets the "sent privately" note, never the text.
-        const privateOutcome = await deliverPrivateReplies({
-          replies: result.privateReplies,
-          userId: msg.authorId,
-          sendDm: sendDmRef.fn,
-        });
-        // DISCORD-3.a — final chat reply is human text only (no plumbing lines).
-        const body = withPrivateNote(
-          stopped
-            ? RUN_STOPPED_TEXT
-            : askBody
-            ? askBody.content
-            : result.ok
-              ? // DISCORD-16: the whole answer; it is split into messages when long.
-                result.summary
-              : // DISCORD-3.b: why (the owner's run), else "the owner has been told".
-                await failedRunReply({ run: result, ownerRun, surface: "chat", channelId, ownerDm: failureDm }),
-          privateOutcome,
-        );
         // AGENT-6: the answer as posted joins the thread (a spend-cap stop
-        // records no answer, REQ-discord-098).
-        store.recordTurn(session, "agent", answerTurnText(body, pendingToStore ?? askRaw));
-
-        // SAFE-14.a: no spend amounts ride the post; the 80% warning and a
-        // cap stop's details go to the owner by DM (after the post, below).
-        // SAFE-13: a tool result that looked like an injection pings the owner
-        // on the same post.
-        const out = withInjectionNotice(
-          {
-            content: body,
-            ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
-          },
-          result.injection,
-          config.owner,
-          // DISCORD-16: the answer is split into messages, so the SAFE-13
-          // line never cuts it down to one message.
-          DISCORD_ANSWER_MAX,
+        // records no answer, REQ-discord-098; a reply that was not posted
+        // records the line shown instead).
+        store.recordTurn(
+          session,
+          "agent",
+          answerTurnText(body, notPosted !== null ? null : (pendingToStore ?? askRaw)),
         );
         let delivered = false;
         try {
@@ -1457,7 +1575,7 @@ export async function startBridge(
             keepFooter: askBody?.keepFooter,
             mentionUserIds: out.mentionUserIds,
             extras: thinkExtras,
-            failed: stopped || (askBody ? askBody.failed : !result.ok),
+            failed: failedLook,
           });
           if (collapsed) {
             delivered = true;
@@ -1484,6 +1602,8 @@ export async function startBridge(
             // Fallback when editMessage unavailable: status embed + separate reply.
             if (stopped) {
               await thinking.fail(RUN_STOPPED_TEXT, thinkExtras);
+            } else if (notPosted !== null) {
+              await thinking.fail(notPosted, thinkExtras);
             } else if (askBody) {
               await (askBody.failed
                 ? thinking.fail(askBody.status, thinkExtras)
@@ -1505,7 +1625,7 @@ export async function startBridge(
                   ? null
                   : thinking.answerFooter({
                       extras: thinkExtras,
-                      failed: stopped || (askBody ? askBody.failed : !result.ok),
+                      failed: failedLook,
                     }),
               replyToMessageId: msg.id,
               ...(out.mentionUserIds ? { mentionUserIds: out.mentionUserIds } : {}),
@@ -1949,6 +2069,9 @@ export async function startBridge(
           );
           if (memInject.injected) enrichedPrompt = memInject.prompt;
 
+          // AUTONOMY-10.a (REQ-discord-099): as on a chat run.
+          const replyPublicThread = await publicReplies.mustHold(channelId);
+
           result = await store.runActive(session, () =>
             agent.runChat({
               prompt: enrichedPrompt,
@@ -1967,6 +2090,7 @@ export async function startBridge(
               // DISCORD-17: files attach in this conversation's channel only.
               replyChannelId: channelId,
               ...(session.threadId ? { replyParentChannelId: session.channelId } : {}),
+              replyPublicThread,
               onStatus: (u) => {
                 void thinking.update({
                   tool: u.tool,
@@ -2005,7 +2129,7 @@ export async function startBridge(
         }
         // AGENT-3.a (REQ-discord-302): a stopped run's answer is only
         // "⏹ Stopped" with the DISCORD-15/15.a footer — no question, no body.
-        const stopped = turn.stopReason === "stopped";
+        let stopped = turn.stopReason === "stopped";
 
         const plumbing = result.task
           ? formatTaskPlumbing({
@@ -2094,12 +2218,6 @@ export async function startBridge(
           pendingToStore = answer?.pending ?? null;
         }
 
-        // The pick already cleared the answered ask; store a follow-up ask
-        // (never a SAFE-8 spend-cap stop, which a reply cannot answer).
-        if (pendingToStore) {
-          store.setPendingAsk(session, pendingToStore);
-        }
-
         // MEMORY-7.a (REQ-discord-710): as on a chat reply — private replies
         // go to the presser (the session's own user) by DM only.
         const privateOutcome = await deliverPrivateReplies({
@@ -2107,7 +2225,7 @@ export async function startBridge(
           userId: interaction.userId,
           sendDm: sendDmRef.fn,
         });
-        const body = withPrivateNote(
+        let body = withPrivateNote(
           stopped
             ? RUN_STOPPED_TEXT
             : askBody
@@ -2119,13 +2237,10 @@ export async function startBridge(
                 await failedRunReply({ run: result, ownerRun, surface: "ask", channelId, ownerDm: failureDm }),
           privateOutcome,
         );
-        // AGENT-6: the answer to the pick joins the session's thread.
-        store.recordTurn(session, "agent", answerTurnText(body, pendingToStore ?? askRaw));
-
         // SAFE-14.a: as on a chat reply — no spend amounts ride the post.
         // SAFE-13: a tool result that looked like an injection pings the owner
         // on the same post.
-        const out = withInjectionNotice(
+        let out: { content: string; mentionUserIds?: string[] } = withInjectionNotice(
           {
             content: body,
             ...(askBody ? { mentionUserIds: askBody.mentionUserIds } : {}),
@@ -2135,6 +2250,48 @@ export async function startBridge(
           // DISCORD-16: the answer is split into messages, so the SAFE-13
           // line never cuts it down to one message.
           DISCORD_ANSWER_MAX,
+        );
+
+        // AUTONOMY-10 / 10.a (REQ-discord-099): as on a chat reply — model
+        // text in a public thread waits for the owner's OK on the stub.
+        const held = await holdRunReply({
+          thinking,
+          channelId,
+          content: out.content,
+          modelText: !stopped && (askBody ? !spendCap : result.ok),
+          requester: interaction.userId,
+          surface: "ask",
+          signal: turn.signal,
+        });
+        if (!held.post && (turn.stopReason as RunStopReason | undefined) === "closed") {
+          inflight?.keep();
+          thinking.dispose();
+          return;
+        }
+        let notPosted: string | null = null;
+        if (!held.post) {
+          stopped = turn.stopReason === "stopped";
+          notPosted = stopped ? RUN_STOPPED_TEXT : publicReplyNotPostedText(held.outcome);
+          askBody = null;
+          pendingToStore = null;
+          body = notPosted;
+          out = { content: notPosted };
+        } else if (held.held) {
+          out = { ...out, content: held.text };
+        }
+        const failedLook = stopped || notPosted !== null || (askBody ? askBody.failed : !result.ok);
+
+        // The pick already cleared the answered ask; store a follow-up ask
+        // (never a SAFE-8 spend-cap stop, which a reply cannot answer) once
+        // it is going out (a held question, AUTONOMY-10.a).
+        if (pendingToStore) {
+          store.setPendingAsk(session, pendingToStore);
+        }
+        // AGENT-6: the answer to the pick joins the session's thread.
+        store.recordTurn(
+          session,
+          "agent",
+          answerTurnText(body, notPosted !== null ? null : (pendingToStore ?? askRaw)),
         );
         let delivered = false;
         try {
@@ -2146,7 +2303,7 @@ export async function startBridge(
             keepFooter: askBody?.keepFooter,
             mentionUserIds: out.mentionUserIds,
             extras: thinkExtras,
-            failed: stopped || (askBody ? askBody.failed : !result.ok),
+            failed: failedLook,
           });
           if (collapsed) {
             delivered = true;
@@ -2171,6 +2328,8 @@ export async function startBridge(
           } else if (replyRef.fn) {
             if (stopped) {
               await thinking.fail(RUN_STOPPED_TEXT, thinkExtras);
+            } else if (notPosted !== null) {
+              await thinking.fail(notPosted, thinkExtras);
             } else if (askBody) {
               await (askBody.failed
                 ? thinking.fail(askBody.status, thinkExtras)
@@ -2191,7 +2350,7 @@ export async function startBridge(
                   ? null
                   : thinking.answerFooter({
                       extras: thinkExtras,
-                      failed: stopped || (askBody ? askBody.failed : !result.ok),
+                      failed: failedLook,
                     }),
               replyToMessageId: pending.stubMessageId ?? interaction.messageId,
               ...(out.mentionUserIds ? { mentionUserIds: out.mentionUserIds } : {}),
@@ -2288,6 +2447,7 @@ export async function startBridge(
       embedRef.editMessage = h.editMessage;
       embedRef.deleteMessage = h.deleteMessage;
       sendDmRef.fn = h.sendDm;
+      publicThreadRef.fn = h.isPublicThread;
       return gw;
     });
 
@@ -2353,12 +2513,23 @@ export async function startBridge(
       // DISCORD-3.b: a failed run of someone else's schedule DMs the owner why.
       failureDm,
       outbound: {
-        post: async ({ channelId, content, mentionUserIds, components }) => {
+        post: async ({ channelId, content, mentionUserIds, components, modelText }) => {
           if (!replyRef.fn) return false;
+          let text = content;
+          if (modelText) {
+            // AUTONOMY-10 / 10.a (REQ-discord-099): a schedule's result or
+            // ask (model text) in a public thread waits for the owner's OK
+            // while fewer than 20 replies were approved. A deny or lapse is
+            // final (not posted, not retried: true); a stop, no owner or no
+            // card hands an ask back for a later pass (false).
+            const held = await publicReplies.hold({ channelId, text: content, surface: "schedule" });
+            if (!held.post) return held.outcome === "denied" || held.outcome === "expired";
+            text = held.text;
+          }
           return (
             (await replyRef.fn({
               channelId,
-              content,
+              content: text,
               mentionUserIds,
               ...(components ? { components } : {}),
             })) !== null
@@ -2393,6 +2564,7 @@ export async function startBridge(
   if (handlers.editMessage) embedRef.editMessage = handlers.editMessage;
   if (handlers.deleteMessage) embedRef.deleteMessage = handlers.deleteMessage;
   if (handlers.sendDm) sendDmRef.fn = handlers.sendDm;
+  if (handlers.isPublicThread) publicThreadRef.fn = handlers.isPublicThread;
 
   try {
     await gateway.start();
@@ -2467,6 +2639,8 @@ export async function startBridge(
       // killed) and no waiting message starts; their in-flight rows stay, so
       // the next start marks those replies interrupted (REQ-discord-311).
       runControl.close();
+      // AUTONOMY-10.a: a reply still waiting for the owner's OK is not posted.
+      publicReplies.close();
       approvals?.stop();
       scheduler?.stop();
       // AGENT-16.a: no further stuck WATCH ask is taken, and the watch

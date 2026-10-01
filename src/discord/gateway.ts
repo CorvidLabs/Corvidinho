@@ -39,6 +39,7 @@ import type { DiscordEmbedPayload } from "./thinking-status.ts";
 import { DISCORD_DM_MAX, DISCORD_MESSAGE_MAX } from "./rich-reply.ts";
 import type { DiscordModal } from "./ask-buttons.ts";
 import { buildVersionPresenceData } from "./presence.ts";
+import { isPublicThreadType } from "./public-reply-gate.ts";
 import type { BridgeConfig, InboundMessage } from "./types.ts";
 import { VERSION as PACKAGE_VERSION } from "../version.ts";
 
@@ -188,6 +189,13 @@ export type GatewayHandlers = {
     content: string;
     components?: unknown[];
   }) => Promise<{ channelId: string; messageId: string } | null>;
+  /**
+   * AUTONOMY-10 / 10.a (REQ-discord-099): is `channelId` a public thread — a
+   * `PublicThread` (a forum or media channel's posts included) or an
+   * `AnnouncementThread` — looked up at post time. Rejects when the channel
+   * cannot be read (the reply gate then treats it as public).
+   */
+  isPublicThread?: (channelId: string) => Promise<boolean>;
 };
 
 /** Who asked for channel autocomplete, and where (REQ-discord-431). */
@@ -810,6 +818,14 @@ export async function createLiveGateway(
       console.error("[discord] deleteMessage failed:", err);
       return false;
     }
+  };
+
+  // AUTONOMY-10 / 10.a (REQ-discord-099): asked at post time; a channel that
+  // cannot be read rejects, and the reply gate treats it as public.
+  handlers.isPublicThread = async (channelId) => {
+    const channel = await client.channels.fetch(channelId);
+    if (!channel) throw new Error(`channel ${channelId} not found`);
+    return isPublicThreadType(channel.type);
   };
 
   return gateway;
