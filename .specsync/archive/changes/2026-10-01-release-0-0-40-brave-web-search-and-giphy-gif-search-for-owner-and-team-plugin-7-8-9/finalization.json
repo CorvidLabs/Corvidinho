@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-40-brave-web-search-and-giphy-gif-search-for-owner-and-team-plugin-7-8-9",
+  "implementation_commit": "6492e3c2bac272890bd66dff6b5f01a958661130",
+  "implementation_tree": "5a4f5203176a21cb349ebb117cd932bc385be1e4",
+  "contract_digest": "c077225ba86a42abc0fff76bb82fab096064878f68a3fa21e691958bd202e00b",
+  "workspace_digest": "4f209e43c1c2906cda86aa8560b45ff8273c11e31d4cdeeb935bf12b40cad93a",
+  "closing_digest": "1dbd5b13ccb3554752daa271dc2eca86d5cdebf6b8c13dfee3b10dcb69112f00",
+  "review_digest": "f3a481feb8ecbc21f2d716a3e638397fa9a8eecc2532008a59c3a0345d9fee86",
+  "finalization_digest": "ff5d73cca021a7df2950bd455a17ad87d1ad97f3c77660d357c93b9a9376f776",
+  "timestamp": 1790870996
+}
