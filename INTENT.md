@@ -14,7 +14,7 @@
 - [cli](hi/cli.md): CLI (5 criteria)
 - [discord](hi/discord.md): DISCORD (18 criteria)
 - [fledge](hi/fledge.md): FLEDGE (7 criteria)
-- [github](hi/github.md): GITHUB (8 criteria)
+- [github](hi/github.md): GITHUB (9 criteria)
 - [identity](hi/identity.md): IDENTITY (16 criteria)
 - [memory](hi/memory.md): MEMORY (10 criteria)
 - [ops](hi/ops.md): OPS (2 criteria)
