@@ -25,6 +25,7 @@ import { emptyConfig } from "../src/allowlist/types.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { clearRegistry, list, register } from "../src/plugins/registry.ts";
 import { runPlugin } from "../src/plugins/run.ts";
+import { headTree, makeReviewRepo, seedFinishedReview } from "./fixtures/review-cycle.ts";
 import {
   ROLE_REFUSED_MESSAGE,
   resolveActingIsAdmin,
@@ -237,9 +238,26 @@ describe("ROLES-CHAT-7 role tool gates", () => {
     expect(noRepo.exitCode).toBe(3);
     expect(noRepo.error ?? "").toContain("GITHUB-6");
 
-    // Allowlist entry + GITHUB-6 repo allowlist: the dry-run PR goes through.
+    // Allowlist entry + GITHUB-6 repo allowlist: past both gates, the call
+    // reaches the GITHUB-9 review gate (no run model and no finished review
+    // here), never the role refusal.
     process.env.CORVIDINHO_GITHUB_ALLOW_REPOS = "CorvidLabs/Corvidinho";
-    const ok = await run(["github-pr-create"]);
+    const held = await run(["github-pr-create"]);
+    expect(held.ok).toBe(false);
+    expect(held.reviewHold).toBe("refused");
+    expect(held.error ?? "").toContain("GITHUB-9");
+    expect(held.error ?? "").not.toContain(ROLE_REFUSED_MESSAGE);
+
+    // With a finished review for the branch's pushed tree, the dry-run PR goes through.
+    const fx = makeReviewRepo({ branch: "corvidinho/roles-chat-7" });
+    seedFinishedReview({ repo: "CorvidLabs/Corvidinho", branch: fx.branch, tree: headTree(fx.dir) });
+    const ok = await runPlugin({
+      name: "github-pr-create",
+      args,
+      nonInteractive: true,
+      allowlist: ["github-pr-create"],
+      cwd: fx.dir,
+    });
     expect(ok.ok).toBe(true);
     expect(ok.exitCode).toBe(0);
     expect(ok.data).toMatchObject({

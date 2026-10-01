@@ -78,6 +78,12 @@ export type RunGitOptions = {
   env?: NodeJS.ProcessEnv;
   /** Default true; only commands that reject literal magic turn it off. */
   literalPathspecs?: boolean;
+  /**
+   * A temporary index for this call (`GIT_INDEX_FILE`; the inherited one is
+   * always stripped). GITHUB-9 `reviewTree` stages the work tree into a copy
+   * so the real index never changes.
+   */
+  indexFile?: string;
 };
 
 async function readCapped(
@@ -116,9 +122,11 @@ export async function runGit(
   args: readonly string[],
   opts: RunGitOptions = {},
 ): Promise<GitRun> {
+  const env = gitEnv(root, opts.env, opts.literalPathspecs ?? true);
+  if (opts.indexFile) env.GIT_INDEX_FILE = opts.indexFile;
   const proc = Bun.spawn(["git", "-c", "core.hooksPath=/dev/null", ...args], {
     cwd: root,
-    env: gitEnv(root, opts.env, opts.literalPathspecs ?? true),
+    env,
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",

@@ -757,3 +757,32 @@ for an unpriced model (was: no card); `tests/agent.spend.test.ts`,
   gives a schedule's spend-cap stop `["Cancel"]`; on the branch: one card
   with the amount unknown and one call, `no-bridge` (recorded), `["Continue",
   "Cancel"]`. Restored, all pass.
+
+## The tool loop hands github-pr-create its run (REQ-agent-092 added, REQ-agent-117 modified; GITHUB-9, GITHUB-9.a)
+
+`tests/work.review.test.ts` ("the agent tool loop hands github-pr-create its
+run …") drives `createTaskExecute` with a scripted provider fetch in a temp
+repo with a bare origin (dry run):
+
+- The reviewer (`CORVIDINHO_LLM_MODEL_READ` = `reviewer-model`, the run on
+  `author-model`) is called once with no `tools`, a system and a fenced user
+  message holding the diff; round 1's findings come back fenced; the same
+  call again opens the PR listing them as not changed; no tool message has
+  the AGENT-16 steer; `onUsage`'s `byModel` has the reviewer's row and
+  `answerSpendFor` makes the cost unknown (unpriced reviewer); `onModel`
+  names only `author-model`.
+- No second model: three identical calls all run and refuse, no steer, no
+  stuck ask, no reviewer request; the summary ends with the GITHUB-9.a line.
+- A provider cap covering the reviewer's own (Ollama) provider, no owner:
+  the run ends with the `spend-cap` ask, no review request is sent, nothing
+  is recorded, no `PR not opened` line.
+- A `delegate` result with `data.models: ["worker-model"]` makes the reviewer
+  the next configured model (`third-model`).
+- Two `github-pr-create` calls in one batch: the second is not run (findings
+  not yet read), one review call, the cycle stays open.
+- `buildDelegateSpawn` / `delegateAuthorsFromEnv` / `workerModelsFromResult`
+  (REQ-agent-117).
+
+Fail on base (modified sources at `9ea766b` swapped in, exports stubbed so
+the file loads): all five tool-loop cases and both delegate cases fail;
+restored they pass.

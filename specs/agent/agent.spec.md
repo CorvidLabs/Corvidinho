@@ -416,6 +416,25 @@ Autonomous gate + delegation core (REQ-agent-117, issue #117):
 `MAX_DELEGATES_PER_RUN` 4, `DELEGATE_MIN_TIER` 2). `buildOpenAiTools` takes
 `autonomous?: boolean`; `createTaskExecute` takes `autonomous?: boolean`
 (default: `autonomousSessionAllowed({ cwd, env })`).
+GITHUB-9 (REQ-agent-117, REQ-agent-092): `src/autonomous/delegate.ts` also
+exports `DELEGATE_AUTHORS_ENV` (`CORVIDINHO_DELEGATE_AUTHORS`, internal: set
+only on a worker spawn), `DELEGATE_AUTHORS_MAX` (32),
+`delegateAuthorsFromEnv(env)` and `workerModelsFromResult(r)`;
+`buildDelegateSpawn` and `runDelegateChild` take `authors?`, and
+`DelegateChildOutcome.models?` lists the worker's models.
+
+Second-model review in the tool loop (REQ-agent-092, GITHUB-9 / GITHUB-9.a):
+`createTaskExecute` hands every `runPlugin` call of its tool loop a
+`PrReviewRun` (`env`, `authors()`: every model its chain called, AGENT-11
+failovers included, its delegate workers' reported models and, in a worker,
+the lead's; `complete`: one no-tools `chatCompletions` call through the run's
+spend-guarded fetch, usage under the reviewer's label). A `ReviewSpendStop`
+thrown by `github-pr-create` ends the attempt (the spend guard's `finish`
+turns it into the spend-cap ask); a result with `reviewHold` is never counted
+by the AGENT-16 guard; a second `github-pr-create` in the batch that just got
+findings is not run; `withReviewRefusalNote(summary, line)` adds the run's
+latest `github-pr-create` refusal line ("PR not opened: …") once, before the
+role note.
 
 Council core (REQ-agent-118, issue #118, AUTONOMOUS-6):
 `src/autonomous/council.ts` exports `parseCouncilArgs`, `resolveCouncilTier`,

@@ -695,7 +695,13 @@ merge-base, HEAD and the work tree, merged fail-closed) requires a change for
 meaningful files, a meaningful path changed since the merge-base that no
 open change and no change archived on the branch covers, or a diff that
 cannot be read, keeps the PR from opening, before the pre-push lane and
-before anything is committed or pushed (AGENT-18, REQ-discord-518).
+before anything is committed or pushed (AGENT-18, REQ-discord-518), and
+`not-reviewed`: `github-pr-create` held the PR at the GITHUB-9 second-model
+review gate (this step has no run model, so it starts no round; only a tree a
+run already had reviewed opens), the line reusing the gate's reason
+(`reviewRefusalReason`) with the changes left on the pushed branch
+(REQ-discord-088). `SCRUB_TARGETS` lists `pr_review_rounds` (`reviewer`, and
+the JSON `authors`, `findings`, `changed`; REQ-plugins-092).
 `src/worktree/base.ts` exports `resolveBase` (the talk base: the remote's
 default branch, else `main`, and HEAD's merge-base with it; shared by
 `openWorkPr` and the verify gate), `talkWorktreeGitDir` (the own git dir of a

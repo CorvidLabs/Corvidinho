@@ -119,6 +119,9 @@ files:
   - tests/must-ask.boundary.test.ts
   - tests/must-ask.regression.test.ts
   - tests/fixtures/must-ask.ts
+  - src/work/review.ts
+  - tests/work.review.test.ts
+  - tests/fixtures/review-cycle.ts
 
 db_tables: []
 depends_on: []
@@ -160,6 +163,13 @@ Every call goes through the must-ask gate in `runPlugin`: a call its command
 classes as prod or deploy contact or as a channel post waits for the owner's
 Approve card, and anything else runs with no ask (AUTONOMY-9/10/11,
 REQ-plugins-097).
+`github-pr-create` opens a PR only after a second model reviewed the diff in
+bounded rounds, and the PR body lists what it raised and what changed
+(GITHUB-9 / GITHUB-9.a, REQ-plugins-092, `src/work/review.ts`): the reviewer
+is the first other configured model that did not write the change (no
+reviewer setting); an agent run starts the rounds, a caller with no run model
+opens only a tree whose review already finished, and no second model means no
+PR, with one line saying why.
 
 ## Public API
 
@@ -201,7 +211,28 @@ AGENT-18.a). `plugins/specsync/commands.ts` exports `SDD_OFF_REFUSAL`;
 `specsync-change-answer`, `specsync-change-approve` and
 `specsync-change-finalize` (REQ-plugins-518 / REQ-plugins-519);
 `TEAM_WORK_TOOLS` gains the last four;
-`PluginHandlerArgs.tier?` / `signal?` and matching `runPlugin` options.
+`PluginHandlerArgs.tier?` / `signal?` / `review?` (`PrReviewRun`: the calling
+agent run's `env`, `authors()` and `complete(provider, messages, signal?)`,
+GITHUB-9) and matching `runPlugin` options; `PluginHandlerResult.reviewHold?`
+(`findings` | `refused`); `ReviewMessage` / `ReviewCompletion`. `delegate`
+passes the lead's `review.authors()` to its worker and returns the worker's
+models as `data.models` (REQ-plugins-117). `runGit` takes `indexFile`
+(a temporary `GIT_INDEX_FILE`; the inherited one is still stripped).
+`src/work/review.ts` (REQ-plugins-092) exports `gatePrCreate(gate)`
+(`PrReviewGate` → `PrReviewVerdict`: `{ open: true, section, rounds }` or
+`{ open: false, result }`), `REVIEW_MAX_ROUNDS` (3), `REVIEW_DIFF_MAX_BYTES`
+(200 KiB), `REVIEW_FINDINGS_MAX` (10), `REVIEW_FINDING_MAX_CHARS`,
+`REVIEW_PATHS_MAX`, `REVIEW_TITLE_MAX`, `REVIEW_SECTION_HEADING`,
+`REVIEW_REFUSED_PREFIX`, `REVIEW_REFUSAL`, `REVIEW_SYSTEM_PROMPT`,
+`configuredModels(env)`, `resolveReviewer(env, authors)`, `reviewTree(root)`,
+`reviewMergeBase`, `reviewDiffText`, `changedPaths`, `pushRemoteTree(cwd,
+branch)`, `reviewMessages(title, diff)`, `parseReviewFindings(text)`,
+`reviewDiff(o)`, `ReviewSpendStop`, `PR_REVIEW_ROUNDS_SQL`,
+`ensurePrReviewRounds`, `reviewRepoKey`, `latestReviewCycle`,
+`branchReviewAuthors`, `recordReviewRound`, `endReviewCycle`, `ReviewRound`,
+`ReviewEnd`, `reviewSection(rounds)`, `withReviewSection(body, section)` and
+`reviewRefusalReason(error)`; `plugins/github/commands.ts` exports
+`githubBranchTree(octokit, owner, repo, head)`.
 `src/plugins/proc-group.ts` (REQ-plugins-154) exports `killProcessTree`,
 `signalProcessTree`, `collectProcessTree`, `readProcTable`, `parseProcStat`,
 `trackChildProcess(pid, known?)` (the `KnownMembers` exit-snapshot getter),
@@ -260,7 +291,10 @@ non-interactive deny unless CORVIDINHO_ALLOWLIST names them. Repo gate
 (GITHUB-6 / ALLOW-1) still applies before any Octokit write. PR create appends
 plain Made with Corvidinho attribution (no @handles) unless the body already
 holds it (`ATTRIBUTION_MARKDOWN` or `ATTRIBUTION_PLAIN`; the two words alone
-do not count). The Octokit token is `GITHUB_TOKEN`, else `GH_TOKEN`, trimmed;
+do not count). PR create never opens a tree without a finished second-model
+review (GITHUB-9, REQ-plugins-092): after the repo gate, for every caller, the
+branch on GitHub (dry run: the push remote) must be the reviewed tree, and the
+body gets the `## Second-model review` section before the attribution. The Octokit token is `GITHUB_TOKEN`, else `GH_TOKEN`, trimmed;
 a blank one is missing and never shadows the other, as WATCH reads it. Dry-run via
 CORVIDINHO_GITHUB_DRY_RUN=1. File write/edit/delete require minTier 2 (code);
 `files-delete` is dangerous. Paths clamp to plugin cwd; symlink escapes refuse;
@@ -1107,6 +1141,9 @@ command line.
 | specsync-change-approve / -finalize outside Corvidinho | `HUMAN_LIFECYCLE_LINE` (exit 2); nothing spawned (REQ-plugins-519) |
 | specsync-change-approve / -finalize on Corvidinho for a change this run did not open, before its lane is green, in WATCH / a schedule / a worker / a community run | refused (exit 2) with the reason; nothing spawned (REQ-plugins-519) |
 | specsync-change-finalize step fails | ok=false naming the step (`check`, `review` or `finalize`); later steps not run (REQ-plugins-519) |
+| github-pr-create, round k (< 3) of the second-model review raised findings | ok=false, exit 2, `reviewHold: findings`, the findings fenced as untrusted data; no PR (REQ-plugins-092) |
+| github-pr-create with no second model, a provider error, a diff over 200 KiB, no changes against the base, a branch not on GitHub or not the reviewed tree, or (no run model) no finished review for the exact tree | ok=false, exit 2, `reviewHold: refused`, one plain line `PR not opened: …`; no PR (REQ-plugins-092) |
+| github-pr-create review call stopped at a spend cap | `ReviewSpendStop` thrown (never "unavailable"); the run stops at the spend cap's ask (REQ-plugins-092, REQ-agent-092) |
 
 ## Dependencies
 
@@ -1122,7 +1159,8 @@ command line.
 | node:dns / net / tls | web-fetch resolve once, dial pinned IP, SNI + cert check |
 | src/store/scrub.ts | `scrubSecrets` on web-fetch output and errors; secret-bearing URLs refused |
 | src/discord/image-attachments.ts | `MAX_IMAGE_SIZE_BYTES` / `ImageMediaType` for files-read image mode (DISCORD-9) |
-| git (system binary) | git plugins via `Bun.spawn` argv arrays |
+| git (system binary) | git plugins via `Bun.spawn` argv arrays; the GITHUB-9 review tree (temporary index), diff and `ls-remote` |
+| src/agent/providers.ts / untrusted.ts, src/store/db.ts | GITHUB-9 reviewer choice (configured models), the fence for the diff and findings, the lazily created `pr_review_rounds` table |
 | /proc (Linux) | process-tree walk for bounded child stops (proc-group) |
 
 ## Change Log

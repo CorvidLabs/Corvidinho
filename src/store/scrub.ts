@@ -238,6 +238,10 @@ export const SCRUB_TARGETS: ReadonlyArray<{
   // for the bridge's owner DM (scrubbed on write; a new table, so no rules
   // version bump: it has no rows written under older rules).
   { table: "watch_owner_asks", columns: ["question"] },
+  // GITHUB-9 (src/work/review.ts): a second-model review round's reviewer,
+  // the change's authors, what it raised and the changed paths (JSON lists;
+  // scrubbed on write; a new table, so no rules version bump).
+  { table: "pr_review_rounds", columns: ["reviewer"], json: ["authors", "findings", "changed"] },
 ];
 
 function tableExists(db: Database, table: string): boolean {

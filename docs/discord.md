@@ -408,6 +408,7 @@ opened only when every gate holds; otherwise the line says plainly why not.
 | No test deleted or turned off since the branch left the base branch: the tree about to be committed is compared by test name with the merge-base (a renamed file or a moved test keeps its name; a deleted or retitled test, or one made conditional, `skip` / `todo` or `.only`-silenced, is named) | `PR: not opened — N test(s) were deleted or turned off since the branch left …`, nothing committed or pushed (AGENT-15, REQ-discord-185) |
 | In a repo whose SpecSync workflow requires a change for meaningful files (`.specsync/sdd.json`, read from the merge-base, HEAD and the work tree, so turning it off on the branch does not skip this), every such path changed since the merge-base is covered by an open SpecSync change or one archived on the branch | `PR: not opened — N changed path(s) this repo's SpecSync workflow needs a change for are not covered by a SpecSync change (…)`, nothing committed or pushed (AGENT-18, REQ-discord-518) |
 | Tree passed `fledge lanes run verify --non-interactive` (from the run's result frame, else re-run once; a re-run must also print a test summary showing tests ran) | Nothing pushed (AGENT-4, AGENT-15) |
+| A second-model review finished for the exact tree on GitHub (GITHUB-9, see below). This step has no run model, so it starts no review round itself (the `/work` round driver is a later change): today it opens only a tree an agent run already had reviewed | `PR: not opened — no second-model review has finished for this branch's tree on GitHub, and only an agent run can start one (GITHUB-9). The changes stay on branch …` (the branch is pushed, no PR) |
 
 Steps run through the existing typed plugins (`git-commit` → `git-push` →
 `github-pr-create --draft`), so SAFE-1 deny and SAFE-5 audit apply. The PR body
@@ -417,6 +418,47 @@ and secrets scrubbed. Allowlisting these plugins also offers them to the owner's
 spawned agent (`task run` offers allowlisted dangerous tools to ADMIN runs, CLI-3), so
 the model can commit, push or open a PR itself before the run's verify; this step
 still opens the PR only after verify passes. Non-owner runs never get them.
+
+### Second-model review before every PR (GITHUB-9 / GITHUB-9.a)
+
+`github-pr-create` opens a PR only after a second model reviewed the diff, on
+every path: a chat, slash or button run, `/session`, a schedule, a local
+`task run`, a delegate worker, `/work` and `corvidinho plugins run`.
+
+- **Reviewer.** The first configured model (`CORVIDINHO_LLM_MODEL`, then
+  `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`, every entry of each chain)
+  that has its key and did not write the change. The writers are every model the
+  run called (fallbacks included), its delegate workers' models (and a worker's
+  lead's), and the authors recorded in earlier review rounds of the branch; the
+  same model id behind another kind or gateway counts as the same model. There
+  is no reviewer setting. With no second model there is no PR, and the reply
+  ends with the one line saying why.
+- **Rounds.** At most 3 (a constant). The run's working tree, staged into a
+  temporary index (the real index is untouched), is diffed against its
+  merge-base with `--base`; the diff is secret-scrubbed, fenced as untrusted
+  data and capped at 200 KiB, and sent in one no-tools call through the run's
+  own provider path and spend caps. Findings (at most 10, scrubbed) come back to
+  the run as a refusal for round k of 3: change the tree, commit and push, and
+  call again for the next round, or call again with the tree unchanged to open
+  the PR with them listed as not changed. A round that raises nothing, an
+  unchanged tree after findings, or round 3 ends the review. These calls never
+  count as repeated failures (AGENT-16).
+- **Open.** The branch on GitHub must be the reviewed tree, else one line asks
+  to push it. The PR body gets a `## Second-model review` section: the
+  reviewer, rounds used of 3, what each round raised, and the paths that
+  changed after each round (from git), fenced, with no amounts.
+- **No run model** (`/work`, `plugins run`): no round starts; the PR opens only
+  when a finished review exists for the exact tree of the branch on GitHub,
+  else one plain line refuses.
+- **Refusals** are one plain line (`PR not opened: …`): no second model, a
+  provider error (a fixed reason, never the provider's text), a diff over the
+  cap, no changes against the base, a branch not pushed or not the reviewed
+  tree. A spend cap that stops the review call is not one of them: the run stops
+  at the cap's Approve card or ask like any model call (SAFE-8). The reviewer's
+  tokens count in the owner's answer footer under the reviewer's own model, at
+  its price or as unknown (DISCORD-15.a, SAFE-16).
+- Rounds are kept in the shared DB table `pr_review_rounds` (keyed by repo and
+  branch, tied to tree ids; created on first use, no schema version change).
 
 
 ## Discord user lookup (IDENTITY-5 / DISCORD-13)

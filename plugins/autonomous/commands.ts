@@ -108,6 +108,9 @@ export function createDelegateCommand(deps: DelegateCommandDeps = {}): PluginCom
           baseEnv: env,
           signal: ctx.signal,
           timeoutMs: deps.timeoutMs,
+          // GITHUB-9: the lead's change authors, so a PR the worker opens is
+          // never reviewed by a model that wrote part of it.
+          ...(ctx.review ? { authors: ctx.review.authors() } : {}),
         });
         const ok = outcome.exitCode === 0 && outcome.state === "done";
         const data = {
@@ -132,6 +135,8 @@ export function createDelegateCommand(deps: DelegateCommandDeps = {}): PluginCom
           ...(outcome.injection ? { injection: outcome.injection } : {}),
           // AGENT-11: the worker's model failovers, for the lead's result.
           ...(outcome.modelFallback ? { modelFallback: outcome.modelFallback } : {}),
+          // GITHUB-9: the worker's models, authors of the change for the lead.
+          ...(outcome.models ? { models: outcome.models } : {}),
         };
         const label = parsed.value.skill ? ` [${parsed.value.skill}]` : "";
         return ok

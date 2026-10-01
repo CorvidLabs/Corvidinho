@@ -4,6 +4,7 @@ import type { PluginCommand, PluginHandlerArgs, PluginHandlerResult } from "../.
 import { extractRepoFromArgs } from "../../src/plugins/githubDeny.ts";
 import { checkRepoGateForActingRole } from "../../src/plugins/githubPublic.ts";
 import { ROLE_REFUSED_MESSAGE, resolveActingRole } from "../../src/plugins/roles.ts";
+import { gatePrCreate, pushRemoteTree, withReviewSection } from "../../src/work/review.ts";
 import { createOctokit, splitOwnerRepo, type ApiResult } from "./api.ts";
 import { Octokit } from "@octokit/rest";
 
@@ -112,6 +113,26 @@ function withAttribution(body: string | undefined): string {
   return `${base}\n\n---\n${foot}`;
 }
 
+/**
+ * The PR body with the GITHUB-9 review section, then the attribution: a body
+ * that already ends in the attribution gets the section right before it.
+ */
+function withReviewAndAttribution(body: string | undefined, section: string): string {
+  const base = (body ?? "").trimEnd();
+  for (const attr of [ATTRIBUTION_MARKDOWN, ATTRIBUTION_PLAIN]) {
+    const at = base.lastIndexOf(attr);
+    if (at < 0) continue;
+    let before = base.slice(0, at).trimEnd();
+    let foot = base.slice(at);
+    if (before === "---" || before.endsWith("\n---")) {
+      before = before.slice(0, -3).trimEnd();
+      foot = `---\n${foot}`;
+    }
+    return `${withReviewSection(before, section)}\n\n${foot}`;
+  }
+  return withAttribution(withReviewSection(base, section));
+}
+
 function currentGitBranch(cwd: string): string | undefined {
   const r = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
     cwd,
@@ -120,6 +141,30 @@ function currentGitBranch(cwd: string): string | undefined {
   if (r.status !== 0) return undefined;
   const b = (r.stdout || "").trim();
   return b && b !== "HEAD" ? b : undefined;
+}
+
+/**
+ * GITHUB-9: the tree id of `head` on GitHub (`repos.getBranch`; an
+ * `owner:branch` head is read on that owner's same-named repo), the tree a
+ * PR from it shows. Null when it cannot be read.
+ */
+export async function githubBranchTree(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  head: string,
+): Promise<string | null> {
+  const i = head.indexOf(":");
+  const branchOwner = i > 0 ? head.slice(0, i) : owner;
+  const branch = i > 0 ? head.slice(i + 1) : head;
+  if (!branch) return null;
+  try {
+    const res = await octokit.rest.repos.getBranch({ owner: branchOwner, repo, branch });
+    const sha = res.data.commit?.commit?.tree?.sha;
+    return typeof sha === "string" && /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(sha) ? sha : null;
+  } catch {
+    return null;
+  }
 }
 
 /** GitHub plugins via Octokit — reads (GITHUB-1/4) + dangerous writes (GITHUB-2/3/5). */
@@ -400,7 +445,11 @@ export const githubCommands: PluginCommand[] = [
   },
   {
     name: "github-pr-create",
-    description: "Open a PR from a branch/worktree (Octokit pulls.create; dangerous GITHUB-2/5)",
+    description:
+      "Open a PR from a branch/worktree (Octokit pulls.create; dangerous GITHUB-2/5). " +
+      "A second model reviews the diff first, in up to 3 rounds (GITHUB-9): findings come back as a refusal — " +
+      "change the tree and call again, or call again unchanged to open the PR with them listed as not changed; " +
+      "push the reviewed tree before it opens",
     dangerous: true,
     minTier: 1,
     async handler(ctx) {
@@ -434,8 +483,31 @@ export const githubCommands: PluginCommand[] = [
         };
       }
       const base = baseFlag?.trim() || "main";
-      const bodyWithAttr = withAttribution(body);
-      if (githubDryRun()) {
+      // A live run needs its client before any review is spent.
+      let octokit: Octokit | undefined;
+      if (!githubDryRun()) {
+        const c = clientOrErr();
+        if (!("rest" in c)) return c;
+        octokit = c;
+      }
+      // GITHUB-9 / GITHUB-9.a: a second model reviews the diff in bounded
+      // rounds before the PR opens, for every caller; the branch on GitHub
+      // must be the reviewed tree, and the body lists what each round
+      // raised and what changed (src/work/review.ts).
+      const review = await gatePrCreate({
+        repo: (r as { repo: string }).repo,
+        branch: head,
+        base,
+        title: title.trim(),
+        cwd: ctx.cwd,
+        ...(ctx.review ? { run: ctx.review } : {}),
+        ...(ctx.signal ? { signal: ctx.signal } : {}),
+        remoteTree: () =>
+          octokit ? githubBranchTree(octokit, owner, name, head) : pushRemoteTree(ctx.cwd, head),
+      });
+      if (!review.open) return review.result;
+      const bodyWithAttr = withReviewAndAttribution(body, review.section);
+      if (!octokit) {
         return okResult(ctx, {
           dryRun: true,
           owner,
@@ -447,8 +519,6 @@ export const githubCommands: PluginCommand[] = [
           draft,
         });
       }
-      const octokit = clientOrErr();
-      if (!("rest" in octokit)) return octokit;
       try {
         const res = await octokit.rest.pulls.create({
           owner,

@@ -29,7 +29,11 @@
 
 import { join } from "node:path";
 import { collectTaskRunStream } from "../agent/events-ndjson.ts";
-import { modelFallbackFromUnknown } from "../agent/providers.ts";
+import {
+  modelFallbackFromUnknown,
+  modelLabelFromUnknown,
+  modelUsageFromUnknown,
+} from "../agent/providers.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
 import type { ModelFallback } from "../agent/types.ts";
 import { injectionNoticeFromUnknown, type InjectionNotice } from "../agent/untrusted.ts";
@@ -50,6 +54,15 @@ import { scrubSecrets } from "../store/scrub.ts";
 
 /** Env var carrying how deep in a delegation chain this process runs. */
 export const DELEGATE_DEPTH_ENV = "CORVIDINHO_DELEGATE_DEPTH";
+/**
+ * Env var carrying the lead's change authors to a worker (GITHUB-9): the
+ * comma-separated entry labels of every model that wrote the lead's change,
+ * so a PR the worker opens is never reviewed by one of them. Internal (set
+ * only on a worker spawn, read only at depth > 0), never an operator setting.
+ */
+export const DELEGATE_AUTHORS_ENV = "CORVIDINHO_DELEGATE_AUTHORS";
+/** Most author labels passed to (or read back from) a worker. */
+export const DELEGATE_AUTHORS_MAX = 32;
 /** Workers can be started at most this many levels below the lead. */
 export const MAX_DELEGATE_DEPTH = 2;
 /** Live workers per lead process. */
@@ -82,6 +95,48 @@ export function delegateDepthFromEnv(
   const s = raw.trim();
   if (!/^\d{1,3}$/.test(s)) return MAX_DELEGATE_DEPTH;
   return Number.parseInt(s, 10);
+}
+
+/**
+ * The lead's change authors a worker was given ({@link DELEGATE_AUTHORS_ENV}):
+ * validated labels (scrubbed, one line, bounded), at most
+ * {@link DELEGATE_AUTHORS_MAX}. Empty when unset.
+ */
+export function delegateAuthorsFromEnv(env: NodeJS.ProcessEnv = process.env): string[] {
+  const raw = env[DELEGATE_AUTHORS_ENV];
+  if (!raw) return [];
+  const out: string[] = [];
+  for (const part of raw.split(",")) {
+    if (out.length >= DELEGATE_AUTHORS_MAX) break;
+    const label = modelLabelFromUnknown(part);
+    if (label && !out.includes(label)) out.push(label);
+  }
+  return out;
+}
+
+/**
+ * GITHUB-9: every model a worker's result frame names — the model that
+ * answered, each with reported usage and each failover's both ends —
+ * validated and bounded; undefined when none.
+ */
+export function workerModelsFromResult(r: {
+  model?: unknown;
+  usageByModel?: unknown;
+  modelFallback?: unknown;
+} | undefined): string[] | undefined {
+  if (!r) return undefined;
+  const out: string[] = [];
+  const add = (v: unknown) => {
+    const label = modelLabelFromUnknown(v);
+    if (label && !out.includes(label) && out.length < DELEGATE_AUTHORS_MAX) out.push(label);
+  };
+  add(r.model);
+  for (const row of modelUsageFromUnknown(r.usageByModel) ?? []) add(row.model);
+  for (const hop of modelFallbackFromUnknown(r.modelFallback) ?? []) {
+    add(hop.from);
+    add(hop.to);
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 /** True while this process may still start workers. */
@@ -241,6 +296,8 @@ export function buildDelegateSpawn(opts: {
   childDepth: number;
   allowlist: ReadonlySet<string> | readonly string[];
   baseEnv?: NodeJS.ProcessEnv;
+  /** GITHUB-9: the lead's change authors (entry labels). */
+  authors?: readonly string[];
 }): { cmd: string[]; env: Record<string, string> } {
   const cmd = buildCorvidinhoArgv(opts.bin, [
     "task",
@@ -269,6 +326,14 @@ export function buildDelegateSpawn(opts: {
     // The lead's effective SAFE-1 allowlist — never a wider env one.
     CORVIDINHO_ALLOWLIST: [...opts.allowlist].join(","),
   });
+  // GITHUB-9: the lead's change authors, so a PR the worker opens is never
+  // reviewed by a model that wrote part of it; never an inherited value.
+  const authors = (opts.authors ?? [])
+    .map((a) => modelLabelFromUnknown(a))
+    .filter((a): a is string => typeof a === "string" && !a.includes(","))
+    .slice(0, DELEGATE_AUTHORS_MAX);
+  if (authors.length > 0) env[DELEGATE_AUTHORS_ENV] = authors.join(",");
+  else delete env[DELEGATE_AUTHORS_ENV];
   // Workers never act as ADMIN or complete a human SAFE-4 confirm (the
   // CORVIDINHO_ACTING_* keys were dropped above). A lead in a role session
   // gets a non-ADMIN worker: read/chat tools only (ROLES-CHAT-2/3).
@@ -357,6 +422,12 @@ export type DelegateChildOutcome = {
    * frame). The lead reports them as its own run's, marked `via`.
    */
   modelFallback?: ModelFallback[];
+  /**
+   * GITHUB-9: the models the worker reported (validated from its result
+   * frame: the one that answered, those with usage, failovers). The lead
+   * counts them as authors of the change.
+   */
+  models?: string[];
 };
 
 /** After a worker exits (or is killed), how long its pipes may still drain. */
@@ -437,6 +508,8 @@ export async function runDelegateChild(opts: {
   baseEnv?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** GITHUB-9: the lead's change authors, passed to the worker. */
+  authors?: readonly string[];
 }): Promise<DelegateChildOutcome> {
   if (opts.signal?.aborted) {
     return {
@@ -535,6 +608,8 @@ export async function runDelegateChild(opts: {
     if (injection) outcome.injection = injection;
     const modelFallback = modelFallbackFromUnknown(r?.modelFallback);
     if (modelFallback) outcome.modelFallback = modelFallback;
+    const models = workerModelsFromResult(r ?? undefined);
+    if (models) outcome.models = models;
     if (typeof r?.verifySkipped === "boolean") outcome.verifySkipped = r.verifySkipped;
     if (typeof r?.summary === "string") {
       outcome.resultText = scrubSecrets(r.summary).trim().slice(0, DELEGATE_SUMMARY_MAX);

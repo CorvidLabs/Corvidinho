@@ -28,7 +28,7 @@ import {
   roleSessionActive,
 } from "../plugins/roles.ts";
 import { runPlugin } from "../plugins/run.ts";
-import type { PluginHandlerResult, PluginImage } from "../plugins/types.ts";
+import type { PluginHandlerResult, PluginImage, PrReviewRun } from "../plugins/types.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import { projectLabel } from "../discord/list-scope.ts";
 import { projectKeyFor } from "../memory/scope.ts";
@@ -79,7 +79,8 @@ import {
   memoryRecallSearchKind,
   searchMemoryBeforeIgnorance,
 } from "./recall-guard.ts";
-import { delegateDepthFromEnv } from "../autonomous/delegate.ts";
+import { delegateAuthorsFromEnv, delegateDepthFromEnv } from "../autonomous/delegate.ts";
+import { ReviewSpendStop } from "../work/review.ts";
 import { appendAudit, argsDigest, auditContextFromEnv, auditKeyFromEnv } from "../audit/log.ts";
 import { openCorvidinhoDb } from "../store/db.ts";
 import {
@@ -127,6 +128,7 @@ import {
   modelChain,
   modelFallbackEventText,
   modelFallbackFromUnknown,
+  modelLabelFromUnknown,
   providerForTier,
   providerNotice,
   withModelFallbackNote,
@@ -444,6 +446,38 @@ export function withRoleRefusalNote(summary: string): string {
   return body ? `${body}\n\n${ROLE_REFUSED_SUMMARY_NOTE}` : ROLE_REFUSED_SUMMARY_NOTE;
 }
 
+/** The tool whose results carry the GITHUB-9 review gate's refusals. */
+const PR_CREATE_TOOL = "github-pr-create";
+
+/**
+ * GITHUB-9: a github-pr-create call made in the same batch as one that just
+ * got the reviewer's findings — not run, so an unchanged tree never counts as
+ * declining findings the model has not read.
+ */
+const PR_HELD_SAME_BATCH: PluginHandlerResult = {
+  ok: false,
+  exitCode: 2,
+  reviewHold: "findings",
+  error:
+    "not run: the second-model review raised findings in this same turn (GITHUB-9); read them, then call github-pr-create again.",
+};
+
+/** One line of a tool's refusal text (whitespace collapsed, scrubbed, bounded). */
+function oneLineNote(text: string): string {
+  const line = scrubSecrets(text).replace(/\s+/g, " ").trim();
+  return line.length <= 400 ? line : `${line.slice(0, 399)}…`;
+}
+
+/**
+ * GITHUB-9.a: the summary with the review gate's refusal line ("PR not
+ * opened: …"), added once, so the reply says why there is no PR.
+ */
+export function withReviewRefusalNote(summary: string, line: string): string {
+  if (summary.includes(line)) return summary;
+  const body = summary.trim();
+  return body ? `${body}\n\n${line}` : line;
+}
+
 /** SAFE-13: the summary with the "didn't act on it" note, added once. */
 export function withInjectionNote(summary: string, notice: InjectionNotice): string {
   const note = injectionSummaryNote(notice);
@@ -655,22 +689,61 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   // later summary in one note.
   const chain = modelChain(env, opts.tier ?? loadTierFromEnv(env, "tool"));
   const fallbacks: ModelFallback[] = [];
+  // GITHUB-9 / GITHUB-9.a: every model that wrote this run's change — each
+  // model its own chain called (the one that answered and each that failed
+  // over), its delegate workers' and, in a worker, its lead's — so the
+  // second-model reviewer of a PR it opens is none of them.
+  const authors = new Set<string>(delegateDepthFromEnv(env) > 0 ? delegateAuthorsFromEnv(env) : []);
   const noteFallback = (hop: ModelFallback) => {
     fallbacks.push(hop);
+    authors.add(hop.from);
+    if (hop.via) authors.add(hop.to);
     emit(opts.onEvent, { type: "Text", text: modelFallbackEventText(hop) });
     opts.onModelFallback?.(hop);
   };
   const models: ModelCalls = {
     chain,
     onFallback: noteFallback,
-    onModel: opts.onModel,
+    onModel: (model) => {
+      authors.add(model);
+      opts.onModel?.(model);
+    },
     onWorkerFallback: (via, hops) => {
       for (const h of hops) {
         const hop: ModelFallback = { from: h.from, to: h.to, reason: h.reason, via };
         if (mergeModelFallbacks(fallbacks, [hop]).length > fallbacks.length) noteFallback(hop);
       }
     },
+    onWorkerModels: (labels) => {
+      for (const m of labels) authors.add(m);
+    },
   };
+  // GITHUB-9: what github-pr-create gets for the second-model review — the
+  // run's env (its model config), the authors, and one no-tools completion
+  // through this run's provider call path and SAFE-8 spend guard, its usage
+  // counted under the reviewer's own label (DISCORD-15.a footer, SAFE-16).
+  const review: PrReviewRun = {
+    env,
+    authors: () => [...authors],
+    complete: async (provider, messages, signal) => {
+      const reply = await chatCompletions({
+        provider,
+        fetchImpl,
+        messages,
+        tools: [],
+        signal: signal ?? new AbortController().signal,
+        timeoutMs,
+        onUsage,
+      });
+      return reply.ok
+        ? { ok: true, text: reply.message.content ?? "" }
+        : { ok: false, error: reply.error, failure: reply.failure };
+    },
+  };
+  // GITHUB-9.a: the latest github-pr-create refusal of this run ("PR not
+  // opened: …"), so the reply says why there is no PR; cleared by a later
+  // call that opened one or got findings.
+  let reviewRefusal: string | null = null;
   if (opts.loadPlugins !== false) {
     loadBuiltins();
   }
@@ -819,6 +892,11 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
         opts.onInjection?.(notice);
       },
       onPrivateReply: (text) => opts.onPrivateReply?.(text),
+      review,
+      onPrCreate: (result) => {
+        reviewRefusal =
+          result.reviewHold === "refused" ? oneLineNote(result.error ?? "") || null : null;
+      },
       repeatGuard,
       stallGuard,
       workspaceChanged,
@@ -836,12 +914,16 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   // keeps it).
   // AGENT-11: once a model failed over in this run, every summary after it
   // carries the failover note (before the role note, which stays last).
+  // GITHUB-9.a: when the run's last github-pr-create was refused at the
+  // second-model review gate, the summary ends with that line (before the
+  // role note), so the reply says why there is no PR.
   return async (ctx) => {
     let result = spend.finish(await run(ctx));
     if (injection) result = { ...result, summary: withInjectionNote(result.summary, injection) };
     if (fallbacks.length > 0) {
       result = { ...result, summary: withModelFallbackNote(result.summary, fallbacks) };
     }
+    if (reviewRefusal) result = { ...result, summary: withReviewRefusalNote(result.summary, reviewRefusal) };
     return roleRefused
       ? { ...result, summary: withRoleRefusalNote(result.summary) }
       : result;
@@ -860,6 +942,8 @@ type ModelCalls = {
   onModel?: (model: string) => void;
   /** Failovers a delegate or council worker reported in its tool data. */
   onWorkerFallback: (via: "delegate" | "council", hops: ModelFallback[]) => void;
+  /** GITHUB-9: the models a delegate worker reported (authors of the change). */
+  onWorkerModels: (labels: string[]) => void;
 };
 
 type LoopArgs = {
@@ -894,6 +978,10 @@ type LoopArgs = {
   onInjection: (notice: InjectionNotice) => void;
   /** MEMORY-7.a: a tool result's private text, kept from the model (REQ-agent-710). */
   onPrivateReply: (text: string) => void;
+  /** GITHUB-9: the run's review context for github-pr-create (and its authors for delegate workers). */
+  review?: PrReviewRun;
+  /** GITHUB-9.a: each github-pr-create result of the run. */
+  onPrCreate?: (result: PluginHandlerResult) => void;
   /** A worker `delegate` starts may change files no result reports (REQ-agent-502). */
   workerEditsUnreported?: boolean;
   /** AGENT-16: the run's repeat-failure guard (src/agent/loop-guards.ts). */
@@ -930,6 +1018,8 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     injectionTripped,
     onInjection,
     onPrivateReply,
+    review,
+    onPrCreate,
     workerEditsUnreported = false,
     repeatGuard = createRepeatFailureGuard(),
     stallGuard = createStallNudgeGuard(),
@@ -1162,6 +1252,10 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     }
 
     const roundImages: OpenedImage[] = [];
+    // GITHUB-9: once a github-pr-create in this batch got the reviewer's
+    // findings, a later one in the same batch is not run: the model has not
+    // read them yet, so an unchanged tree must not count as declining them.
+    let prHeldThisBatch = false;
     for (const tc of calls) {
       if (signal.aborted) {
         return {
@@ -1220,6 +1314,8 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       try {
         result = asked
           ? asked.refusal
+          : offered.has(name) && name === PR_CREATE_TOOL && prHeldThisBatch
+          ? PR_HELD_SAME_BATCH
           : offered.has(name) && injectionTripped() && blockedAfterInjection(name)
           ? // SAFE-13: no mutating tool after a tool result looked like an injection.
             { ok: false, error: injectionToolRefusal(name), exitCode: 2 }
@@ -1233,6 +1329,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
               allowlist,
               tier: llm.tier,
               signal,
+              ...(review ? { review } : {}),
             })
           : invented && isMutatingPlugin(invented) && (await refusedForRole(roleEnv, invented))
           ? roleRefusal(name)
@@ -1242,10 +1339,26 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
               exitCode: 2,
             };
       } catch (err) {
+        if (err instanceof ReviewSpendStop) {
+          // GITHUB-9 / SAFE-8: the second-model review call stopped at a spend
+          // cap — not "unavailable": the attempt ends here and the spend
+          // guard's finish turns it into the run's spend-cap ask.
+          emit(onEvent, { type: "ToolResult", name: eventName, success: false, detail: err.message });
+          return {
+            summary: err.message,
+            filesChanged: [...filesChanged],
+            error: true,
+            ...unreportedEdits(unreportedEditTools),
+          };
+        }
         const errMsg = err instanceof Error ? err.message : String(err);
         result = { ok: false, error: errMsg, exitCode: 1 };
       }
       if (isRoleRefusal(name, result)) onRoleRefusal();
+      if (offered.has(name) && name === PR_CREATE_TOOL) {
+        onPrCreate?.(result);
+        if (result.reviewHold === "findings") prHeldThisBatch = true;
+      }
       // AGENT-11: a delegate or council worker that failed over, finished or
       // not, is this run's failover too (validated from its tool data).
       if (offered.has(name) && (name === "delegate" || name === "council")) {
@@ -1253,6 +1366,18 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
           (result.data as { modelFallback?: unknown } | undefined)?.modelFallback,
         );
         if (hops) models.onWorkerFallback(name, hops);
+      }
+      // GITHUB-9: a delegate worker's models wrote part of the change.
+      if (offered.has(name) && name === DELEGATE_COMMAND_NAME) {
+        const reported = (result.data as { models?: unknown } | undefined)?.models;
+        if (Array.isArray(reported)) {
+          models.onWorkerModels(
+            reported
+              .slice(0, 32)
+              .map((m) => modelLabelFromUnknown(m))
+              .filter((m): m is string => Boolean(m)),
+          );
+        }
       }
       // MEMORY-7.a (REQ-agent-710): private text goes to the run result for
       // the bridge to send privately — never into the tool message, the
@@ -1317,12 +1442,17 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       // SAFE-12 fence, the result itself left whole. A worker result fenced
       // for its injection hit has no piece of its error quoted outside the
       // fence (SAFE-12).
-      const repeat = repeatGuard.after(
-        signature,
-        round,
-        { ok: Boolean(result.ok), error: result.error },
-        changedState(name, result),
-      );
+      // GITHUB-9: a PR held at the second-model review gate (findings for
+      // round k of N, or a one-line refusal) is not a failed call: calling
+      // again after changing the tree, or unchanged to decline, is the flow.
+      const repeat = result.reviewHold
+        ? { failures: 0, steer: false }
+        : repeatGuard.after(
+            signature,
+            round,
+            { ok: Boolean(result.ok), error: result.error },
+            changedState(name, result),
+          );
       // AGENT-17: a change in any attempt means no nudge for the run.
       if (changedForStall(name, result)) stallGuard.changed();
       if (repeat.steer) {
