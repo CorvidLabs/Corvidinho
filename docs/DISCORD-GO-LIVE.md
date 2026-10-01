@@ -162,7 +162,11 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   push to a remote's default branch or a usual default or deploy branch such as `main` — read-only
   looks included) and every `discord-post-message`
   post wait for your OK on one of those cards before they run (prod cards need the one-time code);
-  a deny or no answer in 5 minutes runs nothing. Updating to a tagged release with
+  a deny or no answer in 5 minutes runs nothing. Its first 20 replies in public threads (forum
+  posts and announcement threads included) wait the same way on a plain `reply` card: the thread
+  shows "waiting for the owner's OK before replying here", Approve posts exactly what the card
+  showed, and a deny or no answer posts nothing (AUTONOMY-10 / 10.a). The bot needs to see the
+  thread's channel type (View Channel, as for any reply); after 20 approvals replies go out at once. Updating to a tagged release with
   `CORVIDINHO_REF=v<X.Y.Z> scripts/corvidinho-update.sh` in the installed checkout is not a deploy.
   Needs the bridge running and an owner configured; nothing else to set. See [`discord.md`](discord.md)
   "The must-ask list".

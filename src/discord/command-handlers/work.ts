@@ -15,14 +15,15 @@ import { deliverPrivateReplies, withPrivateNote } from "../private-reply.ts";
 import { isOwnerDiscord } from "../../identity/owner.ts";
 import { NOT_AUTHORIZED } from "../types.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
-import { finishSlashWithThinking, recordSlashStub } from "../slash-finish.ts";
+import { finishSlashWithThinking, holdSlashReply, recordSlashStub } from "../slash-finish.ts";
+import { PUBLIC_REPLY_PROGRESS_TEXT, publicReplyNotPostedText } from "../public-reply-gate.ts";
 import { formatTaskPlumbing } from "../../agent/task-summary.ts";
 import { loadLlmEnv } from "../../agent/execute.ts";
 import { SPEND_PAUSED_TEXT } from "../../agent/spend-notice.ts";
 import { openWorkPr, type OpenWorkPrInput } from "../../work/pr.ts";
 import { scrubSecrets } from "../../store/scrub.ts";
 import { ASK_NO_OWNER_WARNING, formatAskReply } from "../ask-ping.ts";
-import { answerAskFor, buttonAskFor, toPendingAsk } from "../ask-buttons.ts";
+import { answerAskFor, askExpiresAt, buttonAskFor, toPendingAsk } from "../ask-buttons.ts";
 import { answerTurnText } from "../session-thread.ts";
 import {
   askNeedsOwner,
@@ -32,7 +33,12 @@ import {
 } from "../spend-post.ts";
 import { spendStopFor } from "../spend-dm.ts";
 import { failedRunReply } from "../failure-reason.ts";
-import { RUN_STOPPED_TEXT, buildStopComponents, type SessionRunTurn } from "../run-control.ts";
+import {
+  RUN_STOPPED_TEXT,
+  buildStopComponents,
+  type RunStopReason,
+  type SessionRunTurn,
+} from "../run-control.ts";
 import type { SessionStub } from "../types.ts";
 
 /** AGENT-3.a: the `/work` PR line of a stopped run (nothing verified to ship). */
@@ -183,9 +189,15 @@ async function runWork(
       })
     : null;
 
+  // AUTONOMY-10 / 10.a (REQ-discord-099): while replies in this public thread
+  // wait for the owner's OK, the typed description waits on the card with
+  // the answer, so the progress message does not echo it;
+  // `discord-send-file` asks there too.
+  const replyPublicThread = (await ctx.publicReplies?.mustHold(interaction.channelId)) ?? false;
+
   if (thinking) {
     await thinking.start({
-      description: `Work: ${description.slice(0, 80)}`,
+      description: replyPublicThread ? PUBLIC_REPLY_PROGRESS_TEXT : `Work: ${description.slice(0, 80)}`,
     });
     // AGENT-3.a: a reply 'stop' / 'cancel' to this progress message, or its
     // Stop button, stops the run.
@@ -241,6 +253,9 @@ async function runWork(
         ...(turn ? { signal: turn.signal } : {}),
         // DISCORD-17: files attach in the channel the command ran in.
         replyChannelId: interaction.channelId,
+        // AUTONOMY-10.a (REQ-discord-099): `discord-send-file` asks while
+        // replies in this public thread wait for the owner's OK.
+        replyPublicThread,
         onStatus: (u) => {
           void thinking?.update({
             tool: u.tool,
@@ -340,20 +355,19 @@ async function runWork(
         answerButton: Boolean(answerAsk),
       })
     : null;
+  let pendingToSet: ReturnType<typeof toPendingAsk> | null = null;
   if (ask && result.ask) {
     // The status (ask, not "✅ Done") is set when the answer goes out below.
     ctx.workStore.setStatus(task, ask.failed ? "failed" : "blocked", result.summary.slice(0, 500));
     // AUTONOMY-5/6 (REQ-discord-044): the session waits on this ask like a
     // chat ask — a button ask with its options, else free text, as the
     // answer shows it. A SAFE-8 spend-cap stop is never pending: a reply
-    // cannot lift the cap.
+    // cannot lift the cap. Set once the answer goes out (AUTONOMY-10.a).
     if (result.ask.reason !== "spend-cap") {
-      ctx.store.setPendingAsk(
-        session,
+      pendingToSet =
         choice?.pending ??
-          answerAsk?.pending ??
-          toPendingAsk({ reason: result.ask.reason, question: result.ask.question }),
-      );
+        answerAsk?.pending ??
+        toPendingAsk({ reason: result.ask.reason, question: result.ask.question });
     }
     if (askNeedsOwner(result.ask) && !askOwner?.owner && !askOwner?.deduped) {
       console.warn(ASK_NO_OWNER_WARNING);
@@ -395,18 +409,6 @@ async function runWork(
             ownerDm: ctx.failureDm,
           }),
     privateOutcome,
-  );
-  // AGENT-6 (REQ-discord-072): the answer joins the thread (a button ask as
-  // its question and choices); a spend-cap stop records no answer
-  // (REQ-discord-098).
-  ctx.store.recordTurn(
-    session,
-    "agent",
-    answerTurnText(
-      summary,
-      choice?.pending ??
-        (result.ask ? { reason: result.ask.reason, question: result.ask.question } : null),
-    ),
   );
   const wt = session.worktreePath
     ? `\nWorktree: \`${session.worktreePath}\``
@@ -464,6 +466,64 @@ async function runWork(
   // DISCORD-16: post the whole answer; the gateway splits at 2000.
   const body = `${head}${summary}`;
 
+  // AUTONOMY-10 / 10.a (REQ-discord-099): the answer or question (model
+  // text, the description I typed included) waits for the owner's OK in a
+  // public thread while fewer than 20 replies were approved. A no posts none
+  // of it (the PR step above is GitHub's, which never asks).
+  const held = await holdSlashReply({
+    gate: ctx.publicReplies,
+    thinking,
+    interaction,
+    body,
+    modelText: !stopped && (result.ask ? result.ask.reason !== "spend-cap" : result.ok),
+    surface: "work",
+    ...(turn ? { signal: turn.signal } : {}),
+  });
+  if (!held.post) {
+    // The bridge stopped while it waited: nothing is posted.
+    if ((turn?.stopReason as RunStopReason | undefined) === "closed") {
+      thinking?.dispose();
+      return;
+    }
+    const line = turn?.stopReason === "stopped" ? RUN_STOPPED_TEXT : publicReplyNotPostedText(held.outcome);
+    ctx.store.recordTurn(session, "agent", line);
+    try {
+      await finishSlashWithThinking({
+        thinking,
+        body: line,
+        interaction,
+        sessionId: session.id,
+        trackBotMessage: ctx.trackBotMessage,
+        thinkExtras,
+        ok: false,
+        failStatus: line,
+        post: ctx.post,
+      });
+    } finally {
+      await ctx.spendDm?.deliver({ warning: result.spendWarning });
+    }
+    return;
+  }
+  // DISCORD-ASK-5: a held question's buttons last ~30 minutes from when it
+  // goes out, not from before the owner's OK.
+  if (pendingToSet) {
+    // The same object a stub records later (recordSlashStub), so stamp it in place.
+    if (held.held) pendingToSet.expiresAt = askExpiresAt();
+    ctx.store.setPendingAsk(session, pendingToSet);
+  }
+  // AGENT-6 (REQ-discord-072): the answer joins the thread (a button ask as
+  // its question and choices); a spend-cap stop records no answer
+  // (REQ-discord-098).
+  ctx.store.recordTurn(
+    session,
+    "agent",
+    answerTurnText(
+      summary,
+      choice?.pending ??
+        (result.ask ? { reason: result.ask.reason, question: result.ask.question } : null),
+    ),
+  );
+
   // DISCORD-ASK-7 — collapse thinking into the final body (drop the deferred
   // reply); the owner ping for the ask goes out as a fresh post (an edit does
   // not notify), its claim handed back when nothing carried it. SAFE-14.a:
@@ -479,7 +539,7 @@ async function runWork(
   try {
     await finishSlashWithOwnerNotice({
       thinking,
-      body,
+      body: held.text,
       interaction,
       sessionId: session.id,
       trackBotMessage: ctx.trackBotMessage,

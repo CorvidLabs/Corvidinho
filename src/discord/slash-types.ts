@@ -21,6 +21,7 @@ import type { ChannelPost } from "./spend-post.ts";
 import type { SendPrivateDm } from "./private-reply.ts";
 import type { SpendDm } from "./spend-dm.ts";
 import type { FailureOwnerDm } from "./failure-reason.ts";
+import type { PublicReplyGate } from "./public-reply-gate.ts";
 import type { GithubUserLookup } from "../identity/github-user.ts";
 
 export type SlashOptionValue = string | number | boolean | null;
@@ -96,6 +97,13 @@ export type SlashContext = {
    * told and the reply is only "That didn't work."
    */
   failureDm?: FailureOwnerDm;
+  /**
+   * AUTONOMY-10 / 10.a (REQ-discord-099) — a `/session start` or `/work`
+   * answer (model text) in a public thread waits for the owner's OK while
+   * fewer than 20 replies were approved (src/discord/public-reply-gate.ts).
+   * Unset ⇒ nothing waits (no bridge gate, e.g. unit tests).
+   */
+  publicReplies?: PublicReplyGate;
   /**
    * Fresh channel post (bridge gateway reply) for owner notices after a slash
    * run: a deferred-reply edit may not notify a mention (spend-post.ts).

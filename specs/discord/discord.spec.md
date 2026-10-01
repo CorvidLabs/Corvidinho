@@ -144,6 +144,8 @@ files:
   - src/discord/spend-dm.ts
   - src/discord/failure-reason.ts
   - tests/discord.failed-reply.test.ts
+  - src/discord/public-reply-gate.ts
+  - tests/discord.public-reply-gate.test.ts
   - tests/discord.spend.test.ts
   - tests/discord.spend-dm.test.ts
   - tests/discord.status-audit.test.ts
@@ -924,6 +926,38 @@ the body. `AgentSpawnResult` gains `failureReason?` (the result frame's
 `SchedulerServiceOpts` gain `failureDm?: FailureOwnerDm` (the bridge wires one
 shared `createFailureOwnerDm` on its gateway `sendDm`; the daemon none).
 
+Public-thread replies (AUTONOMY-10 / 10.a, REQ-discord-099):
+`src/discord/public-reply-gate.ts` exports `PUBLIC_THREAD_REPLY_LIMIT` (20),
+`PUBLIC_REPLIES_APPROVED_KEY` (`public_thread_replies_approved`, a
+`schema_meta` key; no schema change), `PUBLIC_REPLY_KIND` (`reply`) and
+`PUBLIC_REPLY_CLASS` (`plain`), `PUBLIC_REPLY_HOLD_TEXT` ("waiting for the
+owner's OK before replying here") and `PUBLIC_REPLY_HOLD_LINE` (`⏳ ` + it),
+`PUBLIC_REPLY_PROGRESS_TEXT` (the `/session start` / `/work` progress line
+in such a thread, in place of the typed topic or description),
+`PUBLIC_REPLY_CARD_TTL_MS` (5 min), `PUBLIC_REPLY_POLL_MS`,
+`PUBLIC_REPLY_NOTHING_DONE`, `PUBLIC_REPLY_APPROVED`,
+`REPLY_PUBLIC_THREAD_ENV` (`CORVIDINHO_DISCORD_REPLY_PUBLIC_THREAD`),
+`PublicReplyNo`, `publicReplyNotPostedText(outcome)`,
+`approvedPublicReplies(db)`, `countApprovedPublicReply(db)`,
+`publicRepliesStillWait(db)`, `publicReplyApprovalKind({ db, now? })` (a
+`storedApprovalKind` the bridge registers on its one card engine),
+`createPublicReplyGate(deps)` → `PublicReplyGate` (`isPublicThread(id)`,
+`mustHold(id)`, `hold(input)` → `PublicReplyOutcome`, `close()`) and the
+test seam `setPublicReplyTestHooks`.
+The same module exports `isPublicThreadType(type)` (Discord `PUBLIC_THREAD`
+11 — forum and media posts included — or `ANNOUNCEMENT_THREAD` 10:
+`DISCORD_PUBLIC_THREAD_TYPE` / `DISCORD_ANNOUNCEMENT_THREAD_TYPE`).
+`GatewayHandlers` gains `isPublicThread?(channelId)` (the live gateway
+fetches the channel and answers `isPublicThreadType(type)`; a channel it
+cannot read rejects). `ThinkingStatus.hold(description)`
+shows a line on the progress message at once, Stop button kept.
+`AgentRunChatOpts` gains `replyPublicThread?` (the spawn client always
+writes `CORVIDINHO_DISCORD_REPLY_PUBLIC_THREAD`: `1` or empty);
+`SlashContext` gains `publicReplies?: PublicReplyGate`; `slash-finish.ts`
+exports `holdSlashReply(opts)`; `SchedulerOutbound.post` takes
+`modelText?: boolean`; `plugins/discord/send-file.ts` exports
+`sendFileMustAsk(ctx)` (the command's `mustAsk`).
+
 ## Invariants
 
 A run a limit I set stopped (AGENT-12, REQ-discord-125) shows it only as
@@ -1165,7 +1199,21 @@ the owner's own run gets one plain line saying why, anyone else gets
 text only, SAFE-6 scrubbed before it is cut, and carries no spend amounts;
 the `state=` / `verified=` / `attempts=` plumbing stays in the footer.
 
+While fewer than 20 held replies were approved, no model text reaches a
+public thread before the owner's Approve on a plain `reply` card (AUTONOMY-10
+/ 10.a, REQ-discord-099): the bridge asks the gateway at post time (a failed
+lookup is public), shows only the fixed hold line meanwhile, and posts
+exactly the text the card showed; a deny, a lapse, a stop or the bridge
+closing posts none of it, opens no question and does not count; with no
+owner nothing waiting is posted. Fixed harness text never waits.
+
 ## Behavioral Examples
+
+### Scenario: Its first public-thread replies wait for the owner's OK (AUTONOMY-10 / 10.a)
+
+- **Given** an owner is configured, fewer than 20 public-thread replies were approved, and someone mentions the bot in a public thread (a forum post), its parent channel allowlisted
+- **When** the run answers with a clarify question, the owner denies the card, and later a run answers and the owner approves
+- **Then** while each waits the progress message shows `⏳ waiting for the owner's OK before replying here` and the owner gets a plain `reply` card with the reply verbatim before it; the denied one ends as `Not posted — the owner didn't OK this reply.` with no question pending and nothing counted; the approved one is posted exactly as the card showed and the count becomes 1; a failed run's line, a spend-cap stop and `⏹ Stopped` post at once without a card; after 20 approvals replies there go out at once
 
 ### Scenario: A stranger's run fails; the owner is told why (DISCORD-3.b)
 
@@ -1397,6 +1445,9 @@ the `state=` / `verified=` / `attempts=` plumbing stays in the footer.
 | SAFE-13 audit trail unavailable (no DB, keyed chain without the key) | Refusal still sent; one `[discord] SAFE-13 audit row failed` warning (REQ-discord-071) |
 | `/schedule create` project, or a due schedule's project, inside the bridge root but in a nested git checkout whose origin is off the GitHub allowlist (or has none) (DISCORD-SCHEDULE-3.a) | Create: ephemeral `Project refused: not authorized …`, nothing stored. Tick: run failed `project resolve failed: …`, stuck ask, no worktree or agent run (REQ-discord-202 / -353) |
 | Non-owner `/schedule create` name or prompt trips the SAFE-13 detector | Nothing stored; ephemeral refusal; one fresh channel post pinging only the owner; `injection-suspected` row, surface `discord:/schedule` (REQ-discord-713) |
+| A reply with model text in a public thread while fewer than 20 were approved: the owner denies its `reply` card, lets it lapse (5 min), or the run is stopped / the bridge closes while it waits | Nothing of it is posted; the waiting message becomes `Not posted — …` (or `⏹ Stopped`); no question is left pending; the count is unchanged; a schedule post denied or lapsed is not retried, one the bridge stopped on is handed back (REQ-discord-099) |
+| A reply with model text in a public thread and no owner configured, or no DB to raise the card | Nothing of it is posted (nobody can approve); no card (REQ-discord-099) |
+| The gateway cannot look up whether the reply's channel is a public thread | It counts as one: the reply waits for the owner's OK (fail closed, REQ-discord-099) |
 | A due schedule's stored non-owner name, description or prompt trips the SAFE-13 detector | No worktree, no agent run; one `[scheduler] SAFE-13: schedule <id> not run …` log line (reason ids, never the text); run recorded failed with a stuck ask (never the text); schedule paused; the ask pings the owner once through the usual ask path (a daemon tick leaves it pending for a bridge); `injection-suspected` row, surface `scheduler:<id>`, when a trail is wired (REQ-discord-713) |
 
 ## Dependencies
@@ -1560,4 +1611,5 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-09-30 | a-stop-button-on-the-run-s-progress-message-lets-me-or-the-person-who-asked-stop-it-agent-3-a: A Stop button on the run's progress message lets me or the person who asked stop it (AGENT-3.a) |
 | 2026-10-01 | before-a-pr-opens-a-second-model-reviews-the-diff-in-bounded-rounds-and-the-pr-lists-what-it-raised-and-what-changed: Before a PR opens, a second model reviews the diff in bounded rounds, and the PR lists what it raised and what changed (GITHUB-9, GITHUB-9.a) |
 | 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |
+| 2026-10-01 | its-first-20-replies-in-public-threads-each-wait-for-my-ok-on-an-approve-card-even-text-i-dictated-and-replies-to-me: Its first 20 replies in public threads each wait for my OK on an Approve card, even text I dictated and replies to me (AUTONOMY-10, AUTONOMY-10.a) |
 | 2026-10-01 | a-team-member-s-failed-session-or-work-reply-and-someone-else-s-failed-schedule-post-is-checked-for-the-reason-s-401: A team member's failed /session or /work reply, and someone else's failed schedule post, is checked for the reason's 401 with the run's own random ids masked, so an id that happens to contain 401 no longer fails the DISCORD-3.b test |
