@@ -1,6 +1,6 @@
 ---
 id: an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12
-state: draft
+state: implementing
 type: feature
 base_commit: aeb2de3407acd0990897121ac68caf1553be0118
 ---
