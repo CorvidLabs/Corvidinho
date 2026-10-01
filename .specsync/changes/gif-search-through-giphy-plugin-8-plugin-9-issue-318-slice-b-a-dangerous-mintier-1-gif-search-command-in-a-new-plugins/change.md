@@ -1,6 +1,6 @@
 ---
 id: gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins
-state: approved
+state: implementing
 type: feature
 base_commit: 6917920bb1a7cebe9422fd8db3c0f89f18571ea1
 ---
