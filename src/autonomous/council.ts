@@ -14,9 +14,11 @@
  * `corvidinho task run` started through the delegate core
  * (`runDelegateChild`), so it reuses delegate's argv (`bun --no-env-file`,
  * non-interactive, NDJSON, `--task` last, never `--no-verify`), worker env
- * stripping (SAFE-6), depth counter, timeout / abort / exit cleanup and
- * scrubbed summaries. On top of that, council voices are advisers, not
- * actors (safety defaults, not HI claims):
+ * stripping (SAFE-6), depth counter, timeout / abort / exit cleanup,
+ * scrubbed summaries and, for a failed voice, one plain failure line in the
+ * transcript (never the provider's raw error body or host, REQ-agent-117).
+ * On top of that, council voices are advisers, not actors (safety defaults,
+ * not HI claims):
  *
  * - voices run the `read` tier by default and never above `tool`, never
  *   above the lead;
@@ -294,7 +296,12 @@ export function buildDecideText(opts: {
   return parts.join("\n");
 }
 
-/** One run of a voice or the chair. The runner must not throw on child failure. */
+/**
+ * One run of a voice or the chair. The runner must not throw on child
+ * failure; a failed run's `summary` is what the transcript shows, so it is
+ * the delegate core's one plain failure line (`runDelegateChild`,
+ * REQ-agent-117), never the worker's own summary or stderr.
+ */
 export type CouncilVoiceRunner = (req: {
   phase: CouncilPhase;
   /** 1-based voice number; 0 for the chair. */
@@ -467,8 +474,10 @@ export async function runCouncil(opts: {
     if (out.modelFallback) modelFallback = mergeModelFallbacks(modelFallback, out.modelFallback);
     const finished = out.exitCode === 0 && out.state === "done";
     // A finished voice is quoted by its own result summary (up to
-    // DELEGATE_SUMMARY_MAX, not the 1800-char chat body); a failed one keeps
-    // the delegate summary with its timeout / stop note.
+    // DELEGATE_SUMMARY_MAX, not the 1800-char chat body); a failed one by
+    // the delegate core's one plain failure line (its result `error` without
+    // the provider's host, or its timeout / stop line — never its summary or
+    // stderr, REQ-agent-117/118).
     let raw = finished && out.resultText ? out.resultText : (out.summary ?? "");
     if (out.aborted) {
       // The delegate core says "lead run was interrupted"; say why the council stopped it.

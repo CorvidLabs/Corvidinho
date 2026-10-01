@@ -169,8 +169,9 @@ meaningful line of the run's stderr (`AgentSpawnResult.stderrTail`); else the ex
 spawn's message stands in for the result's `error`. The line is SAFE-6
 scrubbed first, stack frames and host paths are dropped, and it is at most
 200 characters. On the thread a model-call line SHALL NOT name the
-provider's host: `watchPublicFailureLine(reason)` (`src/watch/summary.ts`)
-turns `The model call failed (<status> <name> from <host>)` into `The model
+provider's host: `watchPublicFailureLine(reason)` (`src/watch/summary.ts`;
+it is the shared `withoutProviderHost` from `src/agent/providers.ts`, which a
+failed delegate worker's line for its lead uses too, REQ-agent-117) turns `The model call failed (<status> <name> from <host>)` into `The model
 call failed (<status> <name>)`, and likewise drops the host of a timeout
 (`The model call timed out`), a network error (`… (network error)`), a
 malformed reply (`… (malformed reply)`), a call with no failure detail and a
@@ -200,6 +201,7 @@ Acceptance Criteria
 - With no result `error` (and a model configured) a failed run's comment is its scrubbed stderr end (host paths cut, a token `[redacted:…]`), else `The run failed (exit N) without saying why`; a thrown spawn's comment and log line are its scrubbed one-line message with no exit code.
 - A successful run's comment is unchanged; a failed run with a stuck ask keeps its summary with `Needs your input: …`; a spend-cap stop keeps "Work is paused for budget.".
 - `tests/watch.failed-comment.test.ts` fails on main's `src/watch` sources and passes on the branch; its host cases also fail with the host kept on the thread.
+- `watchPublicFailureLine` is `withoutProviderHost` for every `modelCallFailedLine` shape (`tests/autonomous.worker-failure.test.ts`); `tests/watch.failed-comment.test.ts` passes unchanged.
 
 ### REQ-watch-010
 

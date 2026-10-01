@@ -486,18 +486,29 @@ describe("delegate plugin handler (fake bin)", () => {
     expect(envOf(dir)[DELEGATE_DEPTH_ENV]).toBe("2");
   });
 
-  test("worker failure is reported, summary scrubbed (SAFE-6)", async () => {
+  test("worker failure is reported as its one plain line, scrubbed (SAFE-6), never its summary (REQ-agent-117)", async () => {
     const leak = "ghp_" + "A".repeat(36);
     const failed = serializeFrame(
-      resultFrame({ ...DONE, state: "failed", summary: `broke with ${leak}`, filesChanged: [] }),
+      resultFrame({
+        ...DONE,
+        state: "failed",
+        summary: `broke with ${leak}`,
+        filesChanged: [],
+        error: `The verify lane failed: auth ${leak}`,
+      }),
     );
     const { bin } = fakeBin(`cat <<'EOF'\n${failed}\nEOF\nexit 1`);
     const cmd = createDelegateCommand({ bin, env: BASE_ENV });
     const r = await cmd.handler(ctx({ cwd: project(ENABLED) }));
     expect(r.ok).toBe(false);
     expect(r.exitCode).toBe(1);
-    expect(r.data).toMatchObject({ state: "failed", exitCode: 1 });
+    expect(r.data).toMatchObject({
+      state: "failed",
+      exitCode: 1,
+      summary: "The verify lane failed: auth [redacted:github-token]",
+    });
     expect(JSON.stringify(r)).not.toContain(leak);
+    expect(JSON.stringify(r)).not.toContain("broke with");
     expect(r.error).toContain("[redacted:github-token]");
   });
 

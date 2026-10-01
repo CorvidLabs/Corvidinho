@@ -328,6 +328,34 @@ export function modelCallFailedLine(
 }
 
 /**
+ * A {@link modelCallFailedLine} line as a failure's one plain reason carries
+ * it (`The model call failed|timed out (…)`), ending in the provider's host
+ * (`… from <host>)`, `… reaching <host>)` or `(<host>)` alone), or in the
+ * start of a host a 200-char cap cut (`…`). The no-key line (`(<model> needs
+ * <ENV>, which is not set)`) has spaces where a host has none, so it never
+ * matches.
+ */
+const MODEL_CALL_HOST_RE =
+  /^(The model call (?:failed|timed out)) \((?:(.*?) (?:from|reaching) )?[^\s()]+(?:\)|…)$/;
+
+/**
+ * A failure's one plain reason line without the provider's host: a
+ * {@link modelCallFailedLine} line keeps its status (`The model call failed
+ * (429 Too Many Requests)`), since a host can be the account's own resource
+ * name (`<resource>.openai.azure.com`), a private gateway or an Ollama
+ * server's address. Any other line (the no-key line, the no-provider notice,
+ * a verify line, a stderr line, an exit-code line) comes back as is. Shared
+ * by WATCH's public comment (`watchPublicFailureLine`, REQ-watch-009) and a
+ * failed delegate worker's or council voice's line for its lead
+ * (`workerFailureLine`, REQ-agent-117).
+ */
+export function withoutProviderHost(reason: string): string {
+  const m = MODEL_CALL_HOST_RE.exec(reason);
+  if (!m) return reason;
+  return m[2] ? `${m[1]} (${m[2]})` : m[1]!;
+}
+
+/**
  * One call to one configured model. `failure: null` means the call did not
  * fail as a model (a spend-cap stop, the run's own abort): the chain stops
  * there and never fails over.

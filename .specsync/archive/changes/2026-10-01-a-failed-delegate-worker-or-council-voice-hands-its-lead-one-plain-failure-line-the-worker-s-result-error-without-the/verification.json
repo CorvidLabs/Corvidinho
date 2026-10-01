@@ -1,0 +1,196 @@
+{
+  "timestamp": 1790865959,
+  "commit": "fdee0d8c0fa80d98e1fd71e8b2983cf0eb0715f3",
+  "contract_digest": "14d6d570302ff5ca4bd5c3b294d9195ee5cf6e53ad5832dbc574cc9ec5a93a6a",
+  "execution_digest": "1795dc99f370df9499b0d1776bb306b55caf2783bbad11dd43430eca25c6bdbe",
+  "workspace_digest": "db372a4322bde668b7062706da037174e0069c3a20584a42b2ef851bb511c502",
+  "acceptance_input_digest": "c614b64700bef82fc51b9b9d9c27813d550cb0fea5f698559da8a8ed914dfda1",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "specs/agent/agent.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "b4a909bb1dba0f3fea400ceac6707355d6c1e0e57fbcd37806df8154ee5f2eac",
+        "entry_digest": "fff2437e5d71f120af235ba690eb54d10dde32762485f374f1781cb793ec6e8b",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/agent/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "d76cd90c631ea926a7a66ed9c1d9e19cdc745e767687deaff21241041adfb8b9",
+        "entry_digest": "f93515f598a7f68afe90f924ba2680118dbcad9dc5735e84bc325f0aa1fc4208",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/agent/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "32627ca3b61bc4730edc1f8a27df5e9a9f800c29d48cec016cc73b46ad8bc90c",
+        "entry_digest": "0e4d3f9a6f00eec7634eeade8a170975b4aa3403e235b2fb50a7100e4ffcb0a1",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/agent/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "15955dc0ea8bc11ad9e36cea1ca266e352d029a49b0803ae5dae3d239a9fb472",
+        "entry_digest": "320502eca3792ee5e517405b9d1da93a33b8016a009625d2b311ddfce229b670",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/agent/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "d80f34a230433abd0c055caf84237493f41975131b9e04f50a0c7a6adc765117",
+        "entry_digest": "302b9f2192a683ce0a37f8403fb52f8518e59ff7047e91bce914f7a23fae9c11",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "specs/watch/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "7486ce037e1696867c6245b1ecacf96e2c323c929e26bd793f48814caf25ed60",
+        "entry_digest": "b1291945b989854ba964d5574ca98141fb3e84438b18ae9355e373e55d9d9cdd",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "specs/watch/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "92e7c616ff2b81f52959ca931705e33cc7618db8d23e69310bb23b706ecfdc97",
+        "entry_digest": "e30ab0fe2d75d42852ce02120fd245edd4aee8cc495e325c72305a1844aa8ff1",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "specs/watch/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "16212d01b8757063fa74fe1f55645d5b8b9bc2c3e87a38518903e559cbe5a909",
+        "entry_digest": "c59ec320f62bd51b82ea8a4a802867dbfa86d720287f768253f83286519c2393",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "specs/watch/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "49f311a6d7a7bbb5344f72e675642913b5cac5bf6d44b8eb423e140947413ca5",
+        "entry_digest": "a2f5bc9ba2be5e7264e76ad0fac619213c48bb385e5fe43753ad7554eb2781da",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "specs/watch/watch.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "b94933ce5cdfb6483fafd13e303220083f8cd67e5dce5caafdc677a468497100",
+        "entry_digest": "35bbd3f1a4f75faa9f375f758cb143829f3ff12cc3892f7278a4458e38b44799",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "src/agent/providers.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "a5064602e5427750d0510ae819c69bec8ea39e3906725f7e044bfcf6a86fde2b",
+        "entry_digest": "29479a0d4a8e627743fa7583ce26752072a342495e39301f40a896ae370ec862",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "src/autonomous/council.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "a4b43560af3c02f6edb813c9c8ff48093aeeae151af95a70b3279f9b91b97608",
+        "entry_digest": "dfa3037a8d780d31217e11515284dfa8a2b4e40a0e05e30b69c031d0bdcc25b5",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "src/autonomous/delegate.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "bd5a9038f8440744fa6a251391fcdffcafa8619e7625605fb235653db2f09644",
+        "entry_digest": "2ce8da94071cdc64511d4f746284b7345a1a7f3c53f017bb4373d135c4d9b356",
+        "owners": [
+          "agent"
+        ]
+      },
+      {
+        "path": "src/watch/summary.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "1bc29c9e0bcbad34fd11419518ec4f66befee11522e5504051d031d75bd23824",
+        "entry_digest": "8e1c6e530f0098276a45954f0a2736eda0dbe9c7215328549da3a0580a12c0c6",
+        "owners": [
+          "watch"
+        ]
+      },
+      {
+        "path": "tests/autonomous.delegate.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "6c1677c1ffa06fe6cde773f8b02eab9304f9bf47b5e4a4bb1f5746e2f0eee641",
+        "entry_digest": "22f2ee938d809750b0a2d8e6b40cfd2a371bfbc2a0500deb2ae111e60c49d266",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/autonomous.worker-failure.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "e073519533e05c735aae59c6815a8adf90a70011a918ef55808b9672c582031a",
+        "entry_digest": "9302567d7b35fa6edf7b1de18e2b8b6e995165112cffcf6f3b34c49bdf0e997f",
+        "owners": [
+          "@exact:test"
+        ]
+      },
+      {
+        "path": "tests/fixtures/fake-llm.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "edb76e6eabc477f8a73ddeee277075af2c343fab4e9574e1a4cf8e03a739bdf8",
+        "entry_digest": "5ad9df54a68d828ffd73f5efe6c3921e8618ab0364fe08c92d5b0760097ca537",
+        "owners": [
+          "@exact:test"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec agent --spec plugins --spec watch",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": [
+    "REQ-agent-117",
+    "REQ-agent-118",
+    "REQ-watch-009"
+  ]
+}

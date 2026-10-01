@@ -56,6 +56,7 @@ files:
   - src/autonomous/delegate.ts
   - src/autonomous/council.ts
   - tests/autonomous.enabled.test.ts
+  - tests/autonomous.worker-failure.test.ts
   - tests/agent.verify-gate.test.ts
   - tests/fixtures/talk-worktree.ts
   - tests/agent.loop-guards.test.ts
@@ -443,6 +444,15 @@ only on a worker spawn), `DELEGATE_AUTHORS_MAX` (32),
 `delegateAuthorsFromEnv(env)` and `workerModelsFromResult(r)`;
 `buildDelegateSpawn` and `runDelegateChild` take `authors?`, and
 `DelegateChildOutcome.models?` lists the worker's models.
+A failed worker's line for its lead (REQ-agent-117, REQ-agent-118):
+`src/autonomous/delegate.ts` exports `workerFailureLine({ exitCode, error?,
+timedOut?, aborted?, spawnError?, protocolMismatch? }, env, tier)`,
+`WORKER_TIMED_OUT_LINE`, `WORKER_INTERRUPTED_LINE` and
+`WORKER_START_FAILED_LINE`; `src/agent/providers.ts` exports
+`withoutProviderHost(reason)` (a `modelCallFailedLine` line without the
+provider's host, any other line as is — WATCH's `watchPublicFailureLine` is
+it). For a worker that failed, `DelegateChildOutcome.summary` is that line
+and `resultText` is unset.
 
 Second-model review in the tool loop (REQ-agent-092, GITHUB-9 / GITHUB-9.a):
 `createTaskExecute` hands every `runPlugin` call of its tool loop a
@@ -887,6 +897,20 @@ no ADMIN and no SAFE-4 confirm tokens, keeps prove-before-done (never
 `--no-verify`, REQ-cli-085), runs one level deeper, and is stopped on
 lead abort, timeout or lead exit; at most 2 run at once and 4 per lead run.
 These are safety defaults, not HI (draft AUTONOMOUS-10 left for capture).
+A worker that failed (not `done` with exit 0, and not stopped on an ask of
+its own) comes back to its lead — and a council voice into its transcript —
+as one plain line of harness text (`workerFailureLine`, REQ-agent-117): the
+timeout or interrupt line, else for a worker that could not start `worker
+failed to start: <why>` (scrubbed, host paths cut), else its result `error`
+as one scrubbed line without the provider's host (`withoutProviderHost`),
+else for a worker that streamed another protocol the protocol-mismatch
+notice, else the no-provider notice for its tier, else `the worker failed
+(exit N)`. Never its summary,
+stdout or stderr, which for a model failure is `LLM HTTP <status>: <provider
+body>` (org or account names, request ids, the provider's host) that a lead
+could quote into a public reply or comment; the lead keeps no other copy of
+it. A successful worker's summary, an ask's question and the worker's
+`models` / `stopReason` / `injection` fields are unchanged.
 
 A council (AUTONOMOUS-6) deliberates in three phases in order — propose,
 critique, decide — and every voice and the chair is a delegate-core worker
@@ -1118,6 +1142,12 @@ A change the run did not open is never touched.
 - **When** the model calls `delegate` with `--skill specsync --task ...`
 - **Then** a worker `task run` runs non-interactive at depth 1 and its summary and filesChanged come back in the tool result for the lead to synthesize
 
+### Scenario: a delegated worker's model call fails
+
+- **Given** a code-tier lead whose `delegate` worker's model answers 429 with an org name and a request id
+- **When** the worker's run fails
+- **Then** the lead's tool result says `worker (tier code, depth 1) did not finish (state failed, exit 1):` and `The model call failed (429 Too Many Requests)` — no org name, request id, provider host or `LLM HTTP` body (REQ-agent-117)
+
 ### Scenario: lead convenes a council
 
 - **Given** `[corvidinho.autonomous] enabled = true` and a code-tier lead
@@ -1285,6 +1315,7 @@ A change the run did not open is never touched.
 | `persona.md` over 8 KiB | cut on a UTF-8 boundary with a truncation marker; one Text note (REQ-agent-069) |
 | `persona.md` text tries to close its `<persona>` block or override the rules | the close tag is escaped; the block stays first and the PERSONA-3 rules after it say the rules win (REQ-agent-069) |
 | A tool result in `INJECTION_SCAN_TOOLS` looks like an injection attempt (SAFE-13) | note in front of that tool message; no mutating tool and no `memory-store` offered or run for the rest of the run (refused with `injectionToolRefusal`, exit 2); `onInjection` once; `injection-suspected` audit row; summary ends with `injectionSummaryNote`; `TaskResult.injection` set (REQ-agent-071) |
+| A `delegate` worker or `council` voice fails (a model call, verify, the idle timeout, a crash with no result frame) | its lead's tool result (`data.summary`, `error`) or transcript entry is `workerFailureLine`: `worker failed to start: <why>` (host paths cut) for one that could not start, else the result `error` without the provider's host, else the protocol-mismatch notice for one that streamed another protocol, else the no-provider notice, else `the worker failed (exit N)` — never its summary, stdout or stderr (REQ-agent-117/118) |
 | A `delegate` / `council` result carries its worker's own hit (`data.injection`) | counts as this run's hit: `injectionWorkerNote` and the fenced result in its tool message, then the same drop, report, row and note; the worker itself records no row (REQ-agent-071) |
 | Audit trail unavailable when a tool result trips the detector | one `[audit] could not record injection-suspected` line; mutating tools still dropped (REQ-agent-071) |
 | SpecSync workflow requires a change and a changed meaningful path has none | `SpecSync gate:` note, failed verify with no lane run, retry with the note, then failed with the stuck ask (REQ-agent-518) |
@@ -1384,3 +1415,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-10-01 | before-a-pr-opens-a-second-model-reviews-the-diff-in-bounded-rounds-and-the-pr-lists-what-it-raised-and-what-changed: Before a PR opens, a second model reviews the diff in bounded rounds, and the PR lists what it raised and what changed (GITHUB-9, GITHUB-9.a) |
 | 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |
 | 2026-10-01 | my-local-cli-task-run-may-use-the-allowlisted-shell-and-runners-inside-its-own-worktree-safe-3-a-local-cli-half: My local CLI task run may use the allowlisted shell and runners inside its own worktree (SAFE-3.a, local CLI half) |
+| 2026-10-01 | a-failed-delegate-worker-or-council-voice-hands-its-lead-one-plain-failure-line-the-worker-s-result-error-without-the: A failed delegate worker or council voice hands its lead one plain failure line (the worker's result error without the provider's host, the no-provider notice, or the exit code), never the worker's summary or stderr, which for a model failure is the provider's raw error body |
