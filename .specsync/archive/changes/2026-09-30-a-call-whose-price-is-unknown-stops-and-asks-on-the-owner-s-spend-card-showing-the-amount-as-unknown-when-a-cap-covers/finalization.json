@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "a-call-whose-price-is-unknown-stops-and-asks-on-the-owner-s-spend-card-showing-the-amount-as-unknown-when-a-cap-covers",
+  "implementation_commit": "8fd65c33dd8e0ddce6926e90b32abe78c987a2d2",
+  "implementation_tree": "ca71bc4aab3923b838f19a413fa64b9085e00b0f",
+  "contract_digest": "980fe7722d66d669a78414120e651a1d54683e18f82adeee855c1fc0af670e7c",
+  "workspace_digest": "74c010a420e6d5b060438691e85b1706e550e98855f0455f4764c91bd1224794",
+  "closing_digest": "98edadcba86f95d864239a80dc0f7f9881be516afde28fa3d0c1bf56996548d8",
+  "review_digest": "7442faf0131d0a73deeee45eba521309138b80d0a6e4954edbf103da4be8a7ff",
+  "finalization_digest": "de4765c5ebb1e548496a3a290f16820677442a8bb97fdf9be09c7922de8014d1",
+  "timestamp": 1790812717
+}
