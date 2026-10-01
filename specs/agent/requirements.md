@@ -585,6 +585,21 @@ An abort SHALL stop the run's work, not only its bookkeeping (AGENT-3):
   `tool loop aborted …` placeholder dropped; closing notes stay last).
   `runTask` SHALL emit that line as a `Text` event and `StateChanged`
   `failed`. AGENT-15.a treats it like any other run that did not end done.
+- AGENT-12: a stalled run SHALL always end. After the watchdog fires, the
+  step the run is on gets `IDLE_STOP_GRACE_MS` (5 seconds) to see the abort
+  and return; if it has not (an in-process call that ignores the abort and
+  has no timeout of its own), `runTask` SHALL stop waiting for it and end the
+  run the same way (`failed`, `stopReason: "idle-timeout"`, the `error`
+  line), with the attempts started so far, the files finished attempts
+  reported, and the summary `<line> Any changes so far were not verified.`
+  (it cannot know what that step changed) unless files were reported (then
+  ` Its changes so far were not verified.`); a `[operator] AGENT-12: the step
+  the run was on did not stop within 5 seconds of the idle timeout, so the
+  run stopped waiting for it.` `Text` event comes before the stop line, and
+  that step's later events SHALL be dropped. An `idleTimeoutMs` that is not
+  a finite number of at least 1 ms (0, a negative number, NaN, Infinity)
+  SHALL be the default (`effectiveIdleTimeoutMs`), never an instant stop and
+  never no limit.
 
 Acceptance Criteria
 - A provider that sends headers and then trickles body bytes forever makes a read-tier execute return `LLM request timed out after 300ms` within seconds (`llmTimeoutMs: 300`).
@@ -597,6 +612,8 @@ Acceptance Criteria
 - A run whose tool hangs (`idleTimeoutMs: 150`) ends `failed`, `cancelled=false`, `stopReason: "idle-timeout"`, `error` and summary `Stopped: no output for 150 ms (idle timeout).`, and the last two events are that `Text` and `StateChanged failed`; with best prose and changed files the summary is the line, ` Its changes so far were not verified.`, a blank line and the prose.
 - A run that keeps calling `noteIdleActivity`, a read-tier run whose model takes 1.5 s against a 600 ms timeout, a 1.2 s silent `delegate` worker against a 400 ms lead timeout and a 0.9 s Approve-card wait against a 250 ms timeout are never stopped; the card's watchdog fires once the card is answered and nothing else happens.
 - A caller abort during the same hang gives the cancelled result, with no `stopReason` and no `error`.
+- A tool-tier run whose model calls a tool that never returns and ignores the abort (`idleTimeoutMs: 200`) still ends about `IDLE_STOP_GRACE_MS` after the timeout: `failed`, `cancelled=false`, `stopReason: "idle-timeout"`, `attempts: 1`, summary `Stopped: no output for 200 ms (idle timeout). Any changes so far were not verified.`, and the last three events are the `[operator] AGENT-12: the step the run was on did not stop …` line, the stop line and `StateChanged failed`.
+- `effectiveIdleTimeoutMs` of `0`, `-5`, `0.5`, NaN, Infinity or undefined is 600000; a run with `idleTimeoutMs` `0`, `-1` or NaN and a 150 ms silent attempt ends `done` with no `stopReason`.
 - `task run` with `CORVIDINHO_IDLE_TIMEOUT_MS=4000` and a fake verify lane that hangs silently exits 1 with a `failed` `result` frame (`stopReason: "idle-timeout"`, `error: "Stopped: no output for 4 seconds (idle timeout)."`) and the fake `fledge` and its lane task are gone; a lane that prints every 0.5 s for 6 s under a 3 s timeout is verified.
 
 ### REQ-agent-242
@@ -714,7 +731,7 @@ Acceptance Criteria
 
 When the LLM tool loop exhausts `maxToolRounds` without a final no-tool reply, execute SHALL soft-land (AGENT-9): `ExecuteResult.summary` SHALL be the last assistant prose when present, otherwise a short clarifying ask (e.g. "I'm not sure I have enough to answer that cleanly — can you clarify what you meant?"). The summary SHALL NOT contain the operator phrase `Stopped after N tool rounds`. An operator note with that phrase MAY be emitted as a `Text` event for thinking/NDJSON. `chatBodyFromTaskResult` SHALL strip any leftover `Stopped after N tool rounds` lines before Discord outbound (defense in depth).
 The tool-loop system prompt SHALL include Discord chat discipline (IDENTITY-5 / DISCORD-13 / ROLES-CHAT-9): prefer conversational prose for social/game banter; call `discord-user-lookup` for snowflakes/@mentions/named members before repo tools; only use SpecSync/git/github/files when the query clearly needs Corvidinho codebase or product data; treat bare `bug <snowflake>` in Discord as a user id, not a GitHub issue.
-AGENT-12: `maxToolRounds` is the turn cap I set. `createTaskExecute` SHALL default it to the optional `CORVIDINHO_MAX_TURNS` of its `env` (`maxTurnsFromEnv`: a positive whole number; unset, blank or anything else = `DEFAULT_MAX_TURNS`, 8, today's cap), per execute attempt, so each AGENT-4.a verify retry gets its own rounds; an explicit `maxToolRounds` option still wins, and the rounds the AGENT-17 nudge and the MEMORY-9 recall add are not counted. A soft-landed attempt SHALL return `ExecuteResult.stopReason: "turn-cap"`, and `runTask` SHALL set `TaskResult.stopReason: "turn-cap"` only when the run's final attempt returned it and the run was not cancelled (an earlier capped attempt whose retry finished leaves none; a capped attempt can still be verified). `TaskStopReason` is `"turn-cap" | "idle-timeout"`; `stopReasonFromUnknown` accepts only those two. `formatTaskPlumbing` SHALL end with `stopped=turn-cap` or `stopped=idle-timeout` for those values (any other value is left out) — the footer / thinking plumbing AGENT-9 allows — while `chatBodyFromTaskResult` never shows it. Delegate and council workers inherit the cap (their env keeps `CORVIDINHO_MAX_TURNS`).
+AGENT-12: `maxToolRounds` is the turn cap I set. `createTaskExecute` SHALL default it to the optional `CORVIDINHO_MAX_TURNS` of its `env` (`maxTurnsFromEnv`: a positive whole number; unset, blank or anything else = `DEFAULT_MAX_TURNS`, 8, today's cap), per execute attempt, so each AGENT-4.a verify retry gets its own rounds; an explicit `maxToolRounds` option still wins, and the rounds the AGENT-17 nudge and the MEMORY-9 recall add are not counted. A soft-landed attempt SHALL return `ExecuteResult.stopReason: "turn-cap"`, and `runTask` SHALL set `TaskResult.stopReason: "turn-cap"` only when the run's final attempt returned it and the run was not cancelled (an earlier capped attempt whose retry finished leaves none; a capped attempt can still be verified). `TaskStopReason` is `"turn-cap" | "idle-timeout"`; `stopReasonFromUnknown` accepts only those two. `formatTaskPlumbing` SHALL end with `stopped=turn-cap` or `stopped=idle-timeout` for those values (any other value is left out) — the footer / thinking plumbing AGENT-9 allows — while `chatBodyFromTaskResult` never shows it. Delegate and council workers inherit the cap (their env keeps `CORVIDINHO_MAX_TURNS`), and a `delegate` worker's result-frame `stopReason` (validated by `stopReasonFromUnknown`) SHALL come back as `DelegateChildOutcome.stopReason` and in the `delegate` tool's `data`, so the lead knows a capped worker's answer is its best so far. A schedule's post has no footer to carry `stopped=turn-cap` (and AGENT-9 keeps the stop out of the post), so the scheduler (`src/scheduler/service.ts`, bridge and daemon) SHALL log one line `[scheduler] schedule <id>: run stopped=turn-cap (CORVIDINHO_MAX_TURNS); its post is its best answer so far (AGENT-12)` for a run whose result says `turn-cap` (an idle-timed-out schedule run is a failed run whose reason DISCORD-3.b already logs).
 
 Acceptance Criteria
 - Exhausted rounds with no prose → clarify ask; no `Stopped after` in summary.
@@ -726,6 +743,8 @@ Acceptance Criteria
 - `runTask`: a capped first attempt whose retry finishes and verifies has no `stopReason`; a capped final attempt has `stopReason: "turn-cap"` (verified by the lane); a cancelled run has none.
 - `formatTaskPlumbing` of a capped run is `state=done verified=false verifySkipped attempts=1 stopped=turn-cap`; an unknown `stopReason` adds nothing; its chat body is only the prose.
 - A worker env built by `buildDelegateSpawn` keeps `CORVIDINHO_MAX_TURNS` and `CORVIDINHO_IDLE_TIMEOUT_MS`.
+- A worker whose `result` frame has `stopReason: "turn-cap"` gives `runDelegateChild` an outcome with `stopReason: "turn-cap"`; `Stopped after 8 tool rounds` gives none.
+- An owner's schedule whose run returns `task.stopReason: "turn-cap"` posts only `…:\nHere is what I found so far.` (no `turn`, no `stopped=`) and the scheduler logs exactly one `[scheduler] schedule <id>: run stopped=turn-cap …` line for it; a plain run beside it logs none.
 - Fixture: `tests/agent.limits.test.ts`.
 
 ### REQ-agent-079
