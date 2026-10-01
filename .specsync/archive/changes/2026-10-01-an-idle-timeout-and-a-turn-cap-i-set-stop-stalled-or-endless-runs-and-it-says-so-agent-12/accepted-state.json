@@ -7,11 +7,11 @@
   "title": "An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12)",
   "description": "An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "aeb2de3407acd0990897121ac68caf1553be0118",
   "created_at": 1790815767,
-  "updated_at": 1790820730,
+  "updated_at": 1790820934,
   "affected_specs": [
     "agent",
     "cli",

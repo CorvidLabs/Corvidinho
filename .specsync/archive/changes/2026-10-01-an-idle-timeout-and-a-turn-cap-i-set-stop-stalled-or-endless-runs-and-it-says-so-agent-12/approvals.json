@@ -236,6 +236,13 @@
         "plugins": "4243104ed060822238b63cd68820094f29447e57b5000752d1e192de4259e7ca",
         "watch": "c04b1262f682b9543361df4c85f5764c49c7f03e3ed91a101f03ed91a5853782"
       }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1790820934,
+      "digest": "f0c9b155eeef8323624939dc41f436f86fb34ece7419eb35c8ff3e89469ddd62",
+      "note": "Same-PR finalization closing digest"
     }
   ],
   "reopenings": []
