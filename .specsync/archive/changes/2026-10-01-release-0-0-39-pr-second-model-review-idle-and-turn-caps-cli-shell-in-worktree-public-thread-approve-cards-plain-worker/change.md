@@ -1,6 +1,6 @@
 ---
 id: release-0-0-39-pr-second-model-review-idle-and-turn-caps-cli-shell-in-worktree-public-thread-approve-cards-plain-worker
-state: implementing
+state: accepted
 type: operations
 base_commit: 6ea722e17df07467737ce10d8949de85e4c04089
 ---
