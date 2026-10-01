@@ -203,6 +203,63 @@ test removes the worktrees and branches it made.
   `src/worktree/cli-run.ts` (4c20563) swapped in, 6 fail (the
   talk-branch-only case passes there too); restored, 25 of 25 pass.
 
+## A local task run gets the allowlisted shell only in its own worktree (REQ-cli-681; SAFE-3.a, local CLI half)
+
+`tests/cli.safe3a-shell.test.ts` — temp git projects under the test run's
+temp root and the worktree `enterCliTaskWorkspace` makes there; every test
+removes the worktrees and `talk/*` branches it made.
+
+- Gate rows (`shellToolsGate`, `isCliRunWorktree`): granted for a local run
+  (no role session, no Discord session id, no stamp) whose cwd is the top of
+  its own worktree, through a symlink too; refused with the in-place reason
+  for no or a blank `talkWorktree` (`--here` in the checkout, a non-git
+  folder); refused as not at the top for a subdirectory, the main checkout,
+  another talk's worktree, a non-git folder, a missing dir, a main checkout or
+  non-git folder named as the worktree, a look-alike borrowing the worktree's
+  `.git` file and a missing worktree path; refused in its own worktree for
+  delegation depth 1 / 2 / junk, a WATCH marker, a `schedule_` session id,
+  and a Discord session id or any stamp (`chat`, `watch`, `schedule`, `cli`)
+  without a role session, and a `CORVIDINHO_PROJECT_ROOT` (`TOOL_CHILD_ENV`,
+  set or empty: refused as started from inside a tool); the owner's chat (a
+  role session) in the CLI worktree is refused as not its own talk worktree
+  whatever `talkWorktree` says.
+- A nested run: with the env `runnerChildEnv` (the shell and the runners) and
+  `fledgeCoreChildEnv` (the Fledge core runs) give a tool child of the run,
+  `enterCliTaskWorkspace` from the run's worktree makes a nested worktree
+  outside it, and the gate there refuses it with `a run started from inside a
+  tool (the shell, a runner or a Fledge run) never gets them`.
+- `createTaskExecute` with `talkWorktree` (fake provider, code tier,
+  allowlist `shell-exec`, `fledge-run`): both offered, `shell-exec` runs in
+  the worktree (marker there, not in the checkout), no SAFE-3.a line,
+  `unreportedEditTools: ["shell-exec"]`, still granted on attempt 2; the
+  checkout (`--here`) and a non-git folder with no `talkWorktree`, and a
+  subdirectory of the worktree, are not offered either tool over two
+  attempts, both calls refused as not offered, no marker, exactly one
+  `[operator] SAFE-3.a: shell-exec, fledge-run allowlisted but not offered:
+  <why>` line and none in the summaries; `kubectl get pods; touch
+  ran.marker` (a stand-in `kubectl` first on PATH) raises one `mustask`
+  destructive card that nobody answers (no bridge), so it lapses: the call
+  fails with `no answer on the owner's Approve card … with no bridge running
+  it lapses`, the stand-in records no call, no marker, and the wait line
+  (`… with the one-time code … means no`) went to the must-ask notifier
+  (stderr / a Text frame in `task run`).
+- The real CLI against a localhost fake model (`CORVIDINHO_ALLOWLIST=shell-exec`,
+  `CORVIDINHO_LLM_TIER=code`, a fake passing `fledge` lane): by default the
+  first request offers `shell-exec`, it runs, the marker is in the kept
+  worktree and not the checkout, no SAFE-3.a line, exit 0; `--here` in text
+  mode: not offered, exactly one SAFE-3.a line on stderr and none on stdout,
+  no marker, no worktree or branch; a non-git folder with `--json`: not
+  offered, exactly one SAFE-3.a `Text` event, not in the summary, no
+  `workspace`, no marker.
+- Fail on base: with the base's (b84c75f) `src/agent/shell-gate.ts`,
+  `src/agent/execute.ts` and `src/cli.ts` swapped in, the file cannot load
+  (`isCliRunWorktree` is missing); with that export and `TOOL_CHILD_ENV`
+  stubbed in, 11 of 12 fail (every grant, every refusal reason, the nested
+  run, the must-ask lapse through the granted shell and all three real-CLI
+  cases); the role-session guard passes on the base too. With the gate as it
+  was before the tool-child refusal (`TOOL_CHILD_ENV` stubbed in), the two
+  cases holding tool-child rows fail (granted). Restored, 12 of 12 pass.
+
 ## Turn cap and idle timeout in task run (REQ-cli-125, AGENT-12)
 
 `tests/agent.limits.test.ts` ("corvidinho task run (CLI, AGENT-12)"):

@@ -252,19 +252,20 @@ project's Fledge plugins; re-check any time with `corvidinho plugins list`). An 
 `corvidinho plugins run` run the tool and offers it to the model in the owner's runs;
 `shell-exec`, the runners and the Fledge core runs `fledge-lanes-run` / `fledge-run` only in
 the owner's own chat, `/session start`, `/work` and their ask answers, inside that talk's own
-worktree (SAFE-3.a, see "What an entry unlocks" below):
+worktree, and in a local `corvidinho task run` inside the worktree it made for itself
+(SAFE-3.a, see "What an entry unlocks" below):
 
 | Tool | dangerous | minTier | mutating | Allowlist it when |
 |------|-----------|---------|----------|-------------------|
 | `web-fetch` | true | 1 | true | an operator runs `corvidinho plugins run web-fetch` non-interactively (GET-only, SSRF-guarded, SAFE-7) |
 | `fledge-<command>` | true | 2 (native) / 1 (wasm without `exec`) | true | an operator runs `corvidinho plugins run fledge-<command>` non-interactively; one entry per Fledge command you trust, names from `plugins list` (a Fledge plugin command named `run`, `lanes-list`, `lanes-validate` or `lanes-run` is skipped: the Fledge core builtins `fledge-run`, `fledge-lanes-list`, `fledge-lanes-validate` and `fledge-lanes-run` hold those names) |
-| `fledge-lanes-run` / `fledge-run` | true | 2 | true | an operator runs `corvidinho plugins run fledge-lanes-run -- <lane>` or `fledge-run -- <task> [args…]` non-interactively; builtins that run fledge's own `lanes run` / `run` in the project dir (PLUGIN-1), so they run whatever that lane or task's commands do, starting without the owner's GitHub or git credentials like `shell-exec` and the runners (SAFE-21.a), so pushes, PRs and merges go through the checked GitHub tools; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, at code tier (SAFE-3.a) |
+| `fledge-lanes-run` / `fledge-run` | true | 2 | true | an operator runs `corvidinho plugins run fledge-lanes-run -- <lane>` or `fledge-run -- <task> [args…]` non-interactively; builtins that run fledge's own `lanes run` / `run` in the project dir (PLUGIN-1), so they run whatever that lane or task's commands do, starting without the owner's GitHub or git credentials like `shell-exec` and the runners (SAFE-21.a), so pushes, PRs and merges go through the checked GitHub tools; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
 | `git-commit` | true | 2 | true | `/work` should open draft PRs (needed when the work tree has changes) |
 | `git-push` | true | 2 | true | `/work` should open draft PRs; the remote's OWNER/REPO must also pass the GitHub allowlist (GITHUB-6) |
 | `github-pr-create` | true | 1 | true | `/work` should open draft PRs; needs `GITHUB_TOKEN`/`GH_TOKEN`. A PR opens only after a second configured model reviewed the diff (GITHUB-9 / GITHUB-9.a, see [`discord.md`](discord.md) Second-model review): configure at least two models, or every PR is refused with the reason |
 | `git-branch-create` | true | 2 | true | an operator runs `corvidinho plugins run git-branch-create` non-interactively (`/work` does not need it: the worktree makes the branch) |
-| `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, `env -C` and symlinks included, SAFE-3; refuses `sed -i` / `>` edits, downloads piped into a shell, deletes outside the worktree and secret reads, saying why, SAFE-21; starts without GitHub or git credentials, so pushes, PRs and merges go only through the typed GitHub tools, SAFE-21.a; 10 minute timeout, 64 KiB output cap, output scrubbed); the model gets it only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, at code tier (SAFE-3.a) |
-| `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere) without GitHub or git credentials (SAFE-21.a), and `plugins list` names any that are not loaded; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, at code tier (SAFE-3.a) |
+| `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, `env -C` and symlinks included, SAFE-3; refuses `sed -i` / `>` edits, downloads piped into a shell, deletes outside the worktree and secret reads, saying why, SAFE-21; starts without GitHub or git credentials, so pushes, PRs and merges go only through the typed GitHub tools, SAFE-21.a; 10 minute timeout, 64 KiB output cap, output scrubbed); the model gets it only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
+| `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere) without GitHub or git credentials (SAFE-21.a), and `plugins list` names any that are not loaded; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
 | `memory-forget` | true | 1 | true | the owner's chat should forget memories on request, or an operator runs `corvidinho plugins run memory-forget` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
 | `memory-override` | true | 1 | true | the owner's chat should correct memories on request, or an operator runs `corvidinho plugins run memory-override` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
 | `files-delete` | true | 2 | true | an operator runs `corvidinho plugins run files-delete` non-interactively (SAFE-2 protected paths always refused) |
@@ -315,18 +316,22 @@ What an entry unlocks **today**:
     `--tier code`; at the default `tool` tier they are never offered);
   - the run is the owner's own chat message, `/session start`, `/work`, or an ask-button pick
     or Answer form that continues one of those talks (the spawn stamps an internal
-    `CORVIDINHO_ACTING_SURFACE` that you never set yourself); WATCH runs, schedules, non-owner
-    runs (team included), a muted or deny-listed owner and `delegate` / `council` workers never
-    get them;
+    `CORVIDINHO_ACTING_SURFACE` that you never set yourself), or a local `corvidinho task run`
+    you start in a shell (no role session, no Discord session id and no surface stamp; a
+    `task run` the model starts from its own shell, a runner or a Fledge run is refused); WATCH
+    runs, schedules, non-owner runs (team included), a muted or deny-listed owner and
+    `delegate` / `council` workers never get them;
   - the run's directory is that talk's own linked git worktree (`talk-…` under the worktree
-    base). A non-git project (its scoped folder), the main checkout and another talk's
-    worktree are refused.
-  A local `corvidinho task run` does not get them yet (the CLI half of SAFE-3.a is not built):
-  it has no role session, whether it works in its own worktree (the default in a git repo) or,
-  with `--here`, in the current checkout. When the allowlist names one of them and the run is refused, the
+    base); for a local `task run`, the top of the new worktree it made for itself in a git repo
+    (SESSION-WORKTREE-1.a, `talk-cli_…`). A non-git project (its scoped folder, or the folder
+    itself for a local run), the main checkout (a local run with `--here`), a subdirectory and
+    another talk's worktree are refused.
+  When the allowlist names one of them and the run is refused, the
   run's event stream carries one `[operator] SAFE-3.a: … allowlisted but not offered: <why>`
   line (never part of the reply). Every call still goes through the role re-check, SAFE-1,
-  the must-ask Approve card for prod and deploy commands (AUTONOMY-9), the SAFE-5 audit trail
+  the must-ask Approve card for prod and deploy commands (AUTONOMY-9; a local run with no
+  bridge running gets no answer, so the card lapses as a no and the run's output says why),
+  the SAFE-5 audit trail
   and the tools' own SAFE-3 clamp, SAFE-21 refusals and credential-free env (the Fledge runs
   included: no GitHub tokens, no global git config or credential helper, no ssh agent, gh
   logged out). Known limits: the runners' own code (and a Fledge lane or task) can still
@@ -487,7 +492,8 @@ the owner did not create):
   `not authorized` and nothing starts — no worktree, branch, work task, run or PR.
 - The owner keeps the GitHub allowlist (GITHUB-6) and still passes every SAFE gate.
 - A local `corvidinho task run` in a shell has no role session, so these gates do not apply
-  there. The bridges always set `CORVIDINHO_ACTING_IS_ADMIN` to `0` or `1` for their runs, and
+  there (it gets the shell, runners and Fledge runs only in the worktree it made for itself,
+  SAFE-3.a). The bridges always set `CORVIDINHO_ACTING_IS_ADMIN` to `0` or `1` for their runs, and
   the Discord bridge `CORVIDINHO_ACTING_ROLE` (`owner` / `team` / `community`, the most that
   surface allows), `CORVIDINHO_ACTING_WORK_TASK` (`1` for `/work`) and
   `CORVIDINHO_ACTING_SURFACE` (`chat`, `ask`, `session`, `work`, `schedule`; WATCH sets

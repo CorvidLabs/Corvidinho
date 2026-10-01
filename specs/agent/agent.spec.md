@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 47
+version: 48
 status: draft
 files:
   - src/agent/types.ts
@@ -580,18 +580,23 @@ Fledge plugin command allowlisted, a `delegate` call that started a worker is
 named there too. No env var, config key, flag or slash command.
 
 Owner shell grant (REQ-agent-503, SAFE-3.a): `src/agent/shell-gate.ts` exports
-`shellToolsGate({ env, cwd })` → `ShellToolsVerdict` (`{ granted: true }` or
+`shellToolsGate({ env, cwd, talkWorktree? })` → `ShellToolsVerdict` (`{ granted: true }` or
 `{ granted: false, reason }`), `isOwnTalkWorktree(cwd, sessionId)`,
+`isCliRunWorktree(cwd, worktree)` (REQ-cli-681),
 `shellToolsRefusedLine(names, reason)`, `ACTING_SURFACE_ENV`
 (`CORVIDINHO_ACTING_SURFACE`), `ACTING_SURFACES` / `ActingSurface` (`chat`,
 `ask`, `session`, `work`, `watch`, `schedule`), `SAFE3A_SURFACES` (the first
 four) and `actingSurface(env)`. `createTaskExecute` calls the gate once per
 tool-loop attempt when its allowlist names a `SAFE3A_TOOLS` name (never with
 `includeDangerous`), passes `safe3a` to `buildOpenAiTools`, and emits the
-refusal line once per run. The gate grants only at delegation depth 0, in a
-role session, with no WATCH or schedule marker, a `chat` / `ask` / `session`
-/ `work` stamp, the owner role resolved now and a cwd that is the top of this
-session's own linked talk worktree. The stamp is internal: each spawning
+refusal line once per run. The gate grants only at delegation depth 0, with
+no WATCH or schedule marker, and either in a role session with a `chat` /
+`ask` / `session` / `work` stamp, the owner role resolved now and a cwd that
+is the top of this session's own linked talk worktree, or, with no role
+session (the local CLI half, REQ-cli-681), with no Discord session id and no
+stamp and a cwd that is exactly the linked worktree `task run` made for this
+run, which `createTaskExecute`'s optional `talkWorktree` (set only by
+`taskRun`, in-process) names. The stamp is internal: each spawning
 client always overwrites it (REQ-discord-735, REQ-watch-735), and delegate
 workers and the verify lane drop it with the `CORVIDINHO_ACTING_` prefix. No
 config key, flag, slash command or schema.
@@ -667,9 +672,9 @@ A local `task run`'s own worktree (SESSION-WORKTREE-1.a, REQ-cli-122):
 its own worktree (additive on `--json` and the NDJSON `result` frame:
 protocol stays 2). The delegate core spawns every worker (and council voice)
 with `task run --here …` (REQ-agent-117), so a worker works in its lead's cwd
-and never makes a worktree of its own. The SAFE-3.a gate's refusal for a run
-with no role session reads `a local CLI run has no role session (the CLI half
-of SAFE-3.a is not built yet)` (REQ-agent-503).
+and never makes a worktree of its own. A run with no role session gets the
+SAFE-3.a grant only at the top of that worktree (REQ-cli-681,
+REQ-agent-503).
 
 ## Invariants
 
@@ -790,7 +795,8 @@ A task run offers the model a dangerous tool only when the run's allowlist
 names it (SAFE-1 consent, CLI-3), `shell-exec`, the language runners and the
 Fledge core runs (`fledge-lanes-run`, `fledge-run`) only with the attempt's
 SAFE-3.a grant (the owner's own chat, `/session start`, `/work` or ask
-answer, inside that talk's own worktree, REQ-agent-503), and never to a
+answer, inside that talk's own worktree, or a local `task run` at the top of
+the worktree it made for itself, REQ-agent-503 / REQ-cli-681), and never to a
 non-ADMIN role session: the role,
 tier and SAFE-9 filters apply first, and every runtime gate still runs
 (REQ-agent-501). An empty allowlist gives the same catalog as before.
@@ -1202,7 +1208,7 @@ A change the run did not open is never touched.
 
 - **Given** `CORVIDINHO_ALLOWLIST=shell-exec`, a code-tier run spawned by the bridge for the owner's chat message (`CORVIDINHO_ACTING_SURFACE=chat`) in the talk worktree made for its session
 - **When** the model calls `shell-exec`
-- **Then** the tool is offered and runs in that worktree; a prod command (`kubectl get pods`) still waits for the owner's Approve card and a deny runs nothing; the same run in the main checkout, another talk's worktree, for a team member, on WATCH or a schedule, in a delegate worker or from the local CLI is not offered it, the call is refused and one `[operator] SAFE-3.a` line says why (REQ-agent-503)
+- **Then** the tool is offered and runs in that worktree; a prod command (`kubectl get pods`) still waits for the owner's Approve card and a deny runs nothing; the same run in the main checkout, another talk's worktree, for a team member, on WATCH or a schedule, in a delegate worker or from a local CLI run outside the worktree it made for itself is not offered it, the call is refused and one `[operator] SAFE-3.a` line says why (REQ-agent-503)
 
 ## Error Cases
 
@@ -1220,7 +1226,7 @@ A change the run did not open is never touched.
 | Dangerous plugin the run's allowlist does not name | not in the catalog; a model call to it is refused as not offered (REQ-agent-501 / REQ-agent-128) |
 | Scheduled run (`schedule_*` session), even the owner's, whose allowlist names a Fledge plugin command | no Fledge discovery, so the command is not offered and fledge is never spawned (REQ-agent-741) |
 | Scheduled run: a must-ask call the owner denies, lets lapse, or denied before (`denied` / `expired` / `resent`) | nothing done; the run ends `blocked` with the `mustAskRefusedAsk` stuck question naming the tool, why, rule and card, verify skipped (REQ-agent-741) |
-| `shell-exec`, `node-exec`, `python-exec`, `cargo-exec`, `fledge-lanes-run` or `fledge-run` named in the allowlist, and the SAFE-3.a gate refuses the attempt (not the owner, a surface other than chat / ask / session / work, WATCH, a schedule, a delegate or council worker, a local CLI run, or a cwd other than this talk's own linked worktree) | not in that attempt's catalog; a model call is refused as not offered (the role refusal for a non-owner); one `[operator] SAFE-3.a: … allowlisted but not offered: <why>` Text line per run, never in the reply (REQ-agent-501 / REQ-agent-503) |
+| `shell-exec`, `node-exec`, `python-exec`, `cargo-exec`, `fledge-lanes-run` or `fledge-run` named in the allowlist, and the SAFE-3.a gate refuses the attempt (not the owner, a surface other than chat / ask / session / work, WATCH, a schedule, a delegate or council worker, a local CLI run with `--here`, outside a git repo or not at the top of the worktree it made for itself, a run with no role session that carries a Discord session id or surface stamp, or a cwd other than this talk's own linked worktree) | not in that attempt's catalog; a model call is refused as not offered (the role refusal for a non-owner); one `[operator] SAFE-3.a: … allowlisted but not offered: <why>` Text line per run, never in the reply (REQ-agent-501 / REQ-agent-503) |
 | The same, and the gate grants (the owner's own chat, `/session start`, `/work` or ask answer in its own talk worktree) | offered at code tier (never at tool tier); each call still goes through `runPlugin` (role re-check, SAFE-1, the must-ask Approve card for prod, SAFE-5) and the tool's own clamp, SAFE-21 refusals and credential-free env (REQ-agent-503) |
 | Git diff unreadable after a good start snapshot | fail closed: verify runs; one Text note says the diff could not be read (REQ-agent-085) |
 | Verify lane passes but prints no recognised test summary, or no test ran (all skipped / todo) | not verified: a failed verify whose note names the verify lane (or says no test ran); retried, then `failed` (REQ-agent-185) |
@@ -1377,3 +1383,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-30 | a-call-whose-price-is-unknown-stops-and-asks-on-the-owner-s-spend-card-showing-the-amount-as-unknown-when-a-cap-covers: A call whose price is unknown stops and asks on the owner's spend card showing the amount as unknown when a cap covers it (recorded unknown, owner lines read $X + unknown, no price override), and every surface asks before spending over a cap: WATCH spend-cap stops reach the owner by DM and a schedule's spend-cap stop can go on through the card (SAFE-16, SAFE-16.a, AUTONOMY-8) |
 | 2026-10-01 | before-a-pr-opens-a-second-model-reviews-the-diff-in-bounded-rounds-and-the-pr-lists-what-it-raised-and-what-changed: Before a PR opens, a second model reviews the diff in bounded rounds, and the PR lists what it raised and what changed (GITHUB-9, GITHUB-9.a) |
 | 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |
+| 2026-10-01 | my-local-cli-task-run-may-use-the-allowlisted-shell-and-runners-inside-its-own-worktree-safe-3-a-local-cli-half: My local CLI task run may use the allowlisted shell and runners inside its own worktree (SAFE-3.a, local CLI half) |
