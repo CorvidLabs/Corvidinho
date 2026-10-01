@@ -921,3 +921,24 @@ a status and the provider's own raw body; temp dirs only):
   `LLM HTTP 429: {"error":{"message":"Rate limit reached … organization
   org-acme-widgets-7731 … https://127.0.0.1:<port>/account/limits."},
   "request_id":"req_7f3c9a1b2d4e5f60"}`; restored, all pass.
+## Extras switch settings (REQ-agent-157, PLUGIN-5 / PLUGIN-5.a)
+
+`tests/plugins.extras-toggle.test.ts` ("[corvidinho.plugins] settings"):
+absent or literal `true` is on, `false` / `"false"` / `0` / an inline table /
+any other value is off; the dotted and inline-table spellings under
+`[corvidinho]` are the same key, and a `plugins` there that is not a table
+(`false`, `true`, `"off"`) is both off (review fix; fails without it); a key
+under a later table, another table or
+another name does not count, and a key written twice is off unless every copy
+is `true`; a `.json` allowlist file's `corvidinho.plugins` object reads the
+same. `loadExtrasToggles`: nothing set (no files, this checkout's own
+`fledge.toml`, no default allowlist under the home dir) is both on; off in
+the install root's `fledge.toml` or the allowlist file (TOML, `.json`, or the
+default path under the home dir) is off and names where, the allowlist
+file's off winning over a `fledge.toml` on; a `fledge.toml` that is a
+directory (EISDIR) or a `.json` allowlist file that does not parse makes both
+`config-unreadable` with a source-named error; `[corvidinho.autonomous]`
+changes nothing. `trackExtraState` reports the first read and each change
+only. These are the new module's units: they pass with the base's gate
+sources swapped in (the module kept), and fail to load on the full base
+(the exports do not exist).

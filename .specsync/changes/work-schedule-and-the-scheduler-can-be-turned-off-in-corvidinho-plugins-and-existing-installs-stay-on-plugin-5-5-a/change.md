@@ -1,0 +1,26 @@
+---
+id: work-schedule-and-the-scheduler-can-be-turned-off-in-corvidinho-plugins-and-existing-installs-stay-on-plugin-5-5-a
+state: verifying
+type: feature
+base_commit: cf7f61b2d624fd9b26f4b21f74fd691185f4284d
+---
+
+# /work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a)
+
+## Intent
+
+/work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a)
+
+## Affected Canonical Specs
+
+- `agent`
+- `discord`
+- `cli`
+
+## Acceptance Criteria
+
+- PLUGIN-5 and PLUGIN-5.a (captured on main from Leif's 2026-09-28 interview, round 10) hold: [corvidinho.plugins] work and schedule are read from the install root's fledge.toml and the owner's allowlist file (TOML table, dotted or inline keys, or a corvidinho.plugins object in a .json allowlist file) on every slash command, every reply or button press that would resume a /work talk and every scheduler tick; off in either file is off, a missing file, table or key is on (existing installs stay on), only the literal true is on otherwise, and a file that exists but cannot be read is off as config-unreadable and logged; the slash gate runs after the channel, actor and mute/rate gates and before minPermission, and while off /work and every /schedule subcommand answer only the fixed ephemeral '/<name> is turned off on this install.' (the owner also gets why and how to turn it back on, never a path) with nothing created; while work is off a reply, an @mention or a button press that would resume a /work talk gets the same line and runs nothing, its asks stay open, and a /work run in flight is not aborted and stays stoppable; while schedule is off the bridge's and the daemon's ticks gate only the schedules part (refresh, due scan, claim) so the onTick hook (Approve / forget cards, stuck WATCH asks), the pending schedule-ask delivery pass, the owner's spend DMs and the nightly backup keep running, and back on each overdue schedule fires at most once; the daemon logs schedules on daemon.started and schedules.off / schedules.on on each change; [corvidinho.autonomous] has no say; no /admin knob, env var, schema or protocol change; tests/plugins.extras-toggle.test.ts fails on the base sources and passes on the branch
+
+## No-spec Rationale
+
+Not applicable

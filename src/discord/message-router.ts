@@ -14,6 +14,9 @@
  * progress message, from its requester or the owner, is `stop_run`; checked
  * right after the channel gate, before the thread and bot-message lookups
  * (the REQ-discord-002 exception).
+ * PLUGIN-5.a (REQ-discord-157): such a resume of a `/work` talk's retained
+ * conversation is refused with `deps.refuseResume`'s line while `/work` is
+ * turned off (no new session is made).
  */
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
@@ -95,6 +98,14 @@ export type RouterDeps = {
    * Unset ⇒ no `stop_run` route.
    */
   runs?: Pick<SessionRunControl, "byProgressMessage">;
+  /**
+   * PLUGIN-5.a (REQ-discord-157) — read when a message would resume an
+   * expired session's retained conversation (SESSION-3.a): the reply that
+   * refuses it (a `/work` talk's while `/work` is turned off), or null to
+   * resume as usual. `priorSessionId` is the session that last carried the
+   * conversation. Asked before any new session is made. Unset ⇒ resume.
+   */
+  refuseResume?: (priorSessionId: string) => string | null;
 };
 
 function refuseRateOrMute(
@@ -267,6 +278,10 @@ function resumeRetained(
     deps.store.touch(live);
     return { kind: "continue_session", session: live, prompt };
   }
+  // PLUGIN-5.a: a `/work` talk's conversation is not resumed while `/work`
+  // is turned off — the fixed line, and no new session is made.
+  const refusal = record.sessionId ? deps.refuseResume?.(record.sessionId) : null;
+  if (refusal) return { kind: "refuse", reason: "extra_disabled", reply: refusal };
   const session = deps.store.resumeFromRetained(record, {
     channelId: msg.channelId,
     userId: msg.authorId,

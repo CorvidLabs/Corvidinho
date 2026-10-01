@@ -22,7 +22,7 @@ CORVIDINHO_UPDATE_DRY_RUN=1 ./scripts/corvidinho-update.sh
 
 1. `git fetch --tags --prune origin`
 2. Record current `HEAD` (rollback target)
-3. `git checkout --force` the requested ref (default `origin/main`; `CORVIDINHO_REF`)
+3. `git checkout --force` the requested ref (default `origin/main`; `CORVIDINHO_REF`). Local edits to tracked files in the checkout, `fledge.toml` included, are thrown away: keep a `[corvidinho.plugins]` off (`work = false` / `schedule = false`, PLUGIN-5.a) in the allowlist file instead, which the updater never touches ([`DISCORD-GO-LIVE.md`](DISCORD-GO-LIVE.md) E.11)
 4. `bun install` (frozen lockfile, then fallback)
 5. `bun src/cli.ts doctor` (refuse to restart if doctor fails → rollback)
 6. Restart the bridge (pidfile mode unless a unit or command is configured; see below)

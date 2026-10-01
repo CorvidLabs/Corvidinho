@@ -172,6 +172,18 @@ export class WorkStore {
     return recovered;
   }
 
+  /**
+   * PLUGIN-5.a — true when `sessionId` is a `/work` talk (a work task was
+   * started on it), so a reply or button press that would resume it can be
+   * refused while `/work` is turned off.
+   */
+  isWorkSession(sessionId: string): boolean {
+    for (const t of this.byId.values()) {
+      if (t.sessionId === sessionId) return true;
+    }
+    return false;
+  }
+
   countByStatus(status: WorkTaskStatus): number {
     let n = 0;
     for (const t of this.byId.values()) {

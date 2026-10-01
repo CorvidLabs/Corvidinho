@@ -271,3 +271,17 @@ hung lane → exit 1, `failed` frame with `stopReason` / `error`, lane killed;
 `--help` and `.env.example` name both keys. Fail on base: all four (8
 requests and no line; no note; the lane still running at the 60 s timeout;
 no help lines).
+
+## The daemon's schedules switch (REQ-cli-157, PLUGIN-5.a)
+
+`tests/plugins.extras-toggle.test.ts` ("corvidinho daemon and
+[corvidinho.plugins] schedule"): with `schedule = false` in the allowlist
+file, `daemon.started` has `schedules: "off"` followed by one `schedules.off`
+warn line (`reason: "off"`, `offIn: ["allowlist file"]`), two ticks claim no
+run while the nightly backup writes its snapshot (`backup.ok`), and
+rewriting the file logs one `schedules.on` and the next tick fires the due
+schedule; with nothing set `daemon.started` has `schedules: "on"` and the
+schedule runs; an install root whose `fledge.toml` is a directory gives
+`schedules: "config-unreadable"` and a `schedules.off` line with the
+source-named error, and nothing runs. Fail on base: all three (no
+`schedules` field, and the tick fires the schedule).

@@ -48,6 +48,14 @@
  * that a result or ask carrying model text is marked `modelText`, so in a
  * public thread, while fewer than 20 replies were approved, the bridge holds
  * it for the owner's OK (AUTONOMY-10.a, REQ-discord-099).
+ * PLUGIN-5 / PLUGIN-5.a (REQ-discord-157): `schedulesEnabled`, read at every
+ * tick (`[corvidinho.plugins] schedule`, src/autonomous/enabled.ts), gates
+ * only the schedules part of the tick (re-read, due scan, claim): while it is
+ * off no run is claimed or started, and the tick's other jobs — the `onTick`
+ * hook (Approve / forget cards, stuck WATCH asks), the pending-ask delivery
+ * pass, the owner's spend DMs and the nightly backup — keep running. Runs in
+ * flight are not aborted. Back on, the existing no-catch-up claim fires each
+ * overdue schedule at most once.
  */
 
 import { basename } from "node:path";
@@ -382,6 +390,12 @@ export type SchedulerServiceOpts = {
    * is fenced as community, as their chat would be (SAFE-12).
    */
   mutedUsers?: Set<string>;
+  /**
+   * PLUGIN-5.a — read at every tick: false ⇒ this tick claims and starts no
+   * schedule run (its other jobs still run). A throw counts as off and is
+   * logged. Unset ⇒ on.
+   */
+  schedulesEnabled?: () => boolean;
 };
 
 /** What a start-up `recoverAbandoned()` fixed (REQ-discord-346). */
@@ -426,6 +440,7 @@ export class SchedulerService {
   private readonly backup?: Pick<BackupTicker, "tick">;
   private readonly recordAudit?: (entry: AuditEntryInput) => unknown;
   private readonly mutedUsers?: Set<string>;
+  private readonly schedulesEnabled?: () => boolean;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly running = new Map<string, InFlight>();
   /** Runs already finished/abandoned — a run is recorded once. */
@@ -458,6 +473,7 @@ export class SchedulerService {
     this.backup = opts.backup;
     this.recordAudit = opts.recordAudit;
     this.mutedUsers = opts.mutedUsers;
+    this.schedulesEnabled = opts.schedulesEnabled;
     if (!opts.manual) {
       this.start();
     }
@@ -517,9 +533,9 @@ export class SchedulerService {
     const skipped: string[] = [];
     try {
       const now = this.nowFn();
-      // Another process may have created/paused/run schedules since last tick.
-      this.store.refresh();
-      const due = this.store.listDue(now);
+      // PLUGIN-5.a: with schedules turned off nothing is re-read, scanned or
+      // claimed; the delivery pass, spend DMs and backup below still run.
+      const due = this.schedulesOn() ? this.dueSchedules(now) : [];
       for (const schedule of due) {
         if (this.running.size >= this.maxConcurrent) {
           skipped.push(schedule.id);
@@ -571,6 +587,23 @@ export class SchedulerService {
       this.tickInFlight = false;
     }
     return { started, skipped };
+  }
+
+  /** PLUGIN-5.a: `schedulesEnabled` now; unset ⇒ on, a throw ⇒ off (logged). */
+  private schedulesOn(): boolean {
+    if (!this.schedulesEnabled) return true;
+    try {
+      return this.schedulesEnabled() === true;
+    } catch (err) {
+      logSchedulerError("tick hook", err);
+      return false;
+    }
+  }
+
+  /** Re-read the schedules (another process may have changed them) and list the due ones. */
+  private dueSchedules(now: number): Schedule[] {
+    this.store.refresh();
+    return this.store.listDue(now);
   }
 
   /**

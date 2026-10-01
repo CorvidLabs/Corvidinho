@@ -2,13 +2,21 @@
  * Slash command dispatch map (DISCORD-4 / 6 / 7 / DENY-1..3).
  * Ancestor shape: COMMAND_HANDLERS Map + permission gate before handler.
  * Corvidinho: channel allowlist → actor gate (REQ-discord-201) → mute/rate →
- * resolvePermissionLevel + minPermission re-check (DISCORD-7) → handler.
+ * extras switch (PLUGIN-5.a) → resolvePermissionLevel + minPermission
+ * re-check (DISCORD-7) → handler.
  *
  * Channel deny (DISCORD-DENY-1..3):
  * - ADMIN → ephemeral allowlist tip (no public leak)
  * - non-admin → ephemeral zero-width ack (Discord 3s rule; no useful leak)
  * Actor deny (deny-listed, or unlisted when a user/role allowlist applies) →
  * the same ephemeral zero-width ack on every command (REQ-discord-201).
+ *
+ * PLUGIN-5 / PLUGIN-5.a (REQ-discord-157): `/work` and every `/schedule`
+ * subcommand are extras the owner can turn off in `[corvidinho.plugins]`
+ * (src/autonomous/enabled.ts, read fresh through `ctx.extraState`). While one
+ * is off it answers only the fixed ephemeral "/<name> is turned off on this
+ * install." (the owner also gets why and how to turn it back on) and nothing
+ * is created. The commands stay registered.
  */
 
 import { handleAgentsCommand } from "./command-handlers/agents.ts";
@@ -27,6 +35,12 @@ import {
   resolvePermissionLevel,
 } from "./permissions.ts";
 import { SLASH_COMMAND_NAMES } from "./slash-commands.ts";
+import { isOwnerDiscord } from "../identity/owner.ts";
+import {
+  extrasSourcePhrase,
+  type ExtraName,
+  type ExtraState,
+} from "../autonomous/enabled.ts";
 import type {
   SlashContext,
   SlashInteraction,
@@ -47,15 +61,37 @@ type CommandEntry = {
   handler: CommandHandler;
   /** Ancestor minPermission — re-checked at run time (DISCORD-7). */
   minPermission?: number;
+  /** PLUGIN-5.a — the extra this command belongs to (off ⇒ refused before the handler). */
+  extra?: ExtraName;
 };
+
+/** PLUGIN-5.a — the fixed reply while an extra is off (everyone sees this line). */
+export function extraOffText(name: ExtraName): string {
+  return `/${name} is turned off on this install.`;
+}
+
+/**
+ * The reply while `name` is off: the fixed line, plus — for the owner only,
+ * in an ephemeral reply — why and how to turn it back on (never a path or a
+ * file's contents).
+ */
+export function extraOffReply(name: ExtraName, state: ExtraState, ownerView: boolean): string {
+  const line = extraOffText(name);
+  if (!ownerView || state.on) return line;
+  if (state.reason === "off") {
+    return `${line}\nIt is off because \`${name}\` under \`[corvidinho.plugins]\` is not \`true\` in ${state.offIn.map(extrasSourcePhrase).join(" and ")}. Remove that line or set it to \`true\` to turn it back on; the next command reads it (no restart).`;
+  }
+  return `${line}\nIt is off because the plugin settings could not be read: ${state.error}. Fix the file; the next command reads it again.`;
+}
 
 const COMMAND_HANDLERS = new Map<string, CommandEntry>([
   ["session", { handler: handleSessionCommand }],
   ["status", { handler: handleStatusCommand }],
   ["agents", { handler: handleAgentsCommand }],
-  ["work", { handler: handleWorkCommand }],
+  // PLUGIN-5.a: both are extras [corvidinho.plugins] can turn off.
+  ["work", { handler: handleWorkCommand, extra: "work" }],
   // Mutations re-check ADMIN inside handler so list stays open (ancestor pattern).
-  ["schedule", { handler: handleScheduleCommand }],
+  ["schedule", { handler: handleScheduleCommand, extra: "schedule" }],
   // Mutations re-check ADMIN inside handler (DISCORD-ANNOUNCE-5).
   ["announce", { handler: handleAnnounceCommand }],
   [
@@ -101,7 +137,7 @@ function isAdminActor(ctx: SlashContext, interaction: SlashInteraction): boolean
 
 /**
  * Dispatch a slash interaction.
- * Order: channel → actor → mute/rate → permission floor → handler.
+ * Order: channel → actor → mute/rate → extras switch → permission floor → handler.
  */
 export async function handleSlashInteraction(
   ctx: SlashContext,
@@ -182,6 +218,23 @@ export async function handleSlashInteraction(
       ephemeral: true,
     });
     return { ok: false, reason: "unknown_command" };
+  }
+
+  // PLUGIN-5 / PLUGIN-5.a (REQ-discord-157) — an extra that is off answers
+  // only its fixed line, before the permission floor and the handler, so no
+  // session, worktree, work task, run, PR or schedule change happens. Read
+  // fresh for every command (unset ⇒ on).
+  if (entry.extra) {
+    const state = ctx.extraState?.(entry.extra);
+    if (state && !state.on) {
+      const content = extraOffReply(
+        entry.extra,
+        state,
+        isOwnerDiscord(ctx.owner, interaction.userId),
+      );
+      await interaction.reply({ content, ephemeral: true });
+      return { ok: false, reason: "extra_disabled", reply: extraOffText(entry.extra) };
+    }
   }
 
   // DISCORD-7 — re-check minPermission at run time (never trust UI alone).

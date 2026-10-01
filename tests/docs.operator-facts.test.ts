@@ -78,13 +78,15 @@ const OPERATOR_DOCS = [
 describe("docs/discord.md slash surface", () => {
   test("gate order names the actor gate (REQ-discord-201) between channel and mute/rate", () => {
     const dispatch = read("src/discord/slash-dispatch.ts");
-    expect(dispatch).toContain("channel allowlist → actor gate (REQ-discord-201) → mute/rate");
+    expect(dispatch).toContain("channel allowlist → actor gate (REQ-discord-201) → mute/rate →\n * extras switch (PLUGIN-5.a) → resolvePermissionLevel + minPermission");
     const line = read("docs/discord.md")
       .split("\n")
       .find((l) => l.startsWith("Gate order for every slash:"));
     expect(line).toBeDefined();
+    // PLUGIN-5.a (REQ-discord-157): the extras switch sits after mute/rate
+    // and before minPermission, as in slash-dispatch.ts.
     expect(line!).toMatch(
-      /channel allowlist → actor gate \(.*REQ-discord-201.*\) → mute\/rate → minPermission → handler/,
+      /channel allowlist → actor gate \(.*REQ-discord-201.*\) → mute\/rate → extras switch \(.*PLUGIN-5\.a.*\) → minPermission → handler/,
     );
   });
 

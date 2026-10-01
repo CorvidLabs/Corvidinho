@@ -17,6 +17,13 @@
  * nightly SQLite backup and the weekly restore test (src/store/backup.ts)
  * and logs each run; a failure's owner notice stays pending for a bridge.
  *
+ * PLUGIN-5.a (REQ-cli-157): `[corvidinho.plugins] schedule` (the install
+ * root's — this process's cwd — fledge.toml and the owner's allowlist file,
+ * src/autonomous/enabled.ts) is read at every tick. While it is off the tick
+ * claims no schedule run; the backup still runs. `daemon.started` carries
+ * `schedules` (`on` / `off` / `config-unreadable`), and each change is logged
+ * once as `schedules.off` (warn, with why) or `schedules.on`.
+ *
  * Supervision/restart is systemd's job (docs/DAEMON.md); heartbeat, crash DMs
  * and running the bridge/watch inside the daemon are not built here.
  */
@@ -36,6 +43,12 @@ import {
   checkProtocolVersion,
 } from "../discord/protocol-version.ts";
 import { loadOwnerConfig, type OwnerRecord } from "../identity/owner.ts";
+import {
+  extraStateLabel,
+  loadExtrasToggles,
+  trackExtraState,
+  type ExtraState,
+} from "../autonomous/enabled.ts";
 import {
   ABANDONED_SETTLE_MS,
   DEFAULT_POLL_INTERVAL_MS,
@@ -94,6 +107,14 @@ export type StartDaemonResult =
       forceStop: () => void;
     }
   | { ok: false; exitCode: number; message: string };
+
+/** `schedules.off` fields: why (`off` and where, or `config-unreadable` and the error). */
+function schedulesOffFields(state: ExtraState): Record<string, unknown> {
+  if (state.on) return {};
+  return state.reason === "off"
+    ? { reason: "off", offIn: state.offIn }
+    : { reason: "config-unreadable", error: state.error };
+}
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -192,6 +213,21 @@ export async function startDaemon(
   // Discord: a failure's owner notice waits for a bridge tick to post it.
   const backup = createBackupTicker({ db: database, env, log });
   const nowFn = opts.now ?? Date.now;
+  // PLUGIN-5.a: schedules on/off, read now and at every tick; each change is
+  // logged once (the first read goes on `daemon.started`).
+  let startSchedules: ExtraState | undefined;
+  const schedulesState = trackExtraState(
+    () => loadExtrasToggles({ installRoot: projectRoot, env }).schedule,
+    (state, previous) => {
+      if (!previous) {
+        startSchedules = state;
+        return;
+      }
+      if (state.on) log("info", "schedules.on", {});
+      else log("warn", "schedules.off", schedulesOffFields(state));
+    },
+  );
+  schedulesState();
   const scheduler = new SchedulerService({
     store,
     agent,
@@ -204,6 +240,8 @@ export async function startDaemon(
     useWorktrees: opts.useWorktrees,
     ...(opts.now ? { now: opts.now } : {}),
     backup,
+    // PLUGIN-5.a: only the schedules part of the tick is gated.
+    schedulesEnabled: () => schedulesState().on,
     // The daemon owns the interval so it can log each tick.
     manual: true,
     onRunFinished: (e) => {
@@ -304,7 +342,13 @@ export async function startDaemon(
     backup: backupCfg.kind === "on" ? backupCfg.dir : backupCfg.kind === "off" ? "off" : backupCfg.error,
     // AGENT-13: the model scheduled runs call at the default tier, or none.
     llm: defaultProviderLabel(env) ?? "none",
+    // PLUGIN-5.a: whether this daemon runs schedules ([corvidinho.plugins]).
+    schedules: startSchedules ? extraStateLabel(startSchedules) : "on",
   });
+  // PLUGIN-5.a: say why schedules are off (or the config is unreadable).
+  if (startSchedules && !startSchedules.on) {
+    log("warn", "schedules.off", schedulesOffFields(startSchedules));
+  }
   // AGENT-10: with no usable provider scheduled runs fail; say so at startup.
   const llmNotice = providerNotice(env);
   if (llmNotice) log("warn", "llm.no_provider", { notice: llmNotice });
