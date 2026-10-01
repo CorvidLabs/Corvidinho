@@ -7,11 +7,11 @@
   "title": "Release 0.0.39: PR second-model review, idle and turn caps, CLI shell in worktree, public-thread approve cards, plain worker and WATCH failure lines",
   "description": "Release 0.0.39: PR second-model review, idle and turn caps, CLI shell in worktree, public-thread approve cards, plain worker and WATCH failure lines",
   "kind": "operations",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "6ea722e17df07467737ce10d8949de85e4c04089",
   "created_at": 1790866752,
-  "updated_at": 1790867031,
+  "updated_at": 1790867845,
   "affected_specs": [
     "cli"
   ],
