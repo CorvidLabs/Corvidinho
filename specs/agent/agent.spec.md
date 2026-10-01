@@ -930,7 +930,8 @@ fresh on every call and never cached. Off in either is off; a missing file,
 table or key is on, so an existing install stays on until the owner turns an
 extra off; only the literal `true` is on otherwise (dotted and inline-table
 spellings under `[corvidinho]` are the same key; a key under a later table
-does not count; a key written twice is off unless every copy is `true`). A
+does not count; a key written twice is off unless every copy is `true`; a
+`plugins` there that is not a table, like `plugins = false`, is both off). A
 file that exists but cannot be read (any error but ENOENT), or a `.json`
 allowlist file that does not parse, makes both extras off with reason
 `config-unreadable` and a source-named error (no path, no contents). Target

@@ -4185,9 +4185,13 @@ needed.
   SHALL get the fixed line in the channel (never the owner hint) and run
   nothing, its open asks left as they were, checked when it would run; the
   requester's press on a `/work` talk's ask (open, pick, Answer form) SHALL
-  get `extraOffReply` privately and resume nothing. A run in flight SHALL NOT
-  be aborted by the switch, and `stop` / `cancel` and its Stop button SHALL
-  still stop it.
+  get `extraOffReply` privately and resume nothing. A message that would
+  resume an expired `/work` talk's retained conversation as a new session
+  (SESSION-3.a: a reply to one of its answers, or its user's message in its
+  thread) SHALL get the same fixed line in the channel, and no session SHALL
+  be made (`RouterDeps.refuseResume`, asked before `resumeFromRetained`). A
+  run in flight SHALL NOT be aborted by the switch, and `stop` / `cancel` and
+  its Stop button SHALL still stop it.
 - Scheduler: `SchedulerServiceOpts.schedulesEnabled` (unset ⇒ on; a throw ⇒
   off, logged) SHALL gate only the schedules part of `tick()` (store
   re-read, due scan, open-ask skip, claim): while off no run row is claimed
@@ -4197,14 +4201,17 @@ needed.
   on, the existing no-catch-up claim fires each overdue schedule at most
   once.
 - Logs: one `[discord] <extra>: off (…)` line per extra that is off at
-  start, one `[discord] scheduler schedule: …` line per change, and a line
-  for each refusal while the settings are unreadable (`config-unreadable`).
+  start, one `[discord] scheduler schedule: …` line per change (the ticker
+  logs nothing else for the switch, so an unreadable file is not logged on
+  every tick), and a line for each refused command, message or press while
+  the settings are unreadable (`config-unreadable`).
 
 Acceptance Criteria
 - With `extraState` off for `work`, a team member's `/work` gets exactly `[{ content: "/work is turned off on this install.", ephemeral: true }]` and `{ ok: false, reason: "extra_disabled" }`; the session store, work store and agent stay untouched; the owner's reply starts with that line and names `[corvidinho.plugins]` and the allowlist file with no path.
 - With `schedule` off, `/schedule` list / create / pause / resume / delete each get `/schedule is turned off on this install.` and the schedule store is unchanged; `/work` still runs; an off-allowlist channel, a deny-listed actor and a muted user keep their zero-width / `MUTED` replies; `/status` never reads the switch.
 - A bridge with `work = false` in its allowlist file refuses `/work`; rewriting the file to `work = true` lets the next `/work` run; `work = false` in the install root's `fledge.toml` refuses it too.
 - After an owner's `/work` answer, with `work = false`: a reply to that answer and the owner's @mention in the channel each get `/work is turned off on this install.` in the channel and no agent call; someone else's @mention still runs; back on, the reply resumes the same session.
+- After an owner's `/work` answer and the session's TTL, with `work = false`: a reply to that answer gets `/work is turned off on this install.` in the channel, no agent call and no new session; back on, the same reply starts a new session from the `/work` talk's conversation.
 - A `/work` run that stopped on a Choose ask: with `work = false` an open press and a pick press each get the line privately (with the owner hint), no agent call, the ask still open; back on, a pick resumes the session with the label.
 - A `/work` run in flight is not aborted when `work = false` is written, and a `stop` reply to its progress message still stops it (`⏹ Stopped`).
 - With `schedule = false` in the allowlist file, the bridge's 20 ms ticker leaves a due schedule unclaimed; rewriting the file lets it fire.

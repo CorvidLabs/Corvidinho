@@ -982,6 +982,12 @@ export async function startBridge(
         rateLimit: { state: rateLimitState, config: rateLimitConfig },
         // AGENT-3.a (REQ-discord-302): a reply 'stop' to a run's progress message.
         runs: runControl,
+        // PLUGIN-5.a (REQ-discord-157): an expired /work talk's conversation
+        // is not resumed as a new session (SESSION-3.a) while /work is off.
+        refuseResume: (priorSessionId) =>
+          workStore.isWorkSession(priorSessionId) && !extraState("work").on
+            ? extraOffText("work")
+            : null,
       });
 
       if (action.kind === "ignore") return;
@@ -2555,11 +2561,15 @@ export async function startBridge(
         })
       : undefined;
     // PLUGIN-5.a: schedules on/off, read at every tick; one log line per
-    // change (the start-up line above covers the first read).
+    // change (the start-up line above covers the first read), so an
+    // unreadable file is not logged again on every tick.
     const schedulesState = trackExtraState(
-      () => extraState("schedule"),
+      () => loadExtrasToggles({ installRoot: config.projectRoot, env }).schedule,
       (state, previous) => {
-        if (previous) console.log(`[discord] scheduler ${formatExtraStateLog("schedule", state)}`);
+        if (!previous) return;
+        const line = `[discord] scheduler ${formatExtraStateLog("schedule", state)}`;
+        if (state.on) console.log(line);
+        else console.warn(line);
       },
     );
     scheduler = new SchedulerService({

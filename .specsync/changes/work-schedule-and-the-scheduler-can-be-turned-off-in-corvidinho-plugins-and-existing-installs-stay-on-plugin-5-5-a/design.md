@@ -37,8 +37,13 @@ artifact: design
   expired-ask clear, thin-ack / cancel and the run: post the fixed line
   (channel; never the owner hint) and track it on the session. In
   `onComponent`, after the not-for-you check: the requester's press on a
-  `/work` talk's ask gets `extraOffReply` ephemerally. Nothing in flight is
-  aborted.
+  `/work` talk's ask gets `extraOffReply` ephemerally. In the router,
+  `RouterDeps.refuseResume(priorSessionId)` is asked before an expired
+  session's retained conversation is resumed (SESSION-3.a); the bridge
+  answers the fixed line for a `/work` talk's while `work` is off, so the
+  router returns `refuse` with it and no new session is made (checking after
+  `resumeFromRetained` would already have re-pointed the conversation at a
+  plain chat session). Nothing in flight is aborted.
 - **Scheduler** (`service.ts`): `schedulesEnabled?: () => boolean`; `tick()`
   computes `due = schedulesOn() ? dueSchedules(now) : []` (re-read + listDue
   only when on), so the loop (open-ask skip, claim, spawn) sees nothing,
@@ -47,7 +52,9 @@ artifact: design
 - **Bridge wiring**: `extraState(name)` reads fresh and logs each
   `config-unreadable` refusal; one start-up line per extra that is off; the
   scheduler gets `schedulesEnabled` through `trackExtraState` (one
-  `[discord] scheduler schedule: …` line per change).
+  `[discord] scheduler schedule: …` line per change; the ticker reads
+  without the per-refusal warning so an unreadable file is not logged every
+  tick).
 - **Daemon**: the same reader on its `projectRoot`; `daemon.started` carries
   `schedules`; `schedules.off` (warn, with why) / `schedules.on` per change.
 - **Config files**: `fledge.toml` and `allowlist.example.toml` get a

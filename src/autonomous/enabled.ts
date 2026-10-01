@@ -111,7 +111,8 @@ export function autonomousSessionAllowed(opts: {
  *     resets it: the update-proof place for an off.
  * Off in either is off. A missing file, table or key is on, so an existing
  * install stays on until the owner turns an extra off (PLUGIN-5.a); only the
- * literal `true` is on otherwise, and `false` or any other value is off. A
+ * literal `true` is on otherwise, and `false` or any other value is off (a
+ * `plugins` that is not a table, like `plugins = false`, turns both off). A
  * file that exists but cannot be read (or a `.json` allowlist file that does
  * not parse) turns both off as `config-unreadable` (fail closed; callers log
  * it). Target-project `fledge.toml` files are not read, and
@@ -161,7 +162,12 @@ export function parseExtrasSettings(toml: string): ExtrasSettings {
     if (key === PLUGINS_TABLE) {
       // Inline table under [corvidinho]: `plugins = { work = false }`.
       const inline = value.match(/^\{(.*)\}$/);
-      if (!inline) continue;
+      if (!inline) {
+        // `plugins = false` (or any value that is not a table) is not a
+        // setting we can read: off, as for a `.json` file's `"plugins": false`.
+        for (const name of EXTRA_NAMES) setExtra(out, name, false);
+        continue;
+      }
       for (const part of inline[1]!.split(",")) {
         const kv = part.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*?)\s*$/);
         if (kv && isExtraName(kv[1]!)) setExtra(out, kv[1]!, kv[2] === "true");

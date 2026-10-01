@@ -30,6 +30,9 @@ Rules:
 - `plugins.work = false` and `plugins = { work = false }` under
   `[corvidinho]` SHALL be the same key; a key under a later table SHALL
   not count; a key written twice SHALL be off unless every copy is `true`.
+  A `plugins` under `[corvidinho]` that is not an inline table (such as
+  `plugins = false`) SHALL make both extras off, as a `.json` file's
+  non-object `corvidinho.plugins` does.
 - A file that exists but cannot be read (any error but ENOENT), or a
   `.json` allowlist file that does not parse, SHALL make both extras off
   with `reason: "config-unreadable"` and an `error` naming the source (no
@@ -41,7 +44,7 @@ Rules:
   and on each change of state or reason only.
 
 Acceptance Criteria
-- `[corvidinho.plugins]` with `work = true` / `schedule = true` or no key is on; `false`, `"false"`, `"true"`, `0`, `1`, an inline table and `no` are off; `plugins.work = false` and `plugins = { work = false, schedule = true }` under `[corvidinho]` read the same; a key under a later `[tasks.test]` / `[[lanes.x]]` table, under `[merlin.plugins]` or named `council` does not count.
+- `[corvidinho.plugins]` with `work = true` / `schedule = true` or no key is on; `false`, `"false"`, `"true"`, `0`, `1`, an inline table and `no` are off; `plugins.work = false` and `plugins = { work = false, schedule = true }` under `[corvidinho]` read the same; `plugins = false`, `plugins = true` and `plugins = "off"` under `[corvidinho]` give both off; a key under a later `[tasks.test]` / `[[lanes.x]]` table, under `[merlin.plugins]` or named `council` does not count.
 - No files, this checkout's own `fledge.toml` and no default allowlist file under the home dir give both on; `work = false` in the install root's `fledge.toml` gives `{ on: false, reason: "off", offIn: ["fledge.toml"] }`; `schedule = false` in the allowlist file beats `schedule = true` in `fledge.toml`; a `.json` allowlist file's `corvidinho.plugins.work: false` and the default allowlist path under the home dir are read.
 - A `fledge.toml` that is a directory gives both `{ on: false, reason: "config-unreadable", error: "the install's fledge.toml could not be read (EISDIR)" }`; a `.json` allowlist file `{oops` gives `the allowlist file could not be parsed`.
 - `[corvidinho.autonomous] enabled = false` leaves both on.

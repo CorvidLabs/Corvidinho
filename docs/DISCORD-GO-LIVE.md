@@ -688,7 +688,8 @@ schedule = false   # every /schedule subcommand, and schedule runs in the bridge
 ```
 
 (`plugins.work = false` or `plugins = { work = false }` under `[corvidinho]` is the same key.)
-Only the literal `true` or a missing key means on; `false` or any other value means off.
+Only the literal `true` or a missing key means on; `false` or any other value means off, and a
+`plugins = false` (any `plugins` that is not a table) under `[corvidinho]` turns both off.
 
 - **Where:** in the **allowlist file** (`CORVIDINHO_ALLOWLIST_FILE`, else
   `~/.config/corvidinho/allowlist.toml`; a `.json` file takes `{"corvidinho": {"plugins":
@@ -704,7 +705,9 @@ Only the literal `true` or a missing key means on; `false` or any other value me
   message that would resume a `/work` talk — a reply to its answer, or an @mention in that
   channel while the talk is still your active session there — gets the same line in the
   channel; a button press on its question gets it privately; nothing runs and the question
-  stays open. A `/work` run already going is not stopped, and `stop` or its Stop button still
+  stays open. After the talk has idled out, a reply to one of its answers (or your message in
+  its thread) gets the same line too instead of picking the conversation up again in a new
+  talk. A `/work` run already going is not stopped, and `stop` or its Stop button still
   stop it.
 - **While `/schedule` is off:** every subcommand (list, create, pause, resume, delete) gets
   `/schedule is turned off on this install.`, and the bridge's and the daemon's ticks start no

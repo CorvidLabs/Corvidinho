@@ -926,7 +926,9 @@ a status and the provider's own raw body; temp dirs only):
 `tests/plugins.extras-toggle.test.ts` ("[corvidinho.plugins] settings"):
 absent or literal `true` is on, `false` / `"false"` / `0` / an inline table /
 any other value is off; the dotted and inline-table spellings under
-`[corvidinho]` are the same key; a key under a later table, another table or
+`[corvidinho]` are the same key, and a `plugins` there that is not a table
+(`false`, `true`, `"off"`) is both off (review fix; fails without it); a key
+under a later table, another table or
 another name does not count, and a key written twice is off unless every copy
 is `true`; a `.json` allowlist file's `corvidinho.plugins` object reads the
 same. `loadExtrasToggles`: nothing set (no files, this checkout's own

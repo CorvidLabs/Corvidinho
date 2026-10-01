@@ -116,6 +116,11 @@ describe("[corvidinho.plugins] settings (REQ-agent-157)", () => {
       work: false,
       schedule: true,
     });
+    // `plugins` that is not a table is not a setting we can read: both off,
+    // as for a .json file's `"plugins": false`.
+    for (const v of ["false", "true", '"off"']) {
+      expect(parseExtrasSettings(`[corvidinho]\nplugins = ${v}\n`)).toEqual({ work: false, schedule: false });
+    }
   });
 
   test("a key under a later table, another table or another extra name does not count", () => {
@@ -443,6 +448,7 @@ async function bridgeWith(opts: {
   root?: string;
   db?: Database;
   scheduler?: boolean;
+  sessionStore?: SessionStore;
 }) {
   const box: { handlers: GatewayHandlers | null } = { handlers: null };
   const outbound = memoryThinkingOutbound();
@@ -460,6 +466,7 @@ async function bridgeWith(opts: {
     ...(opts.scheduler ? { schedulerPollIntervalMs: 20 } : { disableScheduler: true }),
     approvalPollMs: 0,
     ...(opts.db ? { db: opts.db } : {}),
+    ...(opts.sessionStore ? { sessionStore: opts.sessionStore } : {}),
     thinkingOutbound: outbound,
     thinkingDebounceMs: 0,
     thinkingTickMs: 60_000,
@@ -612,6 +619,47 @@ describe("the bridge reads [corvidinho.plugins] live (REQ-discord-157)", () => {
     await b.handlers.onMessage(replyTo("m-2", answer, "follow up again"));
     expect(calls).toHaveLength(3);
     expect(calls[2]).toMatchObject({ sessionId: sessionA, resume: true, humanText: "follow up again" });
+  });
+
+  test("a reply to an expired /work talk's answer does not resume its conversation while /work is off (SESSION-3.a)", async () => {
+    const TTL = 45 * 60 * 1000;
+    const clock = { now: 1_000_000 };
+    const db = openCorvidinhoDb({ memory: true });
+    cleanups.push(() => db.close());
+    const sessionStore = new SessionStore({
+      db,
+      ttlMs: TTL,
+      now: () => clock.now,
+      defaultProjectRoot: installRoot(),
+    });
+    const file = allowlistFile("");
+    const { agent, calls } = recordingAgent();
+    const b = await bridgeWith({ agent, allowlist: file, db, sessionStore });
+    await b.handlers.onSlash!(workSlash(1, "topic A").ix);
+    expect(calls).toHaveLength(1);
+    const answer = b.outbound.sends[0]!.messageId;
+    const sessionA = calls[0]!.sessionId;
+    clock.now += TTL + 5_000;
+
+    writeFileSync(file, OFF_WORK);
+    const sessionsBefore = sessionStore.list().length;
+    await b.handlers.onMessage(replyTo("m-late", answer, "and the follow-up?"));
+    expect(calls).toHaveLength(1);
+    expect(b.replies.at(-1)).toEqual({
+      channelId: CHAN,
+      content: "/work is turned off on this install.",
+      replyToMessageId: "m-late",
+    });
+    // No new session was made from the /work talk's conversation.
+    expect(sessionStore.list().length).toBe(sessionsBefore);
+
+    // Back on, the same reply resumes it as before (a new session that
+    // begins from the /work talk's conversation).
+    writeFileSync(file, "");
+    await b.handlers.onMessage(replyTo("m-late-2", answer, "and the follow-up?"));
+    expect(calls).toHaveLength(2);
+    expect(calls[1]!.sessionId).not.toBe(sessionA);
+    expect(calls[1]!.prompt).toContain("topic A");
   });
 
   test("a press on a /work talk's ask is refused privately and resumes nothing; the ask stays open", async () => {

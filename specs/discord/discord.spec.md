@@ -964,7 +964,11 @@ exports `extraOffText(name)` (`/<name> is turned off on this install.`) and
 how to turn it back on, never a path); its command map tags `work` and
 `schedule` with `extra`. `SlashContext` gains optional `extraState?: (name:
 ExtraName) => ExtraState` (unset ⇒ on). `WorkStore.isWorkSession(sessionId)`
-says whether a session is a `/work` talk. `SchedulerServiceOpts` gains optional
+says whether a session is a `/work` talk. `RouterDeps` gains optional
+`refuseResume?: (priorSessionId: string) => string | null`, asked before an
+expired session's retained conversation is resumed (SESSION-3.a); a
+non-null reply routes as `{ kind: "refuse", reason: "extra_disabled",
+reply }` and no session is made. `SchedulerServiceOpts` gains optional
 `schedulesEnabled?: () => boolean` (unset ⇒ on; a throw is off, logged
 `[scheduler] tick hook failed: …`). The bridge wires both from
 `loadExtrasToggles({ installRoot: config.projectRoot, env })` (REQ-agent-157),
@@ -985,7 +989,9 @@ author's active session in that channel) gets the fixed line in the channel
 (never the owner hint) and runs nothing, read when it would run (after any
 wait in the session's queue), its open asks left as they were; the
 requester's press on a `/work` talk's ask (open, pick, Answer form) gets the
-reply privately and resumes nothing. A run in flight is never aborted by the
+reply privately and resumes nothing; a message that would resume an expired
+`/work` talk's conversation as a new session (SESSION-3.a) gets the fixed
+line in the channel and no session is made. A run in flight is never aborted by the
 switch: `stop` / `cancel` and the Stop button reach it before the gate. While
 `schedule` is off, `SchedulerService.tick` skips only the schedules part
 (re-read, due scan, open-ask skip, claim) — no run row is claimed and nothing
@@ -993,8 +999,9 @@ spawns — while the `onTick` hook (Approve / forget cards, stuck WATCH asks),
 the pending-ask delivery pass, the owner's spend DMs and the backup tick still
 run each tick; runs in flight finish; back on, the no-catch-up claim fires
 each overdue schedule at most once. The bridge logs one line per extra that
-is off at start, one `[discord] scheduler schedule: …` line per change, and
-each refusal while the settings are unreadable (`config-unreadable`). There
+is off at start, one `[discord] scheduler schedule: …` line per change (not
+one per tick), and each refusal while the settings are unreadable
+(`config-unreadable`). There
 is no `/admin` knob; `[corvidinho.autonomous]` has no say.
 
 A run a limit I set stopped (AGENT-12, REQ-discord-125) shows it only as

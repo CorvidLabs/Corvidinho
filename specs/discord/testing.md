@@ -1618,7 +1618,10 @@ stamp, one real `task run` against the fake model; no network):
   install root's `fledge.toml` is off too; a reply to a `/work` answer, and
   the owner's @mention routed to that `/work` talk, get the fixed line in the
   channel and run nothing while someone else's chat still runs, and back on
-  the reply resumes the talk; an open and a pick press on a `/work` talk's
+  the reply resumes the talk; after the talk's TTL, a reply to its answer
+  gets the fixed line, no agent call and no new session, and back on it
+  resumes the conversation as a new session (SESSION-3.a; review fix, fails
+  without `refuseResume`); an open and a pick press on a `/work` talk's
   Choose ask are refused privately (with the owner hint), the ask stays open,
   and back on a pick resumes it; turning `/work` off does not abort a run in
   flight and a `stop` reply still stops it; `schedule = false` keeps the
@@ -1639,4 +1642,7 @@ and the three daemon cases — and the docs gate-order test fails; the 15 that p
 are the config units and the must-not-break guards (other gates' replies,
 `/status`, ask delivery and runs in flight while off, the stop case). With
 every modified source from the base the file does not load. Restored: 28 of
-28 pass.
+28 pass. Review: the expired-`/work`-talk test above (29 in all) fails when
+the router ignores `refuseResume`; with the extras loader forced to on, 10 of
+the 29 fail (every loader-driven bridge and daemon case and the two loader
+units), so the bridge and daemon cases depend on the switch.

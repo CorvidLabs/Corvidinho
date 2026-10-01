@@ -5,7 +5,7 @@ artifact: testing
 
 # Testing
 
-`tests/plugins.extras-toggle.test.ts` (28 tests). Temp install roots and
+`tests/plugins.extras-toggle.test.ts` (29 tests after review). Temp install roots and
 allowlist files, in-memory or temp SQLite, injected agents and a null
 gateway; the bridge cases rewrite the allowlist file between steps to prove
 the live re-read; nothing touches this checkout or the operator's home.
@@ -33,6 +33,13 @@ related suites (`docs.operator-facts`, `autonomous.enabled`,
 `discord.slash-reply-continuity`, `discord.stop-run`,
 `discord.slash-choose-ask`, `allowlist.toml-multiline`; 269 tests) pass,
 as does the full `bun test`.
+
+Review fixes: the test "a reply to an expired /work talk's answer does not
+resume its conversation while /work is off (SESSION-3.a)" fails when the
+router ignores `refuseResume`, and the `plugins = false` assertions in "the
+dotted and inline-table spellings" fail without the non-table rule; both
+pass with the fixes. With the extras loader forced to on, 10 of the 29 fail
+(the two loader units, every loader-driven bridge case and two daemon cases).
 
 ## Requirement evidence
 
