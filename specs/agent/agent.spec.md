@@ -610,6 +610,16 @@ test seam), `HUMAN_LIFECYCLE_LINE`, `selfLifecycleRefusal(cwd, id, env)`,
 `citedHiIds(text, families)`. `ExecuteContext` gains optional
 `repoWays?: RepoWays`. No env var, config key, flag or schema.
 
+A local `task run`'s own worktree (SESSION-WORKTREE-1.a, REQ-cli-122):
+`TaskResult` gains optional `workspace?: TaskWorkspaceReport` (`dir`,
+`branch`, `kept`, `branchKept`), set only by the CLI for a run that worked in
+its own worktree (additive on `--json` and the NDJSON `result` frame:
+protocol stays 2). The delegate core spawns every worker (and council voice)
+with `task run --here …` (REQ-agent-117), so a worker works in its lead's cwd
+and never makes a worktree of its own. The SAFE-3.a gate's refusal for a run
+with no role session reads `a local CLI run has no role session (the CLI half
+of SAFE-3.a is not built yet)` (REQ-agent-503).
+
 ## Invariants
 
 A failed model hands the run to the next configured one and says so (AGENT-11,
@@ -1263,4 +1273,5 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-30 | at-a-spend-cap-the-run-asks-the-owner-on-a-dm-spend-approve-card-with-a-one-time-code-instead-of-refusing-approve-lets: At a spend cap the run asks the owner on a DM spend Approve card with a one-time code instead of refusing; Approve lets only the paused call through at the amount shown and the next call past the cap asks again (SAFE-8, SAFE-8.a, SAFE-15, SAFE-19 money) |
 | 2026-09-30 | the-safe-3-a-approved-prod-command-test-runs-a-stand-in-kubectl-first-on-path-instead-of-the-host-s-real-one-which-took: The SAFE-3.a approved-prod-command test runs a stand-in kubectl first on PATH instead of the host's real one, which took 2.4-3.1 s on CI runners and once passed the 5 s test timeout |
 | 2026-09-30 | if-it-only-plans-or-says-done-without-changing-anything-it-gets-one-nudge-to-the-same-model-a-second-stall-stands-with: If it only plans or says 'Done.' without changing anything, it gets one nudge to the same model; a second stall stands with an operator note (AGENT-17, nudge half) |
+| 2026-09-30 | a-cli-task-run-in-a-git-repo-works-in-its-own-worktree-by-default-here-runs-it-in-my-checkout-session-worktree-1-a: A CLI task run in a git repo works in its own worktree by default; --here runs it in my checkout (SESSION-WORKTREE-1.a) |
 | 2026-09-30 | a-call-whose-price-is-unknown-stops-and-asks-on-the-owner-s-spend-card-showing-the-amount-as-unknown-when-a-cap-covers: A call whose price is unknown stops and asks on the owner's spend card showing the amount as unknown when a cap covers it (recorded unknown, owner lines read $X + unknown, no price override), and every surface asks before spending over a cap: WATCH spend-cap stops reach the owner by DM and a schedule's spend-cap stop can go on through the card (SAFE-16, SAFE-16.a, AUTONOMY-8) |

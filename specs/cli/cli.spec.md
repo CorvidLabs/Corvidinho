@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 73
+version: 74
 status: draft
 files:
   - src/cli.ts
@@ -26,6 +26,8 @@ files:
   - src/store/backup.ts
   - tests/ops.backup.test.ts
   - tests/ops.backup-wiring.test.ts
+  - src/worktree/cli-run.ts
+  - tests/cli.task-worktree.test.ts
 
 db_tables: []
 depends_on:
@@ -52,6 +54,11 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `parseGlobalFlags` | `args: string[]` | `{ rest, pluginArgs, nonInteractiveFlag, json, removedFlag, maxRetries, taskText, tier, project }` | Global flags anywhere in argv; `project` is the `--project` path (`""` when given without one; only before `--`) (REQ-cli-505); `removedFlag` is `--no-verify` when read as a flag, which `main` refuses (REQ-cli-085) |
 | `readStartEnv` | `path?: string` | `Record<string, string> or null` | The env this process was started with (`/proc/self/environ`), before Bun added the start directory's `.env*` values (REQ-cli-505) |
 | `enterProject` | `path: string, opts?: { startEnv? }` | `EnterProjectResult` | CLI-5 `--project`: env as Bun builds it for a process started in `path` (probe pinned to `SPAWN_BUN_CONFIG`), then `chdir`; later `Bun.spawn` / `Bun.spawnSync` without `env` pass the new `process.env`; changes nothing on failure (REQ-cli-505) |
+| `parseTaskHere` | `args: readonly string[]` | `boolean` | `--here` among `task run`'s own args (`rest` after `task run`) before the first `--`; never the `--task` value (REQ-cli-122) |
+| `enterCliTaskWorkspace` | `opts: { cwd, here, env?, signal?, sessionId? }` | `Promise<EnterCliTaskWorkspaceResult>` | Where a local `task run` works (src/worktree/cli-run.ts): in place for `--here`, a non-git dir or a spawned child; else a new worktree from `HEAD` made by `ensureTalkWorkspace` from the realpath repo top, in the same subdir; fails closed (unborn HEAD, git error, missing subdir) and is `cancelled` on an aborted signal, leaving nothing (REQ-cli-122) |
+| `finishCliTaskWorkspace` | `ws` (the `worktree` kind) | `Promise<FinishedCliTaskWorkspace>` | At run end: remove the worktree only when `git status --porcelain` is empty and its branch (the one it is on at the end: `talk/cli_…` or one the run made and switched to) only when it has no own commits; else keep and name them (`report` for `result.workspace`, `note` for stderr) (REQ-cli-122) |
+| `isSpawnedTaskChild` | `env?` | `boolean` | A child a product surface spawned (role session, WATCH / Discord session id, delegation depth > 0): it never makes a nested worktree (REQ-cli-122) |
+| `cliWorkspaceStartLine` | `ws` (the `worktree` kind) | `string` | The run's first line: the worktree and branch, made from HEAD, uncommitted and untracked files not included, nothing installed, `--here` (REQ-cli-122) |
 | `envFileFlags` | `execArgv: readonly string[]` | `string[]` | Bun's `--no-env-file` / `--env-file` flags from `execArgv`, in order, forwarded to the `--project` probe (REQ-cli-505) |
 | `attribution` | `format?: "markdown" or "plain"` | `string` | Return the canonical footer in the requested format |
 | `startDaemon` | `opts?: StartDaemonOptions` | `Promise<StartDaemonResult>` | Take the data-dir lock and arm the headless schedule ticker (CLI-8 / AUTONOMOUS-4) |
@@ -106,6 +113,7 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `ATTRIBUTION_PLAIN` | Canonical plain-text footer without account handles |
 | `DEFAULT_SHUTDOWN_GRACE_MS` | Daemon stop waits this long (30 s) for in-flight runs |
 | `DAEMON_LOCK_FILE` | `daemon.lock` in the data dir |
+| `CLI_HERE_HINT` | `pass --here to run in this checkout`: the hint when a local task run's worktree can't be made (REQ-cli-122) |
 | `PROJECT_ENV_TIMEOUT_MS` | Cap (15 s) on the one-off `.env` probe `--project` runs (REQ-cli-505) |
 | `BACKUP_DIR_ENV` | `CORVIDINHO_BACKUP_DIR` (OPS-1, REQ-cli-680) |
 | `BACKUP_KEEP` | Snapshots kept (7) |
@@ -124,6 +132,8 @@ Operator surface includes Discord HEAR, GitHub WATCH, the headless schedule daem
 | `DoctorCheck` | One doctor line: name, ok, detail, optional printed mark |
 | `EnterProjectResult` | `{ ok: true, dir }` or `{ ok: false, error, hint }` from `enterProject` (REQ-cli-505) |
 | `ProjectDirError` | Error class for an unusable `--project`; `hint` is the operator's next step (REQ-cli-505) |
+| `TaskWorkspaceError` | Error class for a local task run whose worktree can't be made (exit 1, hint `CLI_HERE_HINT`) or that was cancelled while it was made (exit 130), through `reportCliError` (REQ-cli-122) |
+| `CliTaskWorkspace` / `EnterCliTaskWorkspaceResult` / `FinishedCliTaskWorkspace` | `here` (`reason`: `here` / `not-git` / `child`) or `worktree` (`cwd`, `dir`, `branch`, `repoTop`); `{ ok: false, error, cancelled }`; `{ report: TaskWorkspaceReport, note }` (REQ-cli-122) |
 | `RemovedFlagError` / `REMOVED_NO_VERIFY_FLAG` | Error class for the removed `--no-verify` (message and `hint`, exit 1 through `reportCliError`) and the flag it names (REQ-cli-085) |
 | `DoctorAllowlist` / `AllowlistUsage` / `AllowlistSource` | Doctor allowlist load result, listed / usable / deny-listed entry counts and source (`file` / `env`) |
 | `BackupConfig` / `SnapshotInfo` / `SnapshotResult` / `DbFileCheck` / `RestoreOptions` / `RestoreResult` / `RestoreTestResult` | Backup config, snapshot, check, restore and restore-test results (REQ-cli-680) |
@@ -161,7 +171,15 @@ doctor and the report-only `corvidinho init` check the project files in the curr
 
 Nightly backup (OPS-1/2, REQ-cli-680, `src/store/backup.ts`): with `CORVIDINHO_BACKUP_DIR` unset nothing is backed up and doctor prints `[warn] backup: off — …`; a relative path or a directory in a git work tree is never written. The scheduler tick (daemon and bridge) claims the night once per local day per data dir from 03:00 local time, writes a checked `VACUUM INTO` snapshot (umask 077, fsync, rename to `corvidinho-<UTC>Z.db`, 0600; `ensureScrubbed` first; newest 7 kept, other files untouched) and, when due (never ran, ≥7 days, or failing) and a snapshot exists, restores the newest into a temp dir through `restoreSnapshot`, checks integrity / schema version / tables / row counts against the recorded ones, and deletes it. Every run is logged (`backup.ok` / `backup.failed` / `restore_test.ok` / `restore_test.failed` / `restore_test.skipped`; the daemon adds `backup` to `daemon.started`). The first failure of a streak records an owner notice in `schema_meta` (later ones only update the scrubbed reason); the daemon never posts it (REQ-discord-680 delivers it). `backup restore` never overwrites a file a process holds open, even with `--force`; an existing idle target needs `--force`. A snapshot temp file more than an hour old (a crashed run's) is removed before the next snapshot; a backup dir reached through a symlink into a git work tree is refused. The night's job in progress is marked in `schema_meta` (pid + process start); a run whose process died before it finished is recorded as that job's failure (`interrupted: …`) at the next tick with the backup on, so it is told like any failure. The daemon's backup ticks even when its allowlist file fails to load. doctor's `backup` line is `[warn]` while no `/announce` channel is set, since the owner notice goes only there. State is `schema_meta` `ops_*` keys: no table, column or schema version.
 
+`task run` in a git repo works in its own worktree by default and `--here` runs it in the current checkout (SESSION-WORKTREE-1.a, REQ-cli-122): `enterCliTaskWorkspace` keeps a `--here` run (the flag read only from `task run`'s own args before `--`, never `--task` text), a non-git directory (AGENT-1.a) and a child a product surface spawned (role session, WATCH or Discord session id, delegation depth > 0; never a nested worktree) in place, and otherwise makes a linked worktree from `HEAD` with `ensureTalkWorkspace` from the realpath repo top (`WORKTREE_BASE_DIR` or `dirname(repoTop)/.corvid-worktrees`, `talk-cli_<uuid prefix>-<digest>`, branch `talk/cli_…`) and runs (and `chdir`s) in the same subdirectory. Nothing is copied or installed there; the first event says so and names `--here`. Creation fails closed (exit 1, one scrubbed line, hint `pass --here to run in this checkout`; never the checkout) and a signal while it is made gives 130 with nothing left. At run end a clean worktree is removed and its branch deleted only when it has no own commits; anything kept is named on stderr and in the optional additive `TaskResult.workspace` (`--json` / ndjson; protocol unchanged). The Discord, WATCH, delegate and council spawners pass `--here`.
+
 ## Behavioral Examples
+
+### Scenario: A task run in a git repo
+
+- **Given** a git checkout with an uncommitted edit, started in its `sub` directory
+- **When** the operator runs `corvidinho task run --task "…"` (no `--here`)
+- **Then** it says it works in a new worktree made from HEAD without the checkout's uncommitted and untracked files, the run's edits land there and not in the checkout, and at the end a worktree with changes is kept and named (a clean one is removed with its branch); `--here` runs it in the checkout instead
 
 ### Scenario: Github watch missing token
 
@@ -235,6 +253,9 @@ Nightly backup (OPS-1/2, REQ-cli-680, `src/store/backup.ts`): with `CORVIDINHO_B
 | Doctor / `init`: verify lane step (or a step task's `deps`) names an undefined task | `[missing] verify-lane` naming the task (fledge refuses the lane); exit 1 |
 | Doctor / `init` run in a subdirectory of a git project whose root has the project files | Each `[missing]` line names the root to run from, not a creator command; exit 1 |
 | Task verify exhausted | Exit 1; JSON verified false |
+| `task run` in a git repo whose worktree can't be made (unborn HEAD, git error such as a failing post-checkout hook, unusable `WORKTREE_BASE_DIR`) or lacks the start subdir | `corvidinho: task run could not make its worktree: …` / `task run's worktree has no <subdir>: …` + `hint: pass --here to run in this checkout`; exit 1; no model call; nothing left; `--json` → `{ok:false,error}` (REQ-cli-122) |
+| `task run` gets SIGINT / SIGTERM while its worktree is made | `corvidinho: cancelled while making the task worktree`; exit 130; no model call; the worktree and branch removed (REQ-cli-122) |
+| `task run`'s own worktree has uncommitted changes (or git can't read it) at the end | Kept with its branch, never force-removed; `Kept worktree <dir> (branch <b>): …` on stderr; `result.workspace.kept` true (REQ-cli-122) |
 | Task run gets SIGINT / SIGTERM | Run aborted (verify lane and tool loop stopped); cancelled result printed (ndjson `result` frame); exit 130 |
 | Task run started with SIGINT ignored (background job) | SIGINT stays ignored; SIGTERM still cancels (exit 130) |
 | Daemon lock held by a live daemon | `daemon.lock_held` log line; exit 1 |
@@ -254,6 +275,7 @@ Nightly backup (OPS-1/2, REQ-cli-680, `src/store/backup.ts`): with `CORVIDINHO_B
 
 Consumes plugins module for loadBuiltins/list/size/runPlugin/helpers.
 Consumes agent module for runTask / loadAgentConfig.
+`src/worktree/cli-run.ts` (REQ-cli-122) uses the discord module's worktree helpers (`ensureTalkWorkspace`, `isGitRepo`, `parkWorktree`, `removeWorktree`, `branchExists`, `branchHasOwnCommits`, `deleteBranch`), `roleSessionActive` (plugins) and `delegateDepthFromEnv` (agent).
 Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), allowlist/config helpers, spawn agent client and protocol check, plus the shared store (`openCorvidinhoDb`, `resolveDataDir`, `scrubSecrets`).
 `src/store/backup.ts` uses the shared store (`migrateCorvidinhoDb`, `SCHEMA_VERSION`, `ensureScrubbed`, `formatErrorLine`, `scrubSecrets`) and the daemon lock helpers (`daemonLockPath`, `isHolderAlive`); the scheduler (`SchedulerServiceOpts.backup`) runs its ticker in the daemon and the bridge.
 
@@ -319,3 +341,4 @@ Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), 
 | 2026-09-30 | a-schedule-the-owner-creates-runs-with-the-owner-s-tools-and-allowlist-never-the-shell-runners-or-fledge-commands-and: A schedule the owner creates runs with the owner's tools and allowlist (never the shell, runners or Fledge commands) and asks on Approve cards where the must-ask list says so, a denied or lapsed card ending the run with a blocking ask; schedules other people create stay read-only (DISCORD-SCHEDULE-1.a) |
 | 2026-09-30 | rolling-24-hour-spend-caps-per-provider-plus-the-total-cap-each-warning-the-owner-at-80-and-stopping-to-ask-at-100-safe: Rolling 24-hour spend caps per provider plus the total cap, each warning the owner at 80% and stopping to ask at 100% (SAFE-14, SAFE-15): CORVIDINHO_PROVIDER_SPEND_CAPS_USD (provider=USD keyed on the configured provider id; a malformed or unknown key stops every call, value never echoed) next to CORVIDINHO_DAILY_SPEND_CAP_USD (the total cap); every provider call is recorded while any cap is set; SpendLedger.window(now, provider?) with a (provider, ts) index; reserve() checks the total and the call's provider cap in one IMMEDIATE transaction and names each tripped scope (total, provider:<id>) in owner-only text; spend_alerts gains a scope column (idempotent ALTER, scrubbed) so each cap warns once per crossing and pings once per episode; a cap stop is never a model failure; doctor and the owner's /status show each cap |
 | 2026-09-30 | release-0-0-37-owner-worktree-shell-model-fallback-provider-spend-caps-specsync-changes-owner-schedules-stop-and-queue: Release 0.0.37: owner worktree shell, model fallback, provider spend caps, SpecSync changes, owner schedules, stop and queue |
+| 2026-09-30 | a-cli-task-run-in-a-git-repo-works-in-its-own-worktree-by-default-here-runs-it-in-my-checkout-session-worktree-1-a: A CLI task run in a git repo works in its own worktree by default; --here runs it in my checkout (SESSION-WORKTREE-1.a) |

@@ -136,7 +136,7 @@ describe("corvidinho task run CLI", () => {
   test("task run --json that changed nothing ends done with the 'nothing to verify' note (REQ-agent-003)", async () => {
     const lane = recordingLane();
     try {
-      const r = await cliIn(lane.work, ["task", "run", "--json"], lane.env);
+      const r = await cliIn(lane.work, ["task", "run", "--here", "--json"], lane.env);
       expect(r.code).toBe(0);
       const parsed = JSON.parse(r.out) as {
         result: {
@@ -166,7 +166,7 @@ describe("corvidinho task run CLI", () => {
   test("--json stays one pretty { result, events } document (not ndjson, #73)", async () => {
     const lane = recordingLane();
     try {
-      const { code, out } = await cliIn(lane.work, ["task", "run", "--json"], lane.env);
+      const { code, out } = await cliIn(lane.work, ["task", "run", "--here", "--json"], lane.env);
       expect(code).toBe(0);
       // Pretty-printed single document: starts with "{\n  " and has no per-line frames.
       expect(out.startsWith("{\n  ")).toBe(true);
@@ -210,6 +210,7 @@ describe("task run interrupted by a signal (AGENT-3, REQ-cli-244)", () => {
           join(root, "src/cli.ts"),
           "task",
           "run",
+          "--here",
           "--task",
           "demo",
           "--output",
@@ -292,7 +293,7 @@ describe("task run interrupted by a signal (AGENT-3, REQ-cli-244)", () => {
   /** `task run --task demo --output ndjson` in a carried talk worktree (verify runs). */
   function spawnTaskRun(lane: { bin: string; work: string }, wrap: string[] = []) {
     return Bun.spawn(
-      [...wrap, "bun", join(root, "src/cli.ts"), "task", "run", "--task", "demo", "--output", "ndjson"],
+      [...wrap, "bun", join(root, "src/cli.ts"), "task", "run", "--here", "--task", "demo", "--output", "ndjson"],
       {
         cwd: lane.work,
         stdout: "pipe",

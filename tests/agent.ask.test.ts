@@ -409,7 +409,7 @@ describe("task run CLI surfaces the question (localhost mock LLM)", () => {
     });
     try {
       const proc = Bun.spawn(
-        ["bun", join(root, "src/cli.ts"), "task", "run", "--task", "fix it", "--output", output],
+        ["bun", join(root, "src/cli.ts"), "task", "run", "--here", "--task", "fix it", "--output", output],
         {
           // A scratch non-git project: never the repo's own snapshot or lane.
           cwd: mkdtempSync(join(tmpdir(), "corvidinho-ask-cli-")),

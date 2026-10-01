@@ -668,7 +668,7 @@ describe("task run CLI: a 'Done.' that changed nothing is nudged once, then stan
     const fake = startFakeLlm({ reply: () => "Done." });
     try {
       const proc = Bun.spawn(
-        ["bun", join(root, "src/cli.ts"), "task", "run", "--task", "fix the typo in README.md", "--output", "ndjson"],
+        ["bun", join(root, "src/cli.ts"), "task", "run", "--here", "--task", "fix the typo in README.md", "--output", "ndjson"],
         {
           // A scratch non-git project: never the repo's own snapshot or lane.
           cwd: mkdtempSync(join(tmpdir(), "corvidinho-stall-nudge-cli-")),

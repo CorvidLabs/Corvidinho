@@ -321,7 +321,7 @@ describe("SAFE-3.a: everywhere else the shell stays out, with one operator line"
     await run.attempt(1);
     expect(run.seen.offered[0]).not.toContain("shell-exec");
     expect(texts(run.events)).toContain(
-      "[operator] SAFE-3.a: shell-exec allowlisted but not offered: a local CLI run has no talk worktree of its own yet",
+      "[operator] SAFE-3.a: shell-exec allowlisted but not offered: a local CLI run has no role session (the CLI half of SAFE-3.a is not built yet)",
     );
   });
 

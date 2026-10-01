@@ -309,7 +309,9 @@ Discord/WATCH spawn agent clients SHALL build subprocess argv with
 `buildCorvidinhoArgv` so `.ts` entrypoints always run under `bun`. When
 `task run` stdout is present (ndjson result frame or legacy `--json`), the
 Discord chat reply SHALL surface a parsed summary (state / verified /
-attempts + summary) rather than dumping raw JSON. Spawns SHALL NOT pass
+attempts + summary) rather than dumping raw JSON. Spawns SHALL pass `--here` right after `task run`, so the run works in the
+talk's worktree (the cwd given) and never makes a worktree of its own
+(REQ-cli-122). Spawns SHALL NOT pass
 `--no-verify` (the flag is removed and refused, REQ-cli-085) —
 prove-before-done (AGENT-4 / FLEDGE-2 / AGENT-14) always applies; a run whose
 real git diff is empty and that claimed no change ends with "no changes,
@@ -319,7 +321,7 @@ without a live Discord token.
 
 Acceptance Criteria
 - `.ts` bin → `["bun", "--no-env-file", bin, "task", "run", ...]`; non-`.ts` → `[bin, ...]`.
-- Spawn argv for Discord chat is `task run --task <prompt> --output ndjson` with **no** `--no-verify`.
+- Spawn argv for Discord chat is `task run --here --task <prompt> --output ndjson` with **no** `--no-verify`.
 - Valid result/json stdout → Discord body includes state and summary text.
 - Unparseable stdout falls back to truncated stdout/stderr.
 - No ProcessManager; allowlists unchanged; secrets out of repo.
@@ -891,7 +893,7 @@ Acceptance Criteria
 ### REQ-discord-073
 
 The Discord spawn agent client SHALL run
-`task run --task <prompt> --output ndjson`, read stdout line by
+`task run --here --task <prompt> --output ndjson` (`--here`, REQ-cli-122), read stdout line by
 line while the child runs, and forward each frame's live state, current tool,
 and token counts to `onStatus` so the thinking embed shows what the agent is
 doing (AGENT-8 / DISCORD-3). The reply summary SHALL come from the stream's
@@ -914,6 +916,7 @@ Acceptance Criteria
 - A protocol-3 frame's tool output never reaches the reply; the reply is the protocol-mismatch notice.
 - Spawn argv ends with `--output ndjson` (no `--json`) and has no `--no-verify`.
 - `checkProtocolVersion` treats a protocol-1 binary as a mismatch; `--protocol-version` prints 2.
+- Spawn argv is exactly `task run --here --task <prompt> --output ndjson` (REQ-cli-122).
 
 ### REQ-discord-025
 

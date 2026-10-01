@@ -451,7 +451,7 @@ describe("every surface's spawned run carries the persona (PERSONA-2, e2e)", () 
     async () => {
       systems.length = 0;
       const proc = Bun.spawn(
-        buildCorvidinhoArgv(CLI_BIN, ["task", "run", "--task", "say hi", "--json"]),
+        buildCorvidinhoArgv(CLI_BIN, ["task", "run", "--here", "--task", "say hi", "--json"]),
         { cwd: scratchCwd(), env: spawnEnv(), stdout: "pipe", stderr: "pipe" },
       );
       const code = await proc.exited;

@@ -35,6 +35,23 @@ hi check
 
 Secrets (`DISCORD_TOKEN` / `DISCORD_BOT_TOKEN`, `GITHUB_TOKEN` / `GH_TOKEN`, the LLM keys) stay in the environment — never in the repo or chat logs.
 
+### `task run` works in its own worktree (SESSION-WORKTREE-1.a)
+
+```bash
+bun src/cli.ts task run --task "…"          # in a git repo: a new worktree made from HEAD
+bun src/cli.ts task run --here --task "…"   # in this checkout
+```
+
+In a git repo, `task run` works in its own new git worktree by default, made from the
+checkout's `HEAD` next to the repo (`WORKTREE_BASE_DIR`, default `../.corvid-worktrees`,
+branch `talk/cli_…`), in the same subdirectory you started it from. Uncommitted and untracked
+files (a local `.env`, `node_modules`) are not in it and nothing is installed there; the first
+line of the run says so. At the end a clean worktree is removed, and its branch too unless it
+has commits of its own; one with changes is kept and named (stderr, and `result.workspace` in
+`--json` / ndjson). If the worktree can't be made the run stops (exit 1) and says to pass
+`--here`, which runs it in the current checkout as before. Outside a git repo it works in the
+folder itself.
+
 ### Another project without `cd` (CLI-5)
 
 ```bash

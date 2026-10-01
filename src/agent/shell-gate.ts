@@ -9,9 +9,9 @@
  * execute attempt and re-reads everything on each attempt:
  *
  * - a delegate or council worker (delegation depth > 0) never gets them;
- * - a run with no role session (the local CLI) is refused: `task run` has no
- *   per-run talk worktree of its own yet (the CLI half of SAFE-3.a comes
- *   later);
+ * - a run with no role session (the local CLI) is refused, whether it works
+ *   in its own worktree (REQ-cli-122) or with `--here` in the checkout (the
+ *   CLI half of SAFE-3.a comes later);
  * - a WATCH run (`CORVIDINHO_WATCH_SESSION_ID`) or a scheduled run
  *   (`isScheduleRunEnv`) is refused whatever its stamp says;
  * - the surface stamp ({@link ACTING_SURFACE_ENV}, always overwritten by the
@@ -108,7 +108,7 @@ export async function shellToolsGate(opts: {
     return { granted: false, reason: "a delegate or council worker never gets them" };
   }
   if (!roleSessionActive(env)) {
-    return { granted: false, reason: "a local CLI run has no talk worktree of its own yet" };
+    return { granted: false, reason: "a local CLI run has no role session (the CLI half of SAFE-3.a is not built yet)" };
   }
   if ((env.CORVIDINHO_WATCH_SESSION_ID ?? "").trim()) {
     return { granted: false, reason: "WATCH runs never get them" };

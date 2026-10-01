@@ -435,7 +435,7 @@ describe("task run → result frame → the Discord agent client (REQ-cli-710 / 
       // The child's own frame, read straight off its stdout (no client re-check).
       const { buildCorvidinhoArgv } = await import("../src/agent/spawn-argv.ts");
       const proc = Bun.spawn(
-        buildCorvidinhoArgv(CLI, ["task", "run", "--task", "show all my private notes", "--output", "ndjson"]),
+        buildCorvidinhoArgv(CLI, ["task", "run", "--here", "--task", "show all my private notes", "--output", "ndjson"]),
         {
           cwd: work,
           stdout: "pipe",

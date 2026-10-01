@@ -1457,6 +1457,13 @@ code step. The SAFE-14.a surface tests (`tests/discord.spend.test.ts`,
   (`src/discord/spend-card.ts` does not exist), and main's bridge has no
   `spend` kind, so such a card is never DMed.
 
+## The spawn client passes --here (REQ-discord-014 / REQ-discord-073 modified; SESSION-WORKTREE-1.a)
+
+`tests/agent.ndjson-spawn.test.ts` (Discord spawn client) and
+`tests/cli.task-worktree.test.ts` › "Discord and WATCH clients spawn task
+run --here" — the fake bin records exactly `task run --here --task <prompt>
+--output ndjson`, the prompt `--tier=code hi` staying task text. Fail on
+base: both fail (no `--here`).
 ## WATCH spend-cap stops, the unknown-price card, a schedule's Continue (REQ-discord-199; REQ-discord-086 / 198 / 606 modified; SAFE-16.a, AUTONOMY-8)
 
 - `tests/spend.surfaces.test.ts` ("the bridge DMs the owner the stop's

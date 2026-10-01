@@ -689,7 +689,7 @@ describe("the real CLI (REQ-agent-185)", () => {
   }
 
   async function cli(cwd: string, bin: string): Promise<{ code: number; result: TaskResult }> {
-    const proc = Bun.spawn(["bun", join(root, "src/cli.ts"), "task", "run", "--task", "demo", "--json"], {
+    const proc = Bun.spawn(["bun", join(root, "src/cli.ts"), "task", "run", "--here", "--task", "demo", "--json"], {
       cwd,
       stdout: "pipe",
       stderr: "pipe",

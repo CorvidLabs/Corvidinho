@@ -100,6 +100,7 @@ describe("Discord spawn client reads the ndjson stream (REQ-discord-073)", () =>
       expect(readFileSync(join(dir, "argv.txt"), "utf8").trim().split("\n")).toEqual([
         "task",
         "run",
+        "--here",
         "--task",
         "list plugins",
         "--output",
@@ -187,6 +188,7 @@ describe("WATCH spawn client reads the ndjson stream (REQ-watch-073)", () => {
       expect(readFileSync(join(dir, "argv.txt"), "utf8").trim().split("\n")).toEqual([
         "task",
         "run",
+        "--here",
         "--task",
         "review this",
         "--output",
@@ -265,7 +267,7 @@ describe("real CLI: task run --output ndjson (REQ-cli-073)", () => {
   test(
     "prints only protocol-2 frames ending in a result equal to --json's result",
     async () => {
-      const nd = await run(["task", "run", "--task", "hello", "--output", "ndjson"]);
+      const nd = await run(["task", "run", "--here", "--task", "hello", "--output", "ndjson"]);
       expect(nd.code).toBe(0);
       const lines = nd.stdout.trim().split("\n");
       const frames = lines.map(
@@ -276,7 +278,7 @@ describe("real CLI: task run --output ndjson (REQ-cli-073)", () => {
       expect(frames.at(-1)?.type).toBe("result");
       expect(frames.map((f) => f.type)).toContain("Text");
 
-      const js = await run(["task", "run", "--task", "hello", "--json"]);
+      const js = await run(["task", "run", "--here", "--task", "hello", "--json"]);
       expect(js.code).toBe(0);
       const doc = JSON.parse(js.stdout) as { result: unknown; events: unknown[] };
       expect(frames.at(-1)?.result).toEqual(doc.result);
@@ -289,7 +291,7 @@ describe("real CLI: task run --output ndjson (REQ-cli-073)", () => {
   test(
     "--output=json matches --json; unknown --output exits 1 with usage",
     async () => {
-      const a = await run(["task", "run", "--output=json"]);
+      const a = await run(["task", "run", "--here", "--output=json"]);
       expect(a.code).toBe(0);
       const doc = JSON.parse(a.stdout) as { result: { state: string }; events: unknown[] };
       expect(doc.result.state).toBe("done");
