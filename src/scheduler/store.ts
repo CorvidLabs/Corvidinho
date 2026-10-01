@@ -109,7 +109,8 @@ export type ScheduleRun = {
  * private Answer form), `picked` (one of its listed choices), `cancelled`,
  * or `superseded` (recorded before schema v15, closed by the upgrade).
  */
-export type ScheduleAskOutcome = "answered" | "picked" | "cancelled" | "superseded";
+/** `continued`: the owner's Continue on a spend-cap stop (AUTONOMY-8); like `cancelled`, no answer is handed on. */
+export type ScheduleAskOutcome = "answered" | "picked" | "cancelled" | "continued" | "superseded";
 
 /** A schedule run's ask that is still open (AUTONOMY-6.a). */
 export type OpenScheduleAsk = {
@@ -765,16 +766,19 @@ export class ScheduleStore {
 
   /**
    * AUTONOMY-6.a — close a run's open ask: answered (typed or picked, with
-   * the answer SAFE-6 scrubbed for the next run) or cancelled, by `closedBy`.
+   * the answer SAFE-6 scrubbed for the next run), cancelled, or continued
+   * (the owner's Continue on a spend-cap stop, AUTONOMY-8: no answer), by
+   * `closedBy`.
    * A compare-and-set on `ask_closed_at IS NULL`, so two presses (or two
    * processes) close it once. False when it was not open.
    */
   closeRunAsk(
     runId: string,
-    close: { outcome: "answered" | "picked" | "cancelled"; answer?: string; closedBy: string },
+    close: { outcome: "answered" | "picked" | "cancelled" | "continued"; answer?: string; closedBy: string },
     now = Date.now(),
   ): boolean {
-    const answer = close.outcome === "cancelled" ? null : scrubSecrets(close.answer ?? "");
+    const answer =
+      close.outcome === "cancelled" || close.outcome === "continued" ? null : scrubSecrets(close.answer ?? "");
     const run = this.runsMemory.get(runId);
     if (this.db) {
       const res = this.db.run(

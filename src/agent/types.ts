@@ -207,6 +207,12 @@ export type SpendWarning = {
    * provider's spend against its cap); absent for the total cap.
    */
   scope?: string;
+  /**
+   * SAFE-16 / SAFE-16.a: calls in the same window whose price is unknown
+   * (each approved on a spend card); the owner's line then reads
+   * "$X + unknown", never a plain $X. Absent when there are none.
+   */
+  unknownCalls?: number;
 };
 
 /**

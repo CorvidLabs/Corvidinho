@@ -3251,9 +3251,10 @@ stuck asks (AGENT-16.a, captured with `hi` in this change from Leif's
 cards; one pass at a time, never rejecting) over the asks the watch process
 recorded (REQ-watch-086). An ask older than `WATCH_OWNER_ASK_TTL_MS` (a day)
 SHALL be taken and given up with a log line, never sent. With the gateway's
-`sendDm` and an owner Discord id, each other ask SHALL be taken
+`sendDm` and an owner Discord id, each other stuck ask SHALL be taken
 (compare-and-delete, so two bridges never both send it) and sent to the owner
-only, by direct message, as `formatWatchStuckAskDm`: the `formatAskReply`
+only, by direct message, as `formatWatchStuckAskDm` (a spend-cap stop the
+watch process recorded is delivered as REQ-discord-199 says): the `formatAskReply`
 stuck post (`⚠️ I'm stuck and need a human.`, the question quoted, SAFE-6
 scrubbed and mass mentions defanged) with no mention (the DM notifies), led by
 `GitHub <owner/repo>#<n> — answer on the thread: <link>`; never posted to a
@@ -3276,6 +3277,7 @@ Acceptance Criteria
 - With no owner or no `sendDm` the ask stays pending; past a day it is given up (`expired`) with a log line and never sent.
 - A stop while the DM hangs: `settle` returns false after the grace and the ask is pending again.
 - A dry-run bridge whose gateway stub captures `sendDm` marks itself running, DMs the owner once for a recorded assignment ask within a few ticks (not again on later ticks), takes it, and clears its mark on stop.
+- A recorded spend-cap stop is DMed as REQ-discord-199 says (once per cap episode), not as a stuck ask.
 
 ### REQ-discord-096
 
@@ -3414,9 +3416,11 @@ answer or an explicit cancel").
   question, stored scrubbed in `ask_options`), else **Answer** (the same
   `open` custom id, opening the private form of REQ-discord-548), and
   **Cancel** (`cvask:cancel:srun_<id>`, a new `cancel` kind of
-  `parseAskCustomId`). A `spend-cap` stop SHALL carry **Cancel** only
-  (continuing past the cap is not a choice here) and its post SHALL stay
-  "💸 Work is paused for budget." (SAFE-14.a). The post's hint line
+  `parseAskCustomId`). A `spend-cap` stop SHALL carry **Continue**
+  (`SCHEDULE_ASK_CONTINUE_LABEL`, the same `open` custom id) and
+  **Cancel** (AUTONOMY-8: continuing past the cap goes through the owner's
+  spend card) and its post SHALL stay "💸 Work is paused for budget."
+  (SAFE-14.a). The post's hint line
   (`SCHEDULE_ASK_CHOOSE_HINT` / `SCHEDULE_ASK_ANSWER_HINT`, none for a
   spend-cap stop) SHALL name its buttons and never invite a reply: a
   channel reply SHALL NOT answer a schedule ask (schedule posts are not
@@ -3447,9 +3451,17 @@ answer or an explicit cancel").
   ask `answered`. Cancel SHALL close it `cancelled` with no answer. When the
   schedule is paused (the auto-pause, a SAFE-13 refusal, `/schedule pause`)
   the private ack of a pick, a typed answer or a Cancel SHALL add
-  `SCHEDULE_ASK_PAUSED_NOTE`: closing the question does not resume it. A
-  `spend-cap` ask SHALL refuse Choose, Answer and a form submit like
-  someone else's press. Closing is a compare-and-set on `ask_closed_at IS
+  `SCHEDULE_ASK_PAUSED_NOTE`: closing the question does not resume it. On a
+  `spend-cap` ask, the live owner's **Continue** (its `open` press) SHALL
+  close it `continued` with no answer handed on (so the stop's amounts never
+  reach a run's prompt) and ack privately `SCHEDULE_ASK_CONTINUED_ACK` (no
+  amount; plus `SCHEDULE_ASK_PAUSED_NOTE` on a paused schedule): the next
+  due run goes ahead and any call it makes past a cap, or at an unknown
+  price, asks the owner on a spend card with a one-time code first
+  (REQ-agent-198, REQ-agent-199). Anyone else's Continue — the creator's
+  included, since only the owner approves spend — and a pick or a form
+  submit on a `spend-cap` ask SHALL be refused like someone else's press;
+  Cancel stays open to the creator and the owner. Closing is a compare-and-set on `ask_closed_at IS
   NULL` recording `ask_outcome`, `ask_answer` (scrubbed) and
   `ask_closed_by`; nothing runs at the press.
 - No lapse. A schedule ask's controls SHALL NOT expire while it is open
@@ -3462,7 +3474,7 @@ answer or an explicit cancel").
   answerer's words (`fenceSpeakerText`, `ask-answer` for a typed answer,
   `ask-pick` for a pick; SAFE-12 / SAFE-12.a). Only while the answered run
   is the schedule's newest finished run (`ScheduleStore.answeredAsk`), so no
-  later run gets it again. A cancelled ask hands nothing on.
+  later run gets it again. A cancelled or continued ask hands nothing on.
 - Schema v15 (forward-only, idempotent). `schedule_runs` SHALL gain
   `ask_options`, `ask_blocking` (default 0), `ask_closed_at`,
   `ask_outcome`, `ask_answer`, `ask_closed_by`, `ask_skip_at` and
@@ -3486,13 +3498,14 @@ Acceptance Criteria
 - The auto-pause ask blocks; `/schedule resume` leaves it open and the next due slot waits with one note; once the owner answers, the next slot runs.
 - An ask claimed for posting whose post never went out (a crash between the claim and the post): the next due slot waits and its one wait note carries the ask's Choose + Cancel, which close it.
 - A daemon's due run waits too, stamping `ask_skip_at`; the bridge posts the ask, then the one note.
-- Listed choices post Choose + Cancel (`cvask:open:srun_…`, `cvask:cancel:srun_…`) with `SCHEDULE_ASK_CHOOSE_HINT`; free text Answer + Cancel with `SCHEDULE_ASK_ANSWER_HINT`; neither carries the reply hint; a spend-cap stop Cancel only (its note too), its post only "💸 Work is paused for budget." and its note no amount.
+- Listed choices post Choose + Cancel (`cvask:open:srun_…`, `cvask:cancel:srun_…`) with `SCHEDULE_ASK_CHOOSE_HINT`; free text Answer + Cancel with `SCHEDULE_ASK_ANSWER_HINT`; neither carries the reply hint; a spend-cap stop Continue + Cancel (its note too), its post only "💸 Work is paused for budget." and its note no amount.
 - An in-process ask post that resolves `false` is posted, with its controls, by the next tick.
 - A schedule with no channel DMs the ask with its controls and the one note (with the same controls) to the owner and posts nothing in a channel; with no owner nothing is sent and the ask stays pending.
 - The owner's pick reaches the next run unfenced and only that run; the creator's typed answer is stored scrubbed and reaches the next run fenced (`role: community`); a closed ask cannot be closed again.
-- Through `startBridge` with a memory DB and fake interactions: Choose shows the creator the choices privately and a pick closes the ask `picked` (a re-press is "isn't for you"); an unknown option id is `ASK_CHOICE_EXPIRED`; Answer opens the form, a thin submit restates privately with Cancel and keeps it open, a typed submit closes it `answered` with the secret redacted, `cancel` typed cancels; someone else's Cancel or submit is refused and the ask stays open, the owner's and the creator's Cancel close it; a spend-cap ask refuses Choose and a submit and takes Cancel; an ask three days old still takes a pick; a press outside the allowlisted channel, or once the schedule's channel left the allowlist, gets the zero-width ack (the tip for the owner); a deny-listed creator gets the zero-width ack and a muted one `MUTED`; a channel-less schedule's ask is answered in the owner's DM and refused from a guild channel; the creator's injection-like typed answer closes nothing and pings the owner in the schedule's channel; a Cancel id on a session ask is refused; on a paused schedule the ack of a Cancel, a typed answer or a pick ends with `SCHEDULE_ASK_PAUSED_NOTE`, on an active one it does not.
+- Through `startBridge` with a memory DB and fake interactions: Choose shows the creator the choices privately and a pick closes the ask `picked` (a re-press is "isn't for you"); an unknown option id is `ASK_CHOICE_EXPIRED`; Answer opens the form, a thin submit restates privately with Cancel and keeps it open, a typed submit closes it `answered` with the secret redacted, `cancel` typed cancels; someone else's Cancel or submit is refused and the ask stays open, the owner's and the creator's Cancel close it; a spend-cap ask refuses the creator's Continue and a submit, takes the owner's Continue (closed `continued`, no answer, nothing handed to the next run, the ack naming no amount) and the creator's Cancel; an ask three days old still takes a pick; a press outside the allowlisted channel, or once the schedule's channel left the allowlist, gets the zero-width ack (the tip for the owner); a deny-listed creator gets the zero-width ack and a muted one `MUTED`; a channel-less schedule's ask is answered in the owner's DM and refused from a guild channel; the creator's injection-like typed answer closes nothing and pings the owner in the schedule's channel; a Cancel id on a session ask is refused; on a paused schedule the ack of a Cancel, a typed answer or a pick ends with `SCHEDULE_ASK_PAUSED_NOTE`, on an active one it does not.
 - Through the bridge's own scheduler: the ask post carries Choose + Cancel, a channel reply to it leaves it open and the creator's Cancel closes it; a channel-less schedule DMs its ask and controls to the owner.
 - A v14 DB migrates to v15: the eight columns exist; asks recorded before that were posted, or are moot, are closed `superseded`, are neither open nor pending and are not posted again, and that schedule's next due run goes; a still-pending ask on its schedule's newest run becomes open and blocking, its schedule's next due run waits and that ask is posted with Answer + Cancel, then the one note; a re-run changes nothing; `ask_answer` and `ask_options` are re-scrubbed.
+
 ### REQ-discord-185
 
 /work none-deleted check (AGENT-15, REQ-agent-185). Before `openWorkPr`
@@ -3826,7 +3839,8 @@ apart; only the right code typed into the form, for that card and the exact
 action it shows, before it expires, approves it (SAFE-19) — audit prefix
 `spend-cap` (`spend-cap-card`, `-approve`, `-deny`, `-expire` SAFE-5 rows),
 "nothing was spent" as what a no leaves undone, and `SPEND_CARD_APPROVED` as
-the approved outcome. Approve SHALL only record the decision: the waiting
+the approved outcome (`SPEND_CARD_UNKNOWN_APPROVED` for a card whose amount
+is unknown, REQ-discord-199). Approve SHALL only record the decision: the waiting
 run reads it, uses it once and sends exactly the call the card showed, at
 that amount (SAFE-8.a). Any process on the data dir SHALL be able to raise
 the card (chat and slash runs, schedules, WATCH, the daemon, delegate and
@@ -3846,6 +3860,46 @@ Acceptance Criteria
 - A code typed after the card lapsed is a no: nothing is sent and the request is `expired`.
 - A pending spend card whose waiting process is gone is closed on the next pass as a no, with no card sent.
 - The bridge (fake gateway, owner from the allowlist file) DMs a spend card another process recorded, with its `cvok:spend:approve:<id>` button, and Approve answers with the code step (not "This card is no longer handled.") and DMs an 8-character code.
+- These tests fail on main's sources.
+- A card whose amount is unknown (SAFE-16.a) answers Approve plus the code with `SPEND_CARD_UNKNOWN_APPROVED` (REQ-discord-199).
+
+### REQ-discord-199
+
+It asks before any spend that would go over a cap (AUTONOMY-8), and an
+unknown price shows as unknown, never as free (SAFE-16 / SAFE-16.a), on the
+bridge's side:
+
+- WATCH spend-cap stops. `createWatchAskDelivery` SHALL also deliver the
+  `spend-cap` stops the watch process records (REQ-watch-099): each is taken
+  (compare-and-delete) and, once per episode of the caps it names
+  (`claimCapPing(spendScopesOf(ask))` on the spend alert outbox —
+  `createSpendAlertOutbox` over the bridge's DB unless one is passed — the
+  same once-per-episode claim as a chat or schedule stop's owner ping), DMed
+  to the owner only as `formatWatchSpendStopDm`: the SAFE-14.a spend-stop DM
+  (`SPEND_STOP_DM_HEAD`, then the quoted, scrubbed and defanged question with
+  the amounts, caps and what the card came to) with `GitHub <owner/repo>#<n>:
+  <link>` as its second line and no mention. A stop whose episode was already
+  told SHALL be taken and dropped with one log line, not DMed. A DM that does
+  not go out SHALL hand back both the episode claim and the ask (retried after
+  `WATCH_ASK_RETRY_MS`), and so SHALL a stop that hands back a DM still in
+  flight after its grace, so the next start DMs it instead of dropping it as
+  already told (a DM that then goes out after all takes both again). The
+  GitHub side, the one-day limit, the no-owner and no-gateway waits and the
+  stop grace are as for stuck asks (REQ-discord-086);
+  log lines say `WATCH spend-cap stop` and `AUTONOMY-8` and name no amount.
+- Unknown-price card. The `spend` kind SHALL answer an approved card whose
+  amount is unknown (`isUnknownSpendAmount`) with
+  `SPEND_CARD_UNKNOWN_APPROVED` ("… sends exactly this one call; its cost
+  stays unknown (never $0), and the next call at an unknown price asks
+  again (SAFE-16.a)"); other cards keep `SPEND_CARD_APPROVED`.
+
+No new env var, config key, slash command, table or schema version.
+
+Acceptance Criteria
+- A recorded WATCH spend-cap stop: a failed DM hands back the ask (still pending) and the episode claim; the next pass DMs the owner once: the first line is `SPEND_STOP_DM_HEAD`, the second `GitHub CorvidLabs/Corvidinho#7: <link>`, then the quoted `Daily spend cap reached (SAFE-8): $4.9990 spent …`, with no `<@` mention.
+- Another thread's spend-cap stop in the same cap episode is taken and not DMed; the log says the owner was already told about this cap episode.
+- A stop while the spend-cap DM is in flight hands back the ask and its episode claim: the next start DMs the owner once (not dropped as already told), and a later stop in that episode is then not DMed.
+- The engine DMs an unknown-price card with `Amount: unknown (…)` and answers Approve plus the code with `SPEND_CARD_UNKNOWN_APPROVED`.
 - These tests fail on main's sources.
 
 ### REQ-discord-303

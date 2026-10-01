@@ -478,7 +478,7 @@ describe("spend notices (spend-notice.ts)", () => {
     const snap = (spent: number, priced = true): SpendSnapshot => ({
       kind: "cap",
       capMicroUsd: 5_000_000,
-      window: { spentMicroUsd: spent, calls: 3, estimatedCalls: 0 },
+      window: { spentMicroUsd: spent, calls: 3, estimatedCalls: 0, unknownCalls: 0 },
       model: "gpt-4o-mini",
       priced,
     });

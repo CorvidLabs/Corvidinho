@@ -1456,3 +1456,30 @@ code step. The SAFE-14.a surface tests (`tests/discord.spend.test.ts`,
 - Fail on base: the file cannot load on main's (0aeb345) sources
   (`src/discord/spend-card.ts` does not exist), and main's bridge has no
   `spend` kind, so such a card is never DMed.
+
+## WATCH spend-cap stops, the unknown-price card, a schedule's Continue (REQ-discord-199; REQ-discord-086 / 198 / 606 modified; SAFE-16.a, AUTONOMY-8)
+
+- `tests/spend.surfaces.test.ts` ("the bridge DMs the owner the stop's
+  details …") — `createWatchAskDelivery` over a recorded spend-cap stop: a
+  failed DM hands back the ask and the episode claim; the next pass DMs the
+  owner once (`SPEND_STOP_DM_HEAD`, then `GitHub CorvidLabs/Corvidinho#7:
+  <link>`, then the quoted details, no mention); another thread's stop in the
+  same cap episode is taken and not DMed, with a log line. ("a stop while the
+  owner's DM is in flight …") — a DM that hangs past the stop grace hands back
+  the ask and its episode claim, so the next start DMs the owner once instead
+  of dropping it as already told; a later stop in that episode is not DMed.
+  Fails on the pre-review branch source (the episode stayed claimed).
+- `tests/agent.spend-unknown.test.ts` ("the unknown-price card on the
+  bridge's engine") — the owner is DMed `Amount: unknown (…)` (never `$0`);
+  Approve plus the code sends the call once and answers
+  `SPEND_CARD_UNKNOWN_APPROVED`.
+- `tests/discord.schedule-ask.test.ts` ("a spend-cap stop takes the owner's
+  Continue or Cancel …") — through `startBridge`: the creator's Continue and
+  an Answer submit are refused ("isn't for you"); the owner's Continue closes
+  the ask `continued` with no answer (`answeredAsk` undefined) and acks
+  `SCHEDULE_ASK_CONTINUED_ACK` (no amount); the creator's Cancel still works.
+  `tests/scheduler.ask-block.test.ts` — the spend-cap post and its wait note
+  carry Continue + Cancel and still name no amount.
+- Fail on base: the schedule ask test cannot load
+  (`SCHEDULE_ASK_CONTINUED_ACK` missing), the ask-block test gets
+  `["Cancel"]`, and main's watch delivery never sees a spend-cap stop.

@@ -18,6 +18,10 @@
  * provider cap, SAFE-14), so each cap warns once per crossing and each cap's
  * stop pings once per episode (the ask names its scopes, `spendScopes`).
  *
+ * SAFE-16: a warning taken here carries the count of calls at an unknown
+ * price in its cap's window (`unknownCalls`), so the owner's DM reads
+ * "$X + unknown" instead of passing such spend off as $0.
+ *
  * A claim is handed back when the DM or post that carried it did not go out
  * (`release`), so one failed send never swallows a warning or the episode's
  * owner ping. Never throws: a DB problem falls back to the run's own
@@ -129,6 +133,13 @@ export function createSpendAlertOutbox(opts: {
         const warnings = claimed.warnings.map(({ scope, spentMicroUsd: spent, capMicroUsd: cap }) => {
           const w: SpendWarning = { spentMicroUsd: spent, capMicroUsd: cap, percent: spendPercent(spent, cap) };
           if (scope !== TOTAL_SPEND_SCOPE) w.scope = scope;
+          // SAFE-16: the DM reads "$X + unknown" while that cap's window holds a call at an unknown price.
+          try {
+            const unknown = ledger.window(t, providerOfSpendScope(scope)).unknownCalls;
+            if (unknown > 0) w.unknownCalls = unknown;
+          } catch {
+            // Keep the priced amount alone.
+          }
           return w;
         });
         return {

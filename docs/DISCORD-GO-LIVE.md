@@ -175,13 +175,15 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   author, or the schedule creator for a scheduled run); a stuck run (AUTONOMY-2, or a repeated
   failing call, AGENT-16) and a spend-cap stop (SAFE-8) ping the owner. A stuck WATCH (GitHub)
   run is sent to the owner by **direct message** on the bridge's next tick (AGENT-16.a; the watch
-  process must share the bridge's data dir, and the owner must accept DMs from server members). With no owner a stuck question (or a spend-cap stop's "💸 Work is paused for budget.") still posts and the
+  process must share the bridge's data dir, and the owner must accept DMs from server members), and
+  so are a WATCH run's spend-cap stop details, once per cap episode (AUTONOMY-8). With no owner a stuck question (or a spend-cap stop's "💸 Work is paused for budget.") still posts and the
   bridge logs
   `[discord] run needs a human but no owner is configured — owner ping skipped (AUTONOMY-2 / IDENTITY-3)`.
 - A scheduled run's question blocks its schedule (AUTONOMY-6.a): its post carries **Choose** /
-  **Answer** and **Cancel** buttons (a spend-cap stop: **Cancel** only) that the schedule's
-  creator or the owner presses; a reply does not answer it, and the buttons do not expire while
-  it is open. Until then the schedule's due runs are skipped (not made up) and one note says it
+  **Answer** and **Cancel** buttons (a spend-cap stop: **Continue**, the owner's only, and
+  **Cancel**; after Continue the next due run's calls past a cap, or at an unknown price, ask on
+  the spend card first) that the schedule's creator or the owner presses; a reply does not
+  answer it, and the buttons do not expire while it is open. Until then the schedule's due runs are skipped (not made up) and one note says it
   is waiting. A schedule with no channel sends its question and buttons to the owner by **direct
   message** (same DM rule as above). See [`discord.md`](discord.md) "Scheduled questions wait for
   an answer".
@@ -208,8 +210,10 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   4 minutes, a late code or a stopped run sends and spends nothing, and the run ends paused as
   above. The card needs the bridge running on the same data dir (WATCH, schedules, the daemon and
   delegate workers raise it too); with no bridge the run waits out the 4 minutes and the lapse is
-  a no. With no owner configured, or for an unpriced model or a bad cap setting, the run stops and
-  asks the operator as before. See [`discord.md`](discord.md) "The spend card".
+  a no. A model with no known price asks on the same card with the amount shown as unknown while
+  a cap covers its call (SAFE-16.a; no price override), and the owner's spend lines then read
+  `$X + unknown`. With no owner configured, or a bad cap setting, the run stops and asks the
+  operator as before. See [`discord.md`](discord.md) "The spend card".
 
 ### E.2 Protocol 2: restart the bridge, WATCH and daemon together (DISCORD-10)
 
