@@ -12,7 +12,11 @@
  * stopped on comes back as `ask`: a stuck one pings the owner on Discord
  * (AGENT-16.a, REQ-watch-086). A run that failed over to another configured
  * model (AGENT-11) is an `llm.fallback` warn line in the watcher's log; its
- * summary comment carries the note. Injectable for tests; no ProcessManager.
+ * summary comment carries the note. A failed run hands back the result
+ * frame's plain `error` as `failureReason` and its stderr end as
+ * `stderrTail`, which its comment's one-line reason is read from
+ * (DISCORD-3.b on GitHub, REQ-watch-009). Injectable for tests; no
+ * ProcessManager.
  */
 
 import {
@@ -25,6 +29,7 @@ import { ACTING_SURFACE_ENV } from "../agent/shell-gate.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
 import type { ModelFallback } from "../agent/types.ts";
 import { injectionNoticeFromUnknown } from "../agent/untrusted.ts";
+import { failureReasonFromUnknown } from "../discord/failure-reason.ts";
 import type { AgentSpawnResult } from "./types.ts";
 
 export type AgentRunChatOpts = {
@@ -109,7 +114,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
           CORVIDINHO_NON_INTERACTIVE: "1",
         },
       });
-      const { exitCode, summary, result } = await collectTaskRunStream({
+      const { exitCode, summary, result, stderrTail } = await collectTaskRunStream({
         stdout: proc.stdout,
         stderr: proc.stderr,
         exited: proc.exited,
@@ -122,6 +127,11 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       // AGENT-11: a failover is logged for the owner (the comment has the note).
       const modelFallback = modelFallbackFromUnknown(result?.modelFallback);
       if (modelFallback) (opts.onModelFallback ?? warnWatchModelFallback)(modelFallback, sessionId);
+      // DISCORD-3.b on GitHub (REQ-watch-009): why a failed run failed (the
+      // result frame's plain `error`, else the stderr end), for
+      // `watchFailureReason` only — never the provider's reply body.
+      const failed = exitCode !== 0;
+      const failureReason = failed ? failureReasonFromUnknown(result?.error) : undefined;
       return {
         ok: exitCode === 0,
         sessionId,
@@ -129,6 +139,8 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         exitCode,
         ...(injection ? { injection } : {}),
         ...(ask ? { ask } : {}),
+        ...(failureReason ? { failureReason } : {}),
+        ...(failed && stderrTail ? { stderrTail } : {}),
       };
     },
   };

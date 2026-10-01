@@ -28,6 +28,10 @@ const envBase = {
   CORVIDINHO_GITHUB_ALLOW_REPOS: "CorvidLabs/Corvidinho",
   CORVIDINHO_GITHUB_ALLOW_USERS: "0xLeif",
   CORVIDINHO_WATCH_DRY_RUN: "1",
+  // A model is configured, so a failed run with no result frame takes its
+  // comment's reason line from its stderr end (REQ-watch-009), not the
+  // AGENT-10 no-provider notice.
+  CORVIDINHO_LLM_MODEL: "ollama:qwen3",
 };
 
 function mkEvent(id: string): DetectedEvent {
@@ -118,7 +122,8 @@ describe("WATCH summary is secret-scrubbed before public post and JSONL (REQ-wat
       const summary = posts[1]!.body;
       expect(summary).toContain("Failed (exit 1)");
       expect(RAW_TOKEN_RE.test(summary)).toBe(false);
-      expect(summary).toContain(REDACTED);
+      // REQ-watch-009: the failed run's reason line is the stderr end, scrubbed.
+      expect(summary).toContain(`\n\nfatal: auth failed for ${REDACTED}\n\n---\n`);
 
       expect(RAW_TOKEN_RE.test(jsonl)).toBe(false);
       expect(jsonl).toContain(REDACTED);
@@ -169,7 +174,18 @@ describe("WATCH summary is secret-scrubbed before public post and JSONL (REQ-wat
     async () => {
       // The stderr fallback is clipped to 500 chars before WATCH sees it; the
       // token starts at 477 so clip-then-scrub would post `ghp_` + 19 chars.
+      // A run that exits 0 posts that summary.
       const pad = "e".repeat(476);
+      const ok = fakeBin(`printf '%s %s\\n' "${pad}" "${TOKEN}" >&2\nexit 0`);
+      const done = await runOnce(createSpawnAgentClient({ bin: ok.bin, cwd: ok.dir }), ok.dir, "comment-scrub-stderr-cap-ok");
+      expect(done.posts).toHaveLength(2);
+      expect(done.posts[1]!.body).toContain("Done (exit 0)");
+      expect(done.posts[1]!.body).not.toContain("ghp_");
+      expect(done.posts[1]!.body).toContain(`${pad} ${REDACTED}`);
+      expect(done.jsonl).not.toContain("ghp_");
+
+      // A failed run posts its reason line instead (REQ-watch-009): the
+      // scrubbed stderr end cut to 200 characters, still no `ghp_`.
       const { bin, dir } = fakeBin(`printf '%s %s\\n' "${pad}" "${TOKEN}" >&2\nexit 1`);
       const agent = createSpawnAgentClient({ bin, cwd: dir });
       const { posts, jsonl } = await runOnce(agent, dir, "comment-scrub-stderr-cap");
@@ -178,7 +194,7 @@ describe("WATCH summary is secret-scrubbed before public post and JSONL (REQ-wat
       const summary = posts[1]!.body;
       expect(summary).toContain("Failed (exit 1)");
       expect(summary).not.toContain("ghp_");
-      expect(summary).toContain(`${pad} ${REDACTED}`);
+      expect(summary).toContain(`\n\n${"e".repeat(199)}…\n\n---\n`);
       expect(jsonl).not.toContain("ghp_");
     },
     30_000,

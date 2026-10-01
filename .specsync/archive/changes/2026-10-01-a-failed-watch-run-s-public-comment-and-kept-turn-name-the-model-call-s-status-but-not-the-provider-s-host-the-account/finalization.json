@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "a-failed-watch-run-s-public-comment-and-kept-turn-name-the-model-call-s-status-but-not-the-provider-s-host-the-account",
+  "implementation_commit": "86e4acac1a2ddd8cf145053363079c1dd509b3e4",
+  "implementation_tree": "56ec2ef4c7f6327a2bbab44b3a0696c0ee454ea5",
+  "contract_digest": "a3546a44db99bae09844456a426862fdd4889f374731182c4a6382670a943e27",
+  "workspace_digest": "24ee59ccfbbe6c88d0faceb8074dc413e52d1ff1a5c7b16d30c19d176b9342df",
+  "closing_digest": "9ec46f4ddaf3a231af911b1ac6376852635438678e361d898c36c21f58898be8",
+  "review_digest": "06dab0e6df326ec3779cd4ff89fb96e1a64793e60000ef5645cc5d8ddad58d57",
+  "finalization_digest": "b4e3272fb46b34e122ee68ccd3e7e526f8d30a3ebfddb6a934c5e7fa4aa113f3",
+  "timestamp": 1790819719
+}

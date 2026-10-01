@@ -199,3 +199,70 @@ shows the pause). `tests/watch.stuck-ask.test.ts` passes unchanged (a
 clarify ask still never records one).
 - Fail on base: `noteWatchRunAsk` drops every non-stuck ask, so no row is
   recorded and the three tests fail.
+
+## A failed run's comment says why in one plain line (REQ-watch-009, REQ-watch-472, REQ-watch-080 modified; DISCORD-3.b's reason on GitHub)
+
+`tests/watch.failed-comment.test.ts` (7 tests, 8 with the host case below; `startWatchPoller` with the
+echo ack client and an in-memory DB, stub agents, and the real `task run`
+through the WATCH spawn client against a localhost model that answers 429
+with an org name and a request id in its body; no network, no real key):
+
+- End to end: the summary comment is exactly `Corvidinho WATCH run summary —
+  Failed (exit 1).`, `The model call failed (429 Too Many Requests)` and the
+  footer (no host, below); no comment or log line has the org name, the
+  request id or `LLM HTTP`; `[watch] run failed (CorvidLabs/Corvidinho#42
+  id=…, exit 1): The model call failed (429 Too Many Requests from
+  127.0.0.1:<port>)` is logged; the thread's kept agent turn is the comment's
+  line; the operator-only spawn log's `summaryPreview` keeps `LLM HTTP 429: …`
+  (scrubbed).
+- No result `error`: a crash's scrubbed stderr end (`…/x.ts`, the token
+  `[redacted:github-token]`), else `The run failed (exit 2) without saying
+  why`; never the provider body in the comment or the kept turn. A spawn that
+  throws: its scrubbed one-line message in the comment and the log line (no
+  exit code).
+- Unchanged: a successful run's comment and kept turn are its summary and no
+  `run failed` line is logged; a failed run with a stuck ask keeps its
+  summary (`Needs your input: …`); a spend-cap stop keeps "Work is paused for
+  budget.".
+- `watchFailureReason` order (the result's `error`, the no-provider notice,
+  the stderr end, the exit code; 130 interrupted; null on success or an ask)
+  and `buildSummaryBody` keeping the SAFE-13 owner line and the footer.
+- Updated for the new line: `tests/watch.summary-scrub.test.ts` (a model is
+  configured in its env; the stderr-fallback case expects the scrubbed
+  reason line, the 500-char straddle case checks a successful run's summary
+  and a failed run's 200-char reason line, neither with `ghp_`) and
+  `tests/watch.reliability.test.ts` (the failed run's comment has its reason,
+  not "agent blew up").
+- Fail on main: with main's `src/watch/{agent-client,poller,summary,types}.ts`
+  swapped in the file does not load (`watchFailureReason` is missing); with a
+  stub export added so it loads, 5 of 7 fail (the end-to-end comment is `LLM
+  HTTP 429: {"error":{"message":"Rate limit reached … in organization
+  org-acme-widgets-7731 …"},"request_id":"req_7f3c9a1b2d4e5f60"}`); the two
+  unchanged-behaviour cases pass. Restored: 7 pass.
+
+## A failed run's public line drops the provider's host (REQ-watch-009, REQ-watch-472 modified)
+
+`tests/watch.failed-comment.test.ts` (8 tests):
+
+- End to end (the real `task run` against a localhost model answering 429):
+  the comment's line is `The model call failed (429 Too Many Requests)` and no
+  comment has the host `127.0.0.1:<port>`; the `[watch] run failed` log line
+  keeps `… from 127.0.0.1:<port>)`; the kept agent turn is the comment's line
+  and the stored turns never hold the host.
+- `buildSummaryBody` with a reason naming `acme-prod.openai.azure.com`: the
+  body's line is `The model call failed (429 Too Many Requests)`, the SAFE-13
+  owner line and the footer kept.
+- `watchPublicFailureLine` over `modelCallFailedLine` for a host of
+  `acme-prod.openai.azure.com:8443` (through `failureReasonFor`, as the
+  comment reads it): an HTTP status (429, and 599 with no status name), a
+  timeout, a network error, a malformed reply and no failure detail each lose
+  the host; a 266-char host the 200-char cap cut (`…`) is dropped too; the
+  no-key line, the no-provider notice, a verify line, a stderr line and the
+  exit-code lines come back unchanged.
+- Fail on the branch head before this change (58c327f): with its
+  `src/watch/{summary,poller}.ts` swapped in the file does not load
+  (`watchPublicFailureLine` is missing); with a pass-through stub export
+  added, 3 of 8 fail (the end-to-end comment is `The model call failed (429
+  Too Many Requests from 127.0.0.1:<port>)`, the `buildSummaryBody` line names
+  `acme-prod.openai.azure.com`, the shapes keep the host). Restored: 8 pass.
+

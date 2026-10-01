@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "a-failed-github-watch-run-s-comment-says-why-in-one-plain-line-which-model-call-failed-status-and-host-never-the",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "86e4acac1a2ddd8cf145053363079c1dd509b3e4",
+      "contract_digest": "7daa476a6978e54344616f5a4651198047d417fa959b5dd540a45796401faca0",
+      "execution_digest": "c064586f567289895a4881e2f29c8321beb49bd653b85c2d0b3c7f54360a9765",
+      "workspace_digest": "24ee59ccfbbe6c88d0faceb8074dc413e52d1ff1a5c7b16d30c19d176b9342df",
+      "timestamp": 1790819353
+    }
+  ]
+}
