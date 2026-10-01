@@ -105,8 +105,17 @@ and provider keys never reach the suite. `tests/cli.plugins-run-argv.test.ts`,
 `tests/cli.project-path.test.ts`, `tests/agent.cli.test.ts` run `task run`
 against the localhost fake provider. `tests/docs.operator-facts.test.ts`
 checks the `llm.no_provider` Logs row.
+`tests/daemon.no-provider-run.test.ts` — a daemon with no model whose two due
+schedules spawn the real `task run` (a wrapper bin that clears the model
+settings): the owner's schedule's run row keeps the notice as `summary`,
+another creator's `That didn't work.`, both with `error` `failed (exit 1):
+<notice>`; each `run.finished` is a `warn` with `ok: false` and that `error`,
+and `[scheduler] run failed (schedule <id>, exit 1): <notice>` is logged for
+each (DISCORD-3.b since #340; the REQ-cli-079 text now says so).
 - Fail on base: the notice, daemon, doctor, init, preload and `--task -h`
-  cases fail with the base's sources (and the base preload).
+  cases fail with the base's sources (and the base preload). The daemon
+  schedule-run case documents #340's behaviour and passes on main (the
+  REQ text was stale, not the code).
 
 ## Model fallback in task run and the daemon (REQ-cli-080; AGENT-11)
 

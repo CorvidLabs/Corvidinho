@@ -135,7 +135,9 @@ export function idleTimeoutLine(timeoutMs: number): string {
  * The plain note a turn-capped run carries on a WATCH comment and the CLI's
  * human output; on Discord the cap shows only as `stopped=turn-cap` in the
  * footer plumbing (AGENT-9, DISCORD-3.a). An idle-timed-out run needs no
- * note there: its summary starts with {@link idleTimeoutLine}.
+ * note there: the CLI prints its summary, which starts with
+ * {@link idleTimeoutLine}, and its WATCH comment's one reason line is that
+ * line (its `error`, REQ-watch-009).
  */
 export const TURN_CAP_NOTE =
   "Stopped: it reached the turn cap before it finished, so this is its best answer so far.";

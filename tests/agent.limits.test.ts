@@ -825,7 +825,7 @@ describe("it says so on each surface", () => {
     }
   }, 15_000);
 
-  test("WATCH: the comment says it stopped at the turn cap in a plain line; an idle timeout's summary already leads with its line", async () => {
+  test("WATCH: the comment says it stopped at the turn cap in a plain line; an idle-timed-out run's one reason line is its stop line", async () => {
     const watch = await createWatchClient({ bin: resultBin({ ...capped }), cwd: scratch }).runChat({
       prompt: "hi",
       sessionId: "w1",
@@ -835,16 +835,44 @@ describe("it says so on each surface", () => {
     expect(body).toContain(`Here is what I found so far.\n\n${TURN_CAP_NOTE}`);
     expect(body).not.toContain("stopped=");
 
+    // A failed run's comment is its one reason line (REQ-watch-009): for an
+    // idle-timed-out run that is the result frame's `error`, the stop line.
     const idleLine = idleTimeoutLine(600_000);
-    const idle = buildSummaryBody({
-      ok: false,
-      sessionId: "w2",
-      exitCode: 1,
-      summary: `${idleLine}\n\nPartial notes.`,
-      stopReason: "idle-timeout",
-    });
-    expect(idle).toContain(`Failed (exit 1).\n\n${idleLine}\n\nPartial notes.`);
+    const idleSpawn = await createWatchClient({
+      bin: resultBin(
+        {
+          summary: `${idleLine}\n\nPartial notes.`,
+          filesChanged: [],
+          verified: false,
+          verifySkipped: false,
+          cancelled: false,
+          state: "failed",
+          attempts: 1,
+          stopReason: "idle-timeout",
+          error: idleLine,
+        },
+        1,
+      ),
+      cwd: scratch,
+    }).runChat({ prompt: "hi", sessionId: "w2" });
+    expect(idleSpawn.ok).toBe(false);
+    expect(idleSpawn.stopReason).toBe("idle-timeout");
+    expect(idleSpawn.failureReason).toBe(idleLine);
+    const idle = buildSummaryBody(idleSpawn);
+    expect(idle).toContain(`Failed (exit 1).\n\n${idleLine}\n\n---`);
+    expect(idle).not.toContain("Partial notes.");
     expect(idle).not.toContain(TURN_CAP_NOTE);
+    // A turn-capped run that failed posts its reason line, not the note.
+    const cappedFailed = buildSummaryBody({
+      ok: false,
+      sessionId: "w4",
+      exitCode: 1,
+      summary: "Here is what I found so far.",
+      failureReason: "Verification failed after 2 retries",
+      stopReason: "turn-cap",
+    });
+    expect(cappedFailed).toContain("Failed (exit 1).\n\nVerification failed after 2 retries\n\n---");
+    expect(cappedFailed).not.toContain(TURN_CAP_NOTE);
     expect(buildSummaryBody({ ok: true, sessionId: "w3", exitCode: 0, summary: "plain" })).not.toContain(TURN_CAP_NOTE);
   }, 15_000);
 });

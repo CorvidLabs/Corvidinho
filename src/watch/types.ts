@@ -74,6 +74,19 @@ export type AgentSpawnResult = {
    * frame); a turn-capped run's summary comment gets a plain note.
    */
   stopReason?: TaskStopReason;
+  /**
+   * DISCORD-3.b on GitHub (REQ-watch-009): a failed run's reason from the
+   * result frame's `error` (one line of harness text — which model call
+   * failed as status and host, the no-provider notice, which verify failed —
+   * scrubbed and capped); absent on success or when none was given. Shown
+   * only through `watchFailureReason`, never the provider's reply body.
+   */
+  failureReason?: string;
+  /**
+   * DISCORD-3.b on GitHub: the end of a failed run's stderr, the last
+   * fallback for its reason (`watchFailureReason`); never posted as is.
+   */
+  stderrTail?: string;
 };
 
 export type WatchConfig = {
