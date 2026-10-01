@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "3f760e0b5bb1722b885ab8a4ea40fe1ada9f1829",
   "created_at": 1790871909,
-  "updated_at": 1790872413,
+  "updated_at": 1790872775,
   "affected_specs": [
     "plugins",
     "agent",
@@ -32,7 +32,7 @@
     "persona.md"
   ],
   "no_spec_change": true,
-  "no_spec_change_rationale": "Owner already chose prefer fledge-plugin-gif over GIPHY gif-search; Tenor API shutdown forces GIPHY Tenor-compat behind the Fledge CLI. No new PLUGIN HI — wiring, docs, and env pass-through only; gif-search stays for team/tool-tier (#331).",
+  "no_spec_change_rationale": "Owner already chose prefer fledge-plugin-gif over GIPHY gif-search; Tenor API shutdown forces GIPHY Tenor-compat behind the Fledge CLI. No new PLUGIN HI \u2014 wiring, docs, and env pass-through only; gif-search stays for team/tool-tier (#331).",
   "acceptance_criteria": [
     "fledge gif search without GIPHY_API_KEY prints not-configured (no hardcoded Tenor key); with the key set, fledgeChildEnv passes GIPHY_API_KEY through so discovered fledge-gif can search while workers and verify still drop it; gif-search stays registered with a Secondary / Prefer fledge-gif description; docs/DISCORD-GO-LIVE.md E.3.b prefers fledge-gif and keeps gif-search as secondary without removing #331; allowlisting fledge-gif at CORVIDINHO_LLM_TIER=code offers the preferred tool and the persona tip prefers fledge-gif for Discord GIF asks."
   ],
