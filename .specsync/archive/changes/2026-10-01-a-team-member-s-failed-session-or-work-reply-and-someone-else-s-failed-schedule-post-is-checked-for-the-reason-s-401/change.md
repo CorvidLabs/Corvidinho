@@ -1,6 +1,6 @@
 ---
 id: a-team-member-s-failed-session-or-work-reply-and-someone-else-s-failed-schedule-post-is-checked-for-the-reason-s-401
-state: implementing
+state: archived
 type: bug_fix
 base_commit: b84c75fc3e98ce9d51c30ea215f538d53c18ded8
 ---

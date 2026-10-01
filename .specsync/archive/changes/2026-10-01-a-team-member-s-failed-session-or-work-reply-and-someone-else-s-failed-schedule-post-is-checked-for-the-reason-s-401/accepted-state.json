@@ -7,11 +7,11 @@
   "title": "A team member's failed /session or /work reply, and someone else's failed schedule post, is checked for the reason's 401 with the run's own random ids masked, so an id that happens to contain 401 no longer fails the DISCORD-3.b test",
   "description": "A team member's failed /session or /work reply, and someone else's failed schedule post, is checked for the reason's 401 with the run's own random ids masked, so an id that happens to contain 401 no longer fails the DISCORD-3.b test",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "b84c75fc3e98ce9d51c30ea215f538d53c18ded8",
   "created_at": 1790824918,
-  "updated_at": 1790826380,
+  "updated_at": 1790826584,
   "affected_specs": [
     "discord"
   ],
