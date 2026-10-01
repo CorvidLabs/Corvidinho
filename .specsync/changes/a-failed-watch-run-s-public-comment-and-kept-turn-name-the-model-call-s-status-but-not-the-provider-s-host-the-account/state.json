@@ -7,10 +7,11 @@
   "title": "A failed WATCH run's public comment and kept turn name the model call's status but not the provider's host (the account's resource name, a private gateway or an Ollama server's address); the [watch] run failed log line keeps the host",
   "description": "A failed WATCH run's public comment and kept turn name the model call's status but not the provider's host (the account's resource name, a private gateway or an Ollama server's address); the [watch] run failed log line keeps the host",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "58c327f70e90258f02bc8dd49a46d436c57a4f86",
   "created_at": 1790818084,
-  "updated_at": 1790818100,
+  "updated_at": 1790818130,
   "affected_specs": [
     "watch"
   ],

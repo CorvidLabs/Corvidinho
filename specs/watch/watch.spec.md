@@ -1,6 +1,6 @@
 ---
 module: watch
-version: 28
+version: 29
 status: draft
 files:
   - src/watch/types.ts
@@ -370,3 +370,4 @@ WATCH poll-first thin (#19, 2026-09-26, corvid-agent): mention/review_request/is
 | 2026-09-30 | a-cli-task-run-in-a-git-repo-works-in-its-own-worktree-by-default-here-runs-it-in-my-checkout-session-worktree-1-a: A CLI task run in a git repo works in its own worktree by default; --here runs it in my checkout (SESSION-WORKTREE-1.a) |
 | 2026-09-30 | a-call-whose-price-is-unknown-stops-and-asks-on-the-owner-s-spend-card-showing-the-amount-as-unknown-when-a-cap-covers: A call whose price is unknown stops and asks on the owner's spend card showing the amount as unknown when a cap covers it (recorded unknown, owner lines read $X + unknown, no price override), and every surface asks before spending over a cap: WATCH spend-cap stops reach the owner by DM and a schedule's spend-cap stop can go on through the card (SAFE-16, SAFE-16.a, AUTONOMY-8) |
 | 2026-10-01 | a-failed-github-watch-run-s-comment-says-why-in-one-plain-line-which-model-call-failed-status-and-host-never-the: A failed GitHub WATCH run's comment says why in one plain line (which model call failed: status and host), never the provider's raw error body; REQ-cli-079 matches what a daemon no-provider schedule run now records |
+| 2026-10-01 | a-failed-watch-run-s-public-comment-and-kept-turn-name-the-model-call-s-status-but-not-the-provider-s-host-the-account: A failed WATCH run's public comment and kept turn name the model call's status but not the provider's host (the account's resource name, a private gateway or an Ollama server's address); the [watch] run failed log line keeps the host |

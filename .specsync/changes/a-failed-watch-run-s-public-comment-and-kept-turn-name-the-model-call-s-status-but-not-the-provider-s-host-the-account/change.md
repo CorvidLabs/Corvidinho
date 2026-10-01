@@ -1,6 +1,6 @@
 ---
 id: a-failed-watch-run-s-public-comment-and-kept-turn-name-the-model-call-s-status-but-not-the-provider-s-host-the-account
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 58c327f70e90258f02bc8dd49a46d436c57a4f86
 ---
