@@ -1,0 +1,107 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790827258,
+      "digest": "ce324a8c28c2b79ff0de40b8caa0d92449da62782dd0c9fb20d205c64e05343a",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent",
+        "title": "In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard)",
+        "description": "In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "plugins/files/commands.ts",
+          "plugins/files/protectedPaths.ts",
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/testing.md",
+          "src/agent/loop.ts",
+          "src/agent/repo-ways.ts",
+          "src/work/pr.ts",
+          "tests/agent.hi-guard.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "AGENT-18 (captured on main from Leif's 2026-09-28 interview; this builds the guard half of its hi clause, 'never inventing them'): in a repo that uses hi, any change under hi/ since the session base that no approved capture made blocks done and the PR, and since no run can make an approved capture yet, every hi/ change a run makes or leaves blocks. runTask's gate (next to the SpecSync coverage check, before the lane) compares hi/ at the session base (repoWaysBase; a planning snapshot when there is no git base) with the working tree: a criterion added, removed or reworded, a retired entry changed, or any other hi/ file (committed, dirty, untracked or ignored) is a failed verify with one 'hi guard:' note naming them and no lane run, the retry's feedback, then failed with the stuck ask; unreadable fails closed. openWorkPr refuses with reason hi-changed before commit, push and the fallback re-verify when hi/ differs from the merge-base. files-write, files-edit and files-delete refuse every path under hi/ in hi repos with 'refused (AGENT-18): ...' (reads unaffected), and the tool loop's hi block says so. Commits made outside a Corvidinho run are not checked. tests/agent.hi-guard.test.ts fails on the base sources and passes on the branch."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "374ff40e6e70abad1520c129ea561ae89f4e49b407a519beaf4e4bf49cd41bb4",
+        "discord": "3a2c96cb7cd31f40653dfac52fb280f465e0c97a7b01f1267e64b8805ea6f16f",
+        "plugins": "923e958138d61a8469719c28781f303352eca157804ae11832dd83434f198439"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790830046,
+      "digest": "ce324a8c28c2b79ff0de40b8caa0d92449da62782dd0c9fb20d205c64e05343a",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent",
+        "title": "In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard)",
+        "description": "In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "plugins/files/commands.ts",
+          "plugins/files/protectedPaths.ts",
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/testing.md",
+          "src/agent/loop.ts",
+          "src/agent/repo-ways.ts",
+          "src/work/pr.ts",
+          "tests/agent.hi-guard.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "AGENT-18 (captured on main from Leif's 2026-09-28 interview; this builds the guard half of its hi clause, 'never inventing them'): in a repo that uses hi, any change under hi/ since the session base that no approved capture made blocks done and the PR, and since no run can make an approved capture yet, every hi/ change a run makes or leaves blocks. runTask's gate (next to the SpecSync coverage check, before the lane) compares hi/ at the session base (repoWaysBase; a planning snapshot when there is no git base) with the working tree: a criterion added, removed or reworded, a retired entry changed, or any other hi/ file (committed, dirty, untracked or ignored) is a failed verify with one 'hi guard:' note naming them and no lane run, the retry's feedback, then failed with the stuck ask; unreadable fails closed. openWorkPr refuses with reason hi-changed before commit, push and the fallback re-verify when hi/ differs from the merge-base. files-write, files-edit and files-delete refuse every path under hi/ in hi repos with 'refused (AGENT-18): ...' (reads unaffected), and the tool loop's hi block says so. Commits made outside a Corvidinho run are not checked. tests/agent.hi-guard.test.ts fails on the base sources and passes on the branch."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "8f66a82d3a999fa82344bd53e6bee1290d657707f8f9e21a4611044bf20d0b4c",
+        "discord": "40ee0d250b473dfce53b9cfdb26685cd3c0140972d695bee365bb4d2dba11650",
+        "plugins": "9870d581844ab733883a12dc8578ea5fab3d1ba66c8ce34da54196d9425b3079"
+      }
+    }
+  ],
+  "reopenings": []
+}

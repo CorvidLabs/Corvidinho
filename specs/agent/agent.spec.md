@@ -70,6 +70,7 @@ files:
   - tests/agent.safe3a-gate.test.ts
   - tests/agent.safe3a-owner-shell.test.ts
   - tests/agent.repo-ways.test.ts
+  - tests/agent.hi-guard.test.ts
   - src/agent/limits.ts
   - tests/agent.limits.test.ts
 
@@ -664,6 +665,16 @@ test seam), `HUMAN_LIFECYCLE_LINE`, `selfLifecycleRefusal(cwd, id, env)`,
 `settleOwnSddChanges({ cwd, run, call, onText })`, `capturedHiIds(cwd)` and
 `citedHiIds(text, families)`. `ExecuteContext` gains optional
 `repoWays?: RepoWays`. No env var, config key, flag or schema.
+The hi guard (AGENT-18 hi clause, guard half, REQ-agent-520):
+`src/agent/repo-ways.ts` also exports `HiChanges` (`criteria`, `retired`,
+`files`), `HiSnapshot`, `parseHiEntries(text)`, `hiChangesSince(root, base)`,
+`hiSnapshot(root)`, `hiChangesFromSnapshot(root, start)`,
+`hiChangeCount(changes)`, `hiChangeSummary(changes)`, `hiGuardNote(changes)`,
+`HI_GUARD_UNREADABLE_NOTE`, `HI_NO_CAPTURE_YET`, `hiRunChanges(cwd, run)` (the
+gate's comparison for a run) and `hiPrRefusal(cwd)` (`github-pr-create`
+inside a run, REQ-plugins-521); `SddRun` gains
+`hiStart` (hi/ at planning for a run with no git session base). No env var,
+config key, flag or schema.
 
 A failed run's plain reason (DISCORD-3.b, REQ-agent-032): `TaskResult` gains
 an optional `error?: string` (additive; no protocol bump) and `ExecuteResult`
@@ -1051,6 +1062,30 @@ with the stuck ask as for any failed verify. A diff that cannot be read fails
 closed the same way. Deleting or committing away `sdd.json` during the run
 does not switch the check off.
 
+hi guard (AGENT-18 hi clause, guard half, REQ-agent-520): in a repo that
+uses hi (the start scan merged with a scan now), the agent never changes the
+criteria itself. Before the lane runs, everything under `hi/` is compared
+with the session base (`hiChangesSince`: tracked paths that differ from the
+base commit, committed or not, and untracked ones, ignored files included;
+git never asks a configured fsmonitor, and an assume-unchanged or
+skip-worktree `hi/` entry whose file is not its index blob counts too; for a
+run with no git session base, hi/ as it was at planning, `hiSnapshot`). Any difference — a criterion added, removed or reworded, a
+retired entry changed, or any other `hi/` file (intent prose, notes) — made
+by this run or left by an earlier one, is a failed verify whose `hi guard:`
+note (what changed, that no run can make an approved capture yet, and to undo
+a hi/ change this run made but leave one that was already there for the
+owner) is the retry's feedback, with no lane run; after the retries the run fails with the
+stuck ask. What cannot be read fails closed. No run can make an approved
+capture yet (drafting criteria and the capture card come later), so every
+`hi/` change blocks. The tool loop's hi block says the file tools refuse
+`hi/` and that any `hi/` change blocks done and the PR; the run's own
+`github-pr-create` holds to the same comparison (REQ-plugins-521). A run that
+changed nothing is not checked. The guard runs only inside Corvidinho runs
+and `/work`'s PR step: a capture made with the `hi` CLI outside any run that
+is already in the session base never blocks, but a `hi/` commit on the run's
+own branch that is not yet on the remote's default branch counts whoever
+made it, since the run cannot tell.
+
 Own SpecSync change (AGENT-18.a, REQ-agent-519): `runTask` keeps a per-cwd
 ledger for the run. `specsync-change-new` records the ids its own spawn added
 (listing `.specsync/changes/*/state.json` before and after, never model
@@ -1075,6 +1110,12 @@ A change the run did not open is never touched.
 - **Given** a repo whose `.specsync/sdd.json` enables the change workflow and requires a change for `src/`, and a run that edits `src/app.ts` without opening one
 - **When** the attempt ends
 - **Then** one `SpecSync gate:` note names `src/app.ts` and says to open a change with `specsync-change-new`; no lane runs; the retry gets the note as its feedback; once a change's `affected_paths` covers the path, the lane runs and the run is verified (REQ-agent-518)
+
+### Scenario: a run changes a criterion in a hi repo
+
+- **Given** a repo whose `hi/agent.md` has `hi:` front matter, and a run that rewords `AGENT-19` there through the shell while editing `src/app.ts`
+- **When** the attempt ends
+- **Then** one `hi guard:` note names `criteria AGENT-19` and says no run can make an approved capture yet; no lane runs; the retry gets the note as its feedback; once `hi/` is back as it was at the session base, the lane runs and the run is verified (REQ-agent-520)
 
 ### Scenario: its own change on Corvidinho once verify is green
 
@@ -1322,6 +1363,9 @@ A change the run did not open is never touched.
 | `sdd.json` deleted, disabled or committed away during the run | the base tree, HEAD and the start scan still count; the check stays on (REQ-agent-518) |
 | `sdd.json` present but not valid JSON | fails closed: enabled, required, every path meaningful (REQ-agent-518) |
 | Git diff unreadable in a repo whose SpecSync workflow requires a change | failed verify with the "could not read what changed" `SpecSync gate:` note (REQ-agent-518) |
+| In a hi repo, anything under `hi/` differs from the session base (made by the run, left by an earlier one, or committed mid-run) | `hi guard:` note naming the criteria, retired entries and other `hi/` files; failed verify with no lane run, retry with the note, then failed with the stuck ask (REQ-agent-520) |
+| hi/ cannot be read or diffed in a hi repo | failed verify with the "could not read what changed under hi/" `hi guard:` note (REQ-agent-520) |
+| A `hi/` file marked assume-unchanged or skip-worktree is edited on disk (git diff shows nothing) | still a `hi/` change: `hi guard:` note, failed verify; a skip-worktree file missing from disk (sparse checkout) is not (REQ-agent-520) |
 | Own change on a repo other than Corvidinho after a green lane | one Text line: it stays open for a human; nothing approved (REQ-agent-519) |
 | Own change on Corvidinho, approve or finalize not allowlisted, refused or failing | one Text line with the scrubbed reason; the change stays open for a human; the run stays verified (REQ-agent-519) |
 | Lane fails when re-run over what approve and finalize wrote | run failed, not verified, no retry; the summary says so (REQ-agent-519) |
@@ -1416,3 +1460,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |
 | 2026-10-01 | my-local-cli-task-run-may-use-the-allowlisted-shell-and-runners-inside-its-own-worktree-safe-3-a-local-cli-half: My local CLI task run may use the allowlisted shell and runners inside its own worktree (SAFE-3.a, local CLI half) |
 | 2026-10-01 | a-failed-delegate-worker-or-council-voice-hands-its-lead-one-plain-failure-line-the-worker-s-result-error-without-the: A failed delegate worker or council voice hands its lead one plain failure line (the worker's result error without the provider's host, the no-provider notice, or the exit code), never the worker's summary or stderr, which for a model failure is the provider's raw error body |
+| 2026-10-01 | in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent: In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard) |

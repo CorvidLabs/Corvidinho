@@ -700,6 +700,15 @@ meaningful files, a meaningful path changed since the merge-base that no
 open change and no change archived on the branch covers, or a diff that
 cannot be read, keeps the PR from opening, before the pre-push lane and
 before anything is committed or pushed (AGENT-18, REQ-discord-518), and
+`hi-changed`: in a repo that uses hi (read from the merge-base, HEAD and the
+work tree), anything under `hi/` that differs from the merge-base, committed
+on the branch or left in the tree (`hiChangesSince`: a criterion, a retired
+entry or any other `hi/` file, an assume-unchanged or skip-worktree edit
+included; a `hi/` commit on the branch counts whoever made it, since the PR
+would carry it), or a hi/ diff that cannot be read, keeps the
+PR from opening before the pre-push lane (so a trusted and a re-run verify
+both hold to it) and before anything is committed or pushed: no run can make
+an approved capture yet (AGENT-18 hi guard, REQ-discord-520), and
 `not-reviewed`: `github-pr-create` held the PR at the GITHUB-9 second-model
 review gate (this step has no run model, so it starts no round; only a tree a
 run already had reviewed opens), the line reusing the gate's reason
@@ -1402,6 +1411,7 @@ owner nothing waiting is posted. Fixed harness text never waits.
 | `/admin` by non-owner / no owner | Ephemeral `not authorized`; no file write |
 | `/work` tree deleted or turned off a test since the branch left its base, or its test names cannot be read | `PR: not opened — N test(s) were deleted or turned off since the branch left …` naming each as `"name" (file)` (or "could not check …"); nothing committed or pushed; reason `tests-deleted` (REQ-discord-185) |
 | `/work` in a repo whose SpecSync workflow requires a change: a meaningful path changed since the merge-base has no open or branch-archived change, or the diff cannot be read | `PR: not opened — N changed path(s) this repo's SpecSync workflow needs a change for are not covered by a SpecSync change (…)` (or "could not read what changed …"); nothing committed or pushed; reason `sdd-uncovered` (REQ-discord-518) |
+| `/work` in a repo that uses hi: something under `hi/` differs from the merge-base (committed on the branch or left in the tree), or that diff cannot be read | `PR: not opened — this repo's hi/ changed since the branch left … (criteria …; retired entries …; other hi/ files …) and no approved capture made the change; …` (or "could not read what changed under hi/ …"); nothing committed or pushed, the pre-push lane not run; reason `hi-changed` (REQ-discord-520) |
 | `/work` pre-push verify lane passes with no recognised test summary, or no test ran | `PR: not opened — Verify gate: not verified: …`; reason `verify-failed`; nothing committed or pushed (REQ-discord-185) |
 | Spend card: Deny, no answer before it lapses, a code typed after it lapsed, a non-owner's press or code, or its waiting run is gone | nothing is sent or spent; the card closes as a no (`Denied by you — nothing was spent.` / `Expired — …` / `Closed — nobody is waiting …`); a non-owner gets `Only the owner can answer this card.` (REQ-discord-198) |
 | A run fails (non-zero exit without an ask, or the spawn throws) on chat, an ask pick / Answer resume, `/session start`, `/work` or a schedule post | Owner's own run: one plain scrubbed line why; anyone else: `That didn't work — the owner has been told.` after the owner DM went out, else `That didn't work.`; one `[discord] run failed (<surface>, exit N): <reason>` line (`[scheduler] …` for schedules) (REQ-discord-032) |
@@ -1613,3 +1623,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |
 | 2026-10-01 | its-first-20-replies-in-public-threads-each-wait-for-my-ok-on-an-approve-card-even-text-i-dictated-and-replies-to-me: Its first 20 replies in public threads each wait for my OK on an Approve card, even text I dictated and replies to me (AUTONOMY-10, AUTONOMY-10.a) |
 | 2026-10-01 | a-team-member-s-failed-session-or-work-reply-and-someone-else-s-failed-schedule-post-is-checked-for-the-reason-s-401: A team member's failed /session or /work reply, and someone else's failed schedule post, is checked for the reason's 401 with the run's own random ids masked, so an id that happens to contain 401 no longer fails the DISCORD-3.b test |
+| 2026-10-01 | in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent: In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard) |
