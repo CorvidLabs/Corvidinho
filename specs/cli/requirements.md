@@ -1367,3 +1367,12 @@ Acceptance Criteria
 - The real CLI against a localhost fake model: by default `shell-exec` is offered and runs in the kept worktree, not the checkout, exit 0; `--here` (text) prints exactly one SAFE-3.a line on stderr and offers none; a non-git folder (`--json`) has exactly one SAFE-3.a `Text` event and offers none.
 - With the base's sources the file cannot load; with `isCliRunWorktree` and `TOOL_CHILD_ENV` stubbed in, 11 of 12 fail (the role-session guard passes there too); with the gate as it was before the tool-child refusal, the two cases holding tool-child rows fail (granted); all pass on the branch.
 
+### REQ-cli-432
+
+The project SHALL ship package version `0.0.40` (Brave web-search and GIPHY gif-search for owner and team, PLUGIN-7/8/9). CLI `version` and Discord presence (DISCORD-12) report `0.0.40` after a restart. CHANGELOG SHALL include verbose 0.0.40 notes covering #326 and #331.
+
+Acceptance Criteria
+- `package.json` version is `0.0.40`.
+- CLI `version` prints `0.0.40`.
+- CHANGELOG has a 0.0.40 section that the updater's changelog helper extracts exactly.
+
