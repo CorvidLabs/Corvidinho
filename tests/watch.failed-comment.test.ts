@@ -74,7 +74,7 @@ function mkEvent(id: string): DetectedEvent {
   return {
     id,
     type: "issue_comment",
-    body: "@corvid-agent show me a gif of a dog",
+    body: "@corvid-agent say hello in one sentence",
     sender: "0xLeif",
     repo: "CorvidLabs/Corvidinho",
     number: 42,

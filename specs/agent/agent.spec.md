@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 49
+version: 51
 status: draft
 files:
   - src/agent/types.ts
@@ -13,6 +13,7 @@ files:
   - src/agent/index.ts
   - src/agent/task-summary.ts
   - src/agent/execute.ts
+  - src/agent/missing-capability.ts
   - src/agent/spawn-argv.ts
   - src/agent/tier.ts
   - src/agent/tools.ts
@@ -34,6 +35,7 @@ files:
   - tests/agent.tool-loop.test.ts
   - tests/agent.allowlisted-dangerous.test.ts
   - tests/agent.soft-land.test.ts
+  - tests/agent.missing-capability.test.ts
   - tests/spawn.argv.test.ts
   - tests/agent.project-instructions.test.ts
   - tests/agent.persona.test.ts
@@ -83,6 +85,8 @@ depends_on:
 ## Purpose
 
 Root guidance-only `agent.3md` + `@corvidlabs/agent3md` packaging (REQ-agent-260): validate/route/get smoke only; agent loop does not load planes for progressive disclosure until that is HI'd separately (the captured AGENT-13 is model providers, not this).
+
+Missing-capability soft-land (REQ-agent-742; `src/agent/missing-capability.ts`): when the task names a plugin or asks for a GIF and that capability is not offered, the run replies with the concrete gap (not installed, not allowlisted, not configured, role, or tier) and cites an HI id or open PR only when a lookup returned it. It does not invent a provider and does not ask what to install. An offered tool is left for the model. Community sessions are not given mutating tools.
 
 Model providers (AGENT-13 / AGENT-10, REQ-agent-179; `src/agent/providers.ts`):
 the operator configures every model, and none is built in as a default.
@@ -1288,6 +1292,8 @@ A change the run did not open is never touched.
 | Talk worktree whose last run ended blocked / failed / cancelled or died | baseline is the talk branch's merge-base: its edits are verified before done; one carried note; a base git cannot find verifies anyway (REQ-agent-015) |
 | Cwd not in a git work tree, or start snapshot unreadable | tool-reported filesChanged only, as before (REQ-agent-085); if the run called a Fledge command (or the shell / a runner, or a local run's `delegate` with a Fledge plugin command allowlisted, or a `delegate` whose worker left no result frame), verify runs anyway with a `Verify gate: no git working tree to diff` note (REQ-agent-502) |
 | Dangerous plugin the run's allowlist does not name | not in the catalog; a model call to it is refused as not offered (REQ-agent-501 / REQ-agent-128) |
+| The task names a plugin or asks for a GIF that this run does not offer | summary is the concrete gap (not installed / not allowlisted / not configured / role / tier) plus only HI ids and open PR numbers a lookup returned; no model call; no `ask`; no invented provider (REQ-agent-742) |
+| The same ask when a candidate tool is already offered | the model still runs; a vague install question is steered back to that tool instead of a clarify ask (REQ-agent-742) |
 | Scheduled run (`schedule_*` session), even the owner's, whose allowlist names a Fledge plugin command | no Fledge discovery, so the command is not offered and fledge is never spawned (REQ-agent-741) |
 | Scheduled run: a must-ask call the owner denies, lets lapse, or denied before (`denied` / `expired` / `resent`) | nothing done; the run ends `blocked` with the `mustAskRefusedAsk` stuck question naming the tool, why, rule and card, verify skipped (REQ-agent-741) |
 | `shell-exec`, `node-exec`, `python-exec`, `cargo-exec`, `fledge-lanes-run` or `fledge-run` named in the allowlist, and the SAFE-3.a gate refuses the attempt (not the owner, a surface other than chat / ask / session / work, WATCH, a schedule, a delegate or council worker, a local CLI run with `--here`, outside a git repo or not at the top of the worktree it made for itself, a run with no role session that carries a Discord session id or surface stamp, or a cwd other than this talk's own linked worktree) | not in that attempt's catalog; a model call is refused as not offered (the role refusal for a non-owner); one `[operator] SAFE-3.a: … allowlisted but not offered: <why>` Text line per run, never in the reply (REQ-agent-501 / REQ-agent-503) |
@@ -1373,6 +1379,7 @@ Spawns `fledge` for the default verify runner. Reads SpecSync registry/specs via
 ## Change Log
 
 Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
+| 2026-10-03 | missing-plugin soft-land cites the real gap, never an invented provider (REQ-agent-742) |
 | 2026-09-26 | discord-dogfood soft-land + Discord chat prompt (REQ-agent-312 / AGENT-9 / IDENTITY-5 / ROLES-CHAT-9) |
 | 2026-09-26 | dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community: chat/plumbing split for Discord summaries; identity + public Q&A system instructions |
 | 2026-09-26 | flesh-full-llm-tool-loop-on-prove-before-done-so-task-run-discord-watch-can-call-allowlisted-plugins-via-openai: Flesh full LLM tool loop on prove-before-done so task run / Discord / WATCH can call allowlisted plugins via OpenAI-compatible tools (issue #31 dogfood MVP) |
@@ -1454,3 +1461,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-10-01 | a-failed-delegate-worker-or-council-voice-hands-its-lead-one-plain-failure-line-the-worker-s-result-error-without-the: A failed delegate worker or council voice hands its lead one plain failure line (the worker's result error without the provider's host, the no-provider notice, or the exit code), never the worker's summary or stderr, which for a model failure is the provider's raw error body |
 | 2026-09-30 | web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered: Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap |
 | 2026-10-01 | gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins: GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap |
+| 2026-10-03 | missing-plugin-asks-soft-land-with-the-real-gap: Missing-plugin asks soft-land with the real gap |

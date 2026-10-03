@@ -318,7 +318,7 @@ describe("task run: a failed run's result frame carries a plain `error` (real CL
     const llm = unauthorizedLlm();
     try {
       const run = async (env: Record<string, string>) => {
-        const proc = Bun.spawn(["bun", join(ROOT, "src/cli.ts"), "task", "run", "--task", "show me a gif of a dog", "--output", "ndjson"], {
+        const proc = Bun.spawn(["bun", join(ROOT, "src/cli.ts"), "task", "run", "--task", "say hello in one sentence", "--output", "ndjson"], {
           cwd: mkdtempSync(join(tmpdir(), "corvidinho-failed-reply-cli-")),
           stdout: "pipe",
           stderr: "pipe",
