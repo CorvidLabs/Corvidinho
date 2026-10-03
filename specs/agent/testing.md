@@ -14,6 +14,11 @@
 
 `tests/agent.soft-land.test.ts` covers exhaustion soft-land, chatBody scrub, and mention rewrite.
 
+## Missing capability (REQ-agent-742)
+
+`tests/agent.missing-capability.test.ts`: a named install or GIF ask that is not offered replies with the real gap and only cited HI ids / open PR numbers, without calling the model or asking what to install. An offered `gif-search` still calls the model. Community is a role gap. Unknown names are not installed. A vague install `ask-human` does not become a clarify ask when the tool is offered.
+
+
 ## Per-tier model (REQ-agent-079)
 
 `tests/agent.tool-loop.test.ts` "per-tier model (AGENT-5, REQ-agent-079)":
