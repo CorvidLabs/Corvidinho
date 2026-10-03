@@ -10,4 +10,4 @@ artifact: tasks
 - [x] `src/agent/ask.ts` named-plugin sentence.
 - [x] `tests/agent.missing-capability.test.ts`.
 - [x] Agent spec files, requirement REQ-agent-742, testing note.
-- [ ] SpecSync approve, check --commit, PR as corvid-agent, CI, finalize.
+- [x] SpecSync approve and check --commit. PR, CI, and finalize follow on the branch.

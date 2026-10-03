@@ -5,7 +5,7 @@ change: missing-plugin-asks-soft-land-with-the-real-gap
 
 # Delta — agent (missing-plugin soft-land)
 
-## Added
+## Modified
 
 ### REQUIREMENT REQ-agent-742
 
@@ -18,7 +18,3 @@ Acceptance Criteria
 - An unknown name is not installed; the reply does not invent Tenor or a `fledge-` command the user did not say.
 - A model `ask-human` of "what do you mean by install?" when the named tool is offered does not end as a clarify ask.
 - Fixture: `tests/agent.missing-capability.test.ts`.
-
-### FILE src/agent/missing-capability.ts
-
-Owned by the agent spec (`files:`), with `tests/agent.missing-capability.test.ts`.
