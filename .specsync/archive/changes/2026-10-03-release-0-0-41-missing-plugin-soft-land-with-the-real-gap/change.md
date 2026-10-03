@@ -1,6 +1,6 @@
 ---
 id: release-0-0-41-missing-plugin-soft-land-with-the-real-gap
-state: implementing
+state: accepted
 type: operations
 base_commit: 97b8dd758b9f42b0bb3b2341ffbaf196051d4ad1
 ---
