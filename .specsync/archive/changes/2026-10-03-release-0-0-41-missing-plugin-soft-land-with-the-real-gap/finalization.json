@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-41-missing-plugin-soft-land-with-the-real-gap",
+  "implementation_commit": "e8234aa4cd33e1324384022c6687a0e37affecdd",
+  "implementation_tree": "16fc2c54529a2855c5e019ea2c826a0566fc546f",
+  "contract_digest": "1bc24fbd5276330d3df47b634736a401370cfe988261d15e8951bebc22d6035c",
+  "workspace_digest": "5b8766d546fc137ed6c589f68a2ea9ca5d56ee04dfd3ad05c8d499929a0e9dcd",
+  "closing_digest": "a9c37a5f661da16450f875a7cbe83e3776fd114254931ecf6126ef695bf4e7ad",
+  "review_digest": "1820a630f5b95cb8134672090e7464651d57190f1386ef62810659fca6670752",
+  "finalization_digest": "8e6227e81912f6e8e6cfc11961816daf3b8674216014fdb02548e194e75fb886",
+  "timestamp": 1791048771
+}
