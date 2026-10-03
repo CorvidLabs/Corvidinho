@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.0.41
+
+### Agent
+
+- **When an ask names a plugin, or asks for a GIF, that this run cannot offer, it soft-lands with the real gap** — [#360](https://github.com/CorvidLabs/Corvidinho/pull/360) (REQ-agent-742): instead of inventing a tool or asking a vague "what do you mean by install?" clarify, the reply names the concrete gap. **not installed** — not registered, or not in this project's Fledge plugin list when discovery ran. **not allowlisted** — dangerous tool, SAFE-1. **not configured** — the tool's real key (`GIPHY_API_KEY` or `BRAVE_SEARCH_API_KEY`). **role** — community stays read/chat (ROLES-CHAT-2 / PLUGIN-9); Fledge commands stay owner-only. **tier** — below the run's capability tier. An HI id or an open PR number is cited only when a lookup actually returned it (`hi/*.md`, and `gh pr list` on this repo). Tenor, and any other provider that is not an offered tool, is not invented. If `fledge-gif` or `gif-search` is already offered, the model still runs (prefer `fledge-gif`). A vague install `ask-human` is replaced by the gap or steered back to the offered tool. No new HI id (AGENT-18 still needs a human confirm of new criteria). No schema bump. SpecSync tip orphan after the squash is archived in [#361](https://github.com/CorvidLabs/Corvidinho/pull/361).
+
+### Already on the previous tip
+
+- **Prefer `fledge-gif` over native `gif-search`** — [#358](https://github.com/CorvidLabs/Corvidinho/pull/358) (tip orphan [#359](https://github.com/CorvidLabs/Corvidinho/pull/359)) is already on the previous tip, the main commit this bump sits on, not new behaviour introduced by the version number. Live dogfood still needs `GIPHY_API_KEY` in the bridge env. This release does not inject a key, does not add `discord-send-file` or `discord-post-message` to the allowlist, and does not remove `gif-search`. `fledge-gif` stays the preferred GIF path when it is offered; native `gif-search` stays the secondary GIPHY path from 0.0.40.
+
+### Ops
+
+- Package version **0.0.41** — restart the Discord bridge, `corvidinho daemon` and `github watch` after update so presence (DISCORD-12) reports 0.0.41. No schema bump; no new slash command; NDJSON protocol stays 2. No new allowlist names. v0.0.41 gets its tag and Release from CI when this bump lands on main.
+- Needs operator action: (1) Restart bridge, daemon and `github watch`. (2) GIF dogfood still needs `GIPHY_API_KEY` (and `fledge-gif` allowlisted at code tier, which the live allowlist already includes along with `gif-search` and `web-search`). (3) Do not add `discord-send-file` or `discord-post-message` for this cut. Parked drafts #348, #350 and #351 are not in 0.0.41.
+- Rollback to the v0.0.40 tag: schema unchanged. That tag does not include the missing-plugin soft-land (#360) or the fledge-gif prefer path (#358), both of which landed on main after the 0.0.40 package bump. The previous tip (main immediately before this bump) already has #358 and #360; only the package version, changelog and STATUS rows are new here.
+
 ## 0.0.40
 
 ### Plugins

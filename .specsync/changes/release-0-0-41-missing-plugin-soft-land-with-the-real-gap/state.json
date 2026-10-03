@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "release-0-0-41-missing-plugin-soft-land-with-the-real-gap",
+  "slug": "release-0-0-41-missing-plugin-soft-land-with-the-real-gap",
+  "title": "Release 0.0.41: missing-plugin soft-land with the real gap",
+  "description": "Release 0.0.41: missing-plugin soft-land with the real gap",
+  "kind": "operations",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "97b8dd758b9f42b0bb3b2341ffbaf196051d4ad1",
+  "created_at": 1791047927,
+  "updated_at": 1791048042,
+  "affected_specs": [
+    "cli"
+  ],
+  "affected_paths": [
+    "package.json",
+    "CHANGELOG.md",
+    "STATUS.md",
+    "tests/version.test.ts",
+    "tests/update-helpers.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "package.json 0.0.41; version prints 0.0.41; CHANGELOG 0.0.41 extractable and covers missing-plugin soft-land (#360) plus the already-landed fledge-gif prefer path (#358); STATUS rows mention the soft-land"
+  ],
+  "selected_artifacts": [
+    "context",
+    "plan",
+    "testing",
+    "design",
+    "tasks",
+    "requirements",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}
