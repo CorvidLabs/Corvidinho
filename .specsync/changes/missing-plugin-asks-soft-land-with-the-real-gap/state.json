@@ -7,11 +7,11 @@
   "title": "Missing-plugin asks soft-land with the real gap",
   "description": "Missing-plugin asks soft-land with the real gap",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "a93c60a64b8ffbd54f2ea345a76dcd1bfa7eabf5",
   "created_at": 1791045522,
-  "updated_at": 1791046576,
+  "updated_at": 1791046844,
   "affected_specs": [
     "agent"
   ],

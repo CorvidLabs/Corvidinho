@@ -1,6 +1,6 @@
 ---
 id: missing-plugin-asks-soft-land-with-the-real-gap
-state: verifying
+state: accepted
 type: feature
 base_commit: a93c60a64b8ffbd54f2ea345a76dcd1bfa7eabf5
 ---

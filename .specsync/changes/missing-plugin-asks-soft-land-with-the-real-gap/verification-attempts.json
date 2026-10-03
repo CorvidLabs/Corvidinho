@@ -108,6 +108,150 @@
       "requirement_ids": [
         "REQ-agent-742"
       ]
+    },
+    {
+      "timestamp": 1791046575,
+      "commit": "d5e2b2f66de62d1d641ae166bc0245241c73f779",
+      "contract_digest": "e3dee602b09b5d033f31f3307ee7624497c6fbf178abfa26e4fe55926faa7c6b",
+      "execution_digest": "0b66df3f47aeb46d1936fa2ae942cb9a30c5a47c0c23c63f690a70f5e7f3f464",
+      "workspace_digest": "5b399aa57220a43c475e74593889645eb8791cd8349bb12710f6780b72093a7c",
+      "acceptance_input_digest": "b0d591d917904c75f0f74da251fc3172fdcf068b632aa38eb961c7d264898589",
+      "acceptance_manifest": {
+        "schema_version": 1,
+        "entries": [
+          {
+            "path": "specs/agent",
+            "kind": "non_file",
+            "mode": 0,
+            "payload_digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "entry_digest": "4d74e8d0303bf3e85b0f91d9a6d3516620193908f4bd9e9a2ec19300062fa09a",
+            "owners": [
+              "@exact:delivery"
+            ]
+          },
+          {
+            "path": "specs/agent/agent.spec.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "6e8df245c638c58915720682dc31fb3ddf2c890b7cfbf046ec327d3bfb2d8726",
+            "entry_digest": "c3321d0147565bdda500548319900a2c6984902c5cc4fc0389e2dea6596e5cdb",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "specs/agent/context.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "d76cd90c631ea926a7a66ed9c1d9e19cdc745e767687deaff21241041adfb8b9",
+            "entry_digest": "f93515f598a7f68afe90f924ba2680118dbcad9dc5735e84bc325f0aa1fc4208",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "specs/agent/requirements.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "ab25ca74f36b7d010323454e4f93f8799a6478caee9550e9d732a0ddf7d39228",
+            "entry_digest": "ec2db44d539a3901526966ef604833c5c5de5e96424211b3882586d016f38b2d",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "specs/agent/tasks.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "15955dc0ea8bc11ad9e36cea1ca266e352d029a49b0803ae5dae3d239a9fb472",
+            "entry_digest": "320502eca3792ee5e517405b9d1da93a33b8016a009625d2b311ddfce229b670",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "specs/agent/testing.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "e6cdeafd28be370f3a4bfab80af15223a24c8d2f17f3b9dfa4383425a146ce3e",
+            "entry_digest": "5c3df14dc0a35a5fb66d9bcee5c7ebdb7c70eb6ab0d0e098809db0fb09d2a199",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "src/agent/ask.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "bd3bdd3d6beb65b9f092b67b7572719ff83487601f73a29096da4383512b0c41",
+            "entry_digest": "bd9a50c6bf256aef841ea794d3b60e9e95a97380ba9dd598b762a73d058ca134",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "src/agent/execute.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "2b3e0b0414dcba109f575a2201770e7ad8e7966dee7591b2b77b590523e9a745",
+            "entry_digest": "e933acd376987ca9af4133a020cd892a3ef7bdffcdfd119edaf696db8cef9faf",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "src/agent/missing-capability.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "3604a465573a11f6ce85165c860a6ee1076785afa549ac42c28af77ea2b39884",
+            "entry_digest": "c2f2f064782ec6ed4ab76dfcad19d620e3774bb30256b65659f8ac6db2a9f8a3",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "tests/agent.missing-capability.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "ecf7025ef44c720c8ff94cf22e44b78a403724af7eba96e032a02d5121aac768",
+            "entry_digest": "88944d39693500d6e66aadea44590754e34809f020a306796e9d5c11a8f86208",
+            "owners": [
+              "@exact:test"
+            ]
+          },
+          {
+            "path": "tests/discord.failed-reply.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "812d30ce6eecb761e0be34731cc49e5f28ac149979928bcac9cdcca62eda38d4",
+            "entry_digest": "f49f106ece38a35e2bee5f021ff1b897e472e3cc32c694aa79cee6847ef42105",
+            "owners": [
+              "@exact:test"
+            ]
+          },
+          {
+            "path": "tests/watch.failed-comment.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "8a79bbcd63c6868cbbee60b9903a09c3b1a11fa64dc736b3af72d6fc03118216",
+            "entry_digest": "dcc04a6fffe87c50bfefbab4e9b65d29459284d60249669caed1ef1456ba9d1c",
+            "owners": [
+              "@exact:test"
+            ]
+          }
+        ]
+      },
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-742"
+      ]
     }
   ]
 }

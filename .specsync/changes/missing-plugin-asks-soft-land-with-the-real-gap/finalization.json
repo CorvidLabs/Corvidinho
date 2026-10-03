@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "missing-plugin-asks-soft-land-with-the-real-gap",
+  "implementation_commit": "d5e2b2f66de62d1d641ae166bc0245241c73f779",
+  "implementation_tree": "9864bc9c559f7f35f267e6058e97e626a149c0ba",
+  "contract_digest": "e3dee602b09b5d033f31f3307ee7624497c6fbf178abfa26e4fe55926faa7c6b",
+  "workspace_digest": "5b399aa57220a43c475e74593889645eb8791cd8349bb12710f6780b72093a7c",
+  "closing_digest": "d1a33fe44ac76d0bacb084ed85c8a67c87171b5bb78792f3ecfe4734254bea13",
+  "review_digest": "49f140a8f09755dde03d7593b1466716bede529bb3c39c9d58ac457cb6714a0e",
+  "finalization_digest": "8f2fc77d5bfc43b0d18daf120ec8d53e76c68c331070dc7d1252d8311a85c3b4",
+  "timestamp": 1791046844
+}

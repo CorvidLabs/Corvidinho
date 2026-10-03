@@ -16,6 +16,22 @@
       "execution_digest": "f9b6f2dd846e75f5f4b684bc61c497e3e4b0e6f5011f313153c4a0813ad9daf8",
       "workspace_digest": "d2bf2489236aa6545ff132ed3cc6690c70c33209ef1d703bf902d487fd6c860d",
       "timestamp": 1791046118
+    },
+    {
+      "schema_version": 2,
+      "change_id": "missing-plugin-asks-soft-land-with-the-real-gap",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "d5e2b2f66de62d1d641ae166bc0245241c73f779",
+      "contract_digest": "e3dee602b09b5d033f31f3307ee7624497c6fbf178abfa26e4fe55926faa7c6b",
+      "execution_digest": "0b66df3f47aeb46d1936fa2ae942cb9a30c5a47c0c23c63f690a70f5e7f3f464",
+      "workspace_digest": "5b399aa57220a43c475e74593889645eb8791cd8349bb12710f6780b72093a7c",
+      "timestamp": 1791046817
     }
   ]
 }
