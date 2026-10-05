@@ -560,6 +560,9 @@ const RAW_MAX_ENTRIES = 2000;
 const HI_SIDE_FILES = ["INTENT.md"];
 
 function readRaw(top: string): RawTree {
+  // hi/ itself must be a real directory: a capture through a link would
+  // write somewhere the undo below can't reach.
+  if (!lstatSync(join(top, "hi")).isDirectory()) throw new Error("hi/ is not a plain directory a capture can put back");
   const out: RawTree = new Map();
   const add = (rel: string): void => {
     const abs = join(top, rel);
