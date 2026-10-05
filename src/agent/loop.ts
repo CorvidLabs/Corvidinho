@@ -12,9 +12,11 @@
  * change, every changed meaningful path must be covered by one first
  * (AGENT-18, REQ-agent-518); on Corvidinho the run then approves and
  * archives the change it opened and verifies again (AGENT-18.a,
- * REQ-agent-519). An idle timeout I set stops a run that went quiet, and
- * the result says when a limit I set stopped it (AGENT-12, REQ-agent-244 /
- * REQ-agent-312; src/agent/limits.ts).
+ * REQ-agent-519). In a hi repo, any change under hi/ since the session base
+ * fails verify before the lane, since no run can make an approved capture
+ * yet (AGENT-18 hi guard, REQ-agent-520). An idle timeout I set stops a run
+ * that went quiet, and the result says when a limit I set stopped it
+ * (AGENT-12, REQ-agent-244 / REQ-agent-312; src/agent/limits.ts).
  */
 
 import { relative, resolve } from "node:path";
@@ -31,6 +33,10 @@ import {
   beginSddRun,
   endSddRun,
   formatRepoWaysLine,
+  HI_GUARD_UNREADABLE_NOTE,
+  hiGuardNote,
+  hiRunChanges,
+  hiSnapshot,
   mergeScans,
   repoWaysBase,
   scanRepoWays,
@@ -38,6 +44,7 @@ import {
   sddUncovered,
   sddUncoveredNote,
   settleOwnSddChanges,
+  type RepoWaysScan,
   type SddRun,
 } from "./repo-ways.ts";
 import { loadRelevantSpecs } from "./specLoader.ts";
@@ -354,8 +361,7 @@ function idleTimeoutResult(r: TaskResult, timeoutMs: number, abandoned = false):
  * has none; null when covered or not required. `paths` null (the diff could
  * not be read) fails closed.
  */
-async function sddGateNote(cwd: string, sdd: SddRun, paths: string[] | null): Promise<string | null> {
-  const scan = mergeScans([sdd.scan, await scanRepoWays(cwd, sdd.base)]);
+function sddGateNote(cwd: string, scan: RepoWaysScan, paths: string[] | null): string | null {
   if (!sddRequiresChange(scan.sdd)) return null;
   if (paths === null) {
     return "SpecSync gate: could not read what changed, so SpecSync change coverage can't be checked and the run is not verified (AGENT-18).";
@@ -364,6 +370,21 @@ async function sddGateNote(cwd: string, sdd: SddRun, paths: string[] | null): Pr
   const rel = paths.map((p) => relative(root, resolve(root, p)));
   const uncovered = sddUncovered(cwd, rel, scan.sdd);
   return uncovered.length > 0 ? sddUncoveredNote(uncovered) : null;
+}
+
+/**
+ * AGENT-18 hi guard (REQ-agent-520): in a hi repo (`scan`: read at the start
+ * and now, merged), the note when anything under hi/ differs from the
+ * session base — a criterion, a retired entry or any other file, made by this
+ * run or left by an earlier one — or from hi/ at planning when the run has no
+ * git base; null when hi/ is unchanged or the repo does not use hi. No run
+ * can make an approved capture yet, so every change blocks; what can't be
+ * read fails closed.
+ */
+async function hiGateNote(cwd: string, sdd: SddRun, scan: RepoWaysScan): Promise<string | null> {
+  if (!scan.ways.hi) return null;
+  const changes = await hiRunChanges(cwd, sdd);
+  return changes === null ? HI_GUARD_UNREADABLE_NOTE : hiGuardNote(changes);
 }
 
 async function gate(
@@ -436,6 +457,9 @@ async function gate(
   } catch {
     /* no ways found: the run works as before */
   }
+  // AGENT-18 hi guard (REQ-agent-520): with no git session base, hi/ as it
+  // is now is what the gate compares against.
+  if (!sdd.base) sdd.hiStart = hiSnapshot(opts.cwd);
   const repoWays = sdd.scan.ways;
   const waysLine = formatRepoWaysLine(repoWays);
   if (waysLine) emit(onEvent, { type: "Text", text: waysLine });
@@ -638,14 +662,30 @@ async function gate(
     // AGENT-18 (REQ-agent-518): in a repo whose SpecSync workflow requires a
     // change for meaningful files, a changed one no open change covers fails
     // this verify before the lane runs (retry with the note, then failed).
-    let sddNote: string | null;
+    // AGENT-18 hi guard (REQ-agent-520): in a hi repo, so does any change
+    // under hi/ since the session base. Both read the ways from the start
+    // and now, merged (the start alone if a scan now fails), and each fails
+    // closed when its way is on.
+    let scanNow: RepoWaysScan = sdd.scan;
     try {
-      sddNote = await sddGateNote(opts.cwd, sdd, sddPaths);
+      scanNow = mergeScans([sdd.scan, await scanRepoWays(opts.cwd, sdd.base)]);
     } catch {
-      // Fail closed when the workflow was on at the start.
-      sddNote = sddRequiresChange(sdd.scan.sdd)
-        ? "SpecSync gate: could not check SpecSync change coverage, so the run is not verified (AGENT-18)."
-        : null;
+      /* the start scan still decides */
+    }
+    const gateNotes: string[] = [];
+    try {
+      const note = sddGateNote(opts.cwd, scanNow, sddPaths);
+      if (note) gateNotes.push(note);
+    } catch {
+      if (sddRequiresChange(scanNow.sdd)) {
+        gateNotes.push("SpecSync gate: could not check SpecSync change coverage, so the run is not verified (AGENT-18).");
+      }
+    }
+    try {
+      const note = await hiGateNote(opts.cwd, sdd, scanNow);
+      if (note) gateNotes.push(note);
+    } catch {
+      if (scanNow.ways.hi) gateNotes.push(HI_GUARD_UNREADABLE_NOTE);
     }
     if (isAborted(signal)) {
       return cancelledResult(summary, filesChanged, attempts);
@@ -654,11 +694,12 @@ async function gate(
     let result: { success: boolean; output: string };
     let laneOutput: string;
     let evidenceNote: string | undefined;
-    if (sddNote) {
-      emit(onEvent, { type: "Text", text: sddNote });
-      evidenceNote = sddNote;
+    if (gateNotes.length > 0) {
+      for (const text of gateNotes) emit(onEvent, { type: "Text", text });
+      const gateNote = gateNotes.join("\n\n");
+      evidenceNote = gateNote;
       laneOutput = "";
-      result = { success: false, output: sddNote };
+      result = { success: false, output: gateNote };
     } else {
       emit(onEvent, {
         type: "Text",
@@ -789,7 +830,8 @@ async function gate(
     if (evidenceNote) {
       // AGENT-15: the lane passed; the note says what is missing, and the
       // rest of the cap carries the lane's output. AGENT-18: an uncovered
-      // SpecSync path ran no lane, so the note is the whole feedback.
+      // SpecSync path or a hi/ change ran no lane, so the note is the whole
+      // feedback.
       const head = `${VERIFY_FEEDBACK_HEAD}${evidenceNote}`;
       const room = VERIFY_FEEDBACK_MAX_CHARS - head.length - 2;
       verifyFeedback =
