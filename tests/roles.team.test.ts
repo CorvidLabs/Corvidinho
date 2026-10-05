@@ -57,8 +57,13 @@ import {
   resolveActingRole,
   roleAllowsPlugin,
 } from "../src/plugins/roles.ts";
+import * as rolesModule from "../src/plugins/roles.ts";
 import { runPlugin } from "../src/plugins/run.ts";
 import type { WorkPrOutcome } from "../src/work/pr.ts";
+
+/** PLUGIN-9 (#318): read through the namespace, so base sources fail on behaviour, not on import. */
+const TEAM_SEARCH_TOOLS: ReadonlySet<string> =
+  (rolesModule as { TEAM_SEARCH_TOOLS?: ReadonlySet<string> }).TEAM_SEARCH_TOOLS ?? new Set<string>();
 
 const OWNER_ID = "181969874455756800";
 const TOFU = "200000000000000002"; // team
@@ -255,15 +260,16 @@ describe("IDENTITY-12: the tool layer resolves the role on every call", () => {
     expect(await resolveActingRole()).toBe("community");
   });
 
-  test("roleAllowsPlugin: read tools for all; mutating for the owner; team only its review tools (+ work tools in /work)", () => {
+  test("roleAllowsPlugin: read tools for all; mutating for the owner; team only its review and search tools (+ work tools in /work)", () => {
     const every = list();
     for (const e of every) {
       expect(roleAllowsPlugin(null, e)).toBe(true);
       expect(roleAllowsPlugin("owner", e)).toBe(true);
       const mut = isMutatingPlugin(e);
+      const teamAlways = TEAM_REVIEW_TOOLS.has(e.name) || TEAM_SEARCH_TOOLS.has(e.name);
       expect(roleAllowsPlugin("community", e, true)).toBe(!mut);
-      expect(roleAllowsPlugin("team", e)).toBe(!mut || TEAM_REVIEW_TOOLS.has(e.name));
-      expect(roleAllowsPlugin("team", e, true)).toBe(!mut || TEAM_REVIEW_TOOLS.has(e.name) || TEAM_WORK_TOOLS.has(e.name));
+      expect(roleAllowsPlugin("team", e)).toBe(!mut || teamAlways);
+      expect(roleAllowsPlugin("team", e, true)).toBe(!mut || teamAlways || TEAM_WORK_TOOLS.has(e.name));
     }
     expect([...TEAM_REVIEW_TOOLS].sort()).toEqual(["github-issue-comment", "github-pr-review"]);
     // AGENT-18 / AGENT-18.a: working the repo's SpecSync change is team work too.
@@ -275,6 +281,8 @@ describe("IDENTITY-12: the tool layer resolves the role on every call", () => {
       "specsync-change-finalize",
       "specsync-change-new",
     ]);
+    // PLUGIN-9 (#318): the explicit team search rule names web-search and gif-search only.
+    expect([...TEAM_SEARCH_TOOLS].sort()).toEqual(["gif-search", "web-search"]);
   });
 });
 
@@ -336,7 +344,7 @@ describe("DISCORD-SCHEDULE-1.a: schedule-run stamps in the tool layer", () => {
 });
 
 describe("IDENTITY-9..11: the catalog by role", () => {
-  test("owner = every allowlisted tool (unchanged); team = read + reviews (+ file edits in /work); community = read only (unchanged)", () => {
+  test("owner = every allowlisted tool (unchanged); team = read + reviews + web-search + gif-search (+ file edits in /work); community = read only (unchanged)", () => {
     const allowlist = EVERY_DANGEROUS();
     const legacyAdmin = names({ tier: "code", allowlist, actingIsAdmin: true, autonomous: true });
     const legacyNonAdmin = names({ tier: "code", allowlist, actingIsAdmin: false, autonomous: true });
@@ -349,6 +357,11 @@ describe("IDENTITY-9..11: the catalog by role", () => {
     const team = names({ tier: "code", allowlist, actingRole: "team", autonomous: true });
     expect(team.has("github-issue-comment")).toBe(true);
     expect(team.has("github-pr-review")).toBe(true);
+    // PLUGIN-9: web search and GIF search are for the owner and the team (still allowlisted).
+    expect(team.has("web-search")).toBe(true);
+    expect(community.has("web-search")).toBe(false);
+    expect(team.has("gif-search")).toBe(true);
+    expect(community.has("gif-search")).toBe(false);
     expect(team.has("files-read")).toBe(true);
     expect(team.has("memory-store")).toBe(true);
     expect(team.has("memory-recall")).toBe(true);

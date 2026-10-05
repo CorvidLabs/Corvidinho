@@ -189,6 +189,28 @@ describe("planAnswerParts (DISCORD-16, SAFE-6)", () => {
     expect(readsBetterAsEmbed(prose(120, "too long for one embed"))).toBe(false);
   });
 
+  test("a GIF posted as a GIPHY link stays in message content, never in an embed, so Discord can unfurl it (PLUGIN-8)", () => {
+    const link = "https://media2.giphy.com/media/cat1/giphy.gif?cid=abc&rid=giphy.gif";
+    // The common path: within 2000 characters, the link is the content and the footer rides beside it.
+    const short = `Here you go: ${link}`;
+    expect(planAnswerParts(short, { footer, allowEmbed: true })).toEqual([{ content: short, embed: footer }]);
+    // Long plain prose that would otherwise be one embed: split parts instead, the link in a part's content.
+    for (const host of ["media.giphy.com", "MEDIA4.GIPHY.COM", "i.giphy.com"]) {
+      const text = `${prose(70, "d")}\nhttps://${host}/cat.gif`;
+      expect(text.length).toBeLessThanOrEqual(DISCORD_EMBED_DESCRIPTION_MAX);
+      expect(readsBetterAsEmbed(text)).toBe(false);
+      const parts = planAnswerParts(text, { footer, allowEmbed: true });
+      expect(parts.length).toBeGreaterThan(1);
+      expect(parts.every((p) => p.content !== null)).toBe(true);
+      expect(parts.at(-1)!.embed).toEqual(footer);
+      expect(parts.map((p) => p.content).join("\n")).toContain(`https://${host}/cat.gif`);
+    }
+    // Only a GIPHY media link counts: another link, a GIPHY page or a look-alike host still reads as one embed.
+    for (const other of ["https://bun.sh/docs", "https://giphy.com/gifs/cat1", "https://media.giphy.com.evil.example/a.gif"]) {
+      expect(readsBetterAsEmbed(`${prose(70, "e")}\n${other}`)).toBe(true);
+    }
+  });
+
   test("the whole-answer cap is three messages' worth, and no plan holds more (role note kept)", () => {
     expect(DISCORD_ANSWER_MAX).toBe(3 * DISCORD_MESSAGE_MAX);
     const note = `\n\n${ROLE_REFUSED_SUMMARY_NOTE}`;

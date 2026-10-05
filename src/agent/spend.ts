@@ -35,6 +35,13 @@
  * any request, which is not a model failure: no model fallback (AGENT-11) may
  * route around a cap.
  *
+ * Tool calls with a flat price per call (a Brave `web-search`, #318; a
+ * free-tier GIPHY `gif-search`, recorded at $0) count toward the same total
+ * cap and are recorded while any cap is set:
+ * `reserveFlatSpend` reserves the price in the same ledger before the call,
+ * and a stopped call hands the tool loop the same `spend-cap` ask
+ * (`PluginHandlerResult.spendAsk`, src/agent/execute.ts).
+ *
  * Assumptions (see specs/agent REQ-agent-098):
  *  - "Daily" is the last 24 hours (rolling), not a calendar day.
  *  - Prices are standard USD per 1M tokens; cached-input discounts are ignored,
@@ -1208,6 +1215,112 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
       pending = null;
       if (!ask) return result;
       return { summary: SPEND_CAP_SUMMARY, filesChanged: [...result.filesChanged], ask };
+    },
+  };
+}
+
+/** How a flat-priced call ended: billed, certainly not billed, or maybe billed. */
+export type FlatSpendOutcome = "billed" | "not-billed" | "unknown";
+
+/** A flat-priced call's SAFE-8 hold (see {@link reserveFlatSpend}). */
+export type FlatSpendHold =
+  | { kind: "off" }
+  | { kind: "held"; settle(outcome: FlatSpendOutcome): void }
+  | { kind: "stopped"; ask: HumanAsk };
+
+/**
+ * SAFE-8 for a tool call with a flat price per call (REQ-agent-098), such as
+ * a Brave `web-search` (about $0.005, #318): the same rolling 24 h ledger and
+ * total cap as the model calls. No cap at all (neither the total cap nor
+ * SAFE-14's provider caps) ⇒ `off` and the DB is never opened. While any cap
+ * is set the price is reserved in the IMMEDIATE ledger transaction before the
+ * call, so the call is recorded like a provider call; it counts against the
+ * total cap only (a provider cap is keyed on a configured model provider,
+ * REQ-agent-114, so none covers it). A call that would pass the total cap, or
+ * cannot be counted (a spend-cap setting that is not valid, an unavailable
+ * ledger), is `stopped` with the same `spend-cap` ask a model call gets, and
+ * must not be sent. `settle` records the outcome once: `billed` keeps the
+ * price as the call's actual cost, `not-billed` (refused before connecting,
+ * or an HTTP error reply) counts 0, `unknown` (network error, timeout, abort,
+ * unreadable reply) keeps it counted at the estimate. The 80% warning is
+ * noted by the next model call's settle, which sees this row in the window.
+ * A free call (a GIPHY `gif-search`, #318) passes a price of 0: its row is
+ * recorded at $0, and it is stopped only when the window is already past the
+ * cap (spend + 0 > cap).
+ */
+export function reserveFlatSpend(opts: {
+  env?: NodeJS.ProcessEnv;
+  /** Ledger provider label (the API host). */
+  provider: string;
+  /** Ledger model label (the priced call, e.g. `brave-web-search`). */
+  model: string;
+  costMicroUsd: number;
+  /** Test seam: ledger DB (default: shared DB under CORVIDINHO_DATA_DIR, closed after settle). */
+  db?: Database;
+  now?: () => number;
+}): FlatSpendHold {
+  const env = opts.env ?? process.env;
+  const caps = parseSpendCaps(env);
+  if (caps.kind === "off") return { kind: "off" };
+  if (caps.kind === "invalid") return { kind: "stopped", ask: spendCapInvalidAsk(caps.keys) };
+  const total = caps.totalMicroUsd ?? undefined;
+  const now = opts.now ?? Date.now;
+  const cost = Math.max(0, Math.ceil(opts.costMicroUsd));
+  let db: Database | undefined;
+  const close = () => {
+    if (opts.db || !db) return;
+    try {
+      db.close();
+    } catch {
+      // already closed
+    }
+  };
+  let ledger: SpendLedger;
+  let hold: SpendReservation;
+  try {
+    db = opts.db ?? openCorvidinhoDb({ env });
+    ledger = new SpendLedger(db);
+    hold = ledger.reserve({
+      provider: opts.provider,
+      model: opts.model,
+      estimateMicroUsd: cost,
+      ...(total !== undefined ? { capMicroUsd: total } : {}),
+      now: now(),
+    });
+  } catch (err) {
+    close();
+    return { kind: "stopped", ask: spendCapLedgerAsk(err instanceof Error ? err.message : String(err)) };
+  }
+  if (!hold.ok) {
+    close();
+    return { kind: "stopped", ask: spendCapReachedAsk({ estimateMicroUsd: cost, trips: hold.trips }) };
+  }
+  const id = hold.id;
+  let settled = false;
+  return {
+    kind: "held",
+    settle(outcome) {
+      if (settled) return;
+      settled = true;
+      try {
+        ledger.settle(
+          id,
+          outcome === "billed"
+            ? {
+                status: "actual",
+                usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+                costMicroUsd: cost,
+              }
+            : outcome === "not-billed"
+              ? { status: "failed" }
+              : { status: "estimated" },
+          now(),
+        );
+      } catch {
+        // Ledger write failed after the call: the reservation stays counted.
+      } finally {
+        close();
+      }
     },
   };
 }

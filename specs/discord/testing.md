@@ -1616,3 +1616,18 @@ bridge writes the owner's image under
 and keeps another person's URL-only. Fail on base (cf7f61b, shims for the new
 exports): 7 of 8 fail; the scoped-folder case holds on both.
 `tests/scheduler.owner-role.test.ts` keeps the owner schedule's scoped folder.
+REQ-discord-417 (#318): `BRAVE_SEARCH_API_KEY` is on the SAFE-6 secret env
+list — `redactSecretEnvValues` and `formatErrorLine` replace its value with
+`[redacted:env-secret]` (`tests/web.search.test.ts`).
+
+REQ-discord-417 (#318 slice B): `GIPHY_API_KEY` is on the SAFE-6 secret env
+list — `redactSecretEnvValues` and `formatErrorLine` replace its value with
+`[redacted:env-secret]`, so a GIPHY request URL in an error keeps only
+`key=[redacted:env-secret]` (`tests/gif.search.test.ts`).
+
+REQ-discord-075 (#318 slice B): an answer holding a GIPHY media link is never
+one embed, so Discord can unfurl the GIF a run posts as a link (PLUGIN-8):
+within 2000 characters it is plain content with the footer embed, and long
+plain prose with such a link is split into parts with the link in a part's
+content; another link, a `giphy.com` page URL or a look-alike host keeps the
+one-embed path (`tests/discord.rich-reply.unit.test.ts`).
