@@ -337,9 +337,9 @@ What an entry unlocks **today**:
     `delegate` / `council` workers never get them;
   - the run's directory is that talk's own linked git worktree (`talk-…` under the worktree
     base); for a local `task run`, the top of the new worktree it made for itself in a git repo
-    (SESSION-WORKTREE-1.a, `talk-cli_…`). A non-git project (its scoped folder, or the folder
-    itself for a local run), the main checkout (a local run with `--here`), a subdirectory and
-    another talk's worktree are refused.
+    (SESSION-WORKTREE-1.a, `talk-cli_…`). A non-git project (the folder itself, where a talk or a
+    local run works there, AGENT-1.a, or a schedule's scoped folder), the main checkout (a local
+    run with `--here`), a subdirectory and another talk's worktree are refused.
   When the allowlist names one of them and the run is refused, the
   run's event stream carries one `[operator] SAFE-3.a: … allowlisted but not offered: <why>`
   line (never part of the reply). Every call still goes through the role re-check, SAFE-1,

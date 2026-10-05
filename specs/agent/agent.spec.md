@@ -520,8 +520,9 @@ instructions for later runs there.
 
 Non-git project folder (REQ-agent-110, AGENT-1.a): a run whose cwd is a
 project folder that isn't a git repo works there. `createTaskExecute` passes
-the run's cwd to `actingWorkTask(env, cwd)` for the catalog's `workTask` and
-for `refusedForRole`, so a team member's `/work` run there gets no work tools
+the run's cwd to `actingWorkTask(env, cwd)` for the catalog's `workTask`, for
+`refusedForRole` and for the missing-capability facts (`capabilityFacts`,
+REQ-agent-742), so a team member's `/work` run there gets no work tools
 and a call to one gets the role refusal (REQ-plugins-115); the owner's run
 keeps SAFE-2, the AGENT-1.b refusal, the SAFE-3.a withholding of the shell,
 runners and Fledge runs (the cwd is no talk worktree, REQ-agent-503) and the

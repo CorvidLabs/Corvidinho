@@ -703,6 +703,7 @@ function capabilityFacts(input: {
   env: NodeJS.ProcessEnv;
   role: CapabilityFacts["role"];
   tier: CapabilityTier;
+  cwd: string;
   fledge?: FledgeProbe;
 }): CapabilityFacts {
   const registered = new Map<string, ToolFact>();
@@ -721,7 +722,8 @@ function capabilityFacts(input: {
     env: input.env,
     role: input.role,
     tier: input.tier,
-    workTask: actingWorkTask(input.env),
+    // AGENT-1.a: a team /work run only gets work tools in a git work tree.
+    workTask: actingWorkTask(input.env, input.cwd),
     ...(input.fledge ? { fledge: input.fledge } : {}),
   };
 }
@@ -923,6 +925,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
         env,
         role: actingRole,
         tier,
+        cwd,
         ...(fledgeProbe ? { fledge: fledgeProbe } : {}),
       });
 

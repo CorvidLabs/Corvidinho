@@ -23,9 +23,10 @@ talk bound in place, REQ-discord-110, or a local `task run` there) SHALL:
   gate for what it changed (REQ-agent-002 / REQ-agent-185), a failing lane
   failing the run;
 - for anyone else: `createTaskExecute` SHALL pass the run's cwd to
-  `actingWorkTask` (REQ-plugins-115) both for the catalog
-  (`buildOpenAiTools` `workTask`) and for `refusedForRole` (a call to a
-  mutating tool not offered), so a team member's `/work` run there is not
+  `actingWorkTask` (REQ-plugins-115) for the catalog (`buildOpenAiTools`
+  `workTask`), for `refusedForRole` (a call to a mutating tool not offered)
+  and for the missing-capability facts (REQ-agent-742, so a gap there reads
+  as the role's), so a team member's `/work` run there is not
   offered `files-write` / `files-edit` and a call to one gets the role
   refusal; in a git worktree it is offered them as before.
 
