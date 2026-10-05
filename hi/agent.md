@@ -18,6 +18,7 @@ Corvidinho is the agent I actually run on a Linux box: it reads the project’s 
 - **AGENT-3**  It runs a tool loop I can interrupt, and when I interrupt it, it actually stops instead of finishing in the background.
   - **AGENT-3.a**  In Discord I can stop a run with a Stop button or by saying stop or cancel, and so can the person who asked; a message sent while a run is going waits for it instead of starting a second run.
   - **AGENT-3.b**  After I stop a run, messages that were waiting still run, in order.
+  - **AGENT-3.c**  I or the schedule's creator can stop a scheduled run in progress from Discord, the same way as a chat run.
 - **AGENT-4**  It does not tell me the job is done until the project’s verify lane has passed, or it tells me plainly that verification failed.
   - **AGENT-4.a**  If verification fails and retries remain, it keeps working with the failure output instead of shrugging.
 - **AGENT-5**  I can pick a provider and a capability tier so cheap models stay on read-shaped work and expensive ones are used when tools and code are required.
