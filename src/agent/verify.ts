@@ -128,7 +128,8 @@ type FledgeRun = { code: number; output: string } | null;
 /**
  * Spawn `fledge <args>` in `cwd` with the verify env (SAFE-6) in its own
  * process group, reading its pipes as it writes them (AGENT-12); an abort
- * kills its process tree (AGENT-3) and gives null.
+ * kills its process tree (AGENT-3) and gives null. A signal already aborted
+ * (between two steps) spawns nothing.
  */
 async function runFledgeStep(
   fledge: string,
@@ -136,6 +137,7 @@ async function runFledgeStep(
   cwd: string,
   signal?: AbortSignal,
 ): Promise<FledgeRun> {
+  if (signal?.aborted) return null;
   const proc = Bun.spawn([fledge, ...args], {
     cwd,
     env: buildVerifyEnv(),
@@ -221,7 +223,7 @@ export const defaultVerifyRunner: VerifyRunner = async (cwd, signal) => {
   const trust = await usesTrust(cwd);
   if (trust) {
     const probe = await runFledgeStep(fledge, TRUST_PROBE_ARGS, cwd, signal);
-    if (probe === null) return { success: false, output: "verify lane aborted" };
+    if (probe === null || signal?.aborted) return { success: false, output: "verify lane aborted" };
     if (probe.code !== 0) {
       return { success: false, output: trustUnavailableReason(probeDetail(probe)) };
     }
@@ -234,7 +236,8 @@ export const defaultVerifyRunner: VerifyRunner = async (cwd, signal) => {
     return { success: lane.code === 0, output: lane.output };
   }
   const trustRun = await runFledgeStep(fledge, TRUST_VERIFY_ARGS, cwd, signal);
-  if (trustRun === null) {
+  // A Trust step killed by an abort is a cancel, not a failed Trust step.
+  if (trustRun === null || signal?.aborted) {
     return { success: false, output: "verify lane aborted" };
   }
   if (trustRun.code !== 0) {

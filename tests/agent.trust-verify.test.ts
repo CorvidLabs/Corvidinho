@@ -60,7 +60,7 @@ let laneFile = "";
  * Stand-in fledge: logs its argv (and whether the Trust step saw a GitHub
  * token) to $FAKE_FLEDGE_LOG. FAKE_LANE=fail fails the lane; FAKE_TRUST=
  * missing answers like a fledge with no `trust` command, fail fails
- * `trust verify`.
+ * `trust verify`, hang makes it sleep until an abort kills it.
  */
 function fakeFledge(): string {
   return `#!/bin/sh
@@ -86,6 +86,11 @@ case "$*" in
     exit 0;;
   "${TRUST_ARGV}")
     echo "trust-env GITHUB_TOKEN=\${GITHUB_TOKEN:-unset}" >> "$FAKE_FLEDGE_LOG"
+    if [ "$FAKE_TRUST" = hang ]; then
+      sleep 30
+      echo "trust verify outlived its abort" >> "$FAKE_FLEDGE_LOG"
+      exit 0
+    fi
     if [ "$FAKE_TRUST" = fail ]; then
       echo "attest: commit abc1234 has no attestation"
       exit 3
@@ -138,7 +143,7 @@ type Outcome = { success: boolean; output: string };
  */
 async function runDefault(
   cwd: string,
-  opts: { lane?: "fail"; trust?: "missing" | "fail"; ledger?: boolean } = {},
+  opts: { lane?: "fail"; trust?: "missing" | "fail" | "hang"; ledger?: boolean; abortAfterMs?: number } = {},
 ): Promise<{ res: Outcome; calls: string[] }> {
   const log = join(tempBase(), "fledge.log");
   const verify = join(import.meta.dir, "..", "src", "agent", "verify.ts");
@@ -149,7 +154,10 @@ async function runDefault(
       ? `const { beginSddRun } = await import(${JSON.stringify(ways)});` +
         `beginSddRun(${JSON.stringify(cwd)}).scan.ways.trust = true;`
       : "") +
-    `const r = await defaultVerifyRunner(${JSON.stringify(cwd)});` +
+    (opts.abortAfterMs
+      ? `const ac = new AbortController(); setTimeout(() => ac.abort(), ${opts.abortAfterMs});` +
+        `const r = await defaultVerifyRunner(${JSON.stringify(cwd)}, ac.signal);`
+      : `const r = await defaultVerifyRunner(${JSON.stringify(cwd)});`) +
     `process.stdout.write(JSON.stringify(r));`;
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) {
@@ -223,6 +231,15 @@ describe("in a Trust repo the verify gate also runs fledge trust verify (AGENT-1
     const { res, calls } = await runDefault(repo, { trust: "missing" });
     expect(calls).toEqual([PROBE_ARGV]);
     expect(res).toEqual({ success: false, output: UNAVAILABLE_REASON });
+  });
+
+  test("an abort during fledge trust verify stops it and the verify is not passed", async () => {
+    const repo = makeRepo({ ".trust.toml": "[trust]\n" });
+    const started = Date.now();
+    const { res, calls } = await runDefault(repo, { trust: "hang", abortAfterMs: 1500 });
+    expect(Date.now() - started).toBeLessThan(15_000);
+    expect(res).toEqual({ success: false, output: "verify lane aborted" });
+    expect(calls).toEqual([PROBE_ARGV, LANE_ARGV, TRUST_ARGV, "trust-env GITHUB_TOKEN=unset"]);
   });
 
   test("a .trust.toml deleted, committed away on a branch, or seen only at the run's start still counts", async () => {

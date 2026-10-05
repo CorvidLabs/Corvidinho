@@ -1046,7 +1046,8 @@ child `bun` process because it reads PATH as its process started):
   with the lane's output and `TRUST_PASSED_LINE` (one test summary); the
   Trust step's env has no `GITHUB_TOKEN` (SAFE-6);
 - a failing `trust verify` fails with the `Trust gate:` head and its output;
-  a failing lane runs no `trust verify`;
+  a failing lane runs no `trust verify`; an abort while `trust verify` runs
+  stops it and returns `verify lane aborted`;
 - a fledge with no `trust` command (fledge 1.8.0's `unrecognized subcommand
   'trust'`) fails with exactly the unavailable reason and runs no lane;
 - `.trust.toml` deleted from the working tree, committed away on a branch
