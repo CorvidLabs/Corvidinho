@@ -38,6 +38,25 @@
         "REQ-agent-525",
         "REQ-plugins-525"
       ]
+    },
+    {
+      "timestamp": 1791242983,
+      "commit": "74acc408c94b56820a21b0912952ea7fce1a2395",
+      "contract_digest": "bd25f13e9d732f586a549413db2ca7e98eb7fc4e4d11a782a9e66c4f869f0f21",
+      "execution_digest": "2927fd5fc336a4771ffb70af145a5247ac73ab161fe245584538b7dbd5ec7ca2",
+      "workspace_digest": "8e7cb55113734c200aed95f13b71533978cba52a30413d7e2b6b810688f944e0",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-525",
+        "REQ-plugins-525"
+      ]
     }
   ]
 }
