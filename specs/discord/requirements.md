@@ -1965,7 +1965,9 @@ login SHALL end the bridge start cleanly (CLI-4, SAFE-6).
   `SyntaxError` keeps its class name; other names are dropped), with the
   literal value of each set secret env var from `.env.example`
   (`DISCORD_TOKEN`, `DISCORD_BOT_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`,
-  `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `CORVIDINHO_AUDIT_HMAC_KEY`;
+  `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `CORVIDINHO_AUDIT_HMAC_KEY`,
+  `BRAVE_SEARCH_API_KEY` (PLUGIN-7) and `GIPHY_API_KEY` (PLUGIN-8; neither
+  has a vendor shape, so each is redacted by name);
   values of 8+ characters) replaced by `[redacted:env-secret]`, then passed
   through `scrubSecrets`, cut to its first line and capped at
   `ERROR_LINE_MAX` (300) characters. It SHALL NOT throw; an unprintable value
@@ -1997,7 +1999,7 @@ Acceptance Criteria
 - `startBridge` whose gateway `start()` throws discord.js `TokenInvalid` returns `{ ok: false, exitCode: 1 }` with `discord login failed (401): check DISCORD_TOKEN (An invalid token was provided.)` and calls the gateway's `stop()` once.
 - A `DiscordAPIError` with status 403 gives `discord login failed (403): check DISCORD_TOKEN …` on one line with no `rawError`.
 - `corvidinho discord bridge` with a token Discord rejects exits 1 with that line and no stack, crash footer or token value.
-- `formatErrorLine` returns only the first line, redacts vendor-key shapes (including a multi-line private-key block) and the value of a set secret env var of 8+ characters, keeps shorter values, keeps the `TypeError:` prefix, drops `DiscordAPIError[0]`, handles strings, `{message}` objects, numbers, empty messages and null-prototype objects, and caps at `ERROR_LINE_MAX`.
+- `formatErrorLine` returns only the first line, redacts vendor-key shapes (including a multi-line private-key block) and the value of a set secret env var of 8+ characters (`BRAVE_SEARCH_API_KEY` and `GIPHY_API_KEY` included, `tests/web.search.test.ts`, `tests/gif.search.test.ts`; a GIPHY request URL in an error keeps only `key=[redacted:env-secret]`), keeps shorter values, keeps the `TypeError:` prefix, drops `DiscordAPIError[0]`, handles strings, `{message}` objects, numbers, empty messages and null-prototype objects, and caps at `ERROR_LINE_MAX`.
 - A token that is only in the `startBridge` env and appears in the login error text is redacted in the returned message.
 - `formatRegisterCommandsFailure` on a `DiscordAPIError` 403 `Missing Access` with the bridge options gives `[discord] slash command registration failed (403): Missing Access — check DISCORD_TOKEN / DISCORD_BOT_TOKEN and DISCORD_GUILD_ID` with no `requestBody` and no newline; with defaults a 401 names `--guild-id`, a status-less error gets no hint, and a secret env value is redacted.
 
@@ -2879,10 +2881,12 @@ mentioned in that message; the answer's footer (REQ-discord-457) and any
 Choose button SHALL ride the last message, and a reply to any of the messages
 SHALL continue the session (DISCORD-2). Embeds SHALL be used only where they
 read better than plain text and never for code: an answer over 2000
-characters that is plain prose (no code fence, no user or role mention) and
-fits one embed description (4096 characters) SHALL go out as one embed holding
-the text and the footer, unless it carries a Choose button or mentions someone
-to ping. The Discord spawn client SHALL take the answer from the `result`
+characters that is plain prose (no code fence, no user or role mention, no
+link on a GIPHY media host — `hasGiphyMediaLink`, `plugins/gif/hosts.ts`,
+because a GIF a run posts as a link (PLUGIN-8) shows only when Discord
+unfurls it, which it never does inside an embed) and fits one embed
+description (4096 characters) SHALL go out as one embed holding the text and
+the footer, unless it carries a Choose button or mentions someone to ping. The Discord spawn client SHALL take the answer from the `result`
 frame uncut up to `DISCORD_ANSWER_MAX` (6000 characters; the frame already
 caps it at 4000) instead of the 1800-character chat body, and SHALL return the
 run's last `usage` frame; WATCH comments (1800) and schedule posts (1500) SHALL
@@ -2893,6 +2897,7 @@ embed. No env var, config key, slash command, schema or protocol change.
 Acceptance Criteria
 - A chat answer over 4000 characters with a code block across the 2000 mark: the first part is edited into the thinking message and the rest are fresh posts; every part is at most 2000 characters with balanced fences; the block is closed at a part end and reopened with its language; every line of the answer appears in order; the footer rides only the last part; each part's message id continues the session.
 - Long plain prose (over 2000, within 4096, no code fence or mention) goes out as one embed whose description is the answer and whose footer is the answer footer; no extra posts.
+- An answer holding a GIPHY media link (`media.giphy.com`, `media0`–`media4.giphy.com`, `i.giphy.com`, any case) is never an embed: within 2000 characters it is one plain message (the link in its content) with the footer embed, and as long plain prose it goes out as split parts, the link in a part's content and the footer on the last; another link, a `giphy.com` page URL or a look-alike host keeps the one-embed path (`tests/discord.rich-reply.unit.test.ts`, which fails on the slice A head).
 - An answer ending with the role note keeps the note whole at the end of the last part; no earlier part carries it.
 - Without an editable thinking message, the fallback reply is split the same way: the first part replies to the request with the answer's allowed mentions, later parts reply to nothing and allow no mention, the footer is on the last part.
 - A button pick's resumed long answer is split into the stub the same way.
@@ -2902,6 +2907,7 @@ Acceptance Criteria
 - The Discord spawn client returns a 3800-character result-frame answer uncut and the last `usage` frame; the WATCH client returns the same answer cut at 1800.
 - The live gateway reply sends a 2000-character part in full with its embed.
 - `tests/discord.rich-replies.test.ts` fails on the base sources (13 of 14; the WATCH guard passes on both) and passes on the branch.
+
 ### REQ-discord-472
 
 Long Discord conversations SHALL be condensed, kept and resumed

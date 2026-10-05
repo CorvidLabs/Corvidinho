@@ -298,11 +298,19 @@ export function resolveDelegateBin(env: NodeJS.ProcessEnv = process.env): string
   return join(import.meta.dir, "..", "cli.ts");
 }
 
-/** Inherited env keys a worker never gets (SAFE-6): bridge / GitHub tokens, audit key. */
+/**
+ * Inherited env keys a worker never gets (SAFE-6): bridge / GitHub tokens,
+ * audit key, and the Brave Search and GIPHY keys (PLUGIN-7 / PLUGIN-8, #318:
+ * only the lead searches; through `isVerifyEnvDropped` the verify lane, shell
+ * and runners drop them too).
+ */
 const WORKER_ENV_DROP = new Set([
   "GITHUB_TOKEN",
   "GH_TOKEN",
   "CORVIDINHO_AUDIT_HMAC_KEY",
+  "BRAVE_SEARCH_API_KEY",
+  "GIPHY_API_KEY",
+  "TENOR_API_KEY",
 ]);
 /** Inherited env key prefixes a worker never gets: Discord bot config, acting identity. */
 const WORKER_ENV_DROP_PREFIXES = ["DISCORD_", "CORVIDINHO_ACTING_"];

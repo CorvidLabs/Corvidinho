@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 97
+version: 98
 status: draft
 files:
   - src/discord/types.ts
@@ -827,7 +827,10 @@ the closing notes — the AGENT-11 `(model fallback: …)` note and the role not
 kept whole in the last part), `readsBetterAsEmbed` /
 `planAnswerParts` (scrub first, SAFE-6, then cut to `DISCORD_ANSWER_MAX`
 keeping a role note; one plain message within 2000, one
-embed for long plain prose with no fence or mention, else split parts with the
+embed for long plain prose with no fence, mention or GIPHY media link
+(`hasGiphyMediaLink` from `plugins/gif/hosts.ts`: a GIF posted as a link,
+PLUGIN-8, shows only when Discord unfurls it, never inside an embed), else
+split parts with the
 footer on the last), `postAnswerParts` (fresh-reply paths: first part replies
 with the answer's mentions, later parts reply to nothing and allow only users
 first mentioned in them, so a mention past the first part still pings once;
@@ -1464,6 +1467,7 @@ owner nothing waiting is posted. Fixed harness text never waits.
 
 - MEMORY store (`src/memory`) / REQ-discord-021
 - Agent spawn client (`agent-client.ts`)
+- GIPHY media hosts (`plugins/gif/hosts.ts`, `hasGiphyMediaLink`) / REQ-discord-075
 
 ## Change Log
 
@@ -1624,3 +1628,5 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-10-01 | its-first-20-replies-in-public-threads-each-wait-for-my-ok-on-an-approve-card-even-text-i-dictated-and-replies-to-me: Its first 20 replies in public threads each wait for my OK on an Approve card, even text I dictated and replies to me (AUTONOMY-10, AUTONOMY-10.a) |
 | 2026-10-01 | a-team-member-s-failed-session-or-work-reply-and-someone-else-s-failed-schedule-post-is-checked-for-the-reason-s-401: A team member's failed /session or /work reply, and someone else's failed schedule post, is checked for the reason's 401 with the run's own random ids masked, so an id that happens to contain 401 no longer fails the DISCORD-3.b test |
 | 2026-10-01 | in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent: In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard) |
+| 2026-09-30 | web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered: Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap |
+| 2026-10-01 | gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins: GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap |

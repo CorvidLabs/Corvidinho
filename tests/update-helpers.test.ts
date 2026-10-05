@@ -180,6 +180,38 @@ describe("update-helpers.sh", () => {
     }
   });
 
+  test("extract_changelog_section finds 0.0.41", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.41`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("soft-land");
+    expect(r.stdout).toContain("#360");
+    expect(r.stdout).toContain("GIPHY_API_KEY");
+    expect(r.stdout).not.toContain("## 0.0.40");
+  });
+
+  test("extract_changelog_section finds 0.0.40", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.40`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("PLUGIN-7");
+    expect(r.stdout).toContain("PLUGIN-8");
+    expect(r.stdout).toContain("gif-search");
+    expect(r.stdout).not.toContain("## 0.0.39");
+  });
+
+  test("extract_changelog_section finds 0.0.39", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.39`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("GITHUB-9");
+    expect(r.stdout).toContain("AGENT-12");
+    expect(r.stdout).not.toContain("## 0.0.38");
+  });
+
   test("extract_changelog_section finds 0.0.38", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.38`,
@@ -956,10 +988,10 @@ describe("release tagging helpers", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.38", () => {
+  test("package.json is 0.0.41", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.38");
+    expect(pkg.version).toBe("0.0.41");
   });
 });

@@ -1,0 +1,50 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791048004,
+      "digest": "1bc24fbd5276330d3df47b634736a401370cfe988261d15e8951bebc22d6035c",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "release-0-0-41-missing-plugin-soft-land-with-the-real-gap",
+        "title": "Release 0.0.41: missing-plugin soft-land with the real gap",
+        "description": "Release 0.0.41: missing-plugin soft-land with the real gap",
+        "kind": "operations",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "package.json 0.0.41; version prints 0.0.41; CHANGELOG 0.0.41 extractable and covers missing-plugin soft-land (#360) plus the already-landed fledge-gif prefer path (#358); STATUS rows mention the soft-land"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "dc0c6ec280b582e069092c96942a19399521866f3a72d69938289eafbe31a813"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1791048771,
+      "digest": "a9c37a5f661da16450f875a7cbe83e3776fd114254931ecf6126ef695bf4e7ad",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

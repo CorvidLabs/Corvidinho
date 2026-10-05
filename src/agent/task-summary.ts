@@ -33,9 +33,97 @@ const FALLBACK_NOTE_TAIL_RE = new RegExp(
 );
 
 /**
+ * REQ-agent-318 (PLUGIN-7, #318; Leif's go on #318): the short visible line a
+ * reply ends with when its run used a tool whose provider's terms ask for
+ * one, by tool name. A `web-search` that Brave answered makes the reply end
+ * with "Search by Brave". The tool loop reports each such successful call
+ * and `createTaskExecute` adds the line once to the run's summary as a
+ * closing note (`withReplyAttribution`), so it is never in a tool result, the
+ * untrusted fence or anything else the model reads, and every clip keeps it.
+ */
+export const REPLY_ATTRIBUTION_BY_TOOL: ReadonlyMap<string, string> = new Map([
+  ["web-search", "Search by Brave"],
+]);
+
+/** Every attribution line, in the order a closing note lists them. */
+const ATTRIBUTION_LINES: readonly string[] = [...new Set(REPLY_ATTRIBUTION_BY_TOOL.values())];
+
+/**
+ * The attribution note for `lines` (REQ-agent-318): the known lines among
+ * them, one per line in {@link REPLY_ATTRIBUTION_BY_TOOL} order; "" when none.
+ */
+export function replyAttributionNote(lines: Iterable<string>): string {
+  const want = new Set(lines);
+  return ATTRIBUTION_LINES.filter((line) => want.has(line)).join("\n");
+}
+
+/**
+ * A line compared the way a model might write an attribution line: no
+ * surrounding spaces, Markdown quote / subtext / emphasis marks or trailing
+ * period, any case.
+ */
+function attributionKey(line: string): string {
+  return line
+    .trim()
+    .replace(/^(?:>|-#)\s*/, "")
+    .replace(/^[*_~`]+|[*_~`.]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+const ATTRIBUTION_KEYS: ReadonlySet<string> = new Set(ATTRIBUTION_LINES.map(attributionKey));
+
+/**
+ * `text` without the attribution lines it ends with (REQ-agent-318): the
+ * trailing lines that are a known attribution line (as a model might write
+ * one, see `attributionKey`) or blank are dropped, and a text of only such
+ * lines comes back "". A line in the body, or one with more text after it,
+ * stays; a text that ends with none comes back as is. `createTaskExecute`
+ * applies it to every attempt's summary before any closing note goes on, so
+ * a line the model wrote itself (led there by a page, an issue or an earlier
+ * reply) never passes for the one a run earned and never shows twice.
+ */
+export function withoutReplyAttribution(text: string): string {
+  const lines = text.split("\n");
+  let end = lines.length;
+  let dropped = false;
+  while (end > 0) {
+    const line = lines[end - 1] ?? "";
+    if (ATTRIBUTION_KEYS.has(attributionKey(line))) dropped = true;
+    else if (line.trim() !== "") break;
+    end -= 1;
+  }
+  return dropped ? lines.slice(0, end).join("\n").trimEnd() : text;
+}
+
+/**
+ * `summary` ending with the attribution note for `lines` (a blank line
+ * first), once: any attribution the summary already ends with is dropped
+ * first (`withoutReplyAttribution`), so the note is only ever the one for
+ * `lines`, and with no known lines there is none (REQ-agent-318).
+ */
+export function withReplyAttribution(summary: string, lines: Iterable<string>): string {
+  const body = withoutReplyAttribution(summary);
+  const note = replyAttributionNote(lines);
+  if (!note) return body;
+  const text = body.trim();
+  return text ? `${text}\n\n${note}` : note;
+}
+
+/** A closing attribution paragraph at the end of `text` (with its blank line), or "". */
+function attributionTail(text: string): string {
+  const at = text.lastIndexOf("\n\n");
+  if (at < 0) return "";
+  const lines = text.slice(at + 2).split("\n");
+  return lines.every((line) => ATTRIBUTION_LINES.includes(line)) ? text.slice(at) : "";
+}
+
+/**
  * The closing notes `text` ends with, as they stand (each after a blank
- * line): the model fallback note (AGENT-11), then the role note
- * (REQ-agent-333), either or both; "" when none.
+ * line): the model fallback note (AGENT-11), then the attribution note
+ * (REQ-agent-318), then the role note (REQ-agent-333), any of them; "" when
+ * none.
  */
 export function closingNotesTail(text: string): string {
   let rest = text;
@@ -44,15 +132,21 @@ export function closingNotesTail(text: string): string {
     tail = ROLE_NOTE_TAIL;
     rest = rest.slice(0, rest.length - ROLE_NOTE_TAIL.length);
   }
+  const credit = attributionTail(rest);
+  if (credit) {
+    tail = `${credit}${tail}`;
+    rest = rest.slice(0, rest.length - credit.length);
+  }
   const fallback = FALLBACK_NOTE_TAIL_RE.exec(rest);
   return fallback ? `${fallback[0]}${tail}` : tail;
 }
 
 /**
  * Clip already-scrubbed `text` longer than `max` with `clip`, keeping its
- * closing notes (`closingNotesTail`: the model fallback note, AGENT-11, and
- * the role note, REQ-agent-333): a long reply loses the end of its body,
- * never a note. Text within `max` is returned as is.
+ * closing notes (`closingNotesTail`: the model fallback note, AGENT-11, the
+ * attribution note, REQ-agent-318, and the role note, REQ-agent-333): a long
+ * reply loses the end of its body, never a note. Text within `max` is
+ * returned as is.
  */
 export function clipKeepingRoleNote(
   text: string,

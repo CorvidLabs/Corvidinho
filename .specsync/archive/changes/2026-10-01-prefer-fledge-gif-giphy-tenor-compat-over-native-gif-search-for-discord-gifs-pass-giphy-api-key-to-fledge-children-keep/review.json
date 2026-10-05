@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "prefer-fledge-gif-giphy-tenor-compat-over-native-gif-search-for-discord-gifs-pass-giphy-api-key-to-fledge-children-keep",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "a5ba5b4ef971ffd5c45e5746ec33e28b75610d8b",
+  "contract_digest": "d888c19da894842b9fb6a1eeeba58d01f260df6eda15d98b1cc0781b5755dd4a",
+  "execution_digest": "cecd83eb0a3d0cd0aa97ae1dd574e621274299be5782a30548c4a8473f06c65b",
+  "workspace_digest": "81fae49ec5484f7ba302e98d8828e25e23832a63cee5bf4b3314a24901b8e784",
+  "timestamp": 1790872199
+}
