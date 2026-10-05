@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "40ff628e2224d9274b96c782450de1592c3b6733",
   "created_at": 1790830655,
-  "updated_at": 1790866599,
+  "updated_at": 1791243069,
   "affected_specs": [
     "discord",
     "plugins",
