@@ -409,7 +409,8 @@ describe("the tool loop gets one fixed prompt block for the ways (AGENT-18, REQ-
     await exec({ attempt: 1, signal, repoWays: { sdd: true, hi: true, trust: false } });
     await exec({ attempt: 1, signal });
     const system = (n: number) => bodies[n]!.messages.find((m) => m.role === "system")!.content;
-    expect(system(0)).toContain(renderRepoWaysBlock({ sdd: true, hi: true, trust: false }).trim());
+    // A run with no role session is a local CLI run: it is offered hi-draft (AGENT-18 hi drafts).
+    expect(system(0)).toContain(renderRepoWaysBlock({ sdd: true, hi: true, trust: false }, { hiDraft: true }).trim());
     expect(system(0)).toContain("This repo works through SpecSync changes (AGENT-18)");
     expect(system(0)).toContain("Never invent criteria");
     expect(system(1)).not.toContain("This repo works through SpecSync changes");

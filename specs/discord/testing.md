@@ -1618,3 +1618,31 @@ run in the talk is verified and the PR opens (`git-commit`, `git-push`,
 - Fail on base (b84c75f's `src/work/pr.ts` and `src/agent/loop.ts` swapped
   in): the three /work cases fail (the PR opens, or the run is verified);
   restored they pass.
+
+## The owner's hi card (REQ-discord-521 added, REQ-discord-520 modified; AGENT-18 hi drafts)
+
+`tests/discord.hi-card.test.ts` (7 tests; temp git repos and talk worktrees,
+a stand-in `hi` on PATH from `tests/fixtures/stand-in-hi.ts`, a temp DB for
+the engine, the bridge with a fake gateway): the card DMs the owner the
+exact commands first and then the action, project and branch, the drafter's
+run, the ids and plain Approve / Deny buttons (no Enter code); a stranger's
+press is refused and captures nothing; the owner's Approve captures exactly
+the drafts, records the ids, writes `hi-capture-card`, `-approve`
+`started`, two `hi-capture-criterion` and `-approve` `ok` rows and posts one
+outcome to the asker naming ids only; a changed owner config makes Approve
+fail with nothing captured; Deny and a lapsed card capture nothing and tell
+the asker; a removed worktree whose branch has a commit is re-created and
+captured into, and with the branch gone Approve fails closed and the request
+stays open; a worktree on another branch, an id captured by hand since, a
+second draft that fails and a failing `hi check` each leave `hi/` (and a
+first capture's `INTENT.md`) as before. Through the bridge: the `hi` card is
+delivered, a stranger's `cvok:hi:approve` is refused, the owner's captures,
+and `hiChangesSince` then lists nothing for the talk. `/work` with an
+approved capture opens its PR (`tests/agent.hi-draft.test.ts`,
+REQ-discord-520 modified).
+- Fail on base (the stacked base 387dadab's sources swapped in as for
+  REQ-agent-521, the new modules kept): 2 of 7 fail — the re-created
+  worktree (no `prepare` hook in the engine) and the bridge route (no `hi`
+  kind registered); the other 5 exercise the new `hi-card.ts` on the engine
+  directly. Without the new modules the file does not load. Restored: 7 of 7
+  pass.

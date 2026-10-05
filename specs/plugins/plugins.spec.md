@@ -326,7 +326,8 @@ also refuse every path under `hi/` (`isHiPath`, judged where the write lands
 with symlinks resolved and as given), exit 2 with one line
 (`hiRefuseMessage`: `refused (AGENT-18): '<path>' is under hi/, …`): the
 agent never changes a repo's criteria itself, since they change only through
-a capture the owner approves and no run can make one yet. Reads, and hi/ in a
+a capture the owner approves on a card (drafted with `hi-draft`, AGENT-18 hi
+drafts, REQ-agent-521). Reads, and hi/ in a
 repo that does not use hi, are unaffected (AGENT-18 hi guard,
 REQ-plugins-520). Memory plugins take the acting user and ADMIN
 only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID` /

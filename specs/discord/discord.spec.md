@@ -61,6 +61,8 @@ files:
   - tests/fixtures/approval-code.ts
   - src/discord/forget-card.ts
   - tests/discord.forget-card.test.ts
+  - src/discord/hi-card.ts
+  - tests/discord.hi-card.test.ts
   - src/discord/spend-card.ts
   - tests/discord.spend-card.test.ts
   - src/discord/watch-ask.ts
@@ -278,7 +280,16 @@ deny | code | submit`), `buildApproveDenyComponents`,
 decision, the waiting run uses it once — REQ-discord-198, SAFE-8 / SAFE-8.a),
 `SPEND_CARD_NOTHING_DONE` ("nothing was spent"), `SPEND_CARD_APPROVED`
 (the card's outcome line) and `SPEND_CARD_UNKNOWN_APPROVED` (the outcome line
-of a card whose amount is unknown, SAFE-16.a, REQ-discord-199). `src/memory/forget.ts` adds
+of a card whose amount is unknown, SAFE-16.a, REQ-discord-199).
+`src/discord/hi-card.ts` exports `hiCaptureApprovalKind(deps)` (the `hi`
+kind, class `plain`, over `hi_capture_requests`: audit prefix `hi-capture`,
+plus one `hi-capture-criterion` row per captured criterion; AGENT-18 hi
+drafts, REQ-discord-521), `HI_CARD_KIND`, `HI_CARD_TITLE`,
+`HI_CARD_NOTHING_DONE` ("nothing was captured"), `hiCardView(req)`,
+`hiCardActionHash(req)` and `hiCardOutcomeText(req)`. An `ApprovalKind` may
+declare `prepare(req)`, which Approve awaits after the hash check and before
+the SAFE-5 `started` row (a throw: nothing runs, the request stays open).
+`SlashCtx.deliverApprovalCards` runs one card pass when a `/work` run ends. `src/memory/forget.ts` adds
 `previewForgetTargets` (`ForgetCounts`) and `ForgetRequestStore.resetCard`.
 `StartBridgeResult.deliverApprovalCards` (and `deliverForgetCards`, the same
 pass); `StartBridgeOptions.approvalPollMs`. `src/discord/gateway.ts` exports
@@ -707,8 +718,9 @@ entry or any other `hi/` file, an assume-unchanged or skip-worktree edit
 included; a `hi/` commit on the branch counts whoever made it, since the PR
 would carry it), or a hi/ diff that cannot be read, keeps the
 PR from opening before the pre-push lane (so a trusted and a re-run verify
-both hold to it) and before anything is committed or pushed: no run can make
-an approved capture yet (AGENT-18 hi guard, REQ-discord-520), and
+both hold to it) and before anything is committed or pushed; only a path
+whose change approved captures alone explain is left out (AGENT-18 hi guard,
+REQ-discord-520, REQ-agent-522), and
 `not-reviewed`: `github-pr-create` held the PR at the GITHUB-9 second-model
 review gate (this step has no run model, so it starts no round; only a tree a
 run already had reviewed opens), the line reusing the gate's reason

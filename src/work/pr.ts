@@ -14,8 +14,8 @@
  *   every such path changed since the merge-base is covered by an open
  *   change or one archived on the branch (AGENT-18, REQ-discord-518);
  * - in a repo that uses hi, nothing under hi/ differs from the merge-base,
- *   committed on the branch or left in the tree: no run can make an approved
- *   capture yet, so any criterion, retired-entry or other hi/ change keeps
+ *   committed on the branch or left in the tree, except what approved
+ *   captures made: any other criterion, retired-entry or hi/ change keeps
  *   the PR from opening, whether the run's verify is trusted or re-run here
  *   (AGENT-18 hi guard, REQ-discord-520);
  * - the operator allowed the PR path: `git-commit` (only when the tree is

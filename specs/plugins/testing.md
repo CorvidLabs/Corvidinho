@@ -493,3 +493,10 @@ hi/ edit but no run in progress, the hi guard does not refuse (GITHUB-9
 answers next).
 - Fail on base (b84c75f's `plugins/github/commands.ts` swapped in): the
   refusal case fails (no AGENT-18 refusal); restored it passes.
+
+## The hi/ refusal names the owner's card and hi-draft (REQ-plugins-520 modified; AGENT-18 hi drafts)
+
+`tests/agent.hi-guard.test.ts`: the `files-write` refusal under `hi/` now
+says criteria change only through a capture the owner approves on a card
+(and points at `hi-draft`); every other file-tool case is unchanged and
+passes (20 of 20).
