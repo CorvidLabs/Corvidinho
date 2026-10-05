@@ -1,6 +1,6 @@
 ---
 id: in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2
-state: draft
+state: implementing
 type: feature
 base_commit: 25723fe248a307e5ab67e105525e257b2f0d6c71
 ---

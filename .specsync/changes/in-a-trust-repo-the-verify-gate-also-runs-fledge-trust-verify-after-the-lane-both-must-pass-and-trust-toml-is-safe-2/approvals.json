@@ -1,4 +1,49 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791242869,
+      "digest": "bd25f13e9d732f586a549413db2ca7e98eb7fc4e4d11a782a9e66c4f869f0f21",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2",
+        "title": "In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause)",
+        "description": "In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "plugins"
+        ],
+        "affected_paths": [
+          "STATUS.md",
+          "docs/discord.md",
+          "plugins/files/protectedPaths.ts",
+          "specs/agent",
+          "specs/plugins",
+          "src/agent/loop.ts",
+          "src/agent/repo-ways.ts",
+          "src/agent/verify.ts",
+          "tests/agent.trust-verify.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "AGENT-18 (captured on main from Leif's 2026-09-28 interview; this builds its Trust clause only): in a repo with .trust.toml in the session base, HEAD or the working tree, the default verify runner runs fledge trust verify after fledge lanes run verify passes, and the run is verified only when both pass; when this fledge has no trust command it fails closed with the exact reason before the lane runs; a repo without .trust.toml runs the lane alone exactly as before; .trust.toml is SAFE-2 protected (files-write/edit/delete refuse it, git-commit refuses to stage its deletion); nothing Trust-related is added to Corvidinho's own repo."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "f7387ab6fbddd42e117f989dd11449b56d3e03b3ac4b64aa2157672afdc2137d",
+        "plugins": "bdcc13fa70d3772d29ec9d8cba74584da54874bdd264a06dd3cfd4afbf9dac2d"
+      }
+    }
+  ],
   "reopenings": []
 }

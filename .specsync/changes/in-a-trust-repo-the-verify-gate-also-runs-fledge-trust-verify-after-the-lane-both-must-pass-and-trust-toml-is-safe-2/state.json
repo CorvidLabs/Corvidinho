@@ -7,10 +7,11 @@
   "title": "In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause)",
   "description": "In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause)",
   "kind": "feature",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "25723fe248a307e5ab67e105525e257b2f0d6c71",
   "created_at": 1791242701,
-  "updated_at": 1791242711,
+  "updated_at": 1791242882,
   "affected_specs": [
     "agent",
     "plugins"
