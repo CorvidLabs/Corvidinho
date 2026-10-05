@@ -1,0 +1,149 @@
+---
+module: plugins
+change: work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9
+---
+
+# Delta: plugins (the /work round driver shares the review step — GITHUB-9)
+
+## Modified
+
+### REQUIREMENT REQ-plugins-092
+
+Before the PR, a second model reviews the diff in bounded rounds, and the PR
+lists what it raised and what changed (GITHUB-9, captured on main from
+Leif's 2026-09-28 interview). The reviewer is the first other model I've
+configured that didn't write the change; there's no reviewer setting, and
+with no second model there's no PR and the reply says why (GITHUB-9.a,
+captured in this change from Leif's 2026-09-30 interview, round 13).
+
+`github-pr-create` SHALL run `gatePrCreate` (`src/work/review.ts`) for every
+caller, after the repo gate (GITHUB-6) and argument checks and, in live mode,
+after its Octokit client exists, and before anything reaches GitHub; the
+SAFE-1 deny, the must-ask gate and the role gate of `runPlugin` still apply
+first. It SHALL open a PR only for a tree with a finished review cycle:
+
+- **With a run model** (the handler got `review`, a `PrReviewRun`, from the
+  agent tool loop, REQ-agent-092): the gate SHALL stage the work tree's
+  tracked files at the handler cwd (the repository top level, `gitRoot`)
+  into a copy of the index (`git add --update`; `runGit`'s `indexFile` sets a
+  temporary `GIT_INDEX_FILE`; the inherited one is still stripped) and write
+  its tree (`reviewTree`). The copy SHALL keep the real index's modification
+  time: git re-reads a file whose size and times match its index entry only
+  when the entry is not older than the index file, so a copy stamped later
+  would miss a same-size edit made in the same second as the last index
+  write. Tracked edits, deletions and files already staged
+  count; untracked files do not (they are not what the PR carries, so a
+  scratch file never holds the PR back and its content never reaches the
+  reviewer); the real index and status do not change. When the latest cycle for (repo, head) ended on this
+  tree, no round runs. When its open round reviewed this tree (findings,
+  unchanged since), the author declined them: the cycle SHALL end
+  (`declined`) and they are listed as not changed. Otherwise the next round
+  (round 1 of a new cycle after a finished one) SHALL review the diff from
+  the merge-base of HEAD with `--base` (`refs/remotes/origin/<base>`, else
+  `refs/heads/<base>`) to the tree: the reviewer is `resolveReviewer(env,
+  authors)` — the first entry of `CORVIDINHO_LLM_MODEL`, then
+  `CORVIDINHO_LLM_MODEL_READ`, `_TOOL` and `_CODE` (every chain entry, each
+  label once) that has its key and whose model id (whatever kind reaches it)
+  is none of the authors: the run's `authors()`, every model recorded as
+  having changed this checkout (`pr_change_authors`, REQ-agent-092: its top
+  level on the branch checked out now, the head branch, or detached) and
+  every author recorded for (repo, head). There is no reviewer setting. One no-tools completion
+  (`review.complete`) SHALL carry fixed instructions and, as untrusted data
+  (SAFE-12 fence), the title and the diff, secret-scrubbed (SAFE-6) and at
+  most `REVIEW_DIFF_MAX_BYTES` (200 KiB, the `github-pr-diff` cap; a bigger
+  diff is refused, never cut). The diff SHALL leave out the content of every
+  secret-looking path (`isSecretPath`, the ROLES-CHAT-8 rules: `.env*`,
+  `.ssh`, keystores, keys, credentials; `SECRET_GIT_EXCLUDE_PATHSPECS`) and
+  name those paths instead (content withheld), and a secret path found past
+  the excludes SHALL fail closed (a one-line refusal, no call). The reply's findings (the `findings` array of
+  its JSON, else its bullet lines, else an explicit clean reply means none,
+  else the whole text is one finding) SHALL be scrubbed before they are cut
+  to one line of `REVIEW_FINDING_MAX_CHARS` and kept to
+  `REVIEW_FINDINGS_MAX` (10; the rest counted). A round that raises nothing
+  ends the cycle (`clean`); round `REVIEW_MAX_ROUNDS` (3, a constant, its
+  own counter, not the AGENT-4.a verify retries) always ends it
+  (`max-rounds`); any other round with findings SHALL refuse with
+  `reviewHold: "findings"`, exit 2, a fixed line naming round k of 3 and the
+  reviewer and saying how to go on (change, commit and push, then call again;
+  or call again unchanged to open with them listed as not changed), and the
+  findings numbered inside an untrusted-data fence; `data.review` carries
+  only the round, the maximum, the reviewer and the count. Each round SHALL
+  be stored in the `pr_review_rounds` table (created on first use, no
+  schema version bump; keyed (repo lower-cased, head) with cycle and round,
+  tied to the reviewed tree id; reviewer, authors, findings and the changed
+  paths since the previous round's tree — `git diff --name-status` between
+  the two trees, at most `REVIEW_PATHS_MAX` — scrubbed on write and listed in
+  `SCRUB_TARGETS`; `opened_at` once a PR listed it). Round 1 of a new cycle
+  after one that ended with no PR listing it SHALL record the paths changed
+  since that cycle's last tree.
+- **Without a run model** (`corvidinho plugins run github-pr-create`, the
+  /work PR step, REQ-discord-088): no round SHALL start; the PR opens only
+  when the latest cycle for (repo, head) ended on the exact tree of the
+  branch on GitHub.
+- **`/work`** (REQ-agent-092, REQ-cli-092, REQ-discord-088): the run's
+  review hook (`workReviewHook`, `maxRounds` 3) SHALL run the same review
+  step as the gate with a run model (`reviewStep`: the same reviewer,
+  rounds, declined and max-rounds ends and `pr_review_rounds` records) on
+  the tree `/work` will commit — `reviewTree(root, {untracked: true})`
+  stages with `git add --all` into the index copy, so untracked,
+  non-ignored files count (a secret-looking one's content is still never
+  sent) — keyed by the (repo, branch) its PR opens on (`workReviewTarget`:
+  the OWNER/REPO of `origin`'s push URL, the branch checked out, the base
+  from `resolveBase`; no branch, repo or base refuses in one line), with the
+  fixed title `Corvidinho /work task` (the run's task text, which carries
+  identity and memory blocks, is not sent). A round with findings SHALL come
+  back as the next attempt's feedback (`workReviewFeedback`: what to do —
+  change the tree, or leave it to decline — then the findings numbered in an
+  untrusted-data fence, scrubbed, at most `WORK_REVIEW_FEEDBACK_MAX` (3800,
+  under the verify feedback cap) characters, later findings counted). A
+  `ReviewSpendStop` SHALL become the run's spend-cap ask
+  (`takeSpendAsk`), else a refusal; any other error is a refusal.
+  `workTreeReviewed(cwd, repo, branch)` SHALL be true only when the latest
+  cycle for (repo, branch) ended on exactly that tree (fail closed).
+
+Either way the branch on GitHub SHALL be the reviewed tree — read with
+`repos.getBranch` (an `owner:branch` head on that owner's same-named repo;
+`githubBranchTree`), or in a dry run (`CORVIDINHO_GITHUB_DRY_RUN=1`) from
+the push remote with `git ls-remote origin` (`pushRemoteTree`). The opened
+PR's body SHALL be the caller's body (a heading in it that imitates the
+section marked `(quoted)`), then a `## Second-model review` section, then
+the attribution (placed after the section when the body already ended with
+it): rounds used of 3, each round's reviewer and what it raised (fenced,
+numbered), the paths that changed after each round (fenced), and for the
+last round's findings, not changed (declined, or round 3 ends the review);
+scrubbed, with no amounts. It SHALL list every round since the last PR
+opened from the branch: the finishing cycle and, before it, each earlier
+cycle of (repo, head) no opened PR listed (`opened_at` unset;
+`unopenedEarlierRounds`), so a review that ended before the tree changed
+again stays listed. Once a live `pulls.create` succeeds, the rounds it
+listed SHALL be marked (`markReviewOpened`, best effort); a dry run marks
+nothing.
+
+Anything else SHALL refuse with `reviewHold: "refused"`, exit 2, and one
+plain line starting `PR not opened: ` (`REVIEW_REFUSAL`): no second model
+(GITHUB-9.a), no finished review for the tree (no run model), not a git
+checkout top level, the tree or base unreadable, no changes against the base,
+a diff over the cap, a provider error (a fixed reason from
+`modelFailureReason`, never provider text) or an empty reply, the record
+unavailable, the branch unreadable on GitHub or not the reviewed tree. A
+refused or failed review records nothing. A review call stopped at a SAFE-8
+spend cap (a completion with no model failure while the run was not stopped)
+SHALL throw `ReviewSpendStop` instead, so the run stops at the cap's Approve
+card or ask (REQ-agent-092), never "unavailable".
+
+Acceptance Criteria
+- `resolveReviewer` lists configured models in `CORVIDINHO_LLM_MODEL`, `_READ`, `_TOOL`, `_CODE` order, each label once; skips authors by model id across kinds and entries without their key; returns null when only authors remain; no other env key names a reviewer.
+- `reviewTree` of a work tree with an edit, a staged new file, an untracked file and a deletion equals the tree a commit of the tracked files then has (the untracked file left out), and leaves `git status` and the staged list unchanged; an untracked scratch file beside the pushed branch neither blocks the PR nor reaches the reviewer.
+- A tracked file rewritten with the same size in the same second as the last index write (its entry's whole-second ctime and mtime and its size equal the file's) is in `reviewTree`'s tree when the review runs in a later second; the real index is unchanged.
+- A committed `.env.local` and `config/credentials.json` are named to the reviewer but their content is never sent; a change to secret-looking paths only is still reviewed by name.
+- Findings parse from JSON, a fenced JSON block, bullets; an explicit clean reply is none; other text is one finding; capped at 10 with the rest counted; scrubbed before the cut. The review call's user message is the scrubbed title and diff in an untrusted fence the diff cannot close.
+- With a run model (dry run, temp repos with a bare origin): round 1 findings refuse with `reviewHold: findings`, round 1 of 3, the reviewer, the fenced findings; after a change is committed and pushed, a clean round 2 opens the PR whose body has the section (2 of 3 rounds, round 1's finding, `M  src/app.ts` changed after round 1, round 2 raised nothing, no amounts) before the attribution.
+- The same tree after findings opens with them listed as not changed (`declined`); round 3 with findings opens (`max-rounds`) and the same tree later opens with no 4th review call.
+- Unpushed edits, a branch not on GitHub, no changes against the base and a non-git cwd refuse in one line; after the push the PR opens with no new review call.
+- A cycle that ended (clean round 2 on an unpushed edit) and a new cycle on the pushed, changed tree: the PR lists round 1's finding, `M  src/app.ts` and `A  src/more.ts`; after the rounds were marked opened, a later cycle lists only its own rounds; a live `pulls.create` (mocked fetch) marks the rounds it listed.
+- No second model refuses with the GITHUB-9.a line and calls no reviewer; a provider error refuses with `<reviewer> failed (HTTP 500)` and none of the provider's text; a diff over 200 KiB refuses and calls no reviewer; none of these records a round; an author recorded for the branch is never its reviewer.
+- A review completion with no model failure (a spend-cap stop) makes `runPlugin` reject with `ReviewSpendStop` and records nothing.
+- Without a run model: no finished cycle, a finished cycle for another tree, or an open cycle refuse in one line; a finished cycle for the pushed tree opens with its findings listed. Live mode without a token fails before any review call.
+- `githubBranchTree` returns the head commit's tree, reads an `owner:branch` head on that owner's repo, and is null on a 404. `SCRUB_TARGETS` lists `pr_review_rounds` (`reviewer`; JSON `authors`, `findings`, `changed`) and `pr_change_authors` (`model`).
+- `/work` (temp repo, scripted provider, the real tool loop and verify gate): the untracked new file is in the reviewed diff, the reviewer gets `Title: Corvidinho /work task` and not the task text, the rounds are stored (round 1 open with its finding, round 2 `clean` with `M  src/greet.ts` changed), `workTreeReviewed` is true, and the /work PR opens with the section; a finished review of an earlier tree is not this tree's.
+- `workReviewFeedback` stays within 3800 characters (under the 4000 verify feedback cap) with its fence whole and later findings counted; a spend-cap stop gives the hook's `ask` when the run left one, else a refusal, and records nothing.

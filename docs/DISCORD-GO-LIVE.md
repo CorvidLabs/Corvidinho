@@ -369,8 +369,10 @@ What an entry unlocks **today**:
   second-model review of the exact tree on GitHub (GITHUB-9): the reviewer is the first other
   configured model that did not write the change (no reviewer setting, GITHUB-9.a), in at most 3
   rounds, and the PR body lists what it raised and what changed. An agent run starts the rounds
-  itself; `/work` and `plugins run` have no run model, so they open only a tree a run already had
-  reviewed (the `/work` round driver is a later change) and otherwise say why on one line. In a
+  itself; an owner or team `/work` run does too, once its tree is verified, and the `/work` PR
+  step then commits and pushes only a tree whose review finished (else `not-reviewed`, nothing
+  pushed, and the line says why); `plugins run` has no run model, so it opens only a tree a run
+  already had reviewed and otherwise says why on one line. In a
   repo that uses hi, a `github-pr-create` from inside a run is refused before any review while
   `hi/` differs from the run's session base (AGENT-18 hi guard).
 

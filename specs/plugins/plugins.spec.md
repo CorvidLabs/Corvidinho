@@ -167,9 +167,11 @@ REQ-plugins-097).
 bounded rounds, and the PR body lists what it raised and what changed
 (GITHUB-9 / GITHUB-9.a, REQ-plugins-092, `src/work/review.ts`): the reviewer
 is the first other configured model that did not write the change (no
-reviewer setting); an agent run starts the rounds, a caller with no run model
-opens only a tree whose review already finished, and no second model means no
-PR, with one line saying why. Before any of that, a `github-pr-create` called
+reviewer setting); an agent run starts the rounds, an owner or team `/work`
+run drives them itself once its tree is verified (the tree `/work` will
+commit, untracked files included; `workReviewHook`, REQ-agent-092), a caller
+with no run model opens only a tree whose review already finished, and no
+second model means no PR, with one line saying why. Before any of that, a `github-pr-create` called
 while a Corvidinho run is in progress in its cwd, in a repo that uses hi,
 refuses with exit 2 and `refused (AGENT-18): this repo's hi/ changed since the
 session base (…) …, so this run opens no PR; …` while anything under `hi/`
@@ -231,14 +233,19 @@ models as `data.models` (REQ-plugins-117). `runGit` takes `indexFile`
 (200 KiB), `REVIEW_FINDINGS_MAX` (10), `REVIEW_FINDING_MAX_CHARS`,
 `REVIEW_PATHS_MAX`, `REVIEW_TITLE_MAX`, `REVIEW_SECTION_HEADING`,
 `REVIEW_REFUSED_PREFIX`, `REVIEW_REFUSAL`, `REVIEW_SYSTEM_PROMPT`,
-`configuredModels(env)`, `resolveReviewer(env, authors)`, `reviewTree(root)`,
+`configuredModels(env)`, `resolveReviewer(env, authors)`, `reviewTree(root,
+{untracked?})` (`/work`: `git add --all`, untracked non-ignored files count),
 `reviewMergeBase`, `reviewDiffText`, `changedPaths`, `pushRemoteTree(cwd,
 branch)`, `reviewMessages(title, diff)`, `parseReviewFindings(text)`,
 `reviewDiff(o)`, `ReviewSpendStop`, `PR_REVIEW_ROUNDS_SQL`,
 `ensurePrReviewRounds`, `reviewRepoKey`, `latestReviewCycle`,
 `branchReviewAuthors`, `recordReviewRound`, `endReviewCycle`, `ReviewRound`,
-`ReviewEnd`, `reviewSection(rounds)`, `withReviewSection(body, section)` and
-`reviewRefusalReason(error)`; `plugins/github/commands.ts` exports
+`ReviewEnd`, `reviewSection(rounds)`, `withReviewSection(body, section)`,
+`reviewRefusalReason(error)`, `ReviewStep`, and for `/work` `reviewWorkRound`,
+`workReviewHook`, `workReviewTarget`, `workReviewFeedback`,
+`workTreeReviewed`, `WorkReviewOutcome`, `WorkReviewTarget`,
+`WORK_REVIEW_TITLE`, `WORK_REVIEW_FEEDBACK_MAX` (3800) and
+`WORK_REVIEW_REFUSAL`; `plugins/github/commands.ts` exports
 `githubBranchTree(octokit, owner, repo, head)`.
 `src/plugins/proc-group.ts` (REQ-plugins-154) exports `killProcessTree`,
 `signalProcessTree`, `collectProcessTree`, `readProcTable`, `parseProcStat`,

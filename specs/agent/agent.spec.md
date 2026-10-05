@@ -468,6 +468,23 @@ findings is not run; `withReviewRefusalNote(summary, line)` adds the run's
 latest `github-pr-create` refusal line ("PR not opened: …") once, before the
 role note.
 
+The `/work` review rounds (REQ-agent-092, GITHUB-9 / GITHUB-9.a):
+`createTaskExecute` returns a `TaskExecuteFn` — the execute fn plus `review`
+(the run's `PrReviewRun`) and `takeSpendAsk()` (the spend-cap ask a stopped
+review call left, cleared; else null). `RunTaskOptions.review` (a
+`ReviewHook`: `maxRounds`, `run({signal})` → `ReviewHookResult`: `finished`
+with its Text note, `findings` with a note and the next attempt's feedback,
+`refused` with a one-line reason, or `ask`, a spend-cap stop) is called after
+a passing lane and any settle of the run's own SpecSync change, before done:
+findings become the next attempt's `verifyFeedback` (verified again first),
+counted apart from the AGENT-4.a retries; at most `maxRounds - 1` hand
+findings back, and another, or a throw, fails closed (`reviewOverRoundsReason`,
+`REVIEW_HOOK_FAILED_REASON`, exported from `src/agent/loop.ts`);
+`TaskResult.review` (`TaskReview`: `{state: "finished"}` or `{state:
+"refused", reason}`) says how it ended; an `ask` ends the run `blocked`.
+`task run` passes the hook only for an owner or team `/work` run whose PR
+path is allowlisted (REQ-cli-092; `workReviewHook`, `src/work/review.ts`).
+
 Council core (REQ-agent-118, issue #118, AUTONOMOUS-6):
 `src/autonomous/council.ts` exports `parseCouncilArgs`, `resolveCouncilTier`,
 `councilLens`, `capCouncilText`, `buildProposeText`, `buildCritiqueText`,
@@ -1110,6 +1127,12 @@ A change the run did not open is never touched.
 - **Given** a repo whose `.specsync/sdd.json` enables the change workflow and requires a change for `src/`, and a run that edits `src/app.ts` without opening one
 - **When** the attempt ends
 - **Then** one `SpecSync gate:` note names `src/app.ts` and says to open a change with `specsync-change-new`; no lane runs; the retry gets the note as its feedback; once a change's `affected_paths` covers the path, the lane runs and the run is verified (REQ-agent-518)
+
+### Scenario: a /work run's verified tree gets a second-model review before the PR
+
+- **Given** an owner `/work` run with two configured models and the PR path allowlisted
+- **When** its tree passes verify and round 1 of the review raises a finding
+- **Then** the finding is the next attempt's feedback, that attempt is verified again, round 2 reviews the changed tree, and once a round raises nothing the run is done with `review: {state: "finished"}` (REQ-agent-092)
 
 ### Scenario: a run changes a criterion in a hi repo
 

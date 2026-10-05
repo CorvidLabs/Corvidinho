@@ -709,11 +709,20 @@ would carry it), or a hi/ diff that cannot be read, keeps the
 PR from opening before the pre-push lane (so a trusted and a re-run verify
 both hold to it) and before anything is committed or pushed: no run can make
 an approved capture yet (AGENT-18 hi guard, REQ-discord-520), and
-`not-reviewed`: `github-pr-create` held the PR at the GITHUB-9 second-model
-review gate (this step has no run model, so it starts no round; only a tree a
-run already had reviewed opens), the line reusing the gate's reason
-(`reviewRefusalReason`) with the changes left on the pushed branch
-(REQ-discord-088). `SCRUB_TARGETS` lists `pr_review_rounds` (`reviewer`, and
+`not-reviewed`: right before the commit, no finished second-model review
+covers exactly the tree about to be committed and pushed (`workTreeReviewed`,
+src/work/review.ts; the owner or team `/work` run drives the rounds itself,
+REQ-agent-092), so nothing is committed or pushed and the line gives the
+run's own reason from its result frame (`WorkRunFacts.review`; GITHUB-9.a:
+no second model) or `WORK_REVIEW_REFUSAL.notFinished`; or, after the push,
+`github-pr-create` held the PR at the same gate, the line reusing its reason
+(`reviewRefusalReason`) (REQ-discord-088). `buildWorkPrBody` takes
+`reviewed` and then adds `WORK_PR_REVIEWED_LINE` under Verify, pointing to
+the `## Second-model review` section `github-pr-create` writes;
+`OpenWorkPrDeps.reviewed` injects the tree check in tests. The spawn client
+passes the result frame's `review` on `AgentSpawnResult.task`
+(`taskReviewFromUnknown`: validated, the reason scrubbed, one line, at most
+300 characters). `SCRUB_TARGETS` lists `pr_review_rounds` (`reviewer`, and
 the JSON `authors`, `findings`, `changed`; REQ-plugins-092).
 `src/worktree/base.ts` exports `resolveBase` (the talk base: the remote's
 default branch, else `main`, and HEAD's merge-base with it; shared by

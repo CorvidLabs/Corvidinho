@@ -271,3 +271,13 @@ hung lane → exit 1, `failed` frame with `stopReason` / `error`, lane killed;
 `--help` and `.env.example` name both keys. Fail on base: all four (8
 requests and no line; no note; the lane still running at the 60 s timeout;
 no help lines).
+
+## task run wires the /work review hook (REQ-cli-092; GITHUB-9)
+
+`tests/work.review.test.ts` ("only an owner or team /work run whose PR path
+is allowlisted gets the review"): `workReviewApplies` is true for the owner
+and a team `/work` stamp with `git-push` and `github-pr-create` allowlisted,
+false for community, the `chat` surface, no /work bit, a worker
+(`CORVIDINHO_DELEGATE_DEPTH=1`), no stamps, and either plugin missing. Fail
+on base: the file cannot load (`workReviewApplies` is not exported from
+`src/cli.ts`).

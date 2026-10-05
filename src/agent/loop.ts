@@ -16,7 +16,10 @@
  * fails verify before the lane, since no run can make an approved capture
  * yet (AGENT-18 hi guard, REQ-agent-520). An idle timeout I set stops a run
  * that went quiet, and the result says when a limit I set stopped it
- * (AGENT-12, REQ-agent-244 / REQ-agent-312; src/agent/limits.ts).
+ * (AGENT-12, REQ-agent-244 / REQ-agent-312; src/agent/limits.ts). A /work
+ * run (`review`) is done only after a second model reviewed its verified
+ * tree in bounded rounds, counted apart from the verify retries (GITHUB-9,
+ * REQ-agent-092).
  */
 
 import { relative, resolve } from "node:path";
@@ -66,8 +69,10 @@ import { startWorkspaceDiff, WORKSPACE_DIFF_MAX_FILES } from "./workspace-diff.t
 import type {
   AgentEvent,
   AgentState,
+  ReviewHookResult,
   RunTaskOptions,
   TaskResult,
+  TaskReview,
   TestDrop,
   WorkspaceDiffTracker,
 } from "./types.ts";
@@ -108,6 +113,15 @@ function setState(
  */
 export const VERIFY_RERUN_FAILED_REASON =
   "Verification failed when re-run over what approving and archiving its own SpecSync change wrote";
+
+/** GITHUB-9: a review hook that threw — no review finished, so no PR (fail closed). */
+export const REVIEW_HOOK_FAILED_REASON =
+  "the second-model review could not run, so there is no PR (GITHUB-9).";
+
+/** GITHUB-9: a review hook that still raised findings at its last round (fail closed). */
+export function reviewOverRoundsReason(maxRounds: number): string {
+  return `the second-model review did not end within ${maxRounds} rounds, so there is no PR (GITHUB-9).`;
+}
 
 /** DISCORD-3.b: the plain reason of a run that gave up after its verify retries. */
 export function verifyGaveUpReason(maxRetries: number): string {
@@ -404,6 +418,9 @@ async function gate(
   // Output of the last failed verify, kept for the human-facing summary.
   let lastVerifyFailure: string | undefined;
   let retries = 0;
+  // GITHUB-9 (REQ-agent-092): review rounds that handed findings back, apart
+  // from the AGENT-4.a verify retries.
+  let reviewRounds = 0;
   // Real-diff paths added to filesChanged so far (capped per run).
   let realDiffAdded = 0;
   // AGENT-15 (REQ-agent-085): tool-claimed paths git has not shown, so far.
@@ -775,6 +792,45 @@ async function gate(
           }
         }
       }
+      // GITHUB-9 (REQ-agent-092): a /work run's second-model review of the
+      // verified tree, in bounded rounds with their own counter (never the
+      // AGENT-4.a retries). Findings go back to the model as the next
+      // attempt's feedback, and that attempt is verified again first.
+      let review: TaskReview | undefined;
+      if (opts.review) {
+        emit(onEvent, {
+          type: "Text",
+          text: "Second-model review (GITHUB-9): a second model reviews the verified diff before the PR…",
+        });
+        let step: ReviewHookResult;
+        try {
+          step = await opts.review.run({ signal });
+        } catch {
+          step = { kind: "refused", reason: REVIEW_HOOK_FAILED_REASON };
+        }
+        if (isAborted(signal)) {
+          return cancelledResult(summary, filesChanged, attempts);
+        }
+        if (step.kind === "ask") {
+          // SAFE-8: the review call stopped at a spend cap — blocked on its ask.
+          setState(onEvent, "blocked");
+          return blockedTaskResult({ summary: step.summary, filesChanged, ask: step.ask }, attempts);
+        }
+        if (step.kind === "findings" && reviewRounds >= opts.review.maxRounds - 1) {
+          step = { kind: "refused", reason: reviewOverRoundsReason(opts.review.maxRounds) };
+        }
+        if (step.kind === "findings") {
+          reviewRounds += 1;
+          emit(onEvent, { type: "Text", text: step.note });
+          verifyFeedback = step.feedback;
+          continue;
+        }
+        emit(onEvent, {
+          type: "Text",
+          text: step.kind === "finished" ? step.note : `Second-model review: no PR — ${step.reason}`,
+        });
+        review = step.kind === "finished" ? { state: "finished" } : { state: "refused", reason: step.reason };
+      }
       setState(onEvent, "done");
       return {
         summary,
@@ -784,6 +840,7 @@ async function gate(
         cancelled: false,
         state: "done",
         attempts,
+        ...(review ? { review } : {}),
       };
     }
 

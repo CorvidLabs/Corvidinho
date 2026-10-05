@@ -956,3 +956,33 @@ hi/ changed (REQ-plugins-521). 20 tests.
   plus the `github-pr-create` refusal); with the pre-review 82630d9
   `repo-ways.ts` and `loop.ts`, the hidden-edit and note-advice tests fail
   too. Restored: 20 of 20 pass.
+
+## /work runs its second-model review rounds before done (REQ-agent-092 modified; GITHUB-9, GITHUB-9.a)
+
+`tests/agent.loop.test.ts` ("runTask second-model review before the PR",
+5 tests, scripted hooks, no model): findings then finished → done and
+verified after 2 attempts, the lane run twice, attempt 2's `verifyFeedback`
+is the findings text, `review: {state: "finished"}`, with `maxRetries: 0`
+(the rounds are not verify retries); a refusal → done and verified with
+`review: {state: "refused", reason}` and the `Second-model review: no PR — …`
+Text; a hook that keeps raising findings is called 3 times and ends refused,
+a throwing hook ends refused; a spend-cap `ask` ends the run `blocked` with
+that ask; a run that changed nothing or whose verify failed never calls it.
+The file imports only modules the base has (the new types are erased).
+
+`tests/work.review.test.ts` ("/work: an owner or team run drives the review
+rounds", through `createTaskExecute` at code tier with `files-write`,
+`runTask` and `workReviewHook` in temp repos, scripted provider): round 1's
+finding reaches attempt 2 fenced as untrusted data, round 2 reviews the
+changed tree and raises nothing, `review` is finished; with one configured
+model the run is done with `review` refused for the GITHUB-9.a line and no
+reviewer call.
+
+Fail on base: with the stacked base's (387dada) `src/agent/loop.ts`,
+`src/agent/types.ts`, `src/agent/execute.ts`, `src/work/review.ts`,
+`src/work/pr.ts`, `src/work/pr-body.ts`, `src/cli.ts`,
+`src/discord/agent-client.ts` and `src/discord/types.ts` swapped in, 4 of the
+5 loop tests fail (no hook is called: one attempt, no `review`, the spend
+ask never blocks); the never-called guard passes on the base too.
+`tests/work.review.test.ts` cannot load (`workReviewApplies`,
+`workReviewHook` missing). Restored, all pass.
