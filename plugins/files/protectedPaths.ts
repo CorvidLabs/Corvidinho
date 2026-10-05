@@ -116,6 +116,26 @@ export function sddRecordRefuseMessage(path: string): string {
   );
 }
 
+/**
+ * AGENT-18 hi guard: true when a project-relative path is `hi/` or under it,
+ * where a hi repo keeps its acceptance criteria (case-insensitive, like the
+ * SAFE-2 names). Only the file tools' write, edit and delete check it, and
+ * only in a repo that uses hi (`refuseHi`, plugins/files/commands.ts).
+ */
+export function isHiPath(relPath: string): boolean {
+  const parts = pathParts(relPath.replace(/\\/g, "/"));
+  return parts[0]?.toLowerCase() === "hi";
+}
+
+export function hiRefuseMessage(path: string): string {
+  return (
+    `refused (AGENT-18): '${path}' is under hi/, where this repo keeps its acceptance criteria. ` +
+    `The agent never changes them itself: criteria change only through a capture the owner approves, ` +
+    `which no run can make yet, and any hi/ change keeps the run from being verified and /work from opening a PR. ` +
+    `Reading hi/ is fine; say in your reply what you think is missing or wrong.`
+  );
+}
+
 export function protectedRefuseMessage(path: string): string {
   return (
     `refused (SAFE-2): '${path}' is protected project infra ` +

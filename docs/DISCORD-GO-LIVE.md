@@ -277,7 +277,7 @@ inside that talk's own worktree, and in a local `corvidinho task run` inside the
 | `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere) without GitHub or git credentials (SAFE-21.a), and `plugins list` names any that are not loaded; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
 | `memory-forget` | true | 1 | true | the owner's chat should forget memories on request, or an operator runs `corvidinho plugins run memory-forget` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
 | `memory-override` | true | 1 | true | the owner's chat should correct memories on request, or an operator runs `corvidinho plugins run memory-override` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
-| `files-delete` | true | 2 | true | an operator runs `corvidinho plugins run files-delete` non-interactively (SAFE-2 protected paths always refused) |
+| `files-delete` | true | 2 | true | an operator runs `corvidinho plugins run files-delete` non-interactively (SAFE-2 protected paths always refused; in a repo that uses hi, everything under `hi/` too, AGENT-18) |
 | `github-issue-create` / `github-issue-comment` / `github-pr-review` | true | 1 | true | the owner's runs should open issues, comment or review PRs (GITHUB-1/3), or an operator runs `corvidinho plugins run <name>` non-interactively; team members' Discord runs get `github-issue-comment` and `github-pr-review` too, on GITHUB-6-allowlisted repos only (IDENTITY-10, E.6) |
 | `discord-post-message` | true | 1 | true | an operator runs `corvidinho plugins run discord-post-message` non-interactively to post to an allowlisted channel (DISCORD-5/8); in the owner's runs the model can post too, and only where the owner could post themselves (the DISCORD-8 check is for the acting user; needs Server Members Intent). Every post, the operator's included, first waits for the owner's OK on a DM Approve card (AUTONOMY-10.a; needs the bridge running and an owner configured) |
 | `discord-send-file` | true | 1 | true | the owner's runs should attach files and images (screenshots, logs, diffs, charts) to their replies (DISCORD-17); always in the conversation's own channel, which the bridge sets (no `--channel`), only where the owner could attach files themselves (DISCORD-8 with Attach Files; needs Server Members Intent), 8 MB and a png/jpeg/gif/webp + txt/log/md/diff/patch/json/csv allowlist, text secret-scrubbed, SAFE-2 protected and secret paths refused, see [`discord.md`](discord.md) Files and images in replies |
@@ -292,7 +292,17 @@ and in a hi repo an `acceptance_criteria` answer must cite captured hi ids, AGEN
 `council` (minTier 2, autonomous extras, E.5). `specsync-change-status` is read-only. The file tools
 still fill a change's `.md` artifacts, but refuse SpecSync's own records in its folder (the `*.json`
 directly in `.specsync/changes/<id>/`: state, approvals, review, verification), which only the
-`specsync change` commands write (SAFE-2, AGENT-18 / AGENT-18.a).
+`specsync change` commands write (SAFE-2, AGENT-18 / AGENT-18.a). In a repo that uses hi (a
+`hi/*.md` with `hi:` front matter), `files-write`, `files-edit` and `files-delete` refuse every
+path under `hi/` (`refused (AGENT-18): '<path>' is under hi/, …`; reads still work): the agent
+never changes a repo's criteria itself. Criteria change only through a capture the owner
+approves, and no run can make one yet, so any `hi/` change since the session base, however it
+was made, also keeps a run from being verified, `/work` from opening a PR, and the run's own
+`github-pr-create` from opening one (`refused (AGENT-18): … so this run opens no PR`). The
+session base is where the run's branch left the remote's default branch (HEAD at planning
+when there is none): a capture a person made with the `hi` CLI outside any run that is already
+there never blocks, but a `hi/` commit on the run's own branch that is not yet on the default
+branch counts whoever made it, since the run can't tell.
 
 `minTier` is the capability tier the model needs to see the tool: `1` = `tool`, `2` = `code`
 (`CORVIDINHO_LLM_TIER`). `mutating` = dangerous or explicitly marked mutating (ROLES-CHAT-5).
@@ -306,7 +316,8 @@ What an entry unlocks **today**:
   and the changes stay on the work branch. The PR step also needs verify to pass (with a test
   summary showing tests ran), no test deleted or turned off since the branch left its base
   (AGENT-15), in a repo whose SpecSync workflow requires a change for meaningful files every such
-  path changed on the branch covered by a SpecSync change (AGENT-18), the requester
+  path changed on the branch covered by a SpecSync change (AGENT-18), in a repo that uses hi
+  nothing under `hi/` changed on the branch or in the tree (AGENT-18 hi guard), the requester
   to be the owner or a declared team member (only they can start `/work`, IDENTITY-10/11.a),
   and the repo to pass GITHUB-6.
 - The model's tool catalog in `task run` (CLI-3 / SAFE-1). A dangerous tool is offered to the
@@ -365,7 +376,9 @@ What an entry unlocks **today**:
   configured model that did not write the change (no reviewer setting, GITHUB-9.a), in at most 3
   rounds, and the PR body lists what it raised and what changed. An agent run starts the rounds
   itself; `/work` and `plugins run` have no run model, so they open only a tree a run already had
-  reviewed (the `/work` round driver is a later change) and otherwise say why on one line.
+  reviewed (the `/work` round driver is a later change) and otherwise say why on one line. In a
+  repo that uses hi, a `github-pr-create` from inside a run is refused before any review while
+  `hi/` differs from the run's session base (AGENT-18 hi guard).
 
 ### E.3.a Web search through Brave: `web-search` (PLUGIN-7, PLUGIN-9)
 

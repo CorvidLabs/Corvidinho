@@ -182,7 +182,14 @@ bounded rounds, and the PR body lists what it raised and what changed
 is the first other configured model that did not write the change (no
 reviewer setting); an agent run starts the rounds, a caller with no run model
 opens only a tree whose review already finished, and no second model means no
-PR, with one line saying why.
+PR, with one line saying why. Before any of that, a `github-pr-create` called
+while a Corvidinho run is in progress in its cwd, in a repo that uses hi,
+refuses with exit 2 and `refused (AGENT-18): this repo's hi/ changed since the
+session base (…) …, so this run opens no PR; …` while anything under `hi/`
+differs from that run's session base (`hiPrRefusal`, the verify gate's own
+comparison; unreadable refuses too); with no run there (an operator's
+`plugins run`, the `/work` PR step) it does not apply (AGENT-18 hi guard,
+REQ-plugins-521).
 
 ## Public API
 
@@ -350,7 +357,16 @@ overwritten or deleted via file tools (SAFE-2); no in-band override. Inside
 an active change folder the file tools fill the `.md` artifacts but refuse
 SpecSync's own `*.json` records there (state, approvals, review,
 verification; `isSddRecordPath`), which only `specsync change` writes
-(AGENT-18 / AGENT-18.a, REQ-plugins-083). Memory plugins take the acting user and ADMIN
+(AGENT-18 / AGENT-18.a, REQ-plugins-083). In a repo that uses hi (a
+`hi/*.md` with `hi:` front matter in the run's session base, HEAD or the
+working tree, `repoWaysNow`), `files-write`, `files-edit` and `files-delete`
+also refuse every path under `hi/` (`isHiPath`, judged where the write lands
+with symlinks resolved and as given), exit 2 with one line
+(`hiRefuseMessage`: `refused (AGENT-18): '<path>' is under hi/, …`): the
+agent never changes a repo's criteria itself, since they change only through
+a capture the owner approves and no run can make one yet. Reads, and hi/ in a
+repo that does not use hi, are unaffected (AGENT-18 hi guard,
+REQ-plugins-520). Memory plugins take the acting user and ADMIN
 only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID` /
 `CORVIDINHO_ACTING_IS_ADMIN`), never argv — `--user` / `--admin` / `--db` are
 refused; ADMIN is re-checked in the handler (empty admin lists ⇒ nobody);
@@ -1168,6 +1184,18 @@ command line.
 - **When** `files-read` runs on that path
 - **Then** it returns `data.image` true with `mediaType` `image/png` and no `content`, and the file's bytes only on `result.image` (base64) for the tool loop
 
+### Scenario: file tools leave hi/ alone in a hi repo (AGENT-18)
+
+- **Given** a repo whose `hi/agent.md` has `hi:` front matter
+- **When** `files-write`, `files-edit` or `files-delete` targets `hi/agent.md`, a new file under `hi/`, or a symlink that lands there
+- **Then** each refuses with `refused (AGENT-18): '<path>' is under hi/, …` and the file is unchanged; `files-read hi/agent.md` still works, and in a repo whose `hi/` has no hi front matter the write goes through
+
+### Scenario: a run's own PR in a hi repo after a criterion changed (AGENT-18)
+
+- **Given** a run in progress in a repo whose `hi/agent.md` has `hi:` front matter, and a criterion committed there through the shell
+- **When** the model calls `github-pr-create`
+- **Then** it refuses with `refused (AGENT-18): this repo's hi/ changed since the session base (criteria …) …, so this run opens no PR` before any review; with no run in progress the hi guard does not apply
+
 ### Scenario: non-ADMIN refused files-write (ROLES-CHAT-3)
 
 - **Given** builtins loaded and `CORVIDINHO_ACTING_IS_ADMIN=0` with an acting Discord user
@@ -1212,6 +1240,8 @@ command line.
 | specsync-check, fledge on PATH but the project defines no `spec-check` task | Run local `specsync check` (no `Unknown task` failure) |
 | specsync-check, project `fledge.toml` unparsable | Keep `fledge run spec-check` (fail closed; Fledge reports the error) |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
+| Write/edit/delete under `hi/` in a repo that uses hi (as given, absolute, or through a symlink that lands there) | Refuse (exit 2, `refused (AGENT-18): '<path>' is under hi/, …`); file unchanged; reads unaffected (REQ-plugins-520) |
+| github-pr-create inside a run in a repo that uses hi, with anything under `hi/` changed since the run's session base (or unreadable) | Refuse (exit 2, `refused (AGENT-18): this repo's hi/ changed since the session base (…) … so this run opens no PR; …`) before the GitHub client and the GITHUB-9 review; no PR (REQ-plugins-521) |
 | shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, redirections, quoting incl. bash `$'…'`, `\`-newline, comments, here-docs, expanded command words, command substitutions, `eval` and shell `-c` strings, DIRSTACK) | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec cd/pushd left open by an unterminated quote or trailing `\`, or a command nested too deeply to check | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec runs a script (sourced, `BASH_ENV` / `--rcfile`, shell operand or input, here-doc / here-string, run by path) whose cd/pushd escapes, or a `trap` action that does, or defines an alias | Refuse (exit 2, SAFE-3) naming the script; no spawn |
@@ -1393,5 +1423,6 @@ and current rows for plugins host evolution.
 | 2026-10-01 | before-a-pr-opens-a-second-model-reviews-the-diff-in-bounded-rounds-and-the-pr-lists-what-it-raised-and-what-changed: Before a PR opens, a second model reviews the diff in bounded rounds, and the PR lists what it raised and what changed (GITHUB-9, GITHUB-9.a) |
 | 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |
 | 2026-10-01 | the-second-model-review-sees-an-edit-made-in-the-same-second-as-the-last-index-write-its-index-copy-keeps-the-real: The second-model review sees an edit made in the same second as the last index write: its index copy keeps the real index's time (GITHUB-9) |
+| 2026-10-01 | in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent: In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard) |
 | 2026-09-30 | web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered: Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap |
 | 2026-10-01 | gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins: GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap |
