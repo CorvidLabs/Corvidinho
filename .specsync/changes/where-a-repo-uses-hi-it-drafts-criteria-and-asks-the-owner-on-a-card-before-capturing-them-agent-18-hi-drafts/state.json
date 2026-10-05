@@ -7,10 +7,11 @@
   "title": "Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts)",
   "description": "Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts)",
   "kind": "feature",
-  "state": "draft",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "387dadab1f9bc11869a512e57dadd54a6e5cac6c",
   "created_at": 1791242976,
-  "updated_at": 1791244118,
+  "updated_at": 1791244397,
   "affected_specs": [
     "agent",
     "discord",
