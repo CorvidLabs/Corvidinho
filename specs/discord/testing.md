@@ -1616,6 +1616,23 @@ bridge writes the owner's image under
 and keeps another person's URL-only. Fail on base (cf7f61b, shims for the new
 exports): 7 of 8 fail; the scoped-folder case holds on both.
 `tests/scheduler.owner-role.test.ts` keeps the owner schedule's scoped folder.
+
+## /work opens no PR while hi/ differs from the merge-base (REQ-discord-520, AGENT-18 hi guard)
+
+`tests/agent.hi-guard.test.ts` with a temp repo, a bare `origin` and a talk
+worktree from `ensureTalkWorkspace`, `openWorkPr` with stub plugin calls: a
+leftover dirty hi/ edit with a verified run is refused with reason
+`hi-changed` naming `criteria AGENT-19`, nothing committed or pushed; a hi/
+note committed on the branch with no result frame (the fallback re-verify
+path) is refused before the lane runs (the stub verify runner is never
+called); a `/work` run whose `files-edit` of hi/ is refused and whose shell
+edit gets through ends `failed`, opens no PR, and the tree it left is
+refused even with a trusted verified result; once hi/ is restored the next
+run in the talk is verified and the PR opens (`git-commit`, `git-push`,
+`github-pr-create`).
+- Fail on base (b84c75f's `src/work/pr.ts` and `src/agent/loop.ts` swapped
+  in): the three /work cases fail (the PR opens, or the run is verified);
+  restored they pass.
 REQ-discord-417 (#318): `BRAVE_SEARCH_API_KEY` is on the SAFE-6 secret env
 list — `redactSecretEnvValues` and `formatErrorLine` replace its value with
 `[redacted:env-secret]` (`tests/web.search.test.ts`).
