@@ -10,7 +10,7 @@
 | Allowlists | **Default-deny** (empty = refuse). File + env on bot VM; a file that cannot be parsed refuses start (fail closed, #203). See below. |
 | Fledge | `fledge.toml` verify lane: lint + smoke + test + **spec-check** (Merlin pattern) |
 | SpecSync | Agent tools `specsync-list/read/check/brief/coverage/score/change-list/ship-status` + plan-time briefing; local `spec-check` at CI strictness (`--require-coverage 100`); SDD ON; CI Spec Sync Action still dedicated |
-| Trust / Augur / Attest | **Not** wired — do not re-add Trust thrash on this bootstrap |
+| Trust / Augur / Attest | **Not used in Corvidinho's own repo** (no `.trust.toml`; AGENTS.md "No Trust re-add on this bootstrap"). Followed where a repo has it (AGENT-18, #89): with a `.trust.toml` in the session base, HEAD or the working tree, the verify gate runs `fledge trust verify` after `fledge lanes run verify` and both must pass; a fledge with no `trust` command fails the verify closed with the exact reason; `.trust.toml` is SAFE-2 protected |
 | Merge policy | Merge when verify + SpecSync change cycle are green (Leif/CoS standing order) |
 | Box update | `scripts/corvidinho-update.sh` + `docs/BOX-UPDATE.md` / `docs/UPDATE.md` — pidfile ready-wait + rollback; no Discord panic spam |
 | Brave web-search + GIPHY gif-search (0.0.40) | #318 → [#326](https://github.com/CorvidLabs/Corvidinho/pull/326) [#331](https://github.com/CorvidLabs/Corvidinho/pull/331) | PLUGIN-7/8/9: `web-search` (Brave) and `gif-search` (GIPHY, medium filter, link-only) for owner and team when allowlisted; package **0.0.40** |

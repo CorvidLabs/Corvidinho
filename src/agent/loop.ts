@@ -182,7 +182,9 @@ async function runLane(
 /**
  * Run one task through planning → executing → verifying → done|failed.
  * Verifying is skipped only when the run changed nothing (AGENT-14).
- * Does not invent Trust/attest. Injectable execute + verifyRunner for tests.
+ * Trust only where the repo has `.trust.toml` (the default verify runner then
+ * also runs `fledge trust verify`, AGENT-18). Injectable execute +
+ * verifyRunner for tests.
  */
 export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
   let workspace: WorkspaceDiffTracker | null = null;
@@ -660,7 +662,9 @@ async function gate(
     } else {
       emit(onEvent, {
         type: "Text",
-        text: "Running fledge lanes run verify --non-interactive (includes spec-check)…",
+        text: repoWays.trust
+          ? "Running fledge lanes run verify --non-interactive (includes spec-check), then fledge trust verify (.trust.toml)…"
+          : "Running fledge lanes run verify --non-interactive (includes spec-check)…",
       });
 
       if (isAborted(signal)) {

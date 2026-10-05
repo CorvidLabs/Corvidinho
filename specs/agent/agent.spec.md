@@ -72,6 +72,7 @@ files:
   - tests/agent.safe3a-gate.test.ts
   - tests/agent.safe3a-owner-shell.test.ts
   - tests/agent.repo-ways.test.ts
+  - tests/agent.trust-verify.test.ts
   - src/agent/limits.ts
   - tests/agent.limits.test.ts
 
@@ -581,6 +582,19 @@ carries a `stuck` ask. Additive on the NDJSON wire: protocol stays 2.
 Verify runner env (REQ-agent-002, SAFE-6): `src/agent/verify.ts` exports
 `isVerifyEnvDropped` and `buildVerifyEnv`; `defaultVerifyRunner` spawns fledge
 with `buildVerifyEnv()`.
+
+Trust where the repo uses Trust (AGENT-18, REQ-agent-525): `src/agent/verify.ts`
+also exports `TRUST_VERIFY_ARGS` (`--non-interactive trust verify`),
+`TRUST_PROBE_ARGS` (`--non-interactive trust --help`),
+`trustUnavailableReason(detail)` and `TRUST_PASSED_LINE`;
+`src/agent/repo-ways.ts` exports `usesTrust(cwd)` (the run's start scan, else
+`detectRepoWays` now with the run's base or `repoWaysBase`). When it is true,
+`defaultVerifyRunner` probes `fledge trust` (a non-zero exit fails closed with
+the exact reason before the lane), runs the lane, and only after a passing
+lane runs `fledge trust verify`; both must exit 0. Each step uses the lane's
+env, process group, idle-watchdog pipe reading and abort handling. A repo
+without `.trust.toml` runs the lane alone as before. Corvidinho's own repo
+has no `.trust.toml`. No env var, config key, flag or schema.
 
 Verify retry feedback (REQ-agent-002, AGENT-4.a): `src/agent/verify.ts` also
 exports `VERIFY_FEEDBACK_MAX_CHARS` (4000) and `verifyFeedbackExcerpt(output,

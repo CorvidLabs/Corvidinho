@@ -1,6 +1,8 @@
 /**
  * Default verify runner: fledge lanes run verify --non-interactive (FLEDGE-2/3),
- * and the excerpt of its output a retry sends the model (AGENT-4.a).
+ * then, in a repo that uses Trust (`.trust.toml`), `fledge trust verify`
+ * (AGENT-18); and the excerpt of its output a retry sends the model
+ * (AGENT-4.a).
  */
 
 import { isWorkerEnvDropped } from "../autonomous/delegate.ts";
@@ -11,6 +13,7 @@ import {
   type ProcEntry,
 } from "../plugins/proc-group.ts";
 import { noteIdleActivity } from "./limits.ts";
+import { usesTrust } from "./repo-ways.ts";
 import type { VerifyResult, VerifyRunner } from "./types.ts";
 
 export const VERIFY_ARGS = [
@@ -19,6 +22,35 @@ export const VERIFY_ARGS = [
   "verify",
   "--non-interactive",
 ] as const;
+
+/**
+ * AGENT-18 (Trust clause): `fledge trust verify`, run after the verify lane
+ * passes in a repo that uses Trust; fledge's own `--non-interactive` comes
+ * first, so no prompt can wait on a run.
+ */
+export const TRUST_VERIFY_ARGS = ["--non-interactive", "trust", "verify"] as const;
+
+/** Whether `fledge trust` is there at all (exit 0), asked before the lane runs. */
+export const TRUST_PROBE_ARGS = ["--non-interactive", "trust", "--help"] as const;
+
+/** Characters of the probe's first output line kept in the unavailable reason. */
+const TRUST_PROBE_LINE_MAX = 200;
+
+/**
+ * AGENT-18: the exact reason a Trust repo's verify fails closed when this
+ * fledge has no `trust` command (fledge 1.8.0 has none built in; Trust ships
+ * as a fledge plugin). `detail` is the probe's exit and first output line.
+ */
+export function trustUnavailableReason(detail: string): string {
+  return (
+    "Trust gate: this repo uses Trust (.trust.toml), but `fledge trust` is not available here " +
+    `(${detail}), so \`fledge trust verify\` cannot run and the run is not verified (AGENT-18). ` +
+    "Nothing in the repo can fix this: the owner installs Trust for fledge on this machine."
+  );
+}
+
+/** The line a passing Trust step adds after the lane's output (AGENT-18). */
+export const TRUST_PASSED_LINE = "Trust gate: fledge trust verify passed (.trust.toml, AGENT-18).";
 
 /**
  * LLM provider keys: a worker needs them, the verify lane does not. Also the
@@ -90,18 +122,21 @@ async function readLanePipe(
   return text + decoder.decode();
 }
 
-export const defaultVerifyRunner: VerifyRunner = async (cwd, signal) => {
-  const fledge = Bun.which("fledge");
-  if (!fledge) {
-    return {
-      success: false,
-      output: "fledge not on PATH — cannot run verify lane",
-    };
-  }
-  if (signal?.aborted) {
-    return { success: false, output: "verify lane aborted before start" };
-  }
-  const proc = Bun.spawn([fledge, ...VERIFY_ARGS], {
+/** One fledge run's exit code and output; null when it was aborted. */
+type FledgeRun = { code: number; output: string } | null;
+
+/**
+ * Spawn `fledge <args>` in `cwd` with the verify env (SAFE-6) in its own
+ * process group, reading its pipes as it writes them (AGENT-12); an abort
+ * kills its process tree (AGENT-3) and gives null.
+ */
+async function runFledgeStep(
+  fledge: string,
+  args: readonly string[],
+  cwd: string,
+  signal?: AbortSignal,
+): Promise<FledgeRun> {
+  const proc = Bun.spawn([fledge, ...args], {
     cwd,
     env: buildVerifyEnv(),
     stdout: "pipe",
@@ -142,16 +177,80 @@ export const defaultVerifyRunner: VerifyRunner = async (cwd, signal) => {
   try {
     const code = await exited;
     const out = await Promise.race([read, gaveUp]);
-    if (out === null) {
-      return { success: false, output: "verify lane aborted" };
-    }
+    if (out === null) return null;
     const [stdout, stderr] = out;
-    return { success: code === 0, output: `${stdout}${stderr}` };
+    return { code, output: `${stdout}${stderr}` };
   } finally {
     if (graceTimer) clearTimeout(graceTimer);
     signal?.removeEventListener("abort", onAbort);
     untrack();
   }
+}
+
+/** The probe's exit code and first output line, for the unavailable reason. */
+function probeDetail(run: { code: number; output: string }): string {
+  const first = run.output
+    .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, "")
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => l.length > 0);
+  const line = first
+    ? first.length > TRUST_PROBE_LINE_MAX
+      ? `${first.slice(0, TRUST_PROBE_LINE_MAX - 1)}…`
+      : first
+    : "";
+  return `\`fledge trust --help\` exited ${run.code}${line ? `: ${line}` : ""}`;
+}
+
+export const defaultVerifyRunner: VerifyRunner = async (cwd, signal) => {
+  const fledge = Bun.which("fledge");
+  if (!fledge) {
+    return {
+      success: false,
+      output: "fledge not on PATH — cannot run verify lane",
+    };
+  }
+  if (signal?.aborted) {
+    return { success: false, output: "verify lane aborted before start" };
+  }
+  // AGENT-18 (Trust clause): a repo that uses Trust (`.trust.toml` in the
+  // run's session base, HEAD or the working tree) is verified only when the
+  // lane and then `fledge trust verify` both pass. A fledge with no `trust`
+  // command fails closed with the exact reason before the lane runs. A repo
+  // without `.trust.toml` runs the lane alone, as before.
+  const trust = await usesTrust(cwd);
+  if (trust) {
+    const probe = await runFledgeStep(fledge, TRUST_PROBE_ARGS, cwd, signal);
+    if (probe === null) return { success: false, output: "verify lane aborted" };
+    if (probe.code !== 0) {
+      return { success: false, output: trustUnavailableReason(probeDetail(probe)) };
+    }
+  }
+  const lane = await runFledgeStep(fledge, VERIFY_ARGS, cwd, signal);
+  if (lane === null) {
+    return { success: false, output: "verify lane aborted" };
+  }
+  if (lane.code !== 0 || !trust) {
+    return { success: lane.code === 0, output: lane.output };
+  }
+  const trustRun = await runFledgeStep(fledge, TRUST_VERIFY_ARGS, cwd, signal);
+  if (trustRun === null) {
+    return { success: false, output: "verify lane aborted" };
+  }
+  if (trustRun.code !== 0) {
+    // The lane passed; the Trust step's own output is the failure the model
+    // and the summary need, so it alone follows the one-line head.
+    return {
+      success: false,
+      output:
+        `Trust gate: fledge lanes run verify passed, but fledge trust verify failed (exit ${trustRun.code}), ` +
+        `so the run is not verified (.trust.toml, AGENT-18).\n${trustRun.output}`,
+    };
+  }
+  // Only the lane's own output is judged for test evidence (AGENT-15): the
+  // Trust step adds one line, not a second copy of the lane's test summary.
+  const sep = lane.output.length === 0 || lane.output.endsWith("\n") ? "" : "\n";
+  return { success: true, output: `${lane.output}${sep}${TRUST_PASSED_LINE}\n` };
 };
 
 /**

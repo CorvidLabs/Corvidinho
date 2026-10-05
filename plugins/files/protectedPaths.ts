@@ -80,6 +80,9 @@ export function isProtectedPath(filePath: string, root?: string): boolean {
 
   const baseLower = basename(normalized).toLowerCase();
   if (baseLower === "fledge.toml") return true;
+  // Trust config: in a repo that has it the verify gate also runs `fledge
+  // trust verify`, so a run must not rewrite or delete it (AGENT-18).
+  if (baseLower === ".trust.toml") return true;
   // Bun runtime config: a planted `preload` runs code in every spawned agent.
   if (baseLower === "bunfig.toml" || baseLower === ".bunfig.toml") return true;
   if (baseLower.endsWith(".spec.md")) return true;
@@ -119,7 +122,7 @@ export function sddRecordRefuseMessage(path: string): string {
 export function protectedRefuseMessage(path: string): string {
   return (
     `refused (SAFE-2): '${path}' is protected project infra ` +
-    `(.env* / .git / fledge.toml / .fledge / bunfig.toml / specs / *.spec.md / .specsync / keystores). ` +
+    `(.env* / .git / fledge.toml / .fledge / .trust.toml / bunfig.toml / specs / *.spec.md / .specsync / keystores). ` +
     `There is NO override — edit via SpecSync or outside the agent file tools.`
   );
 }

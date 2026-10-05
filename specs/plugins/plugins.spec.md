@@ -342,7 +342,9 @@ CORVIDINHO_GITHUB_DRY_RUN=1. File write/edit/delete require minTier 2 (code);
 `files-delete` is dangerous. Paths clamp to plugin cwd; symlink escapes refuse;
 a dangling symlink is followed by hand and its target clamped (loops refuse).
 Protected infra (`.env*`, `.git`, `fledge.toml`, `.fledge/**` (lane imports
-the verify gate runs, SAFE-2.a), `bunfig.toml`,
+the verify gate runs, SAFE-2.a), `.trust.toml` (the Trust config a Trust
+repo's verify gate runs `fledge trust verify` for, AGENT-18,
+REQ-plugins-525), `bunfig.toml`,
 `specs/**` / `*.spec.md`, `.specsync/` state outside the files of an active
 `.specsync/changes/<id>/` folder, and any keystore file or directory inside
 the project; a change folder's slug name is not a keystore) cannot be
