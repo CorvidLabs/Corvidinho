@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "missing-plugin-asks-soft-land-with-the-real-gap",
+  "slug": "missing-plugin-asks-soft-land-with-the-real-gap",
+  "title": "Missing-plugin asks soft-land with the real gap",
+  "description": "Missing-plugin asks soft-land with the real gap",
+  "kind": "feature",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "a93c60a64b8ffbd54f2ea345a76dcd1bfa7eabf5",
+  "created_at": 1791045522,
+  "updated_at": 1791046844,
+  "affected_specs": [
+    "agent"
+  ],
+  "affected_paths": [
+    "src/agent/missing-capability.ts",
+    "src/agent/execute.ts",
+    "src/agent/ask.ts",
+    "tests/agent.missing-capability.test.ts",
+    "specs/agent",
+    "tests/discord.failed-reply.test.ts",
+    "tests/watch.failed-comment.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "An ask that names a plugin or tool which is not installed, not allowlisted, or missing its configured key gets a concrete reply stating that gap, and cites a captured HI id or an open PR number only when that id or PR is actually present. It does not invent a provider such as Tenor and does not ask a generic install question when the message already names the plugin. A community session is not given mutating tools. When the named capability is already offered, the run is not replaced by that reply."
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

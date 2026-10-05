@@ -643,14 +643,15 @@ process started with. The preload SHALL also unset the run and operator
 settings that change test outcomes on the bot box, so the suite runs as it
 does on CI: `CORVIDINHO_NON_INTERACTIVE` and `FLEDGE_NON_INTERACTIVE` (every
 Discord, WATCH and daemon task run sets the first, and its verify lane runs
-the suite), `CORVIDINHO_DAILY_SPEND_CAP_USD` and
-`CORVIDINHO_PROVIDER_SPEND_CAPS_USD` (SAFE-14), the LLM API keys
+the suite), `CORVIDINHO_DAILY_SPEND_CAP_USD`, the LLM API keys
 `CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` (so `bun
 test` never sends a real model call), the operator's model config
 `CORVIDINHO_LLM_MODEL`, `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`,
 `CORVIDINHO_LLM_BASE_URL`, `CORVIDINHO_LLM_TIER` and `OLLAMA_HOST` (a keyless
 `ollama:` model would call a local server, and the no-provider tests expect
-no model; tests configure a fake provider themselves, AGENT-13), and `CORVIDINHO_DISCORD_SESSION_ID` (a scheduled run's
+no model; tests configure a fake provider themselves, AGENT-13), `BRAVE_SEARCH_API_KEY` (so it never sends a real, paid web
+search, PLUGIN-7), `GIPHY_API_KEY` (so it never sends a real GIF search,
+PLUGIN-8), and `CORVIDINHO_DISCORD_SESSION_ID` (a scheduled run's
 `schedule_*` id narrows the GitHub gate, DISCORD-SCHEDULE-3.a, and its verify
 lane inherits it). No new env var, config key or command.
 
@@ -659,7 +660,7 @@ Acceptance Criteria
 - An operator DB that already holds an audit chain keeps the same row count and last hash after the child run, and no test row is keyed with the operator's key.
 - A CLI or shell a test spawns without an explicit `env` (`Bun.spawn(argv)`, `Bun.spawn({ cmd })`, `Bun.spawnSync(argv)`) resolves the preload's data dir and sees no audit key, WATCH spawn log or worktree base override.
 - Full `bun test` with those operator vars set passes and leaves the operator data dir empty.
-- With `CORVIDINHO_NON_INTERACTIVE`, `FLEDGE_NON_INTERACTIVE`, `CORVIDINHO_DAILY_SPEND_CAP_USD`, `CORVIDINHO_PROVIDER_SPEND_CAPS_USD`, `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY` and a `schedule_*` `CORVIDINHO_DISCORD_SESSION_ID` set, a child `bun test` sees none of them: it is not non-interactive and has no LLM API key; full `bun test` with them set passes.
+- With `CORVIDINHO_NON_INTERACTIVE`, `FLEDGE_NON_INTERACTIVE`, `CORVIDINHO_DAILY_SPEND_CAP_USD`, `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `BRAVE_SEARCH_API_KEY`, `GIPHY_API_KEY` and a `schedule_*` `CORVIDINHO_DISCORD_SESSION_ID` set, a child `bun test` sees none of them: it is not non-interactive and has no LLM API key; full `bun test` with them set passes.
 - With `ANTHROPIC_API_KEY`, `OLLAMA_HOST`, `CORVIDINHO_LLM_MODEL`, `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`, `CORVIDINHO_LLM_BASE_URL` and `CORVIDINHO_LLM_TIER` set too, a child `bun test` sees none of them and has no usable model provider.
 
 ### REQ-cli-419
@@ -1290,6 +1291,15 @@ Acceptance Criteria
 - CLI `version` prints `0.0.38`.
 - CHANGELOG has a 0.0.38 section that the updater's changelog helper extracts exactly.
 
+### REQ-cli-431
+
+The project SHALL ship package version `0.0.39` (PR second-model review, idle and turn caps, CLI shell in worktree, public-thread approve cards, plain worker and WATCH failure lines). CLI `version` and Discord presence (DISCORD-12) report `0.0.39` after a restart. CHANGELOG SHALL include verbose 0.0.39 notes.
+
+Acceptance Criteria
+- `package.json` version is `0.0.39`.
+- CLI `version` prints `0.0.39`.
+- CHANGELOG has a 0.0.39 section that the updater's changelog helper extracts exactly.
+
 ### REQ-cli-681
 
 My local CLI task run may use the allowlisted shell and runners inside its
@@ -1356,6 +1366,24 @@ Acceptance Criteria
 - Through `createTaskExecute` with `talkWorktree`: `shell-exec` and `fledge-run` are offered at code tier and `shell-exec` runs in the worktree (not the checkout), with no SAFE-3.a line and `unreportedEditTools: ["shell-exec"]`, on attempt 2 too; the checkout, a non-git folder and a subdirectory are not offered either over two attempts, both calls refused as not offered, exactly one SAFE-3.a line, none in the summaries; `kubectl get pods; touch ran.marker` raises one `mustask` destructive card, which nobody answers, so the call fails with the lapse reason, nothing runs and the wait line says no answer means no.
 - The real CLI against a localhost fake model: by default `shell-exec` is offered and runs in the kept worktree, not the checkout, exit 0; `--here` (text) prints exactly one SAFE-3.a line on stderr and offers none; a non-git folder (`--json`) has exactly one SAFE-3.a `Text` event and offers none.
 - With the base's sources the file cannot load; with `isCliRunWorktree` and `TOOL_CHILD_ENV` stubbed in, 11 of 12 fail (the role-session guard passes there too); with the gate as it was before the tool-child refusal, the two cases holding tool-child rows fail (granted); all pass on the branch.
+
+### REQ-cli-432
+
+The project SHALL ship package version `0.0.40` (Brave web-search and GIPHY gif-search for owner and team, PLUGIN-7/8/9). CLI `version` and Discord presence (DISCORD-12) report `0.0.40` after a restart. CHANGELOG SHALL include verbose 0.0.40 notes covering #326 and #331.
+
+Acceptance Criteria
+- `package.json` version is `0.0.40`.
+- CLI `version` prints `0.0.40`.
+- CHANGELOG has a 0.0.40 section that the updater's changelog helper extracts exactly.
+
+### REQ-cli-433
+
+The project SHALL ship package version `0.0.41` (missing-plugin soft-land with the real gap, #360). CLI `version` and Discord presence (DISCORD-12) report `0.0.41` after a restart. CHANGELOG SHALL include verbose 0.0.41 notes covering #360 (real gap, no vague clarify, no invented Tenor, HI/PR cited only when lookup returns it, community stays read/chat) and noting that the #358 fledge-gif prefer path is already on the previous tip and dogfood still needs GIPHY_API_KEY.
+
+Acceptance Criteria
+- `package.json` version is `0.0.41`.
+- CLI `version` prints `0.0.41`.
+- CHANGELOG has a 0.0.41 section that the updater's changelog helper extracts exactly.
 
 ### REQ-cli-092
 

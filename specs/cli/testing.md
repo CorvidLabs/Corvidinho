@@ -271,6 +271,14 @@ hung lane → exit 1, `failed` frame with `stopReason` / `error`, lane killed;
 `--help` and `.env.example` name both keys. Fail on base: all four (8
 requests and no line; no note; the lane still running at the 60 s timeout;
 no help lines).
+REQ-cli-262 (#318): `tests/preload.operator-data-dir.test.ts` also starts the
+child `bun test` of `tests/fixtures/preload-probe.ts` with
+`BRAVE_SEARCH_API_KEY` set; the probe's run-settings list includes it and the
+child sees none of them, so the suite never sends a real, paid web search.
+
+REQ-cli-262 (#318 slice B): the same child `bun test` also starts with
+`GIPHY_API_KEY` set; the probe's run-settings list includes it and the child
+sees none of them, so the suite never sends a real GIF search.
 
 ## task run wires the /work review hook (REQ-cli-092; GITHUB-9)
 

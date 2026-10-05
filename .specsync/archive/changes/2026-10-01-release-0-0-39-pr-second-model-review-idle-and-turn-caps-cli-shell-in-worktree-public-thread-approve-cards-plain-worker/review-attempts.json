@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "release-0-0-39-pr-second-model-review-idle-and-turn-caps-cli-shell-in-worktree-public-thread-approve-cards-plain-worker",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "32e5ee736e03837e4682ec8ff1513c19786cee5e",
+      "contract_digest": "6a3eeca97bd6c3036250665e24de42a631bf1f3cfcc6937e4f25f9789118096a",
+      "execution_digest": "0260e893aba861d618df38d800338f1e8da07f87cec86da108c7157714016348",
+      "workspace_digest": "6ef09b124d98e149916b69f9912f60f2f2f9d6ff245e622840fabb43363d320c",
+      "timestamp": 1790867835
+    }
+  ]
+}

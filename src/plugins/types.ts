@@ -5,6 +5,7 @@
 
 import type { ModelFailure, ResolvedProvider } from "../agent/providers.ts";
 import type { CapabilityTier } from "../agent/tier.ts";
+import type { HumanAsk } from "../agent/types.ts";
 
 /** One message of the second-model review's no-tools chat call (GITHUB-9). */
 export type ReviewMessage = { role: "system" | "user"; content: string };
@@ -99,6 +100,14 @@ export type PluginHandlerResult = {
    * (AGENT-17).
    */
   reviewHold?: "findings" | "refused";
+  /**
+   * SAFE-8 (REQ-agent-098): a flat-priced call (`web-search`, `gif-search`) stopped at the
+   * daily spend cap before it was sent. The tool loop ends the attempt with
+   * this `spend-cap` ask, as for a model call stopped at the cap; kept off
+   * `data` and `message` so amounts and cap settings never reach the model
+   * or a public reply (SAFE-14.a).
+   */
+  spendAsk?: HumanAsk;
 };
 
 /**

@@ -9,8 +9,10 @@
  * part. The text is secret-scrubbed before it is split (SAFE-6), so a cut
  * never leaves half a secret in a shape the scrubber misses. Embeds are used
  * only where they read better than plain text, and never for code: a long
- * answer that is plain prose (no code fence, no user or role mention) and
- * fits one embed goes out as one embed instead of two split messages.
+ * answer that is plain prose (no code fence, no user or role mention, no
+ * GIPHY media link) and fits one embed goes out as one embed instead of two
+ * split messages. A GIF a run posts as a link (PLUGIN-8) only shows when
+ * Discord unfurls it, and a link inside an embed is never unfurled.
  *
  * DISCORD-15 / DISCORD-15.a: the answer's footer (model, tokens, cost, time)
  * rides the last part. `answerModelFor` names the model that answered, with
@@ -23,6 +25,7 @@
  * `/session start`; WATCH comments and schedule posts keep their own caps.
  */
 
+import { hasGiphyMediaLink } from "../../plugins/gif/hosts.ts";
 import { answeredModelLabel, modelIdOfLabel } from "../agent/providers.ts";
 import { costMicroUsd, priceForModel } from "../agent/spend.ts";
 import { clipKeepingRoleNote, closingNotesTail } from "../agent/task-summary.ts";
@@ -171,9 +174,10 @@ function splitBody(text: string, max: number): string[] {
 /**
  * DISCORD-16 — split an answer at Discord's 2000-character limit without
  * breaking code fences. Text within `max` comes back as is (one part). The
- * closing notes — the AGENT-11 model fallback note and the ROLES-CHAT-3 role
- * note — stay whole in the last part. Callers scrub first (SAFE-6);
- * `planAnswerParts` does.
+ * closing notes — the AGENT-11 model fallback note, the REQ-agent-318
+ * attribution line ("Search by Brave") and the ROLES-CHAT-3 role note — stay
+ * whole in the last part. Callers scrub first (SAFE-6); `planAnswerParts`
+ * does.
  */
 export function splitDiscordMessage(text: string, max = DISCORD_MESSAGE_MAX): string[] {
   if (text.length <= max) return [text];
@@ -191,15 +195,17 @@ export function splitDiscordMessage(text: string, max = DISCORD_MESSAGE_MAX): st
 /**
  * DISCORD-16 — whether a long answer reads better as one embed than as split
  * messages: plain prose over one message that fits one embed, with no code
- * fence (never code in an embed) and no user or role mention (a mention in an
- * embed does not notify).
+ * fence (never code in an embed), no user or role mention (a mention in an
+ * embed does not notify) and no GIPHY media link (PLUGIN-8: a GIF posted as a
+ * link shows only when Discord unfurls it, which it never does in an embed).
  */
 export function readsBetterAsEmbed(text: string): boolean {
   return (
     text.length > DISCORD_MESSAGE_MAX &&
     text.length <= DISCORD_EMBED_DESCRIPTION_MAX &&
     !text.includes(FENCE) &&
-    !/<@[!&]?\d+>/.test(text)
+    !/<@[!&]?\d+>/.test(text) &&
+    !hasGiphyMediaLink(text)
   );
 }
 
