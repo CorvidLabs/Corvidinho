@@ -7,10 +7,11 @@
   "title": "/work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9)",
   "description": "/work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9)",
   "kind": "feature",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "387dadab1f9bc11869a512e57dadd54a6e5cac6c",
   "created_at": 1791243268,
-  "updated_at": 1791243884,
+  "updated_at": 1791243907,
   "affected_specs": [
     "agent",
     "cli",

@@ -1357,3 +1357,23 @@ Acceptance Criteria
 - The real CLI against a localhost fake model: by default `shell-exec` is offered and runs in the kept worktree, not the checkout, exit 0; `--here` (text) prints exactly one SAFE-3.a line on stderr and offers none; a non-git folder (`--json`) has exactly one SAFE-3.a `Text` event and offers none.
 - With the base's sources the file cannot load; with `isCliRunWorktree` and `TOOL_CHILD_ENV` stubbed in, 11 of 12 fail (the role-session guard passes there too); with the gate as it was before the tool-child refusal, the two cases holding tool-child rows fail (granted); all pass on the branch.
 
+### REQ-cli-092
+
+Before the PR, a second model reviews the diff in bounded rounds, and the PR
+lists what it raised and what changed (GITHUB-9); with no second model
+there's no PR and the reply says why (GITHUB-9.a). `task run` SHALL pass
+`runTask` the `/work` review hook (`workReviewHook` over
+`createTaskExecute`'s `review` and `takeSpendAsk`, REQ-agent-092 /
+REQ-plugins-092) exactly when `workReviewApplies(env, allowlist)`: the run's
+surface stamp is `work` (`CORVIDINHO_ACTING_SURFACE`), the /work bit is set
+(`CORVIDINHO_ACTING_WORK_TASK`), the role cap is owner or team
+(`actingRoleCap`, `CORVIDINHO_ACTING_ROLE`), it is no `delegate` or
+`council` worker (delegation depth 0), and the plugin allowlist has
+`git-push` and `github-pr-create` (GITHUB-5), so no review is spent on a PR
+that cannot open. Every other run — chat, `/session`, schedules, WATCH, a
+local `task run`, workers — gets no hook. No new flag, env var or config
+key.
+
+Acceptance Criteria
+- `workReviewApplies` is true for an owner and a team `/work` stamp with both plugins allowlisted, and false for community, another surface, no /work bit, a worker (`CORVIDINHO_DELEGATE_DEPTH=1`), no stamps, or either plugin missing from the allowlist.
+

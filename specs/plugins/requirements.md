@@ -1992,6 +1992,26 @@ first. It SHALL open a PR only for a tree with a finished review cycle:
   /work PR step, REQ-discord-088): no round SHALL start; the PR opens only
   when the latest cycle for (repo, head) ended on the exact tree of the
   branch on GitHub.
+- **`/work`** (REQ-agent-092, REQ-cli-092, REQ-discord-088): the run's
+  review hook (`workReviewHook`, `maxRounds` 3) SHALL run the same review
+  step as the gate with a run model (`reviewStep`: the same reviewer,
+  rounds, declined and max-rounds ends and `pr_review_rounds` records) on
+  the tree `/work` will commit — `reviewTree(root, {untracked: true})`
+  stages with `git add --all` into the index copy, so untracked,
+  non-ignored files count (a secret-looking one's content is still never
+  sent) — keyed by the (repo, branch) its PR opens on (`workReviewTarget`:
+  the OWNER/REPO of `origin`'s push URL, the branch checked out, the base
+  from `resolveBase`; no branch, repo or base refuses in one line), with the
+  fixed title `Corvidinho /work task` (the run's task text, which carries
+  identity and memory blocks, is not sent). A round with findings SHALL come
+  back as the next attempt's feedback (`workReviewFeedback`: what to do —
+  change the tree, or leave it to decline — then the findings numbered in an
+  untrusted-data fence, scrubbed, at most `WORK_REVIEW_FEEDBACK_MAX` (3800,
+  under the verify feedback cap) characters, later findings counted). A
+  `ReviewSpendStop` SHALL become the run's spend-cap ask
+  (`takeSpendAsk`), else a refusal; any other error is a refusal.
+  `workTreeReviewed(cwd, repo, branch)` SHALL be true only when the latest
+  cycle for (repo, branch) ended on exactly that tree (fail closed).
 
 Either way the branch on GitHub SHALL be the reviewed tree — read with
 `repos.getBranch` (an `owner:branch` head on that owner's same-named repo;
@@ -2037,6 +2057,8 @@ Acceptance Criteria
 - A review completion with no model failure (a spend-cap stop) makes `runPlugin` reject with `ReviewSpendStop` and records nothing.
 - Without a run model: no finished cycle, a finished cycle for another tree, or an open cycle refuse in one line; a finished cycle for the pushed tree opens with its findings listed. Live mode without a token fails before any review call.
 - `githubBranchTree` returns the head commit's tree, reads an `owner:branch` head on that owner's repo, and is null on a 404. `SCRUB_TARGETS` lists `pr_review_rounds` (`reviewer`; JSON `authors`, `findings`, `changed`) and `pr_change_authors` (`model`).
+- `/work` (temp repo, scripted provider, the real tool loop and verify gate): the untracked new file is in the reviewed diff, the reviewer gets `Title: Corvidinho /work task` and not the task text, the rounds are stored (round 1 open with its finding, round 2 `clean` with `M  src/greet.ts` changed), `workTreeReviewed` is true, and the /work PR opens with the section; a finished review of an earlier tree is not this tree's.
+- `workReviewFeedback` stays within 3800 characters (under the 4000 verify feedback cap) with its fence whole and later findings counted; a spend-cap stop gives the hook's `ask` when the run left one, else a refusal, and records nothing.
 
 ### REQ-plugins-125
 
