@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent",
+  "implementation_commit": "3d3d5a52a6510930df1fe834e6ae5f7fd9180a86",
+  "implementation_tree": "273994cdc86657ae8329561452ac3f6d1066d27b",
+  "contract_digest": "ce324a8c28c2b79ff0de40b8caa0d92449da62782dd0c9fb20d205c64e05343a",
+  "workspace_digest": "ada611d325e547a341e8fee6aace74d2f4d8f4cde5ca0a711c761de712a6407c",
+  "closing_digest": "8b8493f7215ff2ceb76051ca0e61d782ae0b484f30f84652b27dddc3b611f384",
+  "review_digest": "1045d1b0767bb5b5be4f9b9bd7dac798362d1aec0edae2b0485f0439b60a1c90",
+  "finalization_digest": "300488629666d9eac797f4fd8a26bce315e06e635ef23f85ab5f95d35ace785d",
+  "timestamp": 1791242392
+}

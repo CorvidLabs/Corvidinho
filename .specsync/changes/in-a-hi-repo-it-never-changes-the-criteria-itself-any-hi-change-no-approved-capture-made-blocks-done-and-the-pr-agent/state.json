@@ -7,11 +7,11 @@
   "title": "In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard)",
   "description": "In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "b84c75fc3e98ce9d51c30ea215f538d53c18ded8",
   "created_at": 1790826547,
-  "updated_at": 1791242037,
+  "updated_at": 1791242392,
   "affected_specs": [
     "agent",
     "plugins",
