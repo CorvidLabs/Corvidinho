@@ -11,7 +11,9 @@
  *   else the directory, its snapshots and the last backup / restore test.
  * - The project files `task run`'s verify gate reads in the current dir
  *   (`fledge.toml`, its verify lane with spec-check, `.specsync/`, `specs/`),
- *   shared with the report-only `corvidinho init`.
+ *   shared with the report-only `corvidinho init`; `[warn] test-step` when
+ *   that lane visibly runs no test runner whose summary verify reads
+ *   (AGENT-15).
  * - Declared people and the owner with a GitHub login but no GitHub numeric
  *   id (IDENTITY-7.a): not recognised on GitHub until an id is linked.
  * - A removed verify switch (`[corvidinho] verify_before_complete`) still set
@@ -31,6 +33,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { Database } from "bun:sqlite";
 import { removedVerifyKeys } from "./agent/config.ts";
+import { TEST_SUMMARY_RUNNERS } from "./agent/test-evidence.ts";
 import { entryLabel, providerForTier, providerNotice } from "./agent/providers.ts";
 import { findProjectRoot } from "./agent/project-instructions.ts";
 import { loadTierFromEnv, perTierModels, type CapabilityTier } from "./agent/tier.ts";
@@ -500,25 +503,52 @@ function laneStepParts(steps: unknown): { tasks: string[]; cmds: string[] } {
 }
 
 /**
- * True when running `name` (fledge runs a task's `deps` first) runs
- * spec-check: the defined `spec-check` task, or a task whose `cmd` runs
- * `specsync check`.
+ * True when running the defined task `name` (fledge runs a task's `deps`
+ * first) reaches a task for which `hit(name, cmd)` holds; `cmd` is the
+ * task's string form or its `cmd`.
  */
-function taskRunsSpecCheck(
+function taskChainSome(
   name: string,
   tasks: Map<string, unknown>,
+  hit: (name: string, cmd: unknown) => boolean,
   seen = new Set<string>(),
 ): boolean {
   if (seen.has(name) || !tasks.has(name)) return false;
   seen.add(name);
   const task = tasks.get(name);
-  if (name === SPEC_CHECK_TASK) return true;
-  if (runsSpecsyncCheck(typeof task === "string" ? task : tableOf(task).cmd)) return true;
+  if (hit(name, typeof task === "string" ? task : tableOf(task).cmd)) return true;
   const deps = tableOf(task).deps;
   return (
     Array.isArray(deps) &&
-    deps.some((d) => typeof d === "string" && taskRunsSpecCheck(d, tasks, seen))
+    deps.some((d) => typeof d === "string" && taskChainSome(d, tasks, hit, seen))
   );
+}
+
+/**
+ * True when running `name` runs spec-check: the defined `spec-check` task,
+ * or a task (or one of its `deps`) whose `cmd` runs `specsync check`.
+ */
+function taskRunsSpecCheck(name: string, tasks: Map<string, unknown>): boolean {
+  return taskChainSome(name, tasks, (n, cmd) => n === SPEC_CHECK_TASK || runsSpecsyncCheck(cmd));
+}
+
+/** One pattern per runner whose summary counts as test evidence (AGENT-15). */
+const TEST_RUNNER_PATTERNS = TEST_SUMMARY_RUNNERS.map(
+  (runner) => new RegExp(`(?:^|[\\s;&|(/"'\`])${runner.split(" ").join("\\s+")}(?![\\w-])`),
+);
+
+/**
+ * A shell command line that names a runner from TEST_SUMMARY_RUNNERS (bare,
+ * by path or quoted). Static: a wrapper such as `npm test` is not seen.
+ */
+function runsTestRunner(cmd: unknown): boolean {
+  return typeof cmd === "string" && TEST_RUNNER_PATTERNS.some((re) => re.test(cmd));
+}
+
+/** "`bun test`, jest, vitest, `cargo test`, pytest or `go test`". */
+function testRunnerNames(): string {
+  const named = TEST_SUMMARY_RUNNERS.map((r) => (r.includes(" ") ? `\`${r}\`` : r));
+  return `${named.slice(0, -1).join(", ")} or ${named[named.length - 1]}`;
 }
 
 /**
@@ -627,6 +657,30 @@ function verifyLaneCheck(project: FledgeProject): DoctorCheck {
   );
 }
 
+/**
+ * CLI-4 / AGENT-15 — `[warn] test-step` when the loaded `[lanes.verify]`
+ * has no step (a task and its `deps`, `{ run }`, `{ task }` or a parallel
+ * item) whose command names a runner from TEST_SUMMARY_RUNNERS: if the lane
+ * prints none of their summaries, a run that changes files is never
+ * verified. Static detection, so it never fails doctor / init. Null when
+ * such a step is found, or when no verify lane loaded (the `verify-lane`
+ * line already says so).
+ */
+function verifyTestStepCheck(project: FledgeProject): DoctorCheck | null {
+  if (project.state !== "ok" || !project.lanes.has("verify")) return null;
+  const { tasks, cmds } = laneStepParts(tableOf(project.lanes.get("verify")).steps);
+  const runsTests =
+    cmds.some(runsTestRunner) ||
+    tasks.some((t) => taskChainSome(t, project.tasks, (_n, cmd) => runsTestRunner(cmd)));
+  if (runsTests) return null;
+  return {
+    name: "test-step",
+    ok: true,
+    mark: "warn",
+    detail: `no [lanes.verify] step visibly runs a recognised test runner (${testRunnerNames()}) — if the lane prints none of their summaries, a run that changes files is never verified (AGENT-15)`,
+  };
+}
+
 function isDirectory(path: string): boolean {
   try {
     return statSync(path).isDirectory();
@@ -681,7 +735,9 @@ export function removedVerifyKeyDoctorCheck(cwd: string = process.cwd()): Doctor
 /**
  * CLI-4 — the project files `task run`'s prove-before-done gate reads in
  * `cwd` (AGENT-4 / SPECSYNC-2), one line each: `fledge.toml`, its verify
- * lane with a spec-check step (`verify-lane`), `.specsync/` and `specs/`.
+ * lane with a spec-check step (`verify-lane`), `.specsync/` and `specs/`;
+ * plus `[warn] test-step` when a loaded verify lane visibly runs no
+ * recognised test runner (AGENT-15; never fails).
  * A missing item fails (`[missing]`) and is named in plain language with
  * what fails without it and, where Fledge / SpecSync has one, the command
  * that creates it — or, in a subdirectory of a git project whose root has
@@ -692,9 +748,11 @@ export function projectFilesDoctorChecks(cwd: string = process.cwd()): DoctorChe
   const dir = resolve(cwd);
   const fledge = loadFledgeProject(dir);
   const rootAbove = projectRootAbove(dir);
+  const testStep = verifyTestStepCheck(fledge);
   return [
     fledgeTomlCheck(dir, fledge, rootAbove),
     verifyLaneCheck(fledge),
+    ...(testStep ? [testStep] : []),
     projectDirCheck(dir, rootAbove, {
       name: ".specsync",
       why: "SpecSync has no project config (.specsync/config.toml) for spec-check",

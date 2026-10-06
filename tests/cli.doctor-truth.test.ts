@@ -697,6 +697,145 @@ describe("project files: doctor and a report-only init name what is missing (CLI
     expect(b.out).toContain("`specsync init` creates it");
     expect(b.out).toContain(`[missing] specs: not found in ${join(bare, "pkg")} — spec-check has no specs to hold the code to; ${bare} (the project root) has it`);
   }, 30_000);
+
+  // CLI-4 / AGENT-15 (REQ-cli-430): a passing lane with no recognised test
+  // summary fails closed, so a verify lane that visibly runs no recognised
+  // runner is warned about now, not after every file-changing run fails.
+  const TEST_STEP_WARN =
+    "[warn] test-step: no [lanes.verify] step visibly runs a recognised test runner (`bun test`, jest, vitest, `cargo test`, pytest or `go test`) — if the lane prints none of their summaries, a run that changes files is never verified (AGENT-15)";
+
+  const SPEC_CHECK_TASK_TOML = '[tasks.spec-check]\ncmd = "specsync check"\n\n';
+
+  function testStepLines(out: string): string[] {
+    return out
+      .split("\n")
+      .filter((l) => l.includes("test-step"))
+      .map((l) => l.trim());
+  }
+
+  test("a verify lane that visibly runs no recognised test runner gets one [warn] test-step line in doctor and init; exit code unchanged, nothing created, file never printed", async () => {
+    // Decoys: a wrapper (`npm test`), `bun run test`, a dep running
+    // `node --test`, `jest-junit`, `bun tests/…` and a secret-looking value.
+    const dir = readyProject(
+      [
+        "[tasks.test]",
+        'cmd = "npm test"',
+        `description = "${GITHUB_TOKEN}"`,
+        'deps = ["unit"]',
+        "",
+        "[tasks.unit]",
+        'cmd = "node --test"',
+        "",
+        "[tasks.report]",
+        'cmd = "jest-junit && bun tests/run.ts"',
+        "",
+        SPEC_CHECK_TASK_TOML,
+        "[lanes.verify]",
+        `steps = ["test", { run = "bun run test" }, { parallel = ["report", { run = "echo ${REPO}" }] }, { task = "spec-check" }]`,
+        "",
+      ].join("\n"),
+    );
+    const before = readdirSync(dir).sort();
+
+    const d = await runDoctor(readyEnv(allowEnv), dir);
+    expect(testStepLines(d.out)).toEqual([TEST_STEP_WARN]);
+    expect(d.out).toContain("[ok] verify-lane: [lanes.verify] runs spec-check");
+    expect(d.out).not.toContain("[missing]");
+    expect(d.out).toContain("All checks passed.");
+    expect(d.code).toBe(0);
+    expectNoValues(d.out);
+
+    const i = await runCmd(
+      "init",
+      cleanEnv({ CORVIDINHO_LLM_API_KEY: LLM_KEY, CORVIDINHO_LLM_MODEL: "test-model" }),
+      dir,
+    );
+    expect(testStepLines(i.out)).toEqual([TEST_STEP_WARN]);
+    expect(i.out).not.toContain("[missing]");
+    expect(i.out).toContain("Nothing missing for task run in this project.");
+    expect(i.code).toBe(0);
+    expectNoValues(i.out);
+    for (const word of ["npm test", "node --test", "jest-junit", "bun run test"]) {
+      expect(d.out + i.out).not.toContain(word);
+    }
+
+    // A lane with no spec-check and no test step: both lines, the warn adds no failure.
+    const bare = readyProject('[lanes.verify]\nsteps = [{ run = "echo ok" }]\n');
+    const b = await runCmd("init", cleanEnv({}), bare);
+    expect(b.out).toContain("[missing] verify-lane: [lanes.verify] has no spec-check step");
+    expect(testStepLines(b.out)).toEqual([TEST_STEP_WARN]);
+    expect(count(b.out, "[missing]")).toBe(1);
+    expect(b.code).toBe(1);
+
+    expect(readdirSync(dir).sort()).toEqual(before);
+  }, 60_000);
+
+  test("no test-step line when a verify step runs a recognised runner (this checkout, { run }, deps, { task }, parallel, by path, quoted, imported lane)", async () => {
+    const lines = async (dir: string): Promise<string[]> =>
+      testStepLines((await runCmd("init", cleanEnv({}), dir)).out);
+    const dirs: Array<[string, string]> = [
+      ["this checkout (verify → test = bun test)", REPO_ROOT],
+      ["the fixture lane (test = bun test)", readyProject()],
+      [
+        '{ run = "cargo test" }',
+        readyProject(`${SPEC_CHECK_TASK_TOML}[lanes.verify]\nsteps = [{ run = "cargo test" }, "spec-check"]\n`),
+      ],
+      [
+        "a step task whose deps run pytest",
+        readyProject(
+          `${SPEC_CHECK_TASK_TOML}[tasks.check]\ncmd = "echo done"\ndeps = ["py"]\n\n[tasks.py]\ncmd = "python -m pytest -q"\n\n[lanes.verify]\nsteps = ["check", "spec-check"]\n`,
+        ),
+      ],
+      [
+        "a lane imported from .fledge/lanes/",
+        readyProject('[tasks.unit]\ncmd = "go test ./..."\n', {
+          ".fledge/lanes/verify.toml": `${SPEC_CHECK_TASK_TOML}[lanes.verify]\nsteps = ["unit", "spec-check"]\n`,
+        }),
+      ],
+      [
+        "{ task } with a string task running vitest",
+        readyProject('[tasks]\nunit = "npx vitest run"\nspec-check = "specsync check"\n\n[lanes.verify]\nsteps = [{ task = "unit" }, "spec-check"]\n'),
+      ],
+      [
+        "a parallel { run } item running jest by path",
+        readyProject(
+          `${SPEC_CHECK_TASK_TOML}[lanes.verify]\nsteps = [{ parallel = ["spec-check", { run = "./node_modules/.bin/jest --ci" }] }]\n`,
+        ),
+      ],
+      [
+        "a quoted sh -c 'bun test'",
+        readyProject(`${SPEC_CHECK_TASK_TOML}[lanes.verify]\nsteps = [{ run = "sh -c 'bun  test --bail'" }, "spec-check"]\n`),
+      ],
+    ];
+    const got = await Promise.all(dirs.map(async ([label, dir]) => [label, await lines(dir)]));
+    expect(got).toEqual(dirs.map(([label]) => [label, []]));
+  }, 60_000);
+
+  test("with fledge.toml or [lanes.verify] absent or broken, the verify-lane [missing] line stands alone (no test-step line)", async () => {
+    const cases: Array<[string, string]> = [
+      [project(), "[missing] verify-lane: no verify lane — there is no fledge.toml to hold [lanes.verify]"],
+      [
+        readyProject('[tasks.lint]\ncmd = "tsc"\n\n[lanes.ci]\nsteps = ["lint"]\n'),
+        "[missing] verify-lane: fledge.toml has no [lanes.verify]",
+      ],
+      [
+        readyProject("[lanes.verify\nsteps = [\n"),
+        "[missing] verify-lane: fledge.toml cannot be read or is not valid TOML — fledge cannot load the verify lane",
+      ],
+      [
+        readyProject('[tasks.lint]\ncmd = "tsc"\n\n[lanes.verify]\nsteps = ["lint"]\n', {
+          ".fledge/lanes/broken.toml": "[lanes\n",
+        }),
+        "[missing] verify-lane: .fledge/lanes/broken.toml cannot be read or is not valid TOML — fledge cannot load the verify lane",
+      ],
+    ];
+    const outs = await Promise.all(cases.map(([dir]) => runCmd("init", cleanEnv({}), dir)));
+    outs.forEach((r, n) => {
+      expect(r.out).toContain(cases[n]![1]);
+      expect(r.out).not.toContain("test-step");
+      expect(r.code).toBe(1);
+    });
+  }, 60_000);
 });
 
 describe("doctor warns about GitHub logins with no numeric id (IDENTITY-7.a)", () => {
