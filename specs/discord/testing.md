@@ -1556,7 +1556,9 @@ work tree /work commits) it opens and the PR body has the section.
 
 Fail on base: the /work case fails (base `pr.ts` has no `not-reviewed`);
 restored, it passes. `tests/work.pr.test.ts` only adapts to the gate (with
-the base's sources it passes).
+the base's sources it passes). Superseded by "/work commits and pushes only a
+reviewed tree" below: the check now runs before the commit, so nothing is
+pushed.
 ## Turn cap / idle timeout plumbing and card waits (REQ-discord-125, AGENT-12)
 
 `tests/agent.limits.test.ts` ("it says so on each surface", "waiting on an
@@ -1601,6 +1603,21 @@ stamp, one real `task run` against the fake model; no network):
 - Fail on base: 17 of 28 fail with the base's ten modified source files
   (the gate's own units and "outside a public thread" pass on both);
   `tests/must-ask.boundary.test.ts` fails on the base's `send-file.ts`.
+## Non-git project talks in the folder itself (REQ-discord-110, REQ-discord-013, AGENT-1.a, AGENT-1.c)
+
+`tests/discord.nongit-project-dir.test.ts` (8 tests): `ensureTalkWorkspace`
+with `nonGit: "project_dir"` returns the folder and makes no
+`.corvid-worktrees`; without it (and with `scoped_dir`) a non-git project gets
+its own scoped folder (AGENT-1.c); park / remove with every kind on the
+project folder, its parent and a git main checkout delete nothing; the session
+store binds in place, re-binds after a restart, and an end, a TTL purge and an
+expired row at start leave the folder; a legacy scoped row is parked and
+re-bound; a switch is refused; a folder that became git gets a worktree; the
+bridge writes the owner's image under
+`<project>/.corvidinho/attachments/<session id>/`, removed at the talk's end,
+and keeps another person's URL-only. Fail on base (cf7f61b, shims for the new
+exports): 7 of 8 fail; the scoped-folder case holds on both.
+`tests/scheduler.owner-role.test.ts` keeps the owner schedule's scoped folder.
 
 ## /work opens no PR while hi/ differs from the merge-base (REQ-discord-520, AGENT-18 hi guard)
 
@@ -1670,3 +1687,29 @@ REQ-discord-520 modified).
   hook in the engine) and the bridge route (no `hi` kind registered); the
   other 6 exercise the new `hi-card.ts` on the engine directly. Without the
   new modules the file does not load. Restored: 8 of 8 pass.
+## /work commits and pushes only a reviewed tree (REQ-discord-088 modified; GITHUB-9, GITHUB-9.a)
+
+`tests/work.pr.test.ts` ("GITHUB-9: no finished second-model review for the
+tree it would ship"): `not-reviewed` with `PR: not opened — no second-model
+review finished for the tree this /work run would ship, so there is no PR
+(GITHUB-9). The changes stay on branch …`, no plugin call, nothing pushed,
+the edit still in the tree; with the run's refusal on its frame (no second
+model) the line is that reason. Its opening, push-failure, PR-failure and
+SAFE-1 cases seed a finished review for the tree they ship (`fullWorkTree`).
+"GITHUB-9: the result frame's review outcome rides AgentSpawnResult.task":
+`finished` passes, `refused` comes through with a token scrubbed and its line
+break gone, a `refused` without a reason and a bare string are dropped.
+
+`tests/work.review.test.ts`: "/work: with no finished review for the tree it
+would ship, nothing is committed or pushed" (no plugin ran, HEAD unchanged,
+no remote branch; a finished review of an earlier tree does not count; a
+review of the whole work tree opens with the section and the reviewed line);
+and the owner run through the real tool loop, verify gate and review hook
+(round 1 findings changed, round 2 clean) whose /work PR opens listing round
+1's finding and `M  src/greet.ts`, while with one configured model the PR
+step commits and pushes nothing and its line is the GITHUB-9.a reason.
+
+Fail on base: with the stacked base's (387dada) sources swapped in, both
+`tests/work.pr.test.ts` GITHUB-9 cases fail (the base commits and pushes
+before `github-pr-create` refuses, and drops the frame's `review`);
+`tests/work.review.test.ts` cannot load. Restored, all pass.

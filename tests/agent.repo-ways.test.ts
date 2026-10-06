@@ -768,6 +768,8 @@ describe("/work checks SpecSync coverage before commit and push (AGENT-18, REQ-d
         calls.push(o.name);
         return { ok: true, data: { url: "https://github.com/acme/widget/pull/1", number: 1 } };
       },
+      // GITHUB-9's own gate is tested in tests/work.review.test.ts.
+      reviewed: async () => true,
     };
     const input = { worktreePath: wt, branch, taskId: "work_1", description: "bump x", run: verified };
     const blocked = await openWorkPr(input, deps);

@@ -1,8 +1,10 @@
 /**
  * AGENT-18 / AGENT-18.a (#89): it works each repo's own way. This module
- * covers the SpecSync clause and the guard half of the hi clause; hi
- * drafting and the capture card are src/agent/hi-drafts.ts and
- * src/discord/hi-card.ts, and the Trust clause comes later.
+ * covers the SpecSync clause, the guard half of the hi clause, the Trust
+ * clause's detection ({@link usesTrust}: the verify runner,
+ * src/agent/verify.ts, then also runs `fledge trust verify`), and hi
+ * drafting with the capture card (src/agent/hi-drafts.ts,
+ * src/discord/hi-card.ts).
  *
  * - {@link detectRepoWays} finds the ways a repo uses: a SpecSync change
  *   workflow (`.specsync/sdd.json` with `enabled: true`), hi criteria (a
@@ -479,7 +481,7 @@ export function formatRepoWaysLine(ways: RepoWays): string | null {
   const found: string[] = [];
   if (ways.sdd) found.push("SpecSync changes (.specsync/sdd.json)");
   if (ways.hi) found.push("hi criteria (hi/)");
-  if (ways.trust) found.push("Trust (.trust.toml; its steps are not followed yet)");
+  if (ways.trust) found.push("Trust (.trust.toml: verify also runs fledge trust verify)");
   if (found.length === 0) return null;
   return `Repo ways (AGENT-18): ${found.join(", ")}.`;
 }
@@ -586,6 +588,24 @@ export async function repoWaysNow(cwd: string): Promise<RepoWaysScan> {
   const run = currentSddRun(cwd);
   const now = await scanRepoWays(cwd, run?.base ?? null);
   return run ? mergeScans([run.scan, now]) : now;
+}
+
+/**
+ * AGENT-18 (Trust clause): true when `cwd` uses Trust — `.trust.toml` in the
+ * start scan of the run in progress there, or now in the working tree, HEAD
+ * or the session base (that run's, else {@link repoWaysBase}), so a
+ * `.trust.toml` deleted or committed away during a run, or on a `/work`
+ * branch, still counts. Never throws: a tree that can't be read adds nothing.
+ */
+export async function usesTrust(cwd: string): Promise<boolean> {
+  try {
+    const run = currentSddRun(cwd);
+    if (run?.scan.ways.trust) return true;
+    const base = run ? run.base : await repoWaysBase(cwd);
+    return (await detectRepoWays(cwd, base)).trust;
+  } catch {
+    return false;
+  }
 }
 
 // ------------------------------------------------------------------ Corvidinho

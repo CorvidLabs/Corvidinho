@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2",
+  "slug": "in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2",
+  "title": "In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause)",
+  "description": "In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause)",
+  "kind": "feature",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "25723fe248a307e5ab67e105525e257b2f0d6c71",
+  "created_at": 1791242701,
+  "updated_at": 1791299657,
+  "affected_specs": [
+    "agent",
+    "plugins"
+  ],
+  "affected_paths": [
+    "src/agent/verify.ts",
+    "src/agent/repo-ways.ts",
+    "src/agent/loop.ts",
+    "src/agent/types.ts",
+    "plugins/files/protectedPaths.ts",
+    "tests/agent.trust-verify.test.ts",
+    "specs/agent",
+    "specs/plugins",
+    "docs/discord.md",
+    "STATUS.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "AGENT-18 (captured on main from Leif's 2026-09-28 interview; this builds its Trust clause only): in a repo with .trust.toml in the session base, HEAD or the working tree, the default verify runner runs fledge trust verify after fledge lanes run verify passes, and the run is verified only when both pass; when this fledge has no trust command it fails closed with the exact reason before the lane runs; a repo without .trust.toml runs the lane alone exactly as before; .trust.toml is SAFE-2 protected (files-write/edit/delete refuse it, git-commit refuses to stage its deletion); nothing Trust-related is added to Corvidinho's own repo."
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

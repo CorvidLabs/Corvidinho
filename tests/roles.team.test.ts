@@ -139,6 +139,9 @@ beforeEach(() => {
     delete process.env[k];
   }
   dir = mkdtempSync(join(tmpdir(), "corvidinho-roles-team-"));
+  // A team member's /work file edits need a git work tree: in a non-git
+  // project folder other people's runs only read (AGENT-1.a).
+  Bun.spawnSync(["git", "init", "-q"], { cwd: dir, stdout: "ignore", stderr: "ignore" });
   path = join(dir, "allowlist.toml");
   writeFileSync(path, fileText());
   process.env.CORVIDINHO_ALLOWLIST_FILE = path;

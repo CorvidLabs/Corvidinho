@@ -926,6 +926,15 @@ a status and the provider's own raw body; temp dirs only):
   `LLM HTTP 429: {"error":{"message":"Rate limit reached … organization
   org-acme-widgets-7731 … https://127.0.0.1:<port>/account/limits."},
   "request_id":"req_7f3c9a1b2d4e5f60"}`; restored, all pass.
+## The owner's run in a non-git project folder (REQ-agent-110, AGENT-1.a)
+
+`tests/agent.nongit-project-dir.test.ts` (2 tests, `runTask` +
+`createTaskExecute`, fake provider, stub verify lane): the owner's run writes
+`src/app.ts` in the folder, `fledge.toml` (SAFE-2) and `AGENTS.md`
+(AGENT-1.b) are refused, `shell-exec` is not offered with the SAFE-3.a line,
+the lane runs on the folder and its failure fails the run; a team member's
+`/work` run there has no `files-write` / `files-edit` and its call is refused
+for the role, while in a linked worktree both are offered. Fail on base: both.
 ## hi guard: any hi/ change since the session base blocks done (REQ-agent-520, AGENT-18 hi clause, guard half)
 
 `tests/agent.hi-guard.test.ts` (temp git repos and temp non-git dirs only,
@@ -1109,3 +1118,63 @@ new `hi/notes.md`, and a ledger step of a pending request still block;
   the new module's own units, the gate, the capture itself and the
   still-blocking cases. Without the new modules the file does not load.
   Restored: 17 of 17 pass.
+## /work runs its second-model review rounds before done (REQ-agent-092 modified; GITHUB-9, GITHUB-9.a)
+
+`tests/agent.loop.test.ts` ("runTask second-model review before the PR",
+5 tests, scripted hooks, no model): findings then finished → done and
+verified after 2 attempts, the lane run twice, attempt 2's `verifyFeedback`
+is the findings text, `review: {state: "finished"}`, with `maxRetries: 0`
+(the rounds are not verify retries); a refusal → done and verified with
+`review: {state: "refused", reason}` and the `Second-model review: no PR — …`
+Text; a hook that keeps raising findings is called 3 times and ends refused,
+a throwing hook ends refused; a spend-cap `ask` ends the run `blocked` with
+that ask; a run that changed nothing or whose verify failed never calls it.
+The file imports only modules the base has (the new types are erased).
+
+`tests/work.review.test.ts` ("/work: an owner or team run drives the review
+rounds", through `createTaskExecute` at code tier with `files-write`,
+`runTask` and `workReviewHook` in temp repos, scripted provider): round 1's
+finding reaches attempt 2 fenced as untrusted data, round 2 reviews the
+changed tree and raises nothing, `review` is finished; with one configured
+model the run is done with `review` refused for the GITHUB-9.a line and no
+reviewer call.
+
+Fail on base: with the stacked base's (387dada) `src/agent/loop.ts`,
+`src/agent/types.ts`, `src/agent/execute.ts`, `src/work/review.ts`,
+`src/work/pr.ts`, `src/work/pr-body.ts`, `src/cli.ts`,
+`src/discord/agent-client.ts` and `src/discord/types.ts` swapped in, 4 of the
+5 loop tests fail (no hook is called: one attempt, no `review`, the spend
+ask never blocks); the never-called guard passes on the base too.
+`tests/work.review.test.ts` cannot load (`workReviewApplies`,
+`workReviewHook` missing). Restored, all pass.
+## Trust where the repo uses Trust (REQ-agent-525 added; AGENT-18 Trust clause)
+
+`tests/agent.trust-verify.test.ts` (temp git repos, a stand-in `fledge` on
+PATH that logs its argv, never the host's; the default runner runs in a
+child `bun` process because it reads PATH as its process started):
+
+- no `.trust.toml` (a `trust.toml` and `docs/trust.md` present): only
+  `lanes run verify --non-interactive` runs and the output is the lane's,
+  unchanged (passes on the base too: the regression guard);
+- with `.trust.toml`: probe, lane, then `trust verify`, in that order; passes
+  with the lane's output and `TRUST_PASSED_LINE` (one test summary); the
+  Trust step's env has no `GITHUB_TOKEN` (SAFE-6);
+- a failing `trust verify` fails with the `Trust gate:` head and its output,
+  the head as `trustNote`; a failing lane runs no `trust verify` and has no
+  `trustNote`; an abort once `trust verify` has started (the child polls the
+  stand-in's log, so a slow probe or lane cannot race it) stops it and
+  returns `verify lane aborted`;
+- a fledge with no `trust` command (fledge 1.8.0's `unrecognized subcommand
+  'trust'`) fails with exactly the unavailable reason (also its `trustNote`)
+  and runs no lane;
+- `.trust.toml` deleted from the working tree, committed away on a branch
+  (only the merge-base with `main` has it), or only in a run's start scan
+  still runs the probe;
+- `runTask` in a Trust repo names the step in its ways and verifying lines;
+- `runTask` with a failed Trust step whose output is over the 4000-char
+  feedback cap: the retry feedback starts with the feedback head and the
+  `Trust gate:` line, keeps the step's failure line and stays within the cap,
+  and the failure summary carries the head; with Trust unavailable the reason
+  is the whole feedback.
+
+All but the no-Trust case fail with the base sources swapped in.

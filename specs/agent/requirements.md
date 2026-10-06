@@ -2286,7 +2286,39 @@ review refusal (`reviewHold: "refused"`), every summary after it SHALL end
 with that one line (`withReviewRefusalNote`, added once, scrubbed, before
 the role note); a later call that opened a PR or got findings clears it.
 
+An owner or team `/work` run (REQ-cli-092) SHALL also drive the review
+rounds itself before the `/work` PR step (REQ-discord-088), through
+`RunTaskOptions.review` (a `ReviewHook`: `maxRounds` and `run({signal})`).
+`createTaskExecute` SHALL return its execute fn with `review` (the run's
+`PrReviewRun` above) and `takeSpendAsk()` (the spend-cap ask a stopped
+review call left, then cleared; null when there is none). After a passing
+verify lane — and, when the run opened SpecSync changes, after they are
+settled and verified again (REQ-agent-519) — `runTask` SHALL call the hook
+before the run is done:
+
+- `finished` (a round raised nothing, the tree was left unchanged after
+  findings, or the last round): done and verified, with
+  `TaskResult.review` `{state: "finished"}`;
+- `findings`: the hook's feedback SHALL be the next attempt's
+  `verifyFeedback`, and that attempt SHALL pass the verify gate again before
+  the next review step;
+- `refused` (GITHUB-9.a: no second model; or any other reason no review can
+  finish): done and verified, with `TaskResult.review` `{state: "refused",
+  reason}` (one plain line of harness text), so no PR follows;
+- `ask` (a SAFE-8 spend-cap stop of the review call): the run SHALL end
+  `blocked` on that ask (AUTONOMY-8).
+
+The review rounds SHALL have their own counter, apart from the AGENT-4.a
+verify retries: at most `maxRounds - 1` steps hand findings back, and one
+more, or a hook that throws, SHALL fail closed as `refused`. A run that
+changed nothing or whose verify failed never calls the hook. Each step is
+one `Text` event. `TaskResult.review` is additive (no protocol change) and
+absent on every run without the hook.
+
 Acceptance Criteria
+- With a scripted hook: findings then finished end the run done and verified after 2 attempts with the verify lane run twice, attempt 2's feedback is the findings text, `review` is `{state: "finished"}`, and this holds with `maxRetries: 0`.
+- A refusal ends the run done and verified with `review: {state: "refused", reason}` and a `Second-model review: no PR — <reason>` Text event; a hook that keeps raising findings is called 3 times and ends refused (`did not end within 3 rounds`); a throwing hook ends refused (`could not run`); a spend-cap ask ends the run `blocked` with that ask and no `review`; a run that changed nothing, or whose verify failed, never calls the hook.
+- Through `createTaskExecute` (code tier, `files-write`), `runTask` and `workReviewHook` in a temp repo with a scripted provider: round 1's findings reach attempt 2 fenced as untrusted data, the model's change gets round 2, which raises nothing, and `review` is `{state: "finished"}`; with one configured model the run is done with `review` refused for the GITHUB-9.a reason and no reviewer call.
 - Through `createTaskExecute` and a scripted provider in a temp repo: the reviewer is the first other configured model (`CORVIDINHO_LLM_MODEL_READ` here), called once with no `tools` and a system plus a fenced user message holding the diff; the findings come back fenced as round 1 of 3; the same call again opens the PR listing them as not changed; no tool message carries the AGENT-16 steer; the run's `usageByModel` has the reviewer's row (an unpriced reviewer makes `answerSpendFor`'s cost unknown) and `onModel` names only the run's model.
 - With no second model three identical `github-pr-create` calls all run and refuse, none gets the AGENT-16 steer or the stuck ask, no reviewer is called, and the summary ends with `PR not opened: there is no second model …` (GITHUB-9.a).
 - A reviewer on its own provider whose cap covers it (no owner configured) ends the run with the `spend-cap` ask, no review request is sent, nothing is recorded and the summary has no `PR not opened` line.
@@ -2294,6 +2326,35 @@ Acceptance Criteria
 - Run 1, whose head model fails over to the next one, which writes a file; run 2 (a new `createTaskExecute`), whose head model answers and opens the PR from the same checkout: the reviewer is the third configured model, never the one that wrote the change. `recordChangeAuthors` keeps each model once per checkout and branch, scrubbed, and records nothing below a git top level.
 - Two `github-pr-create` calls in one batch: the first gets round 1's findings, the second is not run, one review call is made and the cycle stays open (not declined).
 
+### REQ-agent-110
+
+In a project that isn't a git repo, the owner's runs work in the project
+folder itself, protected files and the verify gate still apply, and other
+people's runs only read there (AGENT-1.a, captured in `hi/agent.md` from
+Leif's 2026-09-28 interview). A run whose cwd is such a folder (a Discord
+talk bound in place, REQ-discord-110, or a local `task run` there) SHALL:
+
+- for the owner (and the local CLI): run its file tools in that folder, with
+  SAFE-2 protected paths and (AGENT-1.b, REQ-plugins-110) the root AGENTS.md
+  / CLAUDE.md refused; keep the allowlisted shell, language runners and Fledge
+  runs out of the catalog with the one SAFE-3.a operator line (the cwd is not
+  the session's own talk worktree, REQ-agent-503); and go through the verify
+  gate for what it changed (REQ-agent-002 / REQ-agent-185), a failing lane
+  failing the run;
+- for anyone else: `createTaskExecute` SHALL pass the run's cwd to
+  `actingWorkTask` (REQ-plugins-115) for the catalog (`buildOpenAiTools`
+  `workTask`), for `refusedForRole` (a call to a mutating tool not offered)
+  and for the missing-capability facts (REQ-agent-742, so a gap there reads
+  as the role's), so a team member's `/work` run there is not
+  offered `files-write` / `files-edit` and a call to one gets the role
+  refusal; in a git worktree it is offered them as before.
+
+No new option, env var or config key.
+
+Acceptance Criteria
+- `tests/agent.nongit-project-dir.test.ts`: the owner's run in a non-git folder writes `src/app.ts` there, `fledge.toml` is refused (SAFE-2) and `AGENTS.md` (AGENT-1.b) and stays unchanged, `shell-exec` (allowlisted) is not offered and the SAFE-3.a line names "not in this talk's own worktree", the stub verify lane runs once on the folder and its failure ends the run `failed` and not verified, and no `.corvid-worktrees` is made.
+- Same file: a team member's `/work` run there is offered `files-read` but not `files-write` / `files-edit`, its `files-write` call is refused with `not allowed for your role`, the file is unchanged and no verify runs; in a linked worktree of a git project it is offered both.
+- With the base sources both fail.
 ### REQ-agent-520
 
 hi guard (AGENT-18, captured on main from Leif's 2026-09-28 interview: "It
@@ -2496,3 +2557,61 @@ Acceptance Criteria
 - An unknown name is not installed; the reply does not invent Tenor or a `fledge-` command the user did not say.
 - A model `ask-human` of "what do you mean by install?" when the named tool is offered does not end as a clarify ask.
 - Fixture: `tests/agent.missing-capability.test.ts`.
+
+### REQ-agent-525
+
+Trust where the repo uses Trust (AGENT-18, captured on main from Leif's
+2026-09-28 interview: "It works each repo's own way: a SpecSync change where
+the repo uses SpecSync; where it uses hi, it drafts criteria and asks before
+capturing, never inventing them; and Trust where the repo uses Trust."; this
+builds its Trust clause). `defaultVerifyRunner` (`src/agent/verify.ts`) SHALL
+ask `usesTrust(cwd)` (`src/agent/repo-ways.ts`): true when the start scan of
+the run in progress in `cwd` found `.trust.toml`, or when `detectRepoWays`
+finds it now in the working tree, HEAD or the session base (that run's base,
+else `repoWaysBase`), so a `.trust.toml` deleted or committed away during a
+run or on a `/work` branch still counts. In such a repo it SHALL first ask
+fledge whether it has a `trust` command (`fledge --non-interactive trust
+--help`); a non-zero exit SHALL fail the verify closed, before the lane
+runs, with the exact reason (`trustUnavailableReason`: `Trust gate: this repo
+uses Trust (.trust.toml), but \`fledge trust\` is not available here
+(\`fledge trust --help\` exited <code>: <its first output line>), so
+\`fledge trust verify\` cannot run and the run is not verified (AGENT-18).
+Nothing in the repo can fix this: the owner installs Trust for fledge on
+this machine.`). Otherwise it SHALL run `fledge lanes run verify
+--non-interactive` and, only when the lane passes, `fledge --non-interactive
+trust verify` (`TRUST_VERIFY_ARGS`); the verify SHALL pass only when both
+exit 0. A failing Trust step SHALL give `Trust gate: fledge lanes run verify
+passed, but fledge trust verify failed (exit <code>), so the run is not
+verified (.trust.toml, AGENT-18).` (`trustFailedHead`) followed by that
+step's output; a passing one SHALL add only `TRUST_PASSED_LINE` after the
+lane's output, so the AGENT-15 test evidence is judged on the lane's own
+output once. A failed or unavailable Trust step's result SHALL also carry
+that one line as `trustNote` (`VerifyResult.trustNote`,
+`src/agent/types.ts`; set by nothing else): `runTask` SHALL lead the failure
+summary and the retry feedback with it, the Trust step's output after it
+(in the feedback, cut to what is left of the 4000-char cap, never the head;
+an unavailable Trust's reason is the whole feedback). Every fledge
+step SHALL run with the same verify env (SAFE-6, `buildVerifyEnv`), its own
+process group, pipe reading that feeds the idle watchdog (AGENT-12) and
+abort handling (an abort is `verify lane aborted`) as the lane. A repo with
+no `.trust.toml` in any of those trees SHALL run the lane alone with today's
+argv and output. The ways line SHALL read `Trust (.trust.toml: verify also
+runs fledge trust verify)` and, when the run's start scan found Trust, the
+verifying line `Running fledge lanes run verify --non-interactive (includes
+spec-check), then fledge trust verify (.trust.toml)…`. This applies wherever
+`defaultVerifyRunner` runs (the `runTask` gate, its re-run after settling
+its own SpecSync change, and `/work`'s pre-push re-verify). Corvidinho's own
+repo has no `.trust.toml` and gets nothing Trust-related. No env var, config
+key, flag, NDJSON field or schema.
+
+Acceptance Criteria
+- With a stand-in fledge on PATH (never the host's), a repo with `.trust.toml` runs the probe, the lane, then `trust verify` in that order, passes with the lane's output plus the passed line (one test summary), and the Trust step's env has no `GITHUB_TOKEN`.
+- A failing `trust verify` after a passing lane fails with the `Trust gate:` head and the step's output; a failing lane runs no `trust verify`.
+- A fledge with no `trust` command fails with exactly the unavailable reason and runs no lane.
+- `.trust.toml` deleted from the working tree (HEAD has it), committed away on a branch (only the merge-base with `main` has it), or seen only in the run's start scan still runs the Trust probe.
+- A repo without `.trust.toml` (a `trust.toml` or `docs/trust.md` do not count) runs only `lanes run verify --non-interactive` and returns the lane's output unchanged.
+- `runTask` in a Trust repo emits the Trust ways line and the verifying line naming `fledge trust verify`.
+- The failed and unavailable results carry `trustNote` (the head, or the whole reason); a failing lane's does not. With a Trust step output over the feedback cap, the retry feedback starts with the feedback head and the `Trust gate:` line, keeps the step's failure line and stays within 4000 chars, and the failure summary carries the head; an unavailable Trust's reason is the whole feedback.
+- An abort once `trust verify` has started stops it and gives `verify lane aborted`.
+- `tests/agent.trust-verify.test.ts` fails on the base sources (all but the no-Trust case) and passes after.
+

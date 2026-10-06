@@ -608,6 +608,8 @@ describe("/work opens no PR while hi/ differs from the merge-base (REQ-discord-5
         calls.push(o.name);
         return { ok: true, data: { url: "https://github.com/acme/widget/pull/1", number: 1 } };
       },
+      // GITHUB-9's own gate is tested in tests/work.review.test.ts.
+      reviewed: async () => true,
     };
   }
 

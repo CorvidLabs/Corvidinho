@@ -80,8 +80,10 @@ import {
   type GatewayHandlers,
 } from "./gateway.ts";
 import {
+  appendAttachmentUrls,
   attachmentCacheDir,
   enrichPromptWithImages,
+  sessionAttachmentDir,
 } from "./image-attachments.ts";
 import { enrichPromptWithIdentity } from "./identity-inject.ts";
 import {
@@ -1274,15 +1276,20 @@ export async function startBridge(
         try {
           // DISCORD-9 — download attachments into the session workspace (bound
           // above): the agent's file tools only open paths under its cwd
-          // (REQ-discord-013).
-          let enrichedPrompt = await enrichPromptWithImages(
-            agentPrompt,
-            msg.attachments,
-            {
-              messageId: msg.id,
-              cacheDir: attachmentCacheDir(sessionCwd ?? config.projectRoot),
-            },
-          );
+          // (REQ-discord-013). AGENT-1.a: a non-git project's talk runs in
+          // the project folder itself, so the owner's images go to this
+          // session's own folder there (removed when the session ends), and
+          // anyone else's stay URL-only — their runs only read there.
+          const inPlace = bound.workspace.kind === "project_dir";
+          let enrichedPrompt =
+            inPlace && actingRole !== "owner"
+              ? appendAttachmentUrls(agentPrompt, msg.attachments)
+              : await enrichPromptWithImages(agentPrompt, msg.attachments, {
+                  messageId: msg.id,
+                  cacheDir: inPlace
+                    ? sessionAttachmentDir(bound.workspace.workDir, session.id)
+                    : attachmentCacheDir(sessionCwd ?? config.projectRoot),
+                });
 
           const people = declaredPeople();
           // IDENTITY-4 — inject Discord user id + display / owner map (never invent names).

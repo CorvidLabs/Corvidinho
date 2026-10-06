@@ -23,9 +23,14 @@
  *   non-interactive use (GITHUB-5 / SAFE-1). Nothing is committed or pushed
  *   unless every step it needs is allowed;
  * - the remote OWNER/REPO passes the repo gate (GITHUB-6);
- * - `github-pr-create` itself holds a tree with no finished second-model
- *   review (GITHUB-9, src/work/review.ts): this step has no run model, so
- *   it starts no round, and says so on the PR line (`not-reviewed`).
+ * - a second-model review finished for exactly the tree about to be
+ *   committed and pushed (GITHUB-9, src/work/review.ts): the run drives the
+ *   rounds itself once its tree is verified (REQ-agent-092); checked right
+ *   before the commit, so with none (`not-reviewed`) nothing is committed or
+ *   pushed, the changes stay on the branch, and the line says why — with no
+ *   second model configured, that there is none (GITHUB-9.a). This step has
+ *   no run model, so it starts no round; `github-pr-create` holds the PR to
+ *   the same review again.
  *
  * The steps go through the existing typed plugins via `runPlugin`, so each
  * dangerous action keeps its SAFE-1 deny and SAFE-5 audit row. Otherwise the
@@ -58,7 +63,7 @@ import { runPlugin, type RunOptions } from "../plugins/run.ts";
 import type { PluginHandlerResult } from "../plugins/types.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import { resolveBase } from "../worktree/base.ts";
-import { reviewRefusalReason } from "./review.ts";
+import { reviewRefusalReason, WORK_REVIEW_REFUSAL, workTreeReviewed } from "./review.ts";
 import {
   buildWorkPrBody,
   workCommitMessage,
@@ -74,6 +79,12 @@ export type WorkRunFacts = {
   verified: boolean;
   verifySkipped: boolean;
   state?: string;
+  /**
+   * GITHUB-9: how the run's second-model review ended (the result frame's
+   * `review`, validated). Only words the `not-reviewed` line; whether the
+   * tree was reviewed is read from the review record (fail closed).
+   */
+  review?: { state: "finished" } | { state: "refused"; reason: string };
 };
 
 export type WorkRunOutcome = {
@@ -134,6 +145,8 @@ export type OpenWorkPrDeps = {
   repoGate?: (repo: string) => RepoGateResult | Promise<RepoGateResult>;
   /** Remote to push to (default `origin`). */
   remote?: string;
+  /** GITHUB-9: a finished review for exactly this tree (default `workTreeReviewed`). */
+  reviewed?: (o: { cwd: string; repo: string; branch: string }) => Promise<boolean>;
 };
 
 export type WorkPrRunner = (input: OpenWorkPrInput) => Promise<WorkPrOutcome>;
@@ -347,6 +360,18 @@ async function ship(input: OpenWorkPrInput, deps: OpenWorkPrDeps): Promise<WorkP
     verify = "pre-push";
   }
 
+  // GITHUB-9 (REQ-discord-088): right before the commit, a second-model
+  // review must have finished for exactly the tree about to be committed and
+  // pushed (the run's round driver, REQ-agent-092). With none, nothing is
+  // committed or pushed and the line says why: the run's own reason (with no
+  // second model configured, that there is none, GITHUB-9.a), else that no
+  // review finished. Unreadable fails closed.
+  const reviewed = await (deps.reviewed ?? workTreeReviewed)({ cwd, repo: slug, branch });
+  if (!reviewed) {
+    const why = run.task?.review?.state === "refused" ? run.task.review.reason : WORK_REVIEW_REFUSAL.notFinished;
+    return skip("not-reviewed", `not opened — ${why} The changes stay on branch \`${branch}\`.`);
+  }
+
   const call = deps.runPlugin ?? defaultRunPlugin;
   const common = { cwd, nonInteractive: true, allowlist: allow } as const;
 
@@ -390,6 +415,7 @@ async function ship(input: OpenWorkPrInput, deps: OpenWorkPrDeps): Promise<WorkP
     diffstat: stat.code === 0 ? stat.stdout : "",
     commits: log.code === 0 ? log.stdout.split("\n").filter(Boolean) : [],
     verify,
+    reviewed: true,
   });
 
   const created = await call({
@@ -409,9 +435,9 @@ async function ship(input: OpenWorkPrInput, deps: OpenWorkPrDeps): Promise<WorkP
       "--draft",
     ],
   });
-  // GITHUB-9: github-pr-create holds a PR whose tree has no finished
-  // second-model review (no run model here: no round starts until the /work
-  // round driver lands); the line says why, the changes stay pushed.
+  // GITHUB-9: github-pr-create holds the PR to the same review (the branch
+  // on GitHub must be the reviewed tree); the line says why, the changes
+  // stay pushed.
   if (!created.ok && created.reviewHold) {
     return skip(
       "not-reviewed",

@@ -61,6 +61,7 @@ files:
   - tests/autonomous.worker-failure.test.ts
   - tests/agent.verify-gate.test.ts
   - tests/fixtures/talk-worktree.ts
+  - tests/agent.nongit-project-dir.test.ts
   - tests/agent.loop-guards.test.ts
   - tests/agent.stall-nudge.test.ts
   - tests/agent.test-evidence.test.ts
@@ -77,6 +78,7 @@ files:
   - src/agent/hi-capture-store.ts
   - tests/agent.hi-draft.test.ts
   - tests/fixtures/stand-in-hi.ts
+  - tests/agent.trust-verify.test.ts
   - src/agent/limits.ts
   - tests/agent.limits.test.ts
 
@@ -486,6 +488,23 @@ findings is not run; `withReviewRefusalNote(summary, line)` adds the run's
 latest `github-pr-create` refusal line ("PR not opened: …") once, before the
 role note.
 
+The `/work` review rounds (REQ-agent-092, GITHUB-9 / GITHUB-9.a):
+`createTaskExecute` returns a `TaskExecuteFn` — the execute fn plus `review`
+(the run's `PrReviewRun`) and `takeSpendAsk()` (the spend-cap ask a stopped
+review call left, cleared; else null). `RunTaskOptions.review` (a
+`ReviewHook`: `maxRounds`, `run({signal})` → `ReviewHookResult`: `finished`
+with its Text note, `findings` with a note and the next attempt's feedback,
+`refused` with a one-line reason, or `ask`, a spend-cap stop) is called after
+a passing lane and any settle of the run's own SpecSync change, before done:
+findings become the next attempt's `verifyFeedback` (verified again first),
+counted apart from the AGENT-4.a retries; at most `maxRounds - 1` hand
+findings back, and another, or a throw, fails closed (`reviewOverRoundsReason`,
+`REVIEW_HOOK_FAILED_REASON`, exported from `src/agent/loop.ts`);
+`TaskResult.review` (`TaskReview`: `{state: "finished"}` or `{state:
+"refused", reason}`) says how it ended; an `ask` ends the run `blocked`.
+`task run` passes the hook only for an owner or team `/work` run whose PR
+path is allowlisted (REQ-cli-092; `workReviewHook`, `src/work/review.ts`).
+
 Council core (REQ-agent-118, issue #118, AUTONOMOUS-6):
 `src/autonomous/council.ts` exports `parseCouncilArgs`, `resolveCouncilTier`,
 `councilLens`, `capCouncilText`, `buildProposeText`, `buildCritiqueText`,
@@ -518,6 +537,19 @@ git plugins' `gitEnv`) and `working-tree` otherwise. A loaded file carries
 `uncommitted: true` when its working-tree copy differs from `HEAD`.
 `LoadProjectInstructionsOptions.exactRoot` reads at the given directory
 instead of walking up to the nearest `.git` (the persona file).
+In a working-tree (non-git) project the file tools never change the root
+`AGENTS.md` / `CLAUDE.md` (AGENT-1.b, REQ-plugins-110), so a run cannot plant
+instructions for later runs there.
+
+Non-git project folder (REQ-agent-110, AGENT-1.a): a run whose cwd is a
+project folder that isn't a git repo works there. `createTaskExecute` passes
+the run's cwd to `actingWorkTask(env, cwd)` for the catalog's `workTask`, for
+`refusedForRole` and for the missing-capability facts (`capabilityFacts`,
+REQ-agent-742), so a team member's `/work` run there gets no work tools
+and a call to one gets the role refusal (REQ-plugins-115); the owner's run
+keeps SAFE-2, the AGENT-1.b refusal, the SAFE-3.a withholding of the shell,
+runners and Fledge runs (the cwd is no talk worktree, REQ-agent-503) and the
+verify gate (REQ-agent-002 / REQ-agent-185).
 
 Persona file (REQ-agent-069, PERSONA-1/2/3, issue #69): `src/agent/persona.ts`
 exports `PERSONA_FILE` (`persona.md`), `PERSONA_MAX_BYTES` (8 KiB),
@@ -586,6 +618,22 @@ carries a `stuck` ask. Additive on the NDJSON wire: protocol stays 2.
 Verify runner env (REQ-agent-002, SAFE-6): `src/agent/verify.ts` exports
 `isVerifyEnvDropped` and `buildVerifyEnv`; `defaultVerifyRunner` spawns fledge
 with `buildVerifyEnv()`.
+
+Trust where the repo uses Trust (AGENT-18, REQ-agent-525): `src/agent/verify.ts`
+also exports `TRUST_VERIFY_ARGS` (`--non-interactive trust verify`),
+`TRUST_PROBE_ARGS` (`--non-interactive trust --help`),
+`trustUnavailableReason(detail)`, `trustFailedHead(code)` and
+`TRUST_PASSED_LINE`; `VerifyResult` gains optional `trustNote` (that one-line
+reason, set only when the Trust step failed or is unavailable), which leads
+`runTask`'s failure summary and retry feedback;
+`src/agent/repo-ways.ts` exports `usesTrust(cwd)` (the run's start scan, else
+`detectRepoWays` now with the run's base or `repoWaysBase`). When it is true,
+`defaultVerifyRunner` probes `fledge trust` (a non-zero exit fails closed with
+the exact reason before the lane), runs the lane, and only after a passing
+lane runs `fledge trust verify`; both must exit 0. Each step uses the lane's
+env, process group, idle-watchdog pipe reading and abort handling. A repo
+without `.trust.toml` runs the lane alone as before. Corvidinho's own repo
+has no `.trust.toml`. No env var, config key, flag or schema.
 
 Verify retry feedback (REQ-agent-002, AGENT-4.a): `src/agent/verify.ts` also
 exports `VERIFY_FEEDBACK_MAX_CHARS` (4000) and `verifyFeedbackExcerpt(output,
@@ -1198,6 +1246,12 @@ A change the run did not open is never touched.
 - **When** the attempt ends
 - **Then** one `SpecSync gate:` note names `src/app.ts` and says to open a change with `specsync-change-new`; no lane runs; the retry gets the note as its feedback; once a change's `affected_paths` covers the path, the lane runs and the run is verified (REQ-agent-518)
 
+### Scenario: a /work run's verified tree gets a second-model review before the PR
+
+- **Given** an owner `/work` run with two configured models and the PR path allowlisted
+- **When** its tree passes verify and round 1 of the review raises a finding
+- **Then** the finding is the next attempt's feedback, that attempt is verified again, round 2 reviews the changed tree, and once a round raises nothing the run is done with `review: {state: "finished"}` (REQ-agent-092)
+
 ### Scenario: a run changes a criterion in a hi repo
 
 - **Given** a repo whose `hi/agent.md` has `hi:` front matter, and a run that rewords `AGENT-19` there through the shell while editing `src/app.ts`
@@ -1564,8 +1618,11 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |
 | 2026-10-01 | my-local-cli-task-run-may-use-the-allowlisted-shell-and-runners-inside-its-own-worktree-safe-3-a-local-cli-half: My local CLI task run may use the allowlisted shell and runners inside its own worktree (SAFE-3.a, local CLI half) |
 | 2026-10-01 | a-failed-delegate-worker-or-council-voice-hands-its-lead-one-plain-failure-line-the-worker-s-result-error-without-the: A failed delegate worker or council voice hands its lead one plain failure line (the worker's result error without the provider's host, the no-provider notice, or the exit code), never the worker's summary or stderr, which for a model failure is the provider's raw error body |
+| 2026-10-01 | in-a-non-git-project-my-runs-work-in-the-folder-itself-its-file-tools-leave-the-root-agents-md-and-claude-md-alone: In a non-git project my runs work in the folder itself, its file tools leave the root AGENTS.md and CLAUDE.md alone, schedules keep their own folder, and others only read there (AGENT-1.a, AGENT-1.b, AGENT-1.c) |
 | 2026-10-01 | in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent: In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard) |
 | 2026-09-30 | web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered: Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap |
 | 2026-10-01 | gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins: GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap |
 | 2026-10-03 | missing-plugin-asks-soft-land-with-the-real-gap: Missing-plugin asks soft-land with the real gap |
 | 2026-10-05 | where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts: Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts) |
+| 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
+| 2026-10-05 | in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2: In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause) |
