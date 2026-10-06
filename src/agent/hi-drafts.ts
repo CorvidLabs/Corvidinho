@@ -7,14 +7,16 @@
  *   (src/agent/execute.ts) intercepts it. {@link hiDraftGate} offers it only
  *   in a repo that uses hi, to the owner's and the team's own interactive
  *   Discord runs (chat, an ask answer, `/session start`, `/work`; the role
- *   re-resolved from the live config at every attempt and call) in a git
- *   worktree, and to a local CLI run nothing spawned. Community runs, WATCH,
- *   schedules and delegate or council workers never get it.
+ *   re-resolved from the live config at every attempt and call) in that
+ *   talk's own linked worktree, and to a local CLI run nothing spawned.
+ *   Community runs, WATCH, schedules and delegate or council workers never
+ *   get it.
  * - A call is validated before anything happens ({@link validateHiDrafts}):
  *   1–{@link HI_DRAFT_MAX} drafts, each a new id (`hi export`: not captured,
  *   not retired, its family declared by a hi file, a dotted id's parent
  *   captured or drafted before it) and one line of text that SAFE-6
- *   scrubbing leaves unchanged (a draft scrubbing would change is refused).
+ *   scrubbing leaves unchanged (a draft scrubbing would change is refused);
+ *   in a Discord run, an id already waiting on an open card is refused too.
  *   A refusal goes back to the model; nothing is recorded.
  * - In a Discord run it records a hi capture request
  *   (src/agent/hi-capture-store.ts) for the configured owner's `hi` card
@@ -23,9 +25,11 @@
  *   drafts as the exact `hi` commands. Nothing is captured by the run.
  * - On the owner's Approve the bridge first makes sure the session worktree
  *   is there ({@link ensureHiCaptureWorktree}: re-created on its branch when
- *   it is gone, else it fails closed), then {@link runHiCapture} runs
- *   `hi <ID> "<text>"` for each draft there, all or nothing, and records what
- *   that changed under hi/ for the guard.
+ *   it is gone, the branch re-made at the drafts' commit when parking deleted
+ *   it, else it fails closed), then {@link runHiCapture} runs
+ *   `hi <ID> "<text>"` for each draft there, all or nothing, commits what
+ *   that changed under hi/ on the session's branch (never pushed) and
+ *   records it for the guard.
  */
 
 import { type Stats, chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";

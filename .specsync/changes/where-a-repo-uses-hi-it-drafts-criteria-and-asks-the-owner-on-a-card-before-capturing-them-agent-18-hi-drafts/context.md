@@ -9,9 +9,9 @@ AGENT-18 is captured on main (`hi/agent.md`, Leif's 2026-09-28 interview,
 round 3: "capture as written"): "It works each repo's own way: a SpecSync
 change where the repo uses SpecSync; where it uses hi, it drafts criteria and
 asks before capturing, never inventing them; and Trust where the repo uses
-Trust." The SpecSync clause shipped in #329; #348 (stacked base, branch
-`claude/m3-agent18-hi-guard`, not merged yet) built the guard half of the hi
-clause ("never inventing them"): any `hi/` change no approved capture made
+Trust." The SpecSync clause shipped in #329; #348 (squash-merged to main as
+8bf4422f; this branch was cut from its head and has since merged main) built
+the guard half of the hi clause ("never inventing them"): any `hi/` change no approved capture made
 blocks done and the PR, and since no run could make an approved capture, all
 of them did. The Trust clause is a parallel PR.
 

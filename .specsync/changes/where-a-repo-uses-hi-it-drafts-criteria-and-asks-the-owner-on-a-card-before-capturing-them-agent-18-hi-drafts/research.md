@@ -14,7 +14,7 @@ artifact: research
   rows of `/home/user/coord/m34-defaults.md` (only Corvidinho's owner
   confirms, through the SAFE-18 DM card; owner and team runs and the local
   CLI draft, community and workers don't; capture always needs Approve).
-- #348 (stacked base): `hiChangesSince` / `hiChangesFromSnapshot`, the gate in
+- #348 (merged as 8bf4422f): `hiChangesSince` / `hiChangesFromSnapshot`, the gate in
   `runTask`, the `/work` PR step and `github-pr-create` inside a run all go
   through the two comparison functions, so the allowance lives there once.
 - #316 (the approvals engine): kinds with their own store (`forget`) and

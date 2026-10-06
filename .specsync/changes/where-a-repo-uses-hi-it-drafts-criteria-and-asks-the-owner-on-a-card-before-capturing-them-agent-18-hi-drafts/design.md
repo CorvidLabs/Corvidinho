@@ -28,9 +28,24 @@ artifact: design
   inside it, synchronously, so the decision, the ledger, the audit rows and
   the captured ids commit together or not at all.
 - **All or nothing on disk.** Before the capture every file under `hi/` and a
-  root `INTENT.md` is read as bytes and mode; any failure (a `hi` error, an id
-  that did not come out as drafted, `hi check`) writes them back and removes
-  what the CLI added, then throws so the transaction rolls back.
+  root `INTENT.md` is read as bytes and mode (a symlink there is refused: the
+  `hi` CLI replaces a link with a plain file the undo could not put back);
+  any failure (a `hi` error, an id that did not come out as drafted, `hi
+  check`, `git commit`) undoes the commit and what it staged, writes the
+  files back and removes what the CLI added, then throws so the transaction
+  rolls back.
+- **Committed on the session's branch (review fix).** Parking a talk
+  (`parkSessionWorktree` after the 45-minute idle TTL, `/session end`)
+  force-removes its worktree, uncommitted changes and all, and deletes a
+  branch with no commits of its own. An uncommitted capture was therefore
+  lost when the talk ended, and an Approve after the talk ended always failed
+  (branch gone). Approve now refuses a `hi/` with anything uncommitted, then
+  commits exactly the `hi/` paths the capture changed (`git commit --only`,
+  hooks off, the host's identity, never pushed): the branch keeps the capture
+  after parking, and a later run or a person can ship it. The capture only
+  ever lands in a linked talk worktree (the gate needs the talk's own
+  worktree; the capture refuses a main checkout), so it never commits on a
+  person's checkout.
 - **The guard's allowance is content-based.** Each approved capture records,
   per changed `hi/` path, a key of its content before and after (text and
   executable bit). The guard leaves a changed path out only when a chain of
@@ -40,5 +55,12 @@ artifact: design
   elsewhere (blocks). Committing changes nothing, so a committed capture
   still passes, and a later capture extends the chain.
 - **Re-create or fail closed.** A parked talk worktree is re-created at its
-  path on its branch only when that branch still exists; otherwise the
-  request stays open with a clear error (the owner can Deny or let it lapse).
+  path on its branch; when parking deleted the branch (no commits of its
+  own), the branch is re-made at the commit the drafts were made on (the
+  request's recorded HEAD, still in the object store). Only when that commit
+  is gone too does the request stay open with a clear error (the owner can
+  Deny or let it lapse).
+- **One open card per id.** A draft whose id already waits in an open request
+  of the same repository is refused at the call, so the owner never gets a
+  second card for it (the second could only fail once the first is
+  captured).

@@ -20,7 +20,9 @@ a delegate or council worker, not WATCH (`CORVIDINHO_WATCH_SESSION_ID` or the
 `watch` surface) and not a schedule (`schedule_*` session or the `schedule`
 surface); then either (a) a role session on the `chat`, `ask`, `session` or
 `work` surface whose acting role, re-resolved now (`resolveActingRole`), is
-owner or team, in a cwd that is a git work tree top — mode `card`; or (b) no
+owner or team, in a cwd that is this talk's own linked worktree
+(`isOwnTalkWorktree` with the run's Discord session id: never a main checkout
+or another talk's worktree) — mode `card`; or (b) no
 role session, no Discord session id or surface stamp, and not started from
 inside a tool (`CORVIDINHO_PROJECT_ROOT` unset) — the local CLI, mode `cli`.
 Community runs SHALL never be offered it; a call to it there is refused as
@@ -34,7 +36,11 @@ id whose family a hi file declares, not captured, not retired, not drafted
 twice, a dotted id's parent captured (not retired) or drafted before it;
 and a draft that SAFE-6 scrubbing would change SHALL be refused. Any
 refusal SHALL go back to the model as a failed tool result
-(`refused (AGENT-18): …`) and record nothing. In mode `card`, with an owner
+(`refused (AGENT-18): …`) and record nothing. In mode `card` a draft whose id
+already waits in an open (pending, not expired) request of the same
+repository SHALL be refused (`<ID> already waits on the owner's card
+(request <id>); nothing new was drafted`), so the owner never gets a second
+card that could only fail. In mode `card`, with an owner
 configured and the cwd on a branch, it SHALL record a pending hi capture
 request (`HiCaptureStore.request`, the module-owned `hi_capture_requests`
 table in the shared data dir DB, created with `CREATE TABLE IF NOT EXISTS`,
@@ -52,13 +58,14 @@ one single-quoted shell word) for the person at the CLI. The run itself
 SHALL never capture anything. No env var, config key or flag.
 
 Acceptance Criteria
-- The owner's and a team member's chat, ask, `/session start` and `/work` runs in a talk worktree get mode `card`; a local CLI run gets `cli`; community (also a declared team member the surface stamped community), WATCH, schedules, delegate workers, no surface, a repo without hi, a non-git cwd, a CLI run with a Discord session id and a run started from inside a tool get nothing.
+- The owner's and a team member's chat, ask, `/session start` and `/work` runs in a talk worktree get mode `card`; a local CLI run gets `cli`; community (also a declared team member the surface stamped community), WATCH, schedules, delegate workers, no surface, a repo without hi, a non-git cwd, the main checkout, another talk's worktree, a CLI run with a Discord session id and a run started from inside a tool get nothing.
+- A second owner run drafting an id that already waits on the owner's card gets `refused (AGENT-18): AGENT-20 already waits on the owner's card (request …)` and no second request is recorded.
 - Through `createTaskExecute` and a scripted model, the owner's chat offers `hi-draft` (its prompt says to draft with it), the call records one pending request with the drafts, branch, worktree, repository, requester, role, surface, session and channel, and the run ends with the clarify ask naming the drafts and the request; `hi/` is unchanged.
 - Through `runTask` a team member's run ends `blocked`, not verified, and the lane is never called.
 - A community run is not offered it (its prompt says this run can't draft) and a call is refused as not in the catalog; nothing is recorded. A delegate worker is not offered it.
 - A secret-looking text, a captured id and an unknown family each come back to the model as `refused (AGENT-18)` with the reason (the secret never echoed); nothing is recorded.
 - A local CLI run ends with the exact `hi AGENT-20 '…'` command (a single quote escaped) and records nothing.
-- `tests/agent.hi-draft.test.ts` fails on the stacked base sources and passes after.
+- `tests/agent.hi-draft.test.ts` fails on the base (main) sources and passes after.
 
 ### REQUIREMENT REQ-agent-522
 
@@ -77,15 +84,17 @@ at the base (the blob and mode at the base commit; or the planning
 snapshot) to its content now; a key that can't be read, a symlink, a path
 that ends absent, a cwd with no git common dir, or a ledger that can't be
 read SHALL leave it in (fail closed). So a run in the session worktree after
-the capture, committed or not, is verified and `/work` opens its PR, while an
+the capture (which the owner's Approve commits on the session's branch,
+REQ-discord-521), with more commits on top or not, is verified and `/work`
+opens its PR, while an
 edit on top of a captured file, any other `hi/` file, and ledger steps of a
 request that was not approved still block. No env var, config key or flag.
 
 Acceptance Criteria
-- After an approved capture of two drafts in a talk worktree, `hiChangesSince` from the talk's base lists nothing (also once committed), and a run there that edits `src/` is verified with the lane run once and no `hi guard` note.
+- After an approved capture of two drafts in a talk worktree (one commit on its branch changing only `hi/agent.md`; the main checkout untouched), `hiChangesSince` from the talk's base lists nothing (also with the run's own edit committed on top), and a run there that edits `src/` is verified with the lane run once and no `hi guard` note.
 - An extra criterion added on top of the captured file is still listed; a new `hi/notes.md` beside an approved capture is still listed; a ledger step recorded for a request that is still pending allows nothing.
 - `openWorkPr` for a tree whose only `hi/` change is an approved capture is not refused with `hi-changed`.
-- `tests/agent.hi-draft.test.ts` fails on the stacked base sources and passes after.
+- `tests/agent.hi-draft.test.ts` fails on the base (main) sources and passes after.
 
 ## Modified
 

@@ -11,7 +11,8 @@ artifact: tasks
 - [x] `src/agent/execute.ts` / `ask.ts`: offer and intercept `hi-draft`; the hi prompt block with and without it.
 - [x] `src/agent/repo-ways.ts`: the approved-capture allowance in both comparisons; guard texts; comments in `loop.ts` and `src/work/pr.ts`; `hiRefuseMessage`.
 - [x] `src/discord/hi-card.ts`, the engine's `prepare` step, bridge registration and delivery after ask-answer and `/work` runs.
-- [x] `tests/agent.hi-draft.test.ts` (16), `tests/discord.hi-card.test.ts` (7), `tests/fixtures/stand-in-hi.ts`; `tests/agent.hi-guard.test.ts` and `tests/agent.repo-ways.test.ts` texts updated.
-- [x] Fail-on-base proof recorded in testing.md.
+- [x] `tests/agent.hi-draft.test.ts` (17), `tests/discord.hi-card.test.ts` (8), `tests/fixtures/stand-in-hi.ts`; `tests/agent.hi-guard.test.ts` and `tests/agent.repo-ways.test.ts` texts updated.
+- [x] Fail-on-base proof recorded in testing.md (re-run against main after #348 merged).
+- [x] Review fixes: commit the approved capture on the session's branch; re-make a deleted branch at the drafts' commit; refuse a main checkout, uncommitted `hi/` and hi symlinks; offer `hi-draft` only in the talk's own worktree; one open card per id.
 - [x] Docs (`docs/discord.md`, `docs/DISCORD-GO-LIVE.md`), spec prose (agent, discord, plugins), deltas, module testing evidence.
 - [x] `specsync check --require-coverage 100`, `hi check`, `bunx tsc --noEmit`, `bun test`, `fledge lanes run verify --non-interactive` green.
