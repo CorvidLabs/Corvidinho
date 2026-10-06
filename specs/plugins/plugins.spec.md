@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 65
+version: 66
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -35,6 +35,8 @@ files:
   - plugins/github/api.ts
   - plugins/github/commands.ts
   - plugins/github/ciStatus.ts
+  - tests/github.merge.plugin.test.ts
+  - plugins/github/merge.ts
   - tests/github.ci-status.test.ts
   - plugins/github/index.ts
   - plugins/github/review.ts
@@ -252,7 +254,7 @@ put in an embed (REQ-discord-075), `src/plugins/roles.ts` exports
 `isWatchRunEnv(env)` (IDENTITY-12.a: the surface stamp is `watch`;
 REQ-plugins-1201), and `PluginHandlerResult.spendAsk` carries a
 flat-priced call's SAFE-8 ask (REQ-agent-098),
-`githubRepoOfUrl(url)` says whether a URL is on a GitHub host and which
+`plugins/github/merge.ts` exports `mergeOwnGreenPr`, `isCorvidinhoRepoSlug`, `MERGE_OUTSIDE_CORVIDINHO`, `MERGE_NOT_OWN`, `MERGE_CI_NOT_GREEN`, `MERGE_NOT_MERGEABLE` and the `MergeOctokit` / `MergeResult` types (GITHUB-7, REQ-plugins-099). `githubRepoOfUrl(url)` says whether a URL is on a GitHub host and which
 `OWNER/REPO` it names (DISCORD-SCHEDULE-3.a),
 `checkAddress` classifies one IP, and `createSocketTransport` is the pinned
 HTTP/1.1 socket transport. Autonomous plugins
@@ -361,7 +363,7 @@ a no-op outside a run), so a printing tool is never stopped as idle.
 Builtin plugin loaders MAY re-register after an in-process registry clear
 (test seam). Presence of an already-registered command name skips duplicate
 register. GitHub write commands (`github-issue-create`, `github-issue-comment`,
-`github-pr-create`, `github-pr-review`) are dangerous + minTier 1; SAFE-1
+`github-pr-create`, `github-pr-review`, `github-pr-merge`) are dangerous + minTier 1; SAFE-1
 non-interactive deny unless CORVIDINHO_ALLOWLIST names them. Repo gate
 (GITHUB-6 / ALLOW-1) still applies before any Octokit write. PR create appends
 plain Made with Corvidinho attribution (no @handles) unless the body already
@@ -371,7 +373,7 @@ review (GITHUB-9, REQ-plugins-092): after the repo gate, for every caller, the
 branch on GitHub (dry run: the push remote) must be the reviewed tree, and the
 body gets the `## Second-model review` section before the attribution. The Octokit token is `GITHUB_TOKEN`, else `GH_TOKEN`, trimmed;
 a blank one is missing and never shadows the other, as WATCH reads it. Dry-run via
-CORVIDINHO_GITHUB_DRY_RUN=1. File write/edit/delete require minTier 2 (code);
+CORVIDINHO_GITHUB_DRY_RUN=1. `github-pr-merge` (GITHUB-7 / PROCESS-3) merges only on `CorvidLabs/Corvidinho` (`isCorvidinhoRepoSlug` / `CORVIDINHO_REPO`): the PR author login must match `users.getAuthenticated`, the PR must be open, not draft and `mergeable === true`, and `fetchCiStatus` verdict must be `green`; then `pulls.merge` with no admin/bypass fields (default method squash). Any other `--repo` is refused with `outside Corvidinho a human still merges`; someone else's PR, non-green CI or a non-mergeable PR is refused (exit 2). Logic lives in `plugins/github/merge.ts` (`mergeOwnGreenPr`) so tests inject a fake Octokit. File write/edit/delete require minTier 2 (code);
 `files-delete` is dangerous. Paths clamp to plugin cwd; symlink escapes refuse;
 a dangling symlink is followed by hand and its target clamped (loops refuse).
 Protected infra (`.env*`, `.git`, `fledge.toml`, `.fledge/**` (lane imports
@@ -1330,6 +1332,12 @@ command line.
 - **When** the agent runs `git-diff`, `git-diff --staged` or `git-diff certs/server.pem`
 - **Then** the diff shows `src/a.ts` only, and the explicit secret path is refused with exit 2 like `files-read`
 
+
+- **When** `github-pr-merge 99 --repo CorvidLabs/Corvidinho` runs allowlisted with the token user the PR author, CI green and the PR mergeable
+  **Then** Octokit `pulls.merge` is called without admin/bypass (default squash) and the result reports merged (GITHUB-7 / REQ-plugins-099)
+- **When** `github-pr-merge` is pointed at any other `--repo`
+  **Then** it refuses before merge with `outside Corvidinho a human still merges` (GITHUB-7)
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -1352,6 +1360,10 @@ command line.
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
 | WATCH run (surface `watch`) whose GitHub id is not the owner's or a team member's, has no id or no WATCH session id, is on GitHub `deny_users`, or whose person's Discord id is muted or deny-listed — or a stamp claiming more | Resolves community: mutating plugins refused `not allowed for your role` (exit 2) before SAFE-1, the must-ask card or the handler (IDENTITY-12.a, REQ-plugins-1201) |
 | Write/edit/delete under `hi/` in a repo that uses hi (as given, absolute, or through a symlink that lands there) | Refuse (exit 2, `refused (AGENT-18): '<path>' is under hi/, …`); file unchanged; reads unaffected (REQ-plugins-520) |
+| github-pr-merge `--repo` not CorvidLabs/Corvidinho | Refuse (exit 2, `refused (GITHUB-7): outside Corvidinho a human still merges…`); no Octokit merge (REQ-plugins-099) |
+| github-pr-merge PR author ≠ authenticated login | Refuse (exit 2, never merges someone else's PR) (REQ-plugins-099) |
+| github-pr-merge CI verdict not green | Refuse (exit 2, CI must be green) (REQ-plugins-099) |
+| github-pr-merge draft / closed / mergeable≠true | Refuse (exit 2, not mergeable) (REQ-plugins-099) |
 | github-pr-create inside a run in a repo that uses hi, with anything under `hi/` changed since the run's session base (or unreadable) | Refuse (exit 2, `refused (AGENT-18): this repo's hi/ changed since the session base (…) … so this run opens no PR; …`) before the GitHub client and the GITHUB-9 review; no PR (REQ-plugins-521) |
 | shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, redirections, quoting incl. bash `$'…'`, `\`-newline, comments, here-docs, expanded command words, command substitutions, `eval` and shell `-c` strings, DIRSTACK) | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec cd/pushd left open by an unterminated quote or trailing `\`, or a command nested too deeply to check | Refuse (exit 2, SAFE-3); no spawn |
@@ -1456,6 +1468,7 @@ command line.
 Plugin reload-after-clearRegistry for HEAR #13 fixtures (2026-09-26). Historical
 and current rows for plugins host evolution.
 
+| 2026-10-06 | github-7-typed-github-pr-merge: GITHUB-7 typed `github-pr-merge` merges the bot's own green Corvidinho PR only (CI green, own author, no admin bypass); fixture tests; docs/STATUS/CHANGELOG |
 | 2026-09-26 | discord-user-lookup read-only guild member resolve (REQ-plugins-312 / IDENTITY-5) |
 | 2026-09-26 | dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community: ROLES-CHAT-8 community public GitHub gate + secret-path read refuse |
 | 2026-09-26 | github-write-plugins-issue-48: dangerous issue/PR create comment review + attribution; SAFE-1 + GITHUB-6 |

@@ -8,6 +8,13 @@ import { hiPrRefusal } from "../../src/agent/repo-ways.ts";
 import { gatePrCreate, markReviewOpened, pushRemoteTree, withReviewSection } from "../../src/work/review.ts";
 import { createOctokit, splitOwnerRepo, type ApiResult } from "./api.ts";
 import { Octokit } from "@octokit/rest";
+import {
+  isCorvidinhoRepoSlug,
+  mergeOwnGreenPr,
+  MERGE_OUTSIDE_CORVIDINHO,
+  type MergeMethod,
+  type MergeOctokit,
+} from "./merge.ts";
 
 function takeFlag(args: string[], name: string): { value: string | undefined; rest: string[] } {
   const out: string[] = [];
@@ -552,6 +559,65 @@ export const githubCommands: PluginCommand[] = [
       } catch (e) {
         return fail(e);
       }
+    },
+  },
+  {
+    name: "github-pr-merge",
+    description:
+      "Merge the authenticated bot's own green PR on CorvidLabs/Corvidinho only " +
+      "(Octokit pulls.merge; dangerous GITHUB-7/5). Requires CI green, open+mergeable+not draft, " +
+      "author === token user; never admin/bypass; outside Corvidinho a human still merges",
+    dangerous: true,
+    minTier: 1,
+    async handler(ctx) {
+      const r = await requireRepo(ctx, true);
+      if ("ok" in r && r.ok === false) return r;
+      const { owner, name } = r as { owner: string; name: string };
+      if (!isCorvidinhoRepoSlug(owner, name)) {
+        return { ok: false, error: MERGE_OUTSIDE_CORVIDINHO, exitCode: 2 };
+      }
+      const rest = argsWithoutRepo(ctx.args);
+      const { value: methodFlag, rest: rest2 } = takeFlag(rest, "--method");
+      const selector = rest2[0];
+      const leftover = rest2.slice(1);
+      if (leftover.length) {
+        return { ok: false, error: `unexpected args: ${leftover.join(" ")}`, exitCode: 1 };
+      }
+      const pull_number = Number(selector);
+      if (!selector || !Number.isFinite(pull_number)) {
+        return {
+          ok: false,
+          error:
+            "usage: github-pr-merge <number> --repo CorvidLabs/Corvidinho [--method squash|merge|rebase]",
+          exitCode: 1,
+        };
+      }
+      let merge_method: MergeMethod = "squash";
+      if (methodFlag !== undefined) {
+        const m = methodFlag.trim().toLowerCase();
+        if (m !== "squash" && m !== "merge" && m !== "rebase") {
+          return {
+            ok: false,
+            error: `--method must be squash, merge, or rebase (got ${methodFlag})`,
+            exitCode: 1,
+          };
+        }
+        merge_method = m;
+      }
+      const octokit = clientOrErr();
+      if (!("rest" in octokit)) return octokit;
+      const result = await mergeOwnGreenPr(octokit as MergeOctokit, {
+        owner,
+        repo: name,
+        pull_number,
+        merge_method,
+        dryRun: githubDryRun(),
+      });
+      if (!result.ok) {
+        return { ok: false, error: result.error, exitCode: result.exitCode };
+      }
+      const { ok: _ok, ...data } = result;
+      return okResult(ctx, data);
     },
   },
   {

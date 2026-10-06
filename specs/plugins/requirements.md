@@ -2613,4 +2613,3 @@ Acceptance Criteria
 - `git-commit` of a deleted tracked `.trust.toml` is refused (exit 2, SAFE-2); it stays in `ls-files` and nothing is staged.
 - `discord-send-file`'s `fileAttachment` of `.trust.toml` is refused with `refused (SAFE-2)`.
 - `tests/agent.trust-verify.test.ts` fails on the base sources and passes after.
-
