@@ -21,12 +21,15 @@ artifact: design
   `/` before; no word char or `-` after), like the `specsync check` match:
   `bun test`, `./node_modules/.bin/jest`, `python -m pytest`,
   `sh -c 'bun test'` count; `npm test`, `bun run test`, `jest-junit`,
-  `bun tests/x.ts` do not.
+  `bun tests/x.ts` do not, nor does a name followed by `.` or `:` (a file
+  or script: `bun test.ts`, `bun test:unit`, `jest.config.js`).
 - Static detection: a wrapper (`npm test`, `make test`) may still print a
   recognised summary, so the line says "visibly" and only warns.
 - No line when the project did not load (no / broken `fledge.toml` or
-  import) or has no `[lanes.verify]`: the existing `verify-lane`
-  `[missing]` line stands alone.
+  import), has no `[lanes.verify]`, or its `steps` are a shape fledge
+  refuses to load (none, empty, not a list, a step that is not `"task"`,
+  `{ run }`, `{ task }` or `{ parallel }` of `"task"` / `{ run }`): the
+  existing `verify-lane` line stands alone.
 - Printed text is fixed: runner names from the constant, no task names or
   commands from the file (SAFE-6).
 
@@ -39,3 +42,8 @@ Design choices pending Leif:
   runners.
 - Detection is name-based: an `echo pytest` step counts as a test step;
   a wrapper that does print a recognised summary still gets the warning.
+- A `[lanes.verify]` whose `steps` fledge cannot load but that still
+  names spec-check (`["spec-check", { foo = 1 }]`) keeps the existing
+  `[ok] verify-lane` line (unchanged from main) and gets no `test-step`
+  line. Making `verify-lane` fail on an unloadable lane is a separate
+  change to the existing check.

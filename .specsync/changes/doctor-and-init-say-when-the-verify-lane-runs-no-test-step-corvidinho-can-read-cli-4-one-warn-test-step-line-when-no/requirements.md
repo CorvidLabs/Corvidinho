@@ -8,7 +8,8 @@ artifact: requirements
 - Modified REQ-cli-430: doctor and `init` also print one `[warn] test-step`
   line when a loaded `[lanes.verify]` reaches no command naming a
   `TEST_SUMMARY_RUNNERS` runner (steps, task string / `cmd`, `deps`,
-  `{ run }`, `{ task }`, parallel items, `.fledge/lanes/` imports), naming
-  the runners and AGENT-15; exit code unchanged; none when `fledge.toml` or
-  `[lanes.verify]` is absent or broken; file text never printed. Three new
-  acceptance bullets.
+  `{ run }`, `{ task }`, parallel items, `.fledge/lanes/` imports; a name
+  followed by `.` or `:` is a file or script, not the runner), naming the
+  runners and AGENT-15; exit code unchanged; none when `fledge.toml` or
+  `[lanes.verify]` is absent or broken (including `steps` fledge cannot
+  load); file text never printed. Three new acceptance bullets.

@@ -715,7 +715,9 @@ describe("project files: doctor and a report-only init name what is missing (CLI
 
   test("a verify lane that visibly runs no recognised test runner gets one [warn] test-step line in doctor and init; exit code unchanged, nothing created, file never printed", async () => {
     // Decoys: a wrapper (`npm test`), `bun run test`, a dep running
-    // `node --test`, `jest-junit`, `bun tests/…` and a secret-looking value.
+    // `node --test`, `jest-junit`, `bun tests/…`, file and script names
+    // (`bun test.ts`, `bun test:unit`, `jest.config.js`, `pytest.ini`) and a
+    // secret-looking value.
     const dir = readyProject(
       [
         "[tasks.test]",
@@ -729,9 +731,12 @@ describe("project files: doctor and a report-only init name what is missing (CLI
         "[tasks.report]",
         'cmd = "jest-junit && bun tests/run.ts"',
         "",
+        "[tasks.names]",
+        'cmd = "bun test.ts; bun test:unit; cat jest.config.js pytest.ini"',
+        "",
         SPEC_CHECK_TASK_TOML,
         "[lanes.verify]",
-        `steps = ["test", { run = "bun run test" }, { parallel = ["report", { run = "echo ${REPO}" }] }, { task = "spec-check" }]`,
+        `steps = ["test", { run = "bun run test" }, { parallel = ["report", { run = "echo ${REPO}" }] }, "names", { task = "spec-check" }]`,
         "",
       ].join("\n"),
     );
@@ -755,7 +760,7 @@ describe("project files: doctor and a report-only init name what is missing (CLI
     expect(i.out).toContain("Nothing missing for task run in this project.");
     expect(i.code).toBe(0);
     expectNoValues(i.out);
-    for (const word of ["npm test", "node --test", "jest-junit", "bun run test"]) {
+    for (const word of ["npm test", "node --test", "jest-junit", "bun run test", "test.ts", "jest.config"]) {
       expect(d.out + i.out).not.toContain(word);
     }
 
@@ -803,6 +808,10 @@ describe("project files: doctor and a report-only init name what is missing (CLI
         ),
       ],
       [
+        "vitest's own bin by path",
+        readyProject(`${SPEC_CHECK_TASK_TOML}[lanes.verify]\nsteps = [{ run = "node node_modules/vitest/vitest.mjs run" }, "spec-check"]\n`),
+      ],
+      [
         "a quoted sh -c 'bun test'",
         readyProject(`${SPEC_CHECK_TASK_TOML}[lanes.verify]\nsteps = [{ run = "sh -c 'bun  test --bail'" }, "spec-check"]\n`),
       ],
@@ -828,6 +837,18 @@ describe("project files: doctor and a report-only init name what is missing (CLI
         }),
         "[missing] verify-lane: .fledge/lanes/broken.toml cannot be read or is not valid TOML — fledge cannot load the verify lane",
       ],
+      // A [lanes.verify] whose steps fledge refuses to load: none, empty, not
+      // a list, not a table, or a step of no known shape.
+      ...[
+        '[lanes.verify]\ndescription = "no steps"\n',
+        "[lanes.verify]\nsteps = []\n",
+        '[lanes.verify]\nsteps = "spec-check"\n',
+        '[lanes]\nverify = ["spec-check"]\n',
+        "[lanes.verify]\nsteps = [{ foo = 1 }]\n",
+      ].map((lane): [string, string] => [
+        readyProject(`${SPEC_CHECK_TASK_TOML}${lane}`),
+        "[missing] verify-lane: [lanes.verify] has no spec-check step",
+      ]),
     ];
     const outs = await Promise.all(cases.map(([dir]) => runCmd("init", cleanEnv({}), dir)));
     outs.forEach((r, n) => {

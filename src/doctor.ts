@@ -532,9 +532,13 @@ function taskRunsSpecCheck(name: string, tasks: Map<string, unknown>): boolean {
   return taskChainSome(name, tasks, (n, cmd) => n === SPEC_CHECK_TASK || runsSpecsyncCheck(cmd));
 }
 
-/** One pattern per runner whose summary counts as test evidence (AGENT-15). */
+/**
+ * One pattern per runner whose summary counts as test evidence (AGENT-15).
+ * A runner name followed by `.` or `:` is a file or script name
+ * (`bun test.ts`, `bun test:unit`, `jest.config.js`), not the runner.
+ */
 const TEST_RUNNER_PATTERNS = TEST_SUMMARY_RUNNERS.map(
-  (runner) => new RegExp(`(?:^|[\\s;&|(/"'\`])${runner.split(" ").join("\\s+")}(?![\\w-])`),
+  (runner) => new RegExp(`(?:^|[\\s;&|(/"'\`])${runner.split(" ").join("\\s+")}(?![\\w.:-])`),
 );
 
 /**
@@ -658,17 +662,38 @@ function verifyLaneCheck(project: FledgeProject): DoctorCheck {
 }
 
 /**
+ * True when fledge can load these lane `steps`: a non-empty array whose
+ * items are each `"task"`, `{ run = "cmd" }`, `{ task = "task" }` or
+ * `{ parallel = [...] }` with only `"task"` / `{ run }` items. Fledge
+ * refuses any other shape (and an empty lane) before running a step.
+ */
+function laneStepsLoad(steps: unknown): boolean {
+  const runs = (s: unknown): boolean => typeof tableOf(s).run === "string";
+  const parallelItem = (p: unknown): boolean => typeof p === "string" || runs(p);
+  const step = (s: unknown): boolean => {
+    if (typeof s === "string" || runs(s)) return true;
+    const t = tableOf(s);
+    if (typeof t.task === "string") return true;
+    return Array.isArray(t.parallel) && t.parallel.every(parallelItem);
+  };
+  return Array.isArray(steps) && steps.length > 0 && steps.every(step);
+}
+
+/**
  * CLI-4 / AGENT-15 — `[warn] test-step` when the loaded `[lanes.verify]`
  * has no step (a task and its `deps`, `{ run }`, `{ task }` or a parallel
  * item) whose command names a runner from TEST_SUMMARY_RUNNERS: if the lane
  * prints none of their summaries, a run that changes files is never
  * verified. Static detection, so it never fails doctor / init. Null when
- * such a step is found, or when no verify lane loaded (the `verify-lane`
- * line already says so).
+ * such a step is found, or when no verify lane loaded: no / broken
+ * `fledge.toml` or import, no `[lanes.verify]`, or one whose `steps` fledge
+ * cannot load (the `verify-lane` line already says so).
  */
 function verifyTestStepCheck(project: FledgeProject): DoctorCheck | null {
   if (project.state !== "ok" || !project.lanes.has("verify")) return null;
-  const { tasks, cmds } = laneStepParts(tableOf(project.lanes.get("verify")).steps);
+  const steps = tableOf(project.lanes.get("verify")).steps;
+  if (!laneStepsLoad(steps)) return null;
+  const { tasks, cmds } = laneStepParts(steps);
   const runsTests =
     cmds.some(runsTestRunner) ||
     tasks.some((t) => taskChainSome(t, project.tasks, (_n, cmd) => runsTestRunner(cmd)));
