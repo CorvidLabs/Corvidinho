@@ -340,7 +340,12 @@ plain module-name check), `refuseRootArg`, `readModuleSpec` (its error carries
 (the project `fledge.toml` defines a `spec-check` task; true when that file
 cannot be read or parsed) and `runSpecCheck` (the Fledge `spec-check` task
 when fledge is on PATH and the project defines it, else local `specsync
-check`).
+check`). `runSpecCheck` and `spawnSpecsync` start their child without the
+owner's cloud credentials (SAFE-21.b, REQ-plugins-621): the Fledge task gets
+`withoutCloudCredentials(buildVerifyEnv())`, the verify lane's env; specsync
+gets `withoutCloudCredentials` of `process.env` at call time; the stand-ins
+are released once the child exits and the output is secret-scrubbed
+(`scrubSecrets(redactSecretEnvValues(…))`).
 
 ## Invariants
 

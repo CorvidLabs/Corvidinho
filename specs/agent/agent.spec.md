@@ -663,8 +663,9 @@ family in place, sets the stand-ins, and points `CLOUDSDK_CONFIG` /
 `AZURE_CONFIG_DIR` at fresh empty 0700 dirs inside one `corvidinho-no-cloud-*`
 temp dir made for that one child) and `releaseCloudStandIns(env)` (removes that
 temp dir once the child has exited; a no-op for any other env; leftovers go
-when the process exits). The verify lane, `shell-exec`, the language runners
-and the Fledge core runs use it (REQ-plugins-621), so none starts with the
+when the process exits). The verify lane, `shell-exec`, the language runners,
+the Fledge core runs and the `specsync-check` tool (the lane's `spec-check`
+step) use it (REQ-plugins-621), so none starts with the
 owner's cloud credentials or reads them from `~/.kube/config`, `~/.aws`,
 `~/.config/gcloud` or `~/.azure`.
 
