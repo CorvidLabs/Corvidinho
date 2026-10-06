@@ -7,10 +7,11 @@
   "title": "Shell-exec refuses specsync change approve, review, finalize and ship in every repo: only a human, or Corvidinho's own green-lane settle, does them (AGENT-18.a)",
   "description": "Shell-exec refuses specsync change approve, review, finalize and ship in every repo: only a human, or Corvidinho's own green-lane settle, does them (AGENT-18.a)",
   "kind": "feature",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "e1a24ed25f0368293f52f056a3483b62a9e14756",
   "created_at": 1791245877,
-  "updated_at": 1791246530,
+  "updated_at": 1791246548,
   "affected_specs": [
     "plugins"
   ],

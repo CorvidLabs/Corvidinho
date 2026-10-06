@@ -1,6 +1,6 @@
 ---
 id: shell-exec-refuses-specsync-change-approve-review-finalize-and-ship-in-every-repo-only-a-human-or-corvidinho-s-own
-state: approved
+state: implementing
 type: feature
 base_commit: e1a24ed25f0368293f52f056a3483b62a9e14756
 ---
