@@ -341,6 +341,49 @@ requests, both operator frames, `done`).
 - `tests/agent.safe3a-owner-shell.test.ts` and
   `tests/scheduler.owner-role.test.ts`: their fake model's closing reply is
   no longer a bare "done" that changed nothing (which is now nudged).
+- AGENT-17.a (REQ-agent-088): the "stalls again" case now runs with no model
+  order set and expects the `(no model order is set, so it does not move to
+  another model)` stand line; the guard test expects `nudge`, then
+  `escalate` until `moved()`, then `stand`.
+
+## After the nudge it moves to the next stronger model in the order I set (REQ-agent-088, AGENT-17 / AGENT-17.a)
+
+`tests/agent.stall-escalate.test.ts` with an injected fake LLM that answers
+by `body.model` and reports usage (no network, no real key): `strongerModel`
+/ `moveToStronger` units (no order ⇒ `no-order`; the next entry in the
+order the tier's chain holds; the order, not the fallback list, decides;
+the last in the order ⇒ `top`; a model not in the order ⇒ `unordered`; an
+order entry the tier's list lacks, one without its key, and another tier's
+model are skipped, none left ⇒ `unavailable`; a model that failed in the run
+is never moved back to; the chain moves only when there is one); the
+closing note (both kinds, added once, kept by `closingNotesTail` and a clip
+after the AGENT-11 fallback note and before the role note); the operator
+lines for the move and each stand reason; the guard. Tool loop: order set ⇒
+weak, weak + nudge, then the same request (the second stall dropped, still
+one nudge) to the stronger model, which writes the file; summary ends with
+the note, both operator lines, usage counted per model, the answering model
+is the stronger one; a plan moves too and a verify retry stays on the
+stronger model; no order ⇒ the nudge, then the reply stands (2 requests);
+the top of the order, an unordered model and another tier's model ⇒ no move;
+a model that failed earlier is not moved back to; the stronger model
+stalling too stands (one move per run); an answer after the nudge is no
+stall. SAFE-8 / AUTONOMY-8: under a $5 cap the stronger model's call is in
+the spend ledger under its own model, and an unpriced stronger model under
+a cap stops and asks (`spend-cap`) before it is sent. A delegate worker's
+env keeps `CORVIDINHO_LLM_MODEL_ORDER`. The real CLI (`task run --output
+ndjson` at code tier against a localhost fake LLM with two `ollama:`
+models): three requests (weak, weak, strong), both operator frames, a
+`done` result whose summary ends with the note and whose `model` is the
+stronger one.
+- Fail on base (e1a24ed): with the base's `src/agent/execute.ts` swapped in
+  (the branch's `providers.ts`, `loop-guards.ts` and `task-summary.ts` kept
+  so the file loads), 10 of 24 fail: every move case (order set, plan and
+  verify retry, the stronger model stalling, both spend cases, the CLI)
+  sends no third request, and the stand cases carry the base's
+  "not built yet" line; the 14 units pass. With all four base sources, the
+  file does not load (`Export named 'stallMovedNote' not found`) and the
+  changed stall-nudge cases fail (old stand line, old guard). Restored: all
+  pass.
 
 ## Public spend text (REQ-agent-098 modified, SAFE-14.a)
 

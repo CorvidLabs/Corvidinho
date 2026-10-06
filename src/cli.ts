@@ -177,6 +177,9 @@ Env / allowlists (ALLOW-4; default-deny, never Merlin BASIC):
   ANTHROPIC_API_KEY                                     key for anthropic: models (never commit)
   CORVIDINHO_LLM_TIER=read|tool|code                    capability tier (AGENT-5; default tool)
   CORVIDINHO_LLM_MODEL_READ / _TOOL / _CODE             optional model per tier (AGENT-5; else CORVIDINHO_LLM_MODEL)
+  CORVIDINHO_LLM_MODEL_ORDER                            optional model order, weakest first, same entries: a run that still only plans or
+                                                        says Done with nothing changed after its one nudge moves to the next stronger
+                                                        model in it that its tier lists, and says so; unset = it never moves (AGENT-17.a)
   CORVIDINHO_MAX_TURNS                                  optional turn cap: model/tool rounds per attempt (default 8); a run whose
                                                         last attempt hits it ends with its best answer so far and says so (AGENT-12)
   CORVIDINHO_IDLE_TIMEOUT_MS                            optional idle timeout (default 600000 = 10 min): a run with no output for this

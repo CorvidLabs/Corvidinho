@@ -171,12 +171,13 @@ Acceptance Criteria
 
 ### REQ-cli-009
 
-The CLI SHALL accept `--tier read|tool|code` for `task run` (and SHALL honor `CORVIDINHO_LLM_TIER`) and SHALL wire `createTaskExecute` with cwd, non-interactive mode, allowlist, and event forwarding so Discord/WATCH/`task run` callers share the same LLM plugin tool loop and the same verify gate, which no caller can skip (AGENT-14). The tier SHALL also select the model the run calls (REQ-agent-079). Help SHALL document the optional per-tier model keys `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`, and when any of them is set the doctor `[ok] llm` line SHALL name the model each tier calls (model names only, never the API key); with none set the line SHALL read as before.
+The CLI SHALL accept `--tier read|tool|code` for `task run` (and SHALL honor `CORVIDINHO_LLM_TIER`) and SHALL wire `createTaskExecute` with cwd, non-interactive mode, allowlist, and event forwarding so Discord/WATCH/`task run` callers share the same LLM plugin tool loop and the same verify gate, which no caller can skip (AGENT-14). The tier SHALL also select the model the run calls (REQ-agent-079). Help SHALL document the optional per-tier model keys `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`, and when any of them is set the doctor `[ok] llm` line SHALL name the model each tier calls (model names only, never the API key); with none set the line SHALL read as before. Help and `.env.example` SHALL also document the optional model order `CORVIDINHO_LLM_MODEL_ORDER` (AGENT-17.a, REQ-agent-088); it does not change the doctor line.
 
 Acceptance Criteria
 - Help documents `--tier` and LLM env vars (no secrets).
 - task run forwards ToolCall/ToolResult when not `--json`.
 - Help lists `CORVIDINHO_LLM_MODEL_READ / _TOOL / _CODE`.
+- Help lists `CORVIDINHO_LLM_MODEL_ORDER`, and `.env.example` documents it (same entries, weakest first; unset = no move).
 - With `CORVIDINHO_LLM_MODEL=big`, `_READ=cheap` and `_CODE=big2`, doctor prints `[ok] llm: … model big; per tier: read cheap, tool big, code big2` and exits 0 without the key value; with no per-tier key the line ends `model big`.
 
 ### REQ-cli-010
@@ -647,6 +648,7 @@ the suite), `CORVIDINHO_DAILY_SPEND_CAP_USD`, the LLM API keys
 `CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` (so `bun
 test` never sends a real model call), the operator's model config
 `CORVIDINHO_LLM_MODEL`, `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`,
+`CORVIDINHO_LLM_MODEL_ORDER` (AGENT-17.a: it would move a stalled test run),
 `CORVIDINHO_LLM_BASE_URL`, `CORVIDINHO_LLM_TIER` and `OLLAMA_HOST` (a keyless
 `ollama:` model would call a local server, and the no-provider tests expect
 no model; tests configure a fake provider themselves, AGENT-13), `BRAVE_SEARCH_API_KEY` (so it never sends a real, paid web
@@ -662,6 +664,7 @@ Acceptance Criteria
 - Full `bun test` with those operator vars set passes and leaves the operator data dir empty.
 - With `CORVIDINHO_NON_INTERACTIVE`, `FLEDGE_NON_INTERACTIVE`, `CORVIDINHO_DAILY_SPEND_CAP_USD`, `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `BRAVE_SEARCH_API_KEY`, `GIPHY_API_KEY` and a `schedule_*` `CORVIDINHO_DISCORD_SESSION_ID` set, a child `bun test` sees none of them: it is not non-interactive and has no LLM API key; full `bun test` with them set passes.
 - With `ANTHROPIC_API_KEY`, `OLLAMA_HOST`, `CORVIDINHO_LLM_MODEL`, `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`, `CORVIDINHO_LLM_BASE_URL` and `CORVIDINHO_LLM_TIER` set too, a child `bun test` sees none of them and has no usable model provider.
+- With `CORVIDINHO_LLM_MODEL_ORDER` set too, a child `bun test` does not see it.
 
 ### REQ-cli-419
 
