@@ -80,8 +80,10 @@ import {
   type GatewayHandlers,
 } from "./gateway.ts";
 import {
+  appendAttachmentUrls,
   attachmentCacheDir,
   enrichPromptWithImages,
+  sessionAttachmentDir,
 } from "./image-attachments.ts";
 import { enrichPromptWithIdentity } from "./identity-inject.ts";
 import {
@@ -104,6 +106,7 @@ import {
   type ApprovalDeliveryResult,
 } from "./approval-cards.ts";
 import { forgetApprovalKind } from "./forget-card.ts";
+import { hiCaptureApprovalKind } from "./hi-card.ts";
 import { spendApprovalKind } from "./spend-card.ts";
 import {
   createPublicReplyGate,
@@ -623,6 +626,19 @@ export async function startBridge(
           // AUTONOMY-10 / 10.a: one of its first 20 public-thread replies
           // (plain), held by the reply gate below (REQ-discord-099).
           publicReplyApprovalKind({ db }),
+          // AGENT-18 hi drafts (REQ-discord-521): criteria a run drafted with
+          // hi-draft, captured only on the owner's Approve (`cvok:hi:…`).
+          hiCaptureApprovalKind({
+            db,
+            env,
+            owner: () => config.owner ?? null,
+            sendDm,
+            post: async ({ channelId, content, mentionUserIds }) =>
+              !!replyRef.fn && (await replyRef.fn({ channelId, content, mentionUserIds })) !== null,
+            // DISCORD-5: the outcome post only in a conversation still allowlisted.
+            mayPost: (channelId, parentChannelId) =>
+              isMonitoredConversation(channelId, parentChannelId, config.allowlist),
+          }),
         ],
       })
     : undefined;
@@ -897,6 +913,8 @@ export async function startBridge(
       // DB and sends the owner's card at once.
       ...(db ? { requestForget: (i) => new ForgetRequestStore({ db }).request(i) } : {}),
       ...(approvals ? { deliverForgetCards: () => approvals.deliver() } : {}),
+      // AGENT-18 hi drafts: a card a /work run raised reaches the owner when it ends.
+      ...(approvals ? { deliverApprovalCards: () => approvals.deliver() } : {}),
       // Same object/arrays as the router + scheduler: /admin splices in place.
       allowlist: config.allowlist,
       agent,
@@ -1258,15 +1276,20 @@ export async function startBridge(
         try {
           // DISCORD-9 — download attachments into the session workspace (bound
           // above): the agent's file tools only open paths under its cwd
-          // (REQ-discord-013).
-          let enrichedPrompt = await enrichPromptWithImages(
-            agentPrompt,
-            msg.attachments,
-            {
-              messageId: msg.id,
-              cacheDir: attachmentCacheDir(sessionCwd ?? config.projectRoot),
-            },
-          );
+          // (REQ-discord-013). AGENT-1.a: a non-git project's talk runs in
+          // the project folder itself, so the owner's images go to this
+          // session's own folder there (removed when the session ends), and
+          // anyone else's stay URL-only — their runs only read there.
+          const inPlace = bound.workspace.kind === "project_dir";
+          let enrichedPrompt =
+            inPlace && actingRole !== "owner"
+              ? appendAttachmentUrls(agentPrompt, msg.attachments)
+              : await enrichPromptWithImages(agentPrompt, msg.attachments, {
+                  messageId: msg.id,
+                  cacheDir: inPlace
+                    ? sessionAttachmentDir(bound.workspace.workDir, session.id)
+                    : attachmentCacheDir(sessionCwd ?? config.projectRoot),
+                });
 
           const people = declaredPeople();
           // IDENTITY-4 — inject Discord user id + display / owner map (never invent names).
@@ -2397,6 +2420,8 @@ export async function startBridge(
         inflight?.end();
         // AGENT-3.a / AGENT-3.b: the next run of this session may start.
         turn.done();
+        // SAFE-18 / AGENT-18 hi drafts: a card this run raised reaches the owner now.
+        void approvals?.deliver();
       }
     },
     onSlash: async (interaction) => {

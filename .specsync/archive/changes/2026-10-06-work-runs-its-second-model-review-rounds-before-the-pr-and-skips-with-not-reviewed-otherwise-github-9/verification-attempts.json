@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "attempts": [
+    {
+      "timestamp": 1791243906,
+      "commit": "021cb84493f27876d6368797f2e9b920270a33f1",
+      "contract_digest": "02c8282dafe7e494f4a2c9adfd63455571d274abf12470e1e48b7b7c54eda255",
+      "execution_digest": "d7fce6b4d3eaef0ac8b96339bfdafe7bedb298a1441333939fd540c066c19b75",
+      "workspace_digest": "891775b03979c45e89ab2ac33518b5cb3e23780f277829ceb794424b9e6b7ade",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-092",
+        "REQ-cli-092",
+        "REQ-discord-088",
+        "REQ-plugins-092"
+      ]
+    },
+    {
+      "timestamp": 1791243913,
+      "commit": "6245a5baef198a00af219cc625af55517e0ed187",
+      "contract_digest": "02c8282dafe7e494f4a2c9adfd63455571d274abf12470e1e48b7b7c54eda255",
+      "execution_digest": "d7fce6b4d3eaef0ac8b96339bfdafe7bedb298a1441333939fd540c066c19b75",
+      "workspace_digest": "891775b03979c45e89ab2ac33518b5cb3e23780f277829ceb794424b9e6b7ade",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-092",
+        "REQ-cli-092",
+        "REQ-discord-088",
+        "REQ-plugins-092"
+      ]
+    },
+    {
+      "timestamp": 1791245094,
+      "commit": "6fff6495e708de62f06da4a73437536cf038882d",
+      "contract_digest": "02c8282dafe7e494f4a2c9adfd63455571d274abf12470e1e48b7b7c54eda255",
+      "execution_digest": "d7fce6b4d3eaef0ac8b96339bfdafe7bedb298a1441333939fd540c066c19b75",
+      "workspace_digest": "8ff5d9f1ad0ed515d2454deb5b3a6e1b1657121d8485530f52d0a0ebeaca8d51",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-092",
+        "REQ-cli-092",
+        "REQ-discord-088",
+        "REQ-plugins-092"
+      ]
+    },
+    {
+      "timestamp": 1791245102,
+      "commit": "fd01e8e7a46459031a08566daeddaa144bd8a983",
+      "contract_digest": "02c8282dafe7e494f4a2c9adfd63455571d274abf12470e1e48b7b7c54eda255",
+      "execution_digest": "d7fce6b4d3eaef0ac8b96339bfdafe7bedb298a1441333939fd540c066c19b75",
+      "workspace_digest": "8ff5d9f1ad0ed515d2454deb5b3a6e1b1657121d8485530f52d0a0ebeaca8d51",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-092",
+        "REQ-cli-092",
+        "REQ-discord-088",
+        "REQ-plugins-092"
+      ]
+    },
+    {
+      "timestamp": 1791300445,
+      "commit": "d560948a695e571a51ba7a90127e93f89dc566a3",
+      "contract_digest": "02c8282dafe7e494f4a2c9adfd63455571d274abf12470e1e48b7b7c54eda255",
+      "execution_digest": "d7fce6b4d3eaef0ac8b96339bfdafe7bedb298a1441333939fd540c066c19b75",
+      "workspace_digest": "07818943fe780a51431f70ba7fe0f8c3986950396f8268c41faf3865a2e4f70b",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-092",
+        "REQ-cli-092",
+        "REQ-discord-088",
+        "REQ-plugins-092"
+      ]
+    },
+    {
+      "timestamp": 1791300448,
+      "commit": "e0c460d8f825675c793dbddc7c922234318260ae",
+      "contract_digest": "02c8282dafe7e494f4a2c9adfd63455571d274abf12470e1e48b7b7c54eda255",
+      "execution_digest": "d7fce6b4d3eaef0ac8b96339bfdafe7bedb298a1441333939fd540c066c19b75",
+      "workspace_digest": "07818943fe780a51431f70ba7fe0f8c3986950396f8268c41faf3865a2e4f70b",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-092",
+        "REQ-cli-092",
+        "REQ-discord-088",
+        "REQ-plugins-092"
+      ]
+    }
+  ]
+}

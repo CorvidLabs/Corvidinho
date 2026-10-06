@@ -757,6 +757,8 @@ describe("/work checks the tree against the merge-base before commit and push (R
     allowlist: new Set<string>(WORK_PR_PLUGINS),
     repoGate: () => ({ ok: true as const, repo: "acme/widget" }),
     verify,
+    // GITHUB-9's own gate is tested in tests/work.review.test.ts.
+    reviewed: async () => true,
   });
 
   test("a test deleted in an earlier commit on the branch keeps the PR from opening and names it", async () => {

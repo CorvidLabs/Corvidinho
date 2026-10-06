@@ -292,6 +292,21 @@ skipped with a notice. The bridge SHALL NOT introduce ProcessManager or
 weaken allowlists. Fixture tests SHALL cover extraction and localPath without
 a live Discord token or live CDN.
 
+In a talk bound to a non-git project folder itself (`project_dir`,
+REQ-discord-110, AGENT-1.a) the workspace is the live project folder and is
+never removed, so:
+
+- the owner's images (acting role `owner`) SHALL be written to that
+  session's own folder, `<project>/.corvidinho/attachments/<session id>/`
+  (`sessionAttachmentDir`), and every end of the talk (`endSession`, a TTL
+  purge, an expired row found at start, the re-bind park) SHALL remove that
+  folder, and `.corvidinho/attachments` and `.corvidinho` when that left
+  them empty, touching only a folder that resolves strictly inside the
+  project (`removeSessionAttachments`);
+- anyone else's images SHALL reach the run as their URLs only
+  (`appendAttachmentUrls`): nothing is downloaded or written there, since
+  their runs only read in that folder.
+
 Acceptance Criteria
 - Supported image → downloaded + localPath under cache dir; prompt cites path.
 - Bridge: the cited path is under `<session cwd>/.corvidinho/attachments/`;
@@ -302,6 +317,7 @@ Acceptance Criteria
 - Unsupported MIME / oversize / over-5 → skipped; peers unaffected.
 - Fixture tests for appendAttachmentUrls / buildMultimodalContent /
   enrichPromptWithImages; no live token; secrets out of repo; default-deny.
+- `tests/discord.nongit-project-dir.test.ts`: in a non-git project the owner's image is cited under `<project>/.corvidinho/attachments/<session id>/`, opens with `files-read` from the project folder, and ending the talk removes it, its folder and the empty `.corvidinho`, leaving the project's files; another person's image reaches the run as its URL only and nothing is written; another session's images survive an end and go at its own TTL purge.
 
 ### REQ-discord-014
 
@@ -1129,14 +1145,35 @@ frame's `verified` / `verifySkipped` / `state` through as
 SHALL say plainly why and SHALL NOT claim a PR. No new slash command, option,
 env var, table or column.
 
-`github-pr-create` itself SHALL hold the PR unless a second-model review
-finished for the exact tree of the branch on GitHub (GITHUB-9,
-REQ-plugins-092). This step has no run model, so it starts no review round
-(the /work round driver is a later change): when the call is held
-(`reviewHold`), the outcome SHALL be `opened: false` with reason
-`not-reviewed` and the line `PR: not opened — <the gate's reason> The
-changes stay on branch <branch>.` (the branch stays pushed), never a
-claimed PR.
+A second-model review SHALL have finished for exactly the tree about to be
+committed and pushed (GITHUB-9 / GITHUB-9.a, REQ-plugins-092): an owner or
+team `/work` run drives the review rounds itself once its tree is verified
+(REQ-agent-092; `task run` wires it, REQ-cli-092). Right before the commit
+(after the verify re-run, before `git-commit`, `git-push` and
+`github-pr-create`), `openWorkPr` SHALL check `workTreeReviewed`: the latest
+review cycle for (OWNER/REPO, branch) ended, and its last round reviewed the
+tree a commit of every path `git status` shows would have (tracked and
+untracked, non-ignored files as they are in the work tree); a tree or record
+that cannot be read fails closed. With none, the outcome SHALL be
+`opened: false` with reason `not-reviewed` and the line `PR: not opened —
+<why> The changes stay on branch <branch>.`, where <why> is the run's own
+one-line reason from its result frame (`review` with state `refused`; with
+no second model configured, that there is none, GITHUB-9.a), else `no
+second-model review finished for the tree this /work run would ship, so
+there is no PR (GITHUB-9).`; nothing SHALL be committed or pushed. The
+Discord spawn client SHALL pass the result frame's `review` through on
+`AgentSpawnResult.task` (`{state: "finished"}`, or `{state: "refused",
+reason}` with the reason secret-scrubbed, on one line and at most 300
+characters; any other shape is dropped). `github-pr-create` still holds the
+PR to the same review (the branch on GitHub must be the reviewed tree, and
+this step has no run model, so it starts no round): when that call is held
+(`reviewHold`), the outcome SHALL be `not-reviewed` with the line `PR: not
+opened — <the gate's reason> The changes stay on branch <branch>.` (the
+branch is then pushed), never a claimed PR. The PR body's Verify section
+SHALL say that a second model reviewed the tree and point to the
+`## Second-model review` section, which `github-pr-create` writes after the
+body from the review record: what each round raised and what changed after
+it.
 
 Acceptance Criteria
 - A dirty verified worktree with the three plugins allowlisted is committed, pushed and opened as a draft PR whose body lists the changed files, diffstat, commits and verify result.
@@ -1148,7 +1185,10 @@ Acceptance Criteria
 - A /work by anyone other than ADMIN (the owner) or a declared team member (IDENTITY-10, re-resolved from the people list after the run) never runs the PR step (ROLES-CHAT-3): a community /work never runs at all (IDENTITY-11.a; the reply is the ephemeral `not authorized`), and a team member demoted during the run gets a reply that says the changes stay on the work branch.
 - A team member's /work reaches the PR step with the same gates as the owner's; a team member demoted during the run does not.
 - Nothing is committed or pushed unless the worktree HEAD is the work branch and not the base; a switched or detached HEAD opens no PR.
-- With no finished second-model review for the pushed tree, the PR step ends `not-reviewed` with `PR: not opened — no second-model review has finished for this branch's tree on GitHub, and only an agent run can start one (GITHUB-9). The changes stay on branch …` and the branch pushed; with one finished for that tree it opens, and the PR body carries the `## Second-model review` section.
+- With no finished second-model review for the tree it would ship, the PR step ends `not-reviewed` with `PR: not opened — no second-model review finished for the tree this /work run would ship, so there is no PR (GITHUB-9). The changes stay on branch …`, runs no plugin and commits and pushes nothing; a finished review of an earlier tree of the branch does not count; with one finished for exactly that tree (its untracked files included) it opens, and the PR body carries the reviewed line and the `## Second-model review` section.
+- With the run's refusal on its result frame (no second model), the line is `PR: not opened — there is no second model to review the diff — … (GITHUB-9.a). The changes stay on branch …` and nothing is committed or pushed.
+- An owner /work run through the real tool loop, verify gate and review hook (round 1's findings changed, round 2 clean) then opens the PR whose section lists round 1's finding and the path that changed after it.
+- The spawn client passes the result frame's `review` through: `finished` as is, `refused` with its reason scrubbed onto one line; any other shape is dropped.
 
 ### REQ-discord-085
 
@@ -4167,6 +4207,59 @@ Acceptance Criteria
 - The run is stamped `replyPublicThread` true in a waiting public thread and false elsewhere or once 20 were approved; the spawn client writes `1` or empty, never the inherited value; `discord-send-file` asks only with the stamp, under 20, not dry-run, and a denied card attaches nothing.
 - A real `task run` against the fake model answering in a public thread waits for the card and then posts exactly its answer.
 - `tests/discord.public-reply-gate.test.ts` fails on the base sources (17 of 28) and passes on the branch.
+### REQ-discord-110
+
+In a project that isn't a git repo, the owner's runs work in the project
+folder itself (protected files and the verify gate still apply) and other
+people's runs only read there (AGENT-1.a, captured in `hi/agent.md` from
+Leif's 2026-09-28 interview); schedules for such a project work in their own
+separate folder, never in the live project folder (AGENT-1.c, captured in this
+change's PR from Leif's 2026-09-30 decision, round 13 of that record). A
+project "isn't a git repo" when `isGitRepo` is false (a folder inside a git
+work tree counts as git).
+
+- `ensureTalkWorkspace` SHALL take `nonGit: "scoped_dir" | "project_dir"`
+  (default `scoped_dir`). With `project_dir` and a non-git project it SHALL
+  return `kind: "project_dir"` with `workDir` and `projectWorkingDir` the
+  project folder, and SHALL create no worktree base, scoped dir or branch. A
+  git project SHALL always get its linked worktree.
+- `SessionStore.bindWorktree` SHALL ask for `project_dir`, so every Discord
+  talk (chat, ask pick and Answer resumes, `/session start`, `/work`, the
+  SESSION-3.a resume) in a non-git project runs with the project folder as its
+  cwd, and a restart re-binds it there. The workspace kind of a row SHALL be
+  derived without a new column (`sessionWorkspaceKind`: a branch ⇒
+  `worktree`; a path that is the project folder by realpath ⇒
+  `project_dir`; else `scoped_dir`). A mid-conversation project switch
+  SHALL still be refused (SESSION-WORKTREE-4). An active row bound to a scoped
+  dir of a project that is not a git repo (bound before this change), or bound
+  in place to a project that has since become a git repo, SHALL be parked and
+  then bound afresh (the folder in place, or a linked worktree).
+- `SchedulerService` SHALL pass `nonGit: "scoped_dir"`: each schedule run
+  on a non-git project works in its own `scoped-talk-schedule_…` folder under
+  the worktree base, removed after the run, never the project folder
+  (AGENT-1.c).
+- Park and remove SHALL never delete a directory that equals or contains the
+  project folder (by realpath, and lexically for a path that no longer
+  resolves), whatever kind the caller passes: `parkWorktree` SHALL treat a
+  `project_dir` talk or such a dir as let go of (`removed`, nothing
+  deleted), `removeWorktree` SHALL return at once for such a dir (a main
+  checkout that git refuses to remove is never removed by hand), and the
+  scoped-dir setup SHALL refuse such a path.
+- Other people's runs only read there: the work tools are offered and run only
+  in a git work tree (REQ-plugins-115); the owner's runs keep SAFE-2, the
+  verify gate and the SAFE-3.a refusal of the shell, runners and Fledge runs
+  (REQ-agent-110), and the file tools never change the folder's root AGENTS.md
+  or CLAUDE.md (AGENT-1.b, REQ-plugins-110). `/work` there still opens no PR
+  ("this work did not run in a git worktree", REQ-discord-088).
+- No new env var, config key, slash command, table, column or schema version.
+  Concurrent talks in one non-git folder are not serialized (pending Leif).
+
+Acceptance Criteria
+- `tests/discord.nongit-project-dir.test.ts`: `nonGit: "project_dir"` returns the folder itself and creates no `.corvid-worktrees`; a git project still gets a worktree.
+- Same file: without `nonGit`, and with `scoped_dir`, a non-git project gets its own scoped folder under the base (AGENT-1.c); `tests/scheduler.owner-role.test.ts` keeps the owner schedule in its own `scoped-talk-schedule_…` folder.
+- Same file: `parkWorktree` with every kind on the project folder and on its parent, and `removeWorktree` / `parkWorktree` on a git main checkout, delete nothing; a real scoped dir is still removed.
+- Same file: `SessionStore` binds a non-git talk in place (`cwdFor` the folder, kind `project_dir`), a second turn and a restart re-bind it there, ending it, a TTL purge and an expired row at start leave the folder and its files; a legacy scoped-dir row is parked (its dir removed) and re-bound in place; a switch to another project is refused; a folder that became a git repo is re-bound to a linked worktree and its files survive the end of the talk.
+- With the base sources these tests fail, except the scoped-folder and the git-project guards, which hold on both.
 ### REQ-discord-520
 
 AGENT-18 hi guard: in a repo that uses hi (`scanRepoWays(cwd, mergeBase)`:
@@ -4176,11 +4269,14 @@ pre-push verify re-run, `git-commit` and `git-push`, compare `hi/` with the
 merge-base (`hiChangesSince`: committed on the branch or left in the tree,
 untracked and ignored files included, and an assume-unchanged or
 skip-worktree entry edited on disk; a `hi/` commit on the branch counts
-whoever made it, since the PR would carry it). When anything differs it SHALL not
-open the PR, with reason `hi-changed` and the line `PR: not opened — this
+whoever made it, since the PR would carry it), leaving out a path whose
+change approved captures alone explain (REQ-agent-522). When anything else
+differs it SHALL not open the PR, with reason `hi-changed` and the line `PR: not opened — this
 repo's hi/ changed since the branch left <base> (criteria …; retired
 entries …; other hi/ files …) and no approved capture made the change; the
-agent never changes a repo's criteria itself: … (AGENT-18). The changes stay
+agent never changes a repo's criteria itself: they change only through a
+capture the owner approves on a card …, and only what approved captures
+made passes (AGENT-18). The changes stay
 on branch <branch>.`; a hi/ diff that cannot be read SHALL refuse the
 same way ("could not read what changed under hi/ …"). Because the check
 comes before the fallback re-verify, a run result trusted from its frame and
@@ -4191,4 +4287,79 @@ Acceptance Criteria
 - A hi/ note committed on the branch with no result frame: `hi-changed` naming `other hi/ files hi/notes.md`, and the verify runner is never called.
 - A `/work` run that edits hi/ ends failed and opens no PR; the tree it left is refused even with a trusted verified result; once hi/ is restored the next run is verified and the PR opens.
 - `tests/agent.hi-guard.test.ts` fails on the base sources and passes after.
+- A tree whose only `hi/` change is a capture the owner approved on the `hi` card opens its PR (REQ-agent-522).
+
+### REQ-discord-521
+
+hi drafts, the owner's card (AGENT-18): a hi capture request a run recorded
+with `hi-draft` (REQ-agent-521) SHALL reach Corvidinho's configured owner as
+the `hi` kind of the Approve/Deny card engine (`src/discord/hi-card.ts`,
+`hiCaptureApprovalKind`; buttons `cvok:hi:<decision>:<id>`, routed by the
+bridge like every card kind; class `plain`, so no one-time code). The card
+SHALL show, before it, the exact `hi <ID> '<text>'` commands verbatim as
+quoted data, then the action (capture N drafted criteria into hi/, exactly as
+the commands say), the target (the member-safe project label, the session's
+branch, and whose run on which surface drafted them — never a host path), the
+amount (the ids), notes that only the owner can approve and no reply
+captures anything, the request id, the action hash (request, repository,
+worktree, branch, HEAD, every draft, requester and role) and the expiry
+(24 h). Every press SHALL count only from the configured owner (the bridge's
+`mayDecide`, re-checked on every press: not muted or deny-listed), and Approve
+SHALL check again, inside the engine's transaction, that the presser is the
+owner configured now; anyone else's press SHALL capture nothing. Deny, no
+answer by the expiry, or a late press SHALL be a no: nothing captured.
+An `ApprovalKind` MAY declare `prepare(req)`, which the engine SHALL await on
+Approve after the hash (and any code) check and before the SAFE-5 `started`
+row, outside its transaction; a throw SHALL leave the request open, write an
+`-approve` `error` row and run nothing. The `hi` kind's `prepare` SHALL make
+sure the session worktree is the one the drafts were made in
+(`ensureHiCaptureWorktree`): there, a linked git work tree top of the same
+repository (never its main checkout), on the same branch; when its directory
+is gone (the talk ended and was parked) it SHALL be re-created at the same
+path on the same branch from the main checkout (`git worktree add`), and when
+parking also deleted that branch (a talk with no commits of its own) the
+branch SHALL be re-made at the commit the drafts were made on (the request's
+recorded HEAD, `git worktree add -b`); when that can't be done — that commit
+is gone too, the folder is on another branch or belongs elsewhere, a bare
+repository — it SHALL fail closed. Then, inside the transaction
+(`runHiCapture`), with the `hi` CLI on the bridge's PATH and only PATH and
+HOME in its env: the worktree and the drafts SHALL be checked again (`hi
+export`, the scrub check), `hi/` SHALL hold nothing uncommitted (no staged,
+unstaged or untracked change) and no symlink, `hi <ID> <text>` SHALL run for
+each draft in the worktree, `hi export` SHALL then show each id with exactly
+its text and `hi check` SHALL pass, and exactly the `hi/` paths the capture
+changed SHALL be committed on the session's branch (`git commit --only`,
+hooks off, the host's git identity; message `hi: capture <ids> (AGENT-18;
+approved on the owner's hi card, request <id>)`; local only, never pushed),
+so the capture outlives the talk (parking force-removes a worktree and
+deletes a branch with no commits of its own). A worktree `prepare` re-created
+only for this capture SHALL be removed again after the approval commits
+(`releaseHiCaptureWorktree`: only while it is still that worktree at exactly
+the capture's commit with nothing in it but a root `INTENT.md` the CLI made);
+the branch keeps the commit. On any failure the commit and
+what it staged SHALL be undone, `hi/` (and a root `INTENT.md` the CLI
+created) SHALL be put back as it was and nothing SHALL count as captured (the
+transaction rolls back; the request stays open). On success each criterion
+SHALL write a SAFE-5 `hi-capture-criterion` row (digest of the request, id
+and text), the ledger SHALL record what changed under `hi/`
+(REQ-agent-522), the request SHALL record the captured ids and the commit,
+and the card SHALL close with `Approved by you — captured <ids> into hi/ on
+branch <branch>, commit <12 hex> (AGENT-18).` The asker SHALL get one outcome
+post naming the ids, the branch and the commit only (never the drafted
+text), mentioning only them, in the conversation they asked in while it is
+still allowlisted, else by DM, retried for a day.
+The engine's delivery pass SHALL send the card after each chat run and ask
+answer, when a `/work` run ends (`SlashCtx.deliverApprovalCards`), on
+scheduler ticks and on its own poll. No env var, config key or flag.
+
+Acceptance Criteria
+- The owner gets the commands DM first and then the card with the action, `widget on branch …`, the team member's `/work` run, `2 criteria: AGENT-20, AGENT-18.b`, Approve and Deny buttons and no Enter code.
+- A stranger's press answers "Only the owner can answer this card." and captures nothing; the owner's Approve captures exactly the drafts in one commit on the session's branch that changes only `hi/agent.md` (leaving `hi/` clean), records the ids and the commit, writes `hi-capture-card`, `hi-capture-approve` `started`, two `hi-capture-criterion` and `hi-capture-approve` `ok` rows, and posts one outcome to the asker's channel naming the ids, branch and commit, not the text; a second press finds it closed.
+- With the owner config changed after the card went out, Approve fails ("only Corvidinho's configured owner can approve a capture") and nothing is captured.
+- Deny and a lapsed card capture nothing and tell the asker.
+- A removed worktree whose branch has a commit is re-created on that branch and captured into; a talk parked with `parkWorktree` (worktree removed, branch deleted) is re-made at the recorded commit and captured into, the capture on the re-made branch; with that commit gone too, Approve fails closed ("so are its branch … and the commit the drafts were made on"), nothing is created and the request stays open.
+- An approved capture outlives its talk: after `parkWorktree` the branch is kept and its tip is the capture's commit; a worktree re-created only for a capture is gone again afterwards, its branch holding the commit.
+- A worktree switched to another branch, a request naming the main checkout, an id captured by hand since the draft, a capture that fails on its second draft, a failing `hi check`, a failing `git commit`, an uncommitted `hi/notes.md`, and a `hi/agent.md` that is a symlink each capture nothing, leave `hi/` (and `INTENT.md`), HEAD and the index as before, and never write through the link.
+- Through the bridge with a fake gateway, the `hi` card is delivered, a stranger's `cvok:hi:approve` press is refused, the owner's captures, and the hi guard then lists nothing for the talk.
+- `tests/discord.hi-card.test.ts` fails on the base (main) sources and passes after.
 

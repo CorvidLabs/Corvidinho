@@ -230,13 +230,13 @@ describe("what changed under hi/ since the session base (AGENT-18 hi guard, REQ-
     });
   });
 
-  test("the guard line names what changed and says no run can make an approved capture yet", () => {
+  test("the guard line names what changed and says only what approved captures made passes", () => {
     expect(hiGuardNote({ criteria: [], retired: [], files: [] })).toBeNull();
     const note = hiGuardNote({ criteria: ["AGENT-19"], retired: ["AGENT-2"], files: ["hi/notes.txt"] })!;
     expect(note.startsWith("hi guard:")).toBe(true);
     expect(note).toContain("criteria AGENT-19; retired entries AGENT-2; other hi/ files hi/notes.txt");
     expect(note).toContain("no approved capture made the change");
-    expect(note).toContain("no run can make one yet");
+    expect(note).toContain("only what approved captures made passes");
     // It can't tell who made a change that was already there, so it undoes only its own.
     expect(note).toContain("Undo a hi/ change this run made; leave one that was already there for the owner");
     expect(note).toContain("(AGENT-18)");
@@ -252,7 +252,7 @@ describe("file tools refuse writes, edits and deletes under hi/ in hi repos (REQ
     const write = await tool("files-write", ["hi/agent.md", "--content", "- **AGENT-99**  invented\n"], repo);
     expect(write.ok).toBe(false);
     expect(write.error).toContain(REFUSED_HI);
-    expect(write.error).toContain("no run can make yet");
+    expect(write.error).toContain("criteria change only through a capture the owner approves on a card");
     const create = await tool("files-write", ["./hi/new.md", "--content", "x"], repo);
     expect(create.ok).toBe(false);
     expect(create.error).toContain("refused (AGENT-18)");
@@ -485,7 +485,9 @@ describe("the verify gate blocks done on any hi/ change since the session base (
     expect(block).toContain("Never invent criteria");
     expect(block).toContain("the file tools refuse every write, edit and delete under hi/");
     expect(block).toContain("keeps the run from being verified and /work from opening a PR");
-    expect(block).toContain("no run can make one yet");
+    expect(block).toContain("This run can't draft one");
+    expect(block).not.toContain("hi-draft");
+    expect(renderRepoWaysBlock({ sdd: false, hi: true, trust: false }, { hiDraft: true })).toContain("draft it with hi-draft");
     expect(renderRepoWaysBlock({ sdd: true, hi: false, trust: false })).not.toContain("under hi/");
   });
 });
@@ -606,6 +608,8 @@ describe("/work opens no PR while hi/ differs from the merge-base (REQ-discord-5
         calls.push(o.name);
         return { ok: true, data: { url: "https://github.com/acme/widget/pull/1", number: 1 } };
       },
+      // GITHUB-9's own gate is tested in tests/work.review.test.ts.
+      reviewed: async () => true,
     };
   }
 
