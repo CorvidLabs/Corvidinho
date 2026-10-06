@@ -210,11 +210,14 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   SAFE-8.a): the bridge DMs a card showing the one model call it held (model and provider), the
   cap it would pass (`total` or `provider:<id>`) and that call's estimate, after the run's task
   as quoted data. The estimate counts the request plus the longest reply the model can return
-  (its listed maximum output, e.g. 16,384 tokens for `gpt-4o`, 128,000 for the Claude Opus and
-  Sonnet models; 128,000 for a priced model with no listed maximum), so the card comes before a
-  call whose long reply could pass a cap (AUTONOMY-8.a); replies are never cut short, and the
-  call then counts what the provider reports. With a small cap, a model with a large maximum
-  output asks on most calls (one `claude-opus-5-5` call counts about $2.56 for its reply). **Approve** plus the one-time code it then DMs (SAFE-19) lets exactly that call
+  (its listed maximum output, e.g. 16,384 tokens for `gpt-4o`, 128,000 for the Claude Fable,
+  Opus and Sonnet models; 128,000 for a priced model with no listed maximum), so the card comes
+  before a call whose long reply could pass a cap (AUTONOMY-8.a); replies are never cut short,
+  and the call then counts what the provider reports. A call that is stopped, times out or
+  loses its connection before the reply, or whose reply reports no usage, stays counted at that
+  worst-case estimate (it may have been billed). With a small cap, a model with a large maximum
+  output asks on most calls (one `claude-opus-5-5` call counts about $2.56 for its reply).
+  **Approve** plus the one-time code it then DMs (SAFE-19) lets exactly that call
   through; the next call past the cap asks again with a new card and code. Deny, no answer in
   4 minutes, a late code or a stopped run sends and spends nothing, and the run ends paused as
   above. The card needs the bridge running on the same data dir (WATCH, schedules, the daemon and
