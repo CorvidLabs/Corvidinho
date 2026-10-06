@@ -829,3 +829,14 @@ unchanged; `files-read .trust.toml` and `files-write trust.toml` work;
 `discord-send-file`'s `fileAttachment` refuses it with SAFE-2; `git-commit`
 refuses to stage the deletion of a tracked `.trust.toml`. Both tests fail
 with the base sources.
+
+## GITHUB-7 typed github-pr-merge (REQ-plugins-099)
+
+`tests/github.merge.plugin.test.ts` (12 tests, fake Octokit, no token):
+`isCorvidinhoRepoSlug`; `mergeOwnGreenPr` merges own green Corvidinho PR
+(squash, no admin field), dry-run skips `pulls.merge`, refuses outside
+Corvidinho, refuses other authors, refuses non-green CI, refuses
+draft/closed/not-mergeable, surfaces merge API errors; plugin listing is
+dangerous minTier 1, SAFE-1 denies without allowlist, outside-Corvidinho
+refusal before Octokit, usage error without a PR number.
+`tests/plugins.list.smoke.test.ts` expects `github-pr-merge` in `plugins list`.
