@@ -191,6 +191,13 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   is waiting. A schedule with no channel sends its question and buttons to the owner by **direct
   message** (same DM rule as above). See [`discord.md`](discord.md) "Scheduled questions wait for
   an answer".
+- A scheduled run the bridge started can be stopped from Discord by the owner or the schedule's
+  creator, like a chat run (AGENT-3.c): its progress message in the schedule's channel carries
+  the **Stop** button (a `stop` / `cancel` reply to it works too). A schedule with no channel
+  sends each run's Stop button to the owner by **direct message** (same DM rule as above) and
+  removes it when the run ends on its own. A stop ends that run only; the schedule's next run
+  goes ahead. Runs `corvidinho daemon` claimed have no Stop button. See [`discord.md`](discord.md)
+  "Stopping a scheduled run".
 - Spend is the owner's (SAFE-14.a): with a spend cap set — the total
   `CORVIDINHO_DAILY_SPEND_CAP_USD`, or per provider `CORVIDINHO_PROVIDER_SPEND_CAPS_USD`
   (`provider=USD` entries keyed on the provider id, e.g. `api.openai.com=3,api.anthropic.com=2`;

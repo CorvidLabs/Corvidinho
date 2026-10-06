@@ -22,6 +22,11 @@
  * carries one danger-style **Stop** button (`buildStopComponents`, custom id
  * `cvstop:<runId>`) while the run goes; a press takes the same `stop` as the
  * stop words, from the requester or the owner only (bridge.ts `onComponent`).
+ *
+ * AGENT-3.c (REQ-discord-304): a schedule run the bridge's ticker starts
+ * takes a turn here too (session `schedule_<id>`, the schedule's creator as
+ * the requester, src/discord/schedule-stop.ts), so the owner or the creator
+ * stops it with the same button and words.
  */
 
 import type { DiscordActionRow } from "./ask-buttons.ts";

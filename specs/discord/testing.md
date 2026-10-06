@@ -1373,6 +1373,54 @@ form's resumed run shows the Stop button on the stub and its answer clears it.
   resolve), 14 of the 17 new or changed tests fail; the 3 that pass are the
   custom-id unit (new module), "the collapsed answer replaces it" and
   "without components nothing changes", which hold on the base.
+## Stopping a scheduled run from Discord (REQ-discord-304; AGENT-3.c)
+
+`tests/discord.schedule-stop.test.ts` — dry-run bridges (fake gateway,
+in-memory outbound, memory SQLite, the scheduler polling every 20 ms), stub
+agents that wait until finished (an abort ends them like a killed process):
+a due schedule's run sends one progress embed `⏳ Schedule **<name>** …
+running.` to its channel with one red `Stop` button (`cvstop:run_<n>`) and
+its agent gets a signal and the `schedule_<id>` session; a third user's press
+gets only `This Stop button isn't for you.`; the creator's press gets only
+`⏹ Stopping the run.` and aborts it once; the row is `failed` / `stopped` /
+`stopped on Discord by <creator>` with no ask, the schedule `active`, its
+failure count 0 and its next run in the future; the progress message ends
+`⏹ Stopped` with `components: null`; nothing is posted; a later press gets
+`Nothing is running.`; the next due run gets its own button, posts its ✅
+result and its progress message is deleted. The owner's `Cancel!` reply to
+someone else's schedule run's progress message stops it (one ack reply to the
+stop message; no session of the owner's); a third user's `stop` reply does
+nothing. A schedule with no channel DMs the owner the line, then adds the
+Stop button; the owner's press there (no guild) stops it and the DM becomes
+`⏹ Stopped` with `components: null`; the owner's later press there gets only
+`Nothing is running.` (not the allowlist tip) and another user's DM press on
+it keeps the channel gate; a run that ends on its own has its DM deleted;
+nothing goes to a channel; the same message pressed in a guild channel off
+the allowlist stops nothing. `SchedulerService` with a fake
+control: at `FAILURE_AUTO_PAUSE - 1` failures a stopped run keeps the count
+and the schedule `active`, stores and posts no question, and finishes the
+control once; a stopped run whose tool result looked like an injection
+(SAFE-13) posts exactly one line to its channel, `⏹ Schedule **<name>** … :
+stopped.` with the owner's `🛡️ <@owner> heads-up: …` line, mentioning only
+the owner and not marked model text; a run nobody stopped finishes the
+control before its ✅ post;
+a `begin` that throws is logged and the run goes on; a run abandoned at
+shutdown keeps `interrupted: bridge shutdown`. `createScheduleRunStop`: no
+owner or no DM gives null; a DM whose button edit fails (returns false, or
+throws and is logged) is deleted and its turn released; a channel run's turn is `schedule_<id>` / the creator / the
+channel, `SessionRunControl.stop` aborts the handle's signal, `finish`
+resolves the stopper (twice), releases the turn and edits `⏹ Stopped` with
+`components: null`.
+- Fail on base: with the base's (8bf4422) sources swapped in for the four
+  modified source files (`bridge.ts`, `scheduler/service.ts`,
+  `scheduler/store.ts`, `scheduler/index.ts`; the branch's new
+  `schedule-stop.ts` kept so imports resolve), 8 of the 10 tests fail; the 2
+  that pass are the `createScheduleRunStop` units (the new module itself).
+  With only the SAFE-13 stop line taken out of `scheduler/service.ts`, the
+  injection test fails; with only the stale-DM-press branch taken out of
+  `bridge.ts`, the no-channel test fails (the owner gets the allowlist tip);
+  with a throwing DM edit left uncaught in `schedule-stop.ts`, the DM unit
+  fails (the turn stays held).
 ## The owner's own schedule runs as the owner (REQ-discord-741; DISCORD-SCHEDULE-1.a)
 
 `tests/scheduler.owner-role.test.ts` — with `loadOwner` returning the owner,
