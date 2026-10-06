@@ -24,7 +24,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { emptyConfig } from "../src/allowlist/types.ts";
-import type { AgentClient, AgentRunChatOpts, AgentRunChatResult } from "../src/discord/agent-client.ts";
+import type { AgentClient, AgentRunChatOpts } from "../src/discord/agent-client.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
 import {
@@ -36,7 +36,7 @@ import {
   parseStopRunCustomId,
 } from "../src/discord/run-control.ts";
 import { createScheduleRunStop } from "../src/discord/schedule-stop.ts";
-import type { InboundMessage } from "../src/discord/types.ts";
+import type { AgentSpawnResult, InboundMessage } from "../src/discord/types.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 import { FAILURE_AUTO_PAUSE, SchedulerService, type ScheduleRunStop } from "../src/scheduler/service.ts";
 import { ScheduleStore, type Schedule } from "../src/scheduler/store.ts";
@@ -67,7 +67,7 @@ async function until(cond: () => boolean, ms = 5000): Promise<boolean> {
 
 type Gate = {
   input: AgentRunChatOpts;
-  finish: (over?: Partial<AgentRunChatResult>) => void;
+  finish: (over?: Partial<AgentSpawnResult>) => void;
   aborts: number;
 };
 
