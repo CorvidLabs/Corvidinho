@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "after-the-one-nudge-a-stalled-run-moves-to-the-next-stronger-model-in-the-order-i-set-and-says-so-agent-17-agent-17-a",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "f98b3b19ca726062ce86b7dc9e6af83a3aa1afea",
+  "contract_digest": "17da04597271a5821e4da6e5eb193a3671160b57dde54b5ca1ed9895d1825644",
+  "execution_digest": "bafe7717099e1a1211a84c16e01766690dc794800183fe1261f3717f0d41f804",
+  "workspace_digest": "68e6bfc652de36d56e5ae872278167c78384b4b89e8af1290c855ff669fc6c49",
+  "timestamp": 1791303855
+}
