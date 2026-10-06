@@ -350,6 +350,29 @@ describe("openWorkPr gates (AGENT-4, GITHUB-5, GITHUB-6)", () => {
     }
   });
 
+  test("GITHUB-9: no finished second-model review for the tree it would ship → nothing committed or pushed; the line says why", async () => {
+    const fx = makeFixture("sess_unreviewed");
+    writeFileSync(join(fx.wt, "greet.ts"), "x\n");
+    const rec = recorder();
+    const r = await openWorkPr(input(fx), deps({ runPlugin: rec.fn }));
+    expect(r).toMatchObject({ opened: false, reason: "not-reviewed" });
+    expect(r.line).toBe(
+      `PR: not opened — no second-model review finished for the tree this /work run would ship, so there is no PR (GITHUB-9). The changes stay on branch \`${fx.branch}\`.`,
+    );
+    expect(rec.calls).toEqual([]);
+    expect(remoteRef(fx.bare, fx.branch)).toBeNull();
+    expect(g(fx.wt, "status", "--porcelain")).toContain("greet.ts");
+
+    // The run's own reason words the line (GITHUB-9.a: no second model).
+    const reason =
+      "there is no second model to review the diff — every configured model that has its key wrote this change, and there is no reviewer setting (GITHUB-9.a).";
+    const refused = { verified: true, verifySkipped: false, state: "done", review: { state: "refused" as const, reason } };
+    const r2 = await openWorkPr(input(fx, { run: { ok: true, exitCode: 0, task: refused } }), deps({ runPlugin: rec.fn }));
+    expect(r2.line).toBe(`PR: not opened — ${reason} The changes stay on branch \`${fx.branch}\`.`);
+    expect(rec.calls).toEqual([]);
+    expect(remoteRef(fx.bare, fx.branch)).toBeNull();
+  });
+
   test("AGENT-4: unverified run re-runs the verify lane once; failure ships nothing", async () => {
     const fx = makeFixture();
     writeFileSync(join(fx.wt, "greet.ts"), "x\n");
@@ -453,6 +476,8 @@ describe("openWorkPr ships through the git + github plugins (AUTONOMOUS-3, GITHU
     writeFileSync(join(fx.wt, "greet.ts"), "x\n");
     g(fx.wt, "add", "greet.ts");
     g(fx.wt, "commit", "-q", "-m", "feat: greet");
+    // GITHUB-9: the tree it pushes has a finished second-model review.
+    seedFinishedReview({ repo: "acme/widget", branch: fx.branch, tree: fullWorkTree(fx.wt) });
     const rec = recorder({
       "github-pr-create": {
         ok: true,
@@ -486,6 +511,7 @@ describe("openWorkPr ships through the git + github plugins (AUTONOMOUS-3, GITHU
   test("push failure or PR failure → plain line, never a claimed PR", async () => {
     const fx = makeFixture();
     writeFileSync(join(fx.wt, "greet.ts"), "x\n");
+    seedFinishedReview({ repo: "acme/widget", branch: fx.branch, tree: fullWorkTree(fx.wt) });
     const pushFail = recorder({
       "git-push": { ok: false, exitCode: 1, error: "git push was rejected" },
     });
@@ -496,6 +522,7 @@ describe("openWorkPr ships through the git + github plugins (AUTONOMOUS-3, GITHU
 
     const fx2 = makeFixture("sess_fixture02");
     writeFileSync(join(fx2.wt, "greet.ts"), "x\n");
+    seedFinishedReview({ repo: "acme/widget", branch: fx2.branch, tree: fullWorkTree(fx2.wt) });
     const prFail = recorder({
       "github-pr-create": { ok: false, exitCode: 1, error: "Validation Failed" },
     });
@@ -507,6 +534,7 @@ describe("openWorkPr ships through the git + github plugins (AUTONOMOUS-3, GITHU
   test("real SAFE-1 deny still applies when the caller allowlist is bypassed", async () => {
     const fx = makeFixture();
     writeFileSync(join(fx.wt, "greet.ts"), "x\n");
+    seedFinishedReview({ repo: "acme/widget", branch: fx.branch, tree: fullWorkTree(fx.wt) });
     // Caller claims all allowed, but the plugin call carries an empty allowlist.
     const r = await openWorkPr(
       input(fx),
@@ -551,6 +579,46 @@ describe("Discord spawn client passes verify facts through (REQ-discord-088)", (
       attempts: 1,
       cancelled: false,
     });
+  });
+
+  test("GITHUB-9: the result frame's review outcome rides AgentSpawnResult.task, validated and scrubbed", async () => {
+    const dir = mkdtempSync(join(base, "bin-"));
+    const bin = join(dir, "corvidinho");
+    const fakeKey = `ghp_${"A1b2".repeat(9)}`;
+    const frames = [
+      { review: { state: "finished" } },
+      { review: { state: "refused", reason: `the review could not run:\n${fakeKey} (GITHUB-9).` } },
+      { review: { state: "refused" } },
+      { review: "finished" },
+    ].map((extra) =>
+      serializeFrame(
+        resultFrame({
+          summary: "done",
+          filesChanged: ["a.ts"],
+          verified: true,
+          verifySkipped: false,
+          cancelled: false,
+          state: "done",
+          attempts: 1,
+          ...extra,
+        } as TaskResult),
+      ),
+    );
+    const seen: unknown[] = [];
+    for (const frame of frames) {
+      writeFileSync(bin, `#!/bin/sh\ncat <<'EOF'\n${frame}\nEOF\n`, { mode: 0o755 });
+      chmodSync(bin, 0o755);
+      const res = await createSpawnAgentClient({ bin, cwd: dir }).runChat({ prompt: "x", sessionId: "s", cwd: dir });
+      seen.push(res.task?.review);
+    }
+    expect(seen[0]).toEqual({ state: "finished" });
+    const refused = seen[1] as { state: string; reason: string };
+    expect(refused.state).toBe("refused");
+    expect(refused.reason).not.toContain(fakeKey);
+    expect(refused.reason).not.toContain("\n");
+    expect(refused.reason.startsWith("the review could not run: ")).toBe(true);
+    expect(seen[2]).toBeUndefined();
+    expect(seen[3]).toBeUndefined();
   });
 });
 

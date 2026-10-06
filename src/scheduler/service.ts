@@ -110,6 +110,7 @@ import {
   isGitRepo,
   parkWorktree,
   resolveProjectDir,
+  type TalkWorkspaceKind,
 } from "../worktree/index.ts";
 import type {
   AnsweredScheduleAsk,
@@ -877,7 +878,7 @@ export class SchedulerService {
   ): Promise<void> {
     let workDir: string | undefined;
     let projectDir: string | undefined;
-    let workspaceKind: "worktree" | "scoped_dir" | undefined;
+    let workspaceKind: TalkWorkspaceKind | undefined;
     let branchName: string | undefined;
     // AGENT-3.c: the run's Stop control, once its agent is about to start.
     let stopControl: ScheduleRunStopHandle | null = null;
@@ -938,6 +939,9 @@ export class SchedulerService {
           sessionId: runKey,
           worktreeId: `talk-${runKey}`,
           branchName: `talk/${runKey}`,
+          // AGENT-1.c: a schedule on a non-git project works in its own
+          // scoped folder, never in the live project folder.
+          nonGit: "scoped_dir",
         }).catch((err: unknown) => ({ ok: false as const, error: errorLine(err) }));
         if (!ensured.ok) {
           await this.failBeforeRun(

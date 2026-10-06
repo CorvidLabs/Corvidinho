@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "workreviewapplies-passes-cwd-into-actingworktask-after-agent-1-nongit",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "211ae9323084803d028fcf0616c01c174db4dbc1",
+  "contract_digest": "bf64d026a6e9a02679cd04a24cc807b09108a35fa3acf917f650c9a7fb9584c8",
+  "execution_digest": "a98c701ad90cc5bbdf7d665fda7f4624d1f0b80dc747b786279af56f639bc24b",
+  "workspace_digest": "84c4251241fa185e6a9527aeb132d5d7d6e530c96542f4c4d59bd2fb549e51f6",
+  "timestamp": 1791301790
+}

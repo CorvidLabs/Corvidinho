@@ -14,6 +14,8 @@ Corvidinho is the agent I actually run on a Linux box: it reads the project’s 
 
 - **AGENT-1**  I can give Corvidinho a task in a project folder and it works from that project’s own config and tools, not from some global sandbox of its own.
   - **AGENT-1.a**  In a project that isn't a git repo, my own runs work in the project folder itself (protected files and the verify gate still apply); other people's runs only read there.
+  - **AGENT-1.b**  In a project folder that isn't a git repo, its file tools can't change the root AGENTS.md or CLAUDE.md; I edit those myself.
+  - **AGENT-1.c**  My schedules for a project that isn't a git repo work in their own separate folder, never in the live project folder.
 - **AGENT-2**  Before it writes code, it loads the relevant specs so the work is constrained by what we already agreed, not by vibes.
 - **AGENT-3**  It runs a tool loop I can interrupt, and when I interrupt it, it actually stops instead of finishing in the background.
   - **AGENT-3.a**  In Discord I can stop a run with a Stop button or by saying stop or cancel, and so can the person who asked; a message sent while a run is going waits for it instead of starting a second run.
