@@ -1,4 +1,37 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791301550,
+      "digest": "bf64d026a6e9a02679cd04a24cc807b09108a35fa3acf917f650c9a7fb9584c8",
+      "note": "call-site fix for actingWorkTask(env, cwd) after #351",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "workreviewapplies-passes-cwd-into-actingworktask-after-agent-1-nongit",
+        "title": "WorkReviewApplies passes cwd into actingWorkTask after AGENT-1 nongit",
+        "description": "workReviewApplies passes cwd into actingWorkTask after AGENT-1 nongit",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "src/cli.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "Call-site fix only: actingWorkTask gained cwd in #351; workReviewApplies must forward the run cwd. No requirement text change.",
+        "acceptance_criteria": [
+          "workReviewApplies(env, allowlist, cwd) forwards cwd to actingWorkTask; taskRunIn passes its run cwd; bunx tsc --noEmit is clean on tip"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    }
+  ],
   "reopenings": []
 }

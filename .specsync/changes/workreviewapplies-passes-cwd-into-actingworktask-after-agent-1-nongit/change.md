@@ -1,6 +1,6 @@
 ---
 id: workreviewapplies-passes-cwd-into-actingworktask-after-agent-1-nongit
-state: draft
+state: implementing
 type: bug_fix
 base_commit: 10b5fcaf98abcfb302574ce854e4989c73574677
 ---

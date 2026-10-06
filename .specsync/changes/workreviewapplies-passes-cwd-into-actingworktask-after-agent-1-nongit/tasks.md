@@ -5,4 +5,7 @@ artifact: tasks
 
 # Tasks
 
-<!-- TODO: complete this artifact or remove it from selected_artifacts before approval. -->
+- [x] Add optional `cwd` arg to `workReviewApplies` (default `process.cwd()`)
+- [x] Forward `cwd` into `actingWorkTask(env, cwd)`
+- [x] Pass `taskRunIn`'s run `cwd` at the call site
+- [x] Confirm `bunx tsc --noEmit` is clean
