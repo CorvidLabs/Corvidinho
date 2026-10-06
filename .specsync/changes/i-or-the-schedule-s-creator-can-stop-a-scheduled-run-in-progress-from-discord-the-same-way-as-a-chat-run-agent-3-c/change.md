@@ -1,6 +1,6 @@
 ---
 id: i-or-the-schedule-s-creator-can-stop-a-scheduled-run-in-progress-from-discord-the-same-way-as-a-chat-run-agent-3-c
-state: approved
+state: implementing
 type: feature
 base_commit: 547232902f989f7d4e20069b99e01576e44cc0ae
 ---

@@ -7,10 +7,11 @@
   "title": "I or the schedule's creator can stop a scheduled run in progress from Discord, the same way as a chat run (AGENT-3.c)",
   "description": "I or the schedule's creator can stop a scheduled run in progress from Discord, the same way as a chat run (AGENT-3.c)",
   "kind": "feature",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "547232902f989f7d4e20069b99e01576e44cc0ae",
   "created_at": 1791244520,
-  "updated_at": 1791245012,
+  "updated_at": 1791245031,
   "affected_specs": [
     "discord"
   ],
