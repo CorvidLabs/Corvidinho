@@ -19,5 +19,6 @@ The agent should be a normal citizen of the repo: read issues, open PRs, check C
 - **GITHUB-5**  Creating issues and PRs counts as dangerous work: under non-interactive mode it needs an explicit allow, not a silent post.
 - **GITHUB-6**  There are repos it simply will not touch, even if prompted, so a bad instruction cannot spray noise across the org.
 - **GITHUB-7**  It may merge its own Corvidinho PR when verify and CI are green and branch protection, reviews and CODEOWNERS allow it; it never bypasses them, never merges someone else's PR, and outside Corvidinho a human still merges.
+  - **GITHUB-7.a**  It merges only PRs it opened from its own talk branches with its own token, and only when I ask; it never marks its own /work draft ready, won't merge a PR that changes its own gates (.github, fledge.toml, hi/, AGENTS.md, CODEOWNERS), and counts CI green only when smoke and spec-sync pass at the head.
 - **GITHUB-9**  Before the PR, a second model reviews the diff in bounded rounds, and the PR lists what it raised and what changed.
   - **GITHUB-9.a**  The reviewer is the first other model I've configured that didn't write the change; there's no reviewer setting, and with no second model there's no PR and the reply says why.
