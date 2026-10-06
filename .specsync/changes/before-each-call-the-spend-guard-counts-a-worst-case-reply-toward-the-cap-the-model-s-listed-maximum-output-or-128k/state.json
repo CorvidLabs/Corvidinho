@@ -7,10 +7,11 @@
   "title": "Before each call the spend guard counts a worst-case reply toward the cap, the model's listed maximum output or 128K tokens for a priced model with none listed, so it asks before a long reply could take spend past it; replies are never cut short (AUTONOMY-8.a)",
   "description": "Before each call the spend guard counts a worst-case reply toward the cap, the model's listed maximum output or 128K tokens for a priced model with none listed, so it asks before a long reply could take spend past it; replies are never cut short (AUTONOMY-8.a)",
   "kind": "feature",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "d0b847d7733820deef204618081c0afa803e0a2a",
   "created_at": 1791246011,
-  "updated_at": 1791246151,
+  "updated_at": 1791246174,
   "affected_specs": [
     "agent"
   ],

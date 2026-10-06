@@ -1,6 +1,6 @@
 ---
 id: before-each-call-the-spend-guard-counts-a-worst-case-reply-toward-the-cap-the-model-s-listed-maximum-output-or-128k
-state: approved
+state: implementing
 type: feature
 base_commit: d0b847d7733820deef204618081c0afa803e0a2a
 ---
