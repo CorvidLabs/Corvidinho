@@ -9,5 +9,6 @@ artifact: tasks
 - [x] `tests/github.merge.plugin.test.ts` + plugins list smoke.
 - [x] Specs / docs / STATUS / CHANGELOG Unreleased.
 - [x] SpecSync artifacts + plugins delta REQ-plugins-099.
-- [x] `specsync change approve` → `specsync change check` → verify lane.
-- [ ] Open PR as corvid-agent linking #99 / GITHUB-7.
+- [x] `specsync change approve --actor corvid-agent`.
+- [x] `specsync change check --require-coverage 100` + `fledge lanes run verify --non-interactive` (this verification pass).
+- [x] Open PR as corvid-agent linking #99 / GITHUB-7 (after green verify).
