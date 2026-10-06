@@ -378,9 +378,13 @@ flowchart TD
 ## Session worktrees (SESSION-WORKTREE-1..5)
 
 Each Discord talk that does repo work (`@mention` start, `/session start`, `/work`)
-and each `/schedule` tick on project X runs in an **isolated git worktree** (or a
-project-scoped directory when the target is not a git repo). Soft session TTL /
-new-topic rules still apply; isolation is filesystem/git context, not MEMORY.
+and each `/schedule` tick on project X runs in an **isolated git worktree**. When
+the project is not a git repo (`git rev-parse --is-inside-work-tree` is not
+`true`; a plain folder inside a git checkout counts as git), a talk works in
+**the project folder itself** (AGENT-1.a) and a schedule run in its own scoped
+folder under the worktree base, never the live project folder (AGENT-1.c).
+Soft session TTL / new-topic rules still apply; isolation is filesystem/git
+context, not MEMORY.
 
 | Item | Behavior |
 |------|----------|
@@ -389,7 +393,10 @@ new-topic rules still apply; isolation is filesystem/git context, not MEMORY.
 | Mid-conversation | Project never silently switches once set |
 | Root on disk | `{dirname(project)}/.corvid-worktrees/` or `WORKTREE_BASE_DIR` |
 | Branch | `talk/{sessionPrefix}-{digest}` (16-char id prefix + 16 hex of sha256 of the full id); schedule runs use `talk/schedule_{scheduleId}_{runId}` |
-| End / TTL / abandon | Worktree parked or removed — another talk must not reuse it as cwd |
+| End / TTL / abandon | Worktree parked or removed — another talk must not reuse it as cwd. Parking never deletes the project folder itself or a folder holding it |
+| Non-git project (talks) | The talk's cwd is the project folder itself: no `.corvid-worktrees`, no branch, nothing removed at the end. Only the owner's runs change files there; anyone else's (a team member's `/work` included) only read — the work tools are not offered and a call gets the role refusal. SAFE-2 protected files and the verify lane still apply, the shell, runners and Fledge runs are never offered there (SAFE-3.a), and the file tools never change the folder's root `AGENTS.md` or `CLAUDE.md` (AGENT-1.b: you edit those yourself). `/work` there opens no PR ("not a git worktree"). Two talks in the same folder share it (no per-folder queue yet). A talk bound before this to a scoped dir is moved to the folder at its next turn (the scoped dir is removed) |
+| Non-git project (images) | The owner's images go to `<project>/.corvidinho/attachments/<session id>/`, removed when the talk ends (end, abandon, TTL, restart); anyone else's images reach the run as their URLs only, nothing is written |
+| Non-git project (schedules) | Each run gets its own `scoped-talk-schedule_…` folder under the worktree base, removed after the run; the live project folder is never the cwd (AGENT-1.c) |
 | Schedule ticks | Resolve `schedule.project` → worktree cwd → park after run |
 | Schedule repos | A scheduled run reads and acts only on GitHub-allowlisted repos, even public ones (DISCORD-SCHEDULE-3.a). Its session id is `schedule_<id>`; in that run, and in any `delegate` / `council` worker it starts (they inherit the id), every `github-*` tool, the PR review readers (`github-pr-diff`, `github-pr-files`) and the docs / milestone readers refuse a repo off the GitHub allowlist before any GitHub call, with no public-visibility check (deny lists still win; the role rules still apply on top, so a community run's reads still need a public repo and its writes stay refused). `web-fetch` in a scheduled run refuses, at the first hop and at every redirect, any URL on `github.com` (and its subdomains: `gist`, `api` — only `/repos/OWNER/REPO/…` names a repo — `codeload`, …) or `*.githubusercontent.com` that does not name an allowlisted `OWNER/REPO`; other hosts are unchanged. Chat, `/session start`, `/work` and WATCH are unchanged |
 | Schedule tick gates | Before the worktree and again before the post, the channel must be allowlisted and the schedule creator must pass the same actor gate as live chat (deny list wins; with a non-empty user or role list, their user id must be listed unless they are the owner; a tick knows no member roles). A run refused before it starts runs nothing, posts nothing, is recorded failed (`creator not allowlisted` / `channel not allowlisted`) and counts toward the 5-failure auto-pause (the pause's stuck ask posts only once the gate passes again); a run refused at post time keeps its recorded outcome and posts nothing (DISCORD-SCHEDULE-3) |

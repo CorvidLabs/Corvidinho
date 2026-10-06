@@ -285,15 +285,19 @@ inside that talk's own worktree, and in a local `corvidinho task run` inside the
 | `danger-ping` | true | 1 | true | only to test the deny path (no-op) |
 
 Not dangerous, but mutating (no allowlist entry needed; owner-only under ROLES-CHAT, E.6, except
-that a team member's `/work` run gets `files-write` / `files-edit` and the SpecSync change tools, IDENTITY-10):
+that a team member's `/work` run gets `files-write` / `files-edit` and the SpecSync change tools, IDENTITY-10,
+only in a git worktree: in a project folder that isn't a git repo the talk runs in the folder itself, so
+other people's runs only read there, AGENT-1.a):
 `files-write` (minTier 2), `files-edit` (minTier 2), `specsync-change-new` and `specsync-change-answer`
 (minTier 2; they open and answer a SpecSync change where the project's SpecSync change workflow is on,
 and in a hi repo an `acceptance_criteria` answer must cite captured hi ids, AGENT-18), `delegate` and
 `council` (minTier 2, autonomous extras, E.5). `specsync-change-status` is read-only. The file tools
 still fill a change's `.md` artifacts, but refuse SpecSync's own records in its folder (the `*.json`
 directly in `.specsync/changes/<id>/`: state, approvals, review, verification), which only the
-`specsync change` commands write (SAFE-2, AGENT-18 / AGENT-18.a). In a repo that uses hi (a
-`hi/*.md` with `hi:` front matter), `files-write`, `files-edit` and `files-delete` refuse every
+`specsync change` commands write (SAFE-2, AGENT-18 / AGENT-18.a). In a project folder that isn't a git
+repo they also refuse its root `AGENTS.md` and `CLAUDE.md` (and the file a symlink of that name leads to),
+which are read from disk into every run's instructions there; you edit those yourself (AGENT-1.b).
+In a repo that uses hi (a `hi/*.md` with `hi:` front matter), `files-write`, `files-edit` and `files-delete` refuse every
 path under `hi/` (`refused (AGENT-18): '<path>' is under hi/, …`; reads still work): the agent
 never changes a repo's criteria itself. Criteria change only through a capture the owner
 approves, and no run can make one yet, so any `hi/` change since the session base, however it
@@ -344,9 +348,9 @@ What an entry unlocks **today**:
     `delegate` / `council` workers never get them;
   - the run's directory is that talk's own linked git worktree (`talk-…` under the worktree
     base); for a local `task run`, the top of the new worktree it made for itself in a git repo
-    (SESSION-WORKTREE-1.a, `talk-cli_…`). A non-git project (its scoped folder, or the folder
-    itself for a local run), the main checkout (a local run with `--here`), a subdirectory and
-    another talk's worktree are refused.
+    (SESSION-WORKTREE-1.a, `talk-cli_…`). A non-git project (the folder itself, where a talk or a
+    local run works there, AGENT-1.a, or a schedule's scoped folder), the main checkout (a local
+    run with `--here`), a subdirectory and another talk's worktree are refused.
   When the allowlist names one of them and the run is refused, the
   run's event stream carries one `[operator] SAFE-3.a: … allowlisted but not offered: <why>`
   line (never part of the reply). Every call still goes through the role re-check, SAFE-1,

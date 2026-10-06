@@ -926,6 +926,15 @@ a status and the provider's own raw body; temp dirs only):
   `LLM HTTP 429: {"error":{"message":"Rate limit reached … organization
   org-acme-widgets-7731 … https://127.0.0.1:<port>/account/limits."},
   "request_id":"req_7f3c9a1b2d4e5f60"}`; restored, all pass.
+## The owner's run in a non-git project folder (REQ-agent-110, AGENT-1.a)
+
+`tests/agent.nongit-project-dir.test.ts` (2 tests, `runTask` +
+`createTaskExecute`, fake provider, stub verify lane): the owner's run writes
+`src/app.ts` in the folder, `fledge.toml` (SAFE-2) and `AGENTS.md`
+(AGENT-1.b) are refused, `shell-exec` is not offered with the SAFE-3.a line,
+the lane runs on the folder and its failure fails the run; a team member's
+`/work` run there has no `files-write` / `files-edit` and its call is refused
+for the role, while in a linked worktree both are offered. Fail on base: both.
 ## hi guard: any hi/ change since the session base blocks done (REQ-agent-520, AGENT-18 hi clause, guard half)
 
 `tests/agent.hi-guard.test.ts` (temp git repos and temp non-git dirs only,

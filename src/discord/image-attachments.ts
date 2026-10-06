@@ -10,8 +10,9 @@
  * agent's file tools refuse paths outside their cwd (REQ-discord-013).
  */
 
+import { realpathSync, rmdirSync, rmSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { DiscordAttachment } from "./types.ts";
 
 /** Supported image MIME types (corvid-agent allowlist). */
@@ -47,6 +48,62 @@ export const WORKSPACE_ATTACHMENTS_SUBDIR = join(".corvidinho", "attachments");
  */
 export function attachmentCacheDir(workDir: string): string {
   return join(workDir, WORKSPACE_ATTACHMENTS_SUBDIR);
+}
+
+/** A session id as one safe path component. */
+function sessionComponent(sessionId: string): string {
+  return sessionId.replace(/[^a-zA-Z0-9_-]/g, "") || "session";
+}
+
+/**
+ * AGENT-1.a: in a non-git project a talk runs in the project folder itself
+ * (`project_dir`), so the owner's images go to their own per-session folder,
+ * `<project>/.corvidinho/attachments/<session>/`, which every end of the
+ * session removes ({@link removeSessionAttachments}).
+ */
+export function sessionAttachmentDir(projectDir: string, sessionId: string): string {
+  return join(attachmentCacheDir(projectDir), sessionComponent(sessionId));
+}
+
+function realOrResolved(p: string): string {
+  try {
+    return realpathSync(p);
+  } catch {
+    return resolve(p);
+  }
+}
+
+function strictlyInside(parent: string, child: string): boolean {
+  const rel = relative(parent, child);
+  return rel !== "" && rel !== ".." && !rel.startsWith("../") && !isAbsolute(rel);
+}
+
+/**
+ * Remove one session's attachment folder in a project folder
+ * ({@link sessionAttachmentDir}), then `.corvidinho/attachments` and
+ * `.corvidinho` when that left them empty. Only a folder that resolves
+ * strictly inside the project is touched, so a symlinked `.corvidinho`
+ * never deletes anything outside it, nor the project itself. Never throws.
+ */
+export function removeSessionAttachments(projectDir: string, sessionId: string): void {
+  try {
+    const project = realOrResolved(projectDir);
+    const dir = sessionAttachmentDir(projectDir, sessionId);
+    const real = realOrResolved(dir);
+    if (!strictlyInside(project, real)) return;
+    rmSync(real, { recursive: true, force: true });
+    for (const parent of [dirname(dir), dirname(dirname(dir))]) {
+      const realParent = realOrResolved(parent);
+      if (!strictlyInside(project, realParent)) break;
+      try {
+        rmdirSync(realParent);
+      } catch {
+        break; // not empty (or gone): leave it
+      }
+    }
+  } catch {
+    /* best-effort: a leftover image is not worth failing the end of a talk */
+  }
 }
 
 export type { DiscordAttachment };

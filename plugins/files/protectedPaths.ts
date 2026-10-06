@@ -3,11 +3,15 @@
  * No in-band override (Merlin files-delete pattern).
  */
 
-import { basename, isAbsolute, relative } from "node:path";
+import { statSync } from "node:fs";
+import { basename, isAbsolute, join, relative } from "node:path";
+import { PROJECT_INSTRUCTION_FILES } from "../../src/agent/project-instructions.ts";
 import {
   resolveActingIsAdmin,
   roleSessionActive,
 } from "../../src/plugins/roles.ts";
+import { isGitRepo } from "../../src/worktree/manager.ts";
+import { isInsideRoot, realRoot, resolveProjectPath } from "./resolvePath.ts";
 
 function pathParts(p: string): string[] {
   return p.split("/").filter((part) => part.length > 0 && part !== ".");
@@ -116,6 +120,47 @@ export function sddRecordRefuseMessage(path: string): string {
     `refused (SAFE-2): '${path}' is a SpecSync lifecycle record (state, approvals, review, verification); ` +
     `only the specsync change commands write it. Answer the change's interview with specsync-change-answer ` +
     `and fill its .md artifacts; approving, reviewing and finalizing are never a file edit (AGENT-18, AGENT-18.a).`
+  );
+}
+
+/**
+ * AGENT-1.b: in a project folder that isn't a git repo (`isGitRepo(cwd)`
+ * false), the root `AGENTS.md` and `CLAUDE.md` are read from disk into every
+ * run's prompt (AGENT-1, `PROJECT_INSTRUCTION_FILES`), so the file tools
+ * never change them; the owner edits them. `absPath` is where the tool would
+ * write (`resolveProjectPath`). True for the root names themselves, anything
+ * under them, the file a symlink of that name leads to (the loader reads
+ * through it), and a hard link to one. A git project is unchanged: there only
+ * the committed copy is loaded.
+ */
+export function isNonGitRootInstructionPath(absPath: string, cwd: string): boolean {
+  if (isGitRepo(cwd)) return false;
+  const root = realRoot(cwd);
+  for (const name of PROJECT_INSTRUCTION_FILES) {
+    const named = join(root, name);
+    const targets = [named];
+    try {
+      targets.push(resolveProjectPath(cwd, name));
+    } catch {
+      /* a link out of the project: the loader refuses it, the tools can't reach it */
+    }
+    if (targets.some((t) => isInsideRoot(t, absPath))) return true;
+    try {
+      const a = statSync(absPath);
+      const b = statSync(named);
+      if (a.isFile() && b.isFile() && a.dev === b.dev && a.ino === b.ino) return true;
+    } catch {
+      /* either missing: no shared inode */
+    }
+  }
+  return false;
+}
+
+export function rootInstructionRefuseMessage(path: string): string {
+  return (
+    `refused (AGENT-1.b): '${path}' is this project's root AGENTS.md / CLAUDE.md (or the file one leads to). ` +
+    `In a project folder that isn't a git repo they are read into every run's instructions, ` +
+    `so the file tools never change them; the owner edits them outside the agent.`
   );
 }
 

@@ -56,6 +56,7 @@ files:
   - plugins/files/resolvePath.ts
   - plugins/files/argv.ts
   - plugins/files/image.ts
+  - tests/plugins.nongit-project-dir.test.ts
   - plugins/search/index.ts
   - plugins/search/commands.ts
   - src/memory/confirm.ts
@@ -334,6 +335,16 @@ when fledge is on PATH and the project defines it, else local `specsync
 check`).
 
 ## Invariants
+
+In a project folder that isn't a git repo (`isGitRepo(cwd)` false) the file
+tools never change its root `AGENTS.md` or `CLAUDE.md` (AGENT-1.b,
+REQ-plugins-110): `refuseProtected` refuses, for every caller,
+`isNonGitRootInstructionPath` — the root names, paths under them, the file a
+symlink of that name leads to, a hard link to one — with `refused (AGENT-1.b)`.
+Team work tools need a git work tree: `actingWorkTask(env, cwd)` reads the
+`/work` stamp and `isGitRepo(cwd)`, and `runPlugin` passes the call's cwd, so
+other people's runs only read in a non-git folder (AGENT-1.a,
+REQ-plugins-115).
 
 `spawnCapped` counts each output chunk of its child as the calling run's
 activity for the idle timeout (AGENT-12, REQ-plugins-125, `noteIdleActivity`;
@@ -1432,6 +1443,7 @@ and current rows for plugins host evolution.
 | 2026-10-01 | before-a-pr-opens-a-second-model-reviews-the-diff-in-bounded-rounds-and-the-pr-lists-what-it-raised-and-what-changed: Before a PR opens, a second model reviews the diff in bounded rounds, and the PR lists what it raised and what changed (GITHUB-9, GITHUB-9.a) |
 | 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |
 | 2026-10-01 | the-second-model-review-sees-an-edit-made-in-the-same-second-as-the-last-index-write-its-index-copy-keeps-the-real: The second-model review sees an edit made in the same second as the last index write: its index copy keeps the real index's time (GITHUB-9) |
+| 2026-10-01 | in-a-non-git-project-my-runs-work-in-the-folder-itself-its-file-tools-leave-the-root-agents-md-and-claude-md-alone: In a non-git project my runs work in the folder itself, its file tools leave the root AGENTS.md and CLAUDE.md alone, schedules keep their own folder, and others only read there (AGENT-1.a, AGENT-1.b, AGENT-1.c) |
 | 2026-10-01 | in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent: In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard) |
 | 2026-09-30 | web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered: Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap |
 | 2026-10-01 | gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins: GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap |
