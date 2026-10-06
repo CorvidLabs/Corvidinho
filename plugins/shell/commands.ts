@@ -7,12 +7,13 @@
  * command that touches prod or deploys (must-ask.ts, AUTONOMY-9/9.a) waits
  * in `runPlugin` for the owner's Approve card and one-time code first. The
  * child runs with the runners' env (verify-lane scrub, no GitHub / git
- * credentials: SAFE-21.a), bounded like them (timeout, output cap, process
+ * credentials: SAFE-21.a, no cloud credentials: SAFE-21.b), bounded like them (timeout, output cap, process
  * group killed on timeout or the calling run's abort), and its output is
  * secret-scrubbed.
  */
 
 import { resolve } from "node:path";
+import { releaseCloudStandIns } from "../../src/agent/verify.ts";
 import { redactSecretEnvValues, scrubSecrets } from "../../src/store/scrub.ts";
 import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
 import { spawnCapped } from "../fledge/spawn.ts";
@@ -146,9 +147,10 @@ export const shellCommands: PluginCommand[] = [
       }
 
       // The runners' env: the verify-lane scrub (no LLM / Discord / GitHub
-      // keys), no GitHub or git credentials (SAFE-21.a), and — SAFE-3 — no
-      // inherited CDPATH (a relative `cd sub` could leave the root) or OLDPWD
-      // (where `cd -` lands).
+      // keys), no GitHub or git credentials (SAFE-21.a), no cloud credentials
+      // (SAFE-21.b; its stand-in dirs are removed once the shell exits), and
+      // — SAFE-3 — no inherited CDPATH (a relative `cd sub` could leave the
+      // root) or OLDPWD (where `cd -` lands).
       const env = runnerChildEnv(process.env, root);
 
       // Merlin pattern: eval "$1" 2>&1 so trailing comments/quotes don't break
@@ -157,22 +159,27 @@ export const shellCommands: PluginCommand[] = [
       // outside the root; both no-ops leave the command's exit code / output
       // untouched. This is the runtime half of SAFE-3 — the lexer no longer
       // second-guesses CDPATH.
-      const res = await spawnCapped(
-        [
-          "sh",
-          "-c",
-          'CDPATH=; readonly CDPATH 2>/dev/null; eval "$1" 2>&1',
-          "corvidinho-shell-exec",
-          cmdStr,
-        ],
-        {
-          cwd: root,
-          env,
-          timeoutMs: SHELL_TIMEOUT_MS,
-          maxBytes: SHELL_MAX_OUTPUT_BYTES,
-          signal: ctx.signal,
-        },
-      );
+      let res: Awaited<ReturnType<typeof spawnCapped>>;
+      try {
+        res = await spawnCapped(
+          [
+            "sh",
+            "-c",
+            'CDPATH=; readonly CDPATH 2>/dev/null; eval "$1" 2>&1',
+            "corvidinho-shell-exec",
+            cmdStr,
+          ],
+          {
+            cwd: root,
+            env,
+            timeoutMs: SHELL_TIMEOUT_MS,
+            maxBytes: SHELL_MAX_OUTPUT_BYTES,
+            signal: ctx.signal,
+          },
+        );
+      } finally {
+        releaseCloudStandIns(env);
+      }
       if (res.spawnError) {
         return {
           ok: false,

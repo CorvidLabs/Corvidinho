@@ -49,6 +49,7 @@ files:
   - tests/spend.surfaces.test.ts
   - tests/agent.ask.test.ts
   - tests/agent.verify-env.test.ts
+  - tests/agent.cloud-credentials.test.ts
   - tests/agent.verify-feedback.test.ts
   - tests/safe.injection.test.ts
   - tests/fixtures/verify-lane-log.ts
@@ -581,7 +582,28 @@ carries a `stuck` ask. Additive on the NDJSON wire: protocol stays 2.
 
 Verify runner env (REQ-agent-002, SAFE-6): `src/agent/verify.ts` exports
 `isVerifyEnvDropped` and `buildVerifyEnv`; `defaultVerifyRunner` spawns fledge
-with `buildVerifyEnv()`.
+with `withoutCloudCredentials(buildVerifyEnv())`.
+
+Cloud credentials (SAFE-21.b, REQ-agent-621): `src/agent/verify.ts` also
+exports `isCloudCredentialEnvKey` (the documented family: `KUBECONFIG`,
+`KUBERNETES_SERVICE_HOST` / `_PORT`; AWS keys, session tokens, profiles,
+credential / config files, role and web-identity settings, `AWS_CONTAINER_*`;
+`GOOGLE_APPLICATION_CREDENTIALS` and other Google key files and tokens, every
+`CLOUDSDK_*`; Azure and `ARM_*` principals, identities (`IDENTITY_*`,
+`MSI_*`) and storage keys; any `AWS_` / `GOOGLE_` / `GCLOUD_` / `GCP_` /
+`AZURE_` / `ARM_` key naming a key, token, secret, password or credential;
+`TF_TOKEN_*`; and listed tokens of other clouds and infrastructure APIs),
+`CLOUD_CREDENTIAL_STAND_INS` (`KUBECONFIG`, `AWS_SHARED_CREDENTIALS_FILE`,
+`AWS_CONFIG_FILE`, `GOOGLE_APPLICATION_CREDENTIALS` = `/dev/null`,
+`AWS_EC2_METADATA_DISABLED=true`), `withoutCloudCredentials(env)` (drops the
+family in place, sets the stand-ins, and points `CLOUDSDK_CONFIG` /
+`AZURE_CONFIG_DIR` at fresh empty 0700 dirs inside one `corvidinho-no-cloud-*`
+temp dir made for that one child) and `releaseCloudStandIns(env)` (removes that
+temp dir once the child has exited; a no-op for any other env; leftovers go
+when the process exits). The verify lane, `shell-exec`, the language runners
+and the Fledge core runs use it (REQ-plugins-621), so none starts with the
+owner's cloud credentials or reads them from `~/.kube/config`, `~/.aws`,
+`~/.config/gcloud` or `~/.azure`.
 
 Verify retry feedback (REQ-agent-002, AGENT-4.a): `src/agent/verify.ts` also
 exports `VERIFY_FEEDBACK_MAX_CHARS` (4000) and `verifyFeedbackExcerpt(output,

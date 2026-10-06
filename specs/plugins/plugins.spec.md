@@ -745,6 +745,19 @@ reads without git or gh (an interpreter opening `~/.ssh/id_*`, `ssh` started
 by a program), and tools with their own credential stores (`cargo publish`
 with `~/.cargo/credentials.toml`, npm tokens); a sandbox (G13) is deferred.
 
+SAFE-21.b (REQ-plugins-621, REQ-agent-621): `runnerChildEnv` and
+`fledgeCoreChildEnv` also apply `withoutCloudCredentials`
+(`src/agent/verify.ts`, the verify lane's own cloud scrub), so `shell-exec`,
+the runners and the Fledge core runs start without the owner's cloud
+credentials: every `isCloudCredentialEnvKey` key is dropped (KUBECONFIG and the
+in-cluster switch, AWS keys / profiles / roles / container endpoints, Google
+ADC and key files, `CLOUDSDK_*`, Azure / `ARM_*` principals and identities,
+other clouds' tokens), `KUBECONFIG`, `AWS_SHARED_CREDENTIALS_FILE`,
+`AWS_CONFIG_FILE` and `GOOGLE_APPLICATION_CREDENTIALS` are `/dev/null`,
+`AWS_EC2_METADATA_DISABLED=true`, and `CLOUDSDK_CONFIG` / `AZURE_CONFIG_DIR`
+are fresh empty dirs for that one child, removed (`releaseCloudStandIns`)
+once it exits. Fledge plugin commands (`fledgeChildEnv`) are unchanged.
+
 
 File write/edit are `mutating: true` even when `dangerous: false` (ROLES-CHAT-5).
 When `CORVIDINHO_ACTING_IS_ADMIN` is set (Discord/WATCH/schedule acting session),
@@ -950,7 +963,8 @@ registers nothing (never offered, never a tool that cannot start). Each runner
 is `dangerous: true`, `minTier: 2`, and spawns `[bin, ...argv]` (no shell) with
 cwd = the plugin cwd, the verify lane's scrubbed env (`buildVerifyEnv`) minus
 `CDPATH` / `OLDPWD` and without GitHub or git credentials (SAFE-21.a,
-REQ-plugins-495) plus `CORVIDINHO_PROJECT_ROOT`, stdin closed, a 10 minute
+REQ-plugins-495) or cloud credentials (SAFE-21.b, REQ-plugins-621) plus
+`CORVIDINHO_PROJECT_ROOT`, stdin closed, a 10 minute
 timeout (exit 124), 64 KiB per-stream caps, and its process group killed on
 timeout or the calling run's abort (exit 130); output is secret-scrubbed. Empty
 argv is a usage error (exit 1, nothing spawned); a binary that cannot start
