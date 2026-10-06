@@ -60,9 +60,15 @@
  *    `providerId`); a malformed entry, or a key that names no configured
  *    provider, makes the whole setting invalid: every call stops and asks, and
  *    the value is never echoed.
- *  - Pre-call estimate: request bytes / 3 prompt tokens + a 4096-token reply
- *    reserve. A reply longer than the reserve can overshoot the cap by that one
- *    call; the next call then stops and asks.
+ *  - Pre-call estimate (AUTONOMY-8.a): request bytes / 3 prompt tokens + the
+ *    model's worst-case reply — its listed maximum output
+ *    (`ModelPrice.maxOutputTokens`), or {@link REPLY_RESERVE_DEFAULT_TOKENS}
+ *    for a priced model with no listed maximum. No `max_tokens` is ever sent,
+ *    so replies are never cut short; because the reserve is the longest reply
+ *    the model can return, a long reply cannot take spend past a cap unasked:
+ *    a call whose worst case would cross a cap asks first (the spend card or
+ *    the spend-cap ask). The reservation is still replaced by the
+ *    provider-reported cost once the reply arrives.
  *  - Provider omitted `usage` (or the reply was unreadable) ⇒ the estimate stays
  *    counted. HTTP error reply ⇒ counted as 0 (not billed). Network error or
  *    abort ⇒ the estimate stays counted (it may have been billed).
@@ -137,8 +143,14 @@ export type {
 } from "./spend-notice.ts";
 
 export const SPEND_WINDOW_MS = 24 * 60 * 60 * 1000;
-/** Reply tokens reserved per call before the provider reports actual usage. */
-export const REPLY_RESERVE_TOKENS = 4096;
+/**
+ * AUTONOMY-8.a: reply tokens counted before the call for a priced model whose
+ * maximum output is not listed (`ModelPrice.maxOutputTokens`) — the largest
+ * maximum output in {@link MODEL_PRICES_USD_PER_MTOK} (128K), far above the
+ * old fixed 4096-token reserve. No `max_tokens` is sent, so this is a
+ * worst-case count, never a cut.
+ */
+export const REPLY_RESERVE_DEFAULT_TOKENS = 128_000;
 /** Request bytes per estimated prompt token (low on purpose: errs high). */
 export const REQUEST_BYTES_PER_TOKEN = 3;
 
@@ -147,37 +159,44 @@ export type ModelPrice = {
   inputPerMTok: number;
   /** USD per 1M completion (output) tokens, reasoning tokens included. */
   outputPerMTok: number;
+  /**
+   * AUTONOMY-8.a: the model's listed maximum output in tokens (reasoning
+   * tokens included) — the longest reply one call can bill, since no
+   * `max_tokens` is sent. Unset ⇒ {@link REPLY_RESERVE_DEFAULT_TOKENS}.
+   */
+  maxOutputTokens?: number;
 };
 
 /**
- * Standard list prices, USD per 1M tokens (no batch / cache discounts).
+ * Standard list prices, USD per 1M tokens (no batch / cache discounts), and
+ * each model's listed maximum output tokens (AUTONOMY-8.a worst-case reply).
  * Matched on the exact model id (trimmed, lower-cased): a dated snapshot or a
  * gateway-prefixed id is a different model and counts as unpriced.
  */
 export const MODEL_PRICES_USD_PER_MTOK: Readonly<Record<string, ModelPrice>> =
   Object.freeze({
     // OpenAI
-    "gpt-4o-mini": { inputPerMTok: 0.15, outputPerMTok: 0.6 },
-    "gpt-4o": { inputPerMTok: 2.5, outputPerMTok: 10 },
-    "gpt-4.1": { inputPerMTok: 2, outputPerMTok: 8 },
-    "gpt-4.1-mini": { inputPerMTok: 0.4, outputPerMTok: 1.6 },
-    "gpt-4.1-nano": { inputPerMTok: 0.1, outputPerMTok: 0.4 },
-    "gpt-5": { inputPerMTok: 1.25, outputPerMTok: 10 },
-    "gpt-5-mini": { inputPerMTok: 0.25, outputPerMTok: 2 },
-    "gpt-5-nano": { inputPerMTok: 0.05, outputPerMTok: 0.4 },
-    o3: { inputPerMTok: 2, outputPerMTok: 8 },
-    "o4-mini": { inputPerMTok: 1.1, outputPerMTok: 4.4 },
+    "gpt-4o-mini": { inputPerMTok: 0.15, outputPerMTok: 0.6, maxOutputTokens: 16_384 },
+    "gpt-4o": { inputPerMTok: 2.5, outputPerMTok: 10, maxOutputTokens: 16_384 },
+    "gpt-4.1": { inputPerMTok: 2, outputPerMTok: 8, maxOutputTokens: 32_768 },
+    "gpt-4.1-mini": { inputPerMTok: 0.4, outputPerMTok: 1.6, maxOutputTokens: 32_768 },
+    "gpt-4.1-nano": { inputPerMTok: 0.1, outputPerMTok: 0.4, maxOutputTokens: 32_768 },
+    "gpt-5": { inputPerMTok: 1.25, outputPerMTok: 10, maxOutputTokens: 128_000 },
+    "gpt-5-mini": { inputPerMTok: 0.25, outputPerMTok: 2, maxOutputTokens: 128_000 },
+    "gpt-5-nano": { inputPerMTok: 0.05, outputPerMTok: 0.4, maxOutputTokens: 128_000 },
+    o3: { inputPerMTok: 2, outputPerMTok: 8, maxOutputTokens: 100_000 },
+    "o4-mini": { inputPerMTok: 1.1, outputPerMTok: 4.4, maxOutputTokens: 100_000 },
     // Anthropic (OpenAI-compatible endpoint)
-    "claude-fable-5-1": { inputPerMTok: 10, outputPerMTok: 50 },
-    "claude-fable-5": { inputPerMTok: 10, outputPerMTok: 50 },
-    "claude-opus-5-5": { inputPerMTok: 4, outputPerMTok: 20 },
-    "claude-opus-5": { inputPerMTok: 5, outputPerMTok: 25 },
-    "claude-opus-4-8": { inputPerMTok: 5, outputPerMTok: 25 },
-    "claude-opus-4-7": { inputPerMTok: 5, outputPerMTok: 25 },
-    "claude-opus-4-6": { inputPerMTok: 5, outputPerMTok: 25 },
-    "claude-sonnet-5": { inputPerMTok: 2, outputPerMTok: 10 },
-    "claude-sonnet-4-6": { inputPerMTok: 3, outputPerMTok: 15 },
-    "claude-haiku-4-5": { inputPerMTok: 1, outputPerMTok: 5 },
+    "claude-fable-5-1": { inputPerMTok: 10, outputPerMTok: 50, maxOutputTokens: 128_000 },
+    "claude-fable-5": { inputPerMTok: 10, outputPerMTok: 50, maxOutputTokens: 128_000 },
+    "claude-opus-5-5": { inputPerMTok: 4, outputPerMTok: 20, maxOutputTokens: 128_000 },
+    "claude-opus-5": { inputPerMTok: 5, outputPerMTok: 25, maxOutputTokens: 128_000 },
+    "claude-opus-4-8": { inputPerMTok: 5, outputPerMTok: 25, maxOutputTokens: 128_000 },
+    "claude-opus-4-7": { inputPerMTok: 5, outputPerMTok: 25, maxOutputTokens: 128_000 },
+    "claude-opus-4-6": { inputPerMTok: 5, outputPerMTok: 25, maxOutputTokens: 128_000 },
+    "claude-sonnet-5": { inputPerMTok: 2, outputPerMTok: 10, maxOutputTokens: 128_000 },
+    "claude-sonnet-4-6": { inputPerMTok: 3, outputPerMTok: 15, maxOutputTokens: 128_000 },
+    "claude-haiku-4-5": { inputPerMTok: 1, outputPerMTok: 5, maxOutputTokens: 64_000 },
   });
 
 /** Known price for a model id, or null when unpriced. */
@@ -308,10 +327,23 @@ export function costMicroUsd(price: ModelPrice, usage: AgentTokenUsage): number 
   return tokensToMicroUsd(price, usage.promptTokens, usage.completionTokens + unsplit);
 }
 
-/** Pre-call estimate in micro-USD: prompt from request size + reply reserve. */
+/**
+ * AUTONOMY-8.a: reply tokens counted before a call to a priced model — its
+ * listed maximum output, or {@link REPLY_RESERVE_DEFAULT_TOKENS} when none is
+ * listed (or the listed figure is not a positive whole number).
+ */
+export function replyReserveTokens(price: ModelPrice): number {
+  const max = price.maxOutputTokens;
+  return typeof max === "number" && Number.isSafeInteger(max) && max > 0 ? max : REPLY_RESERVE_DEFAULT_TOKENS;
+}
+
+/**
+ * Pre-call estimate in micro-USD: prompt from request size + the model's
+ * worst-case reply (AUTONOMY-8.a, {@link replyReserveTokens}).
+ */
 export function estimateCallMicroUsd(price: ModelPrice, requestBytes: number): number {
   const prompt = Math.ceil(Math.max(0, requestBytes) / REQUEST_BYTES_PER_TOKEN);
-  return tokensToMicroUsd(price, prompt, REPLY_RESERVE_TOKENS);
+  return tokensToMicroUsd(price, prompt, replyReserveTokens(price));
 }
 
 const SPEND_LEDGER_SQL = `

@@ -175,6 +175,8 @@ describe("bun test preload never writes the operator data dir (SAFE-5)", () => {
       CORVIDINHO_LLM_MODEL_READ: "anthropic:operator-read",
       CORVIDINHO_LLM_MODEL_TOOL: "ollama:operator-tool",
       CORVIDINHO_LLM_MODEL_CODE: "ollama:operator-code",
+      // AGENT-17.a: the operator's model order would move a stalled test run.
+      CORVIDINHO_LLM_MODEL_ORDER: "ollama:operator-model,ollama:operator-code",
       CORVIDINHO_LLM_BASE_URL: "http://127.0.0.1:9/v1",
       CORVIDINHO_LLM_TIER: "read",
       CORVIDINHO_DISCORD_SESSION_ID: "schedule_sched_verifylane",

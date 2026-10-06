@@ -15,8 +15,10 @@
  *
  * The child gets the verify lane's scrubbed env (no Discord config, GitHub
  * tokens, audit key, acting identity or LLM keys; src/agent/verify.ts),
- * without CDPATH / OLDPWD, like `shell-exec`, and without the owner's GitHub
- * or git credentials (SAFE-21.a, {@link withoutGitCredentials}). The spawn is bounded
+ * without CDPATH / OLDPWD, like `shell-exec`, without the owner's GitHub
+ * or git credentials (SAFE-21.a, {@link withoutGitCredentials}) and without
+ * the owner's cloud credentials (SAFE-21.b, `withoutCloudCredentials`, its
+ * stand-in config dirs removed once the child exits). The spawn is bounded
  * (plugins/fledge/spawn.ts): stdin closed, timeout, per-stream output cap,
  * own process group killed on timeout or the calling run's abort. A binary
  * that cannot start returns exit 127 instead of throwing.
@@ -25,7 +27,11 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { buildVerifyEnv } from "../../src/agent/verify.ts";
+import {
+  buildVerifyEnv,
+  releaseCloudStandIns,
+  withoutCloudCredentials,
+} from "../../src/agent/verify.ts";
 import { redactSecretEnvValues, scrubSecrets } from "../../src/store/scrub.ts";
 import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
 import { spawnCapped } from "../fledge/spawn.ts";
@@ -143,13 +149,15 @@ export function withoutGitCredentials(env: Record<string, string>): Record<strin
 
 /**
  * Child env for the runners and `shell-exec`: the verify lane's scrub, no
- * CDPATH / OLDPWD, no GitHub / git credentials (SAFE-21.a), project root hint.
+ * CDPATH / OLDPWD, no GitHub / git credentials (SAFE-21.a), no cloud
+ * credentials (SAFE-21.b: release its stand-in dirs with
+ * `releaseCloudStandIns` once the child has exited), project root hint.
  */
 export function runnerChildEnv(
   base: NodeJS.ProcessEnv,
   projectRoot: string,
 ): Record<string, string> {
-  const env = withoutGitCredentials(buildVerifyEnv(base));
+  const env = withoutCloudCredentials(withoutGitCredentials(buildVerifyEnv(base)));
   delete env.CDPATH;
   delete env.OLDPWD;
   env.CORVIDINHO_PROJECT_ROOT = projectRoot;
@@ -181,13 +189,19 @@ export async function runRunner(opts: RunRunnerOptions): Promise<PluginHandlerRe
   const timeoutMs = opts.timeoutMs ?? RUNNER_TIMEOUT_MS;
   const maxBytes = opts.maxOutputBytes ?? RUNNER_MAX_OUTPUT_BYTES;
   const argv = [bin, ...opts.args.map((a) => String(a))];
-  const res = await spawnCapped(argv, {
-    cwd: root,
-    env: runnerChildEnv(opts.env ?? process.env, root),
-    timeoutMs,
-    maxBytes,
-    signal: opts.signal,
-  });
+  const env = runnerChildEnv(opts.env ?? process.env, root);
+  let res: Awaited<ReturnType<typeof spawnCapped>>;
+  try {
+    res = await spawnCapped(argv, {
+      cwd: root,
+      env,
+      timeoutMs,
+      maxBytes,
+      signal: opts.signal,
+    });
+  } finally {
+    releaseCloudStandIns(env);
+  }
   if (res.spawnError) {
     // PLUGIN-4: a toolchain that went missing after load degrades to a clean error.
     return {

@@ -171,12 +171,13 @@ Acceptance Criteria
 
 ### REQ-cli-009
 
-The CLI SHALL accept `--tier read|tool|code` for `task run` (and SHALL honor `CORVIDINHO_LLM_TIER`) and SHALL wire `createTaskExecute` with cwd, non-interactive mode, allowlist, and event forwarding so Discord/WATCH/`task run` callers share the same LLM plugin tool loop and the same verify gate, which no caller can skip (AGENT-14). The tier SHALL also select the model the run calls (REQ-agent-079). Help SHALL document the optional per-tier model keys `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`, and when any of them is set the doctor `[ok] llm` line SHALL name the model each tier calls (model names only, never the API key); with none set the line SHALL read as before.
+The CLI SHALL accept `--tier read|tool|code` for `task run` (and SHALL honor `CORVIDINHO_LLM_TIER`) and SHALL wire `createTaskExecute` with cwd, non-interactive mode, allowlist, and event forwarding so Discord/WATCH/`task run` callers share the same LLM plugin tool loop and the same verify gate, which no caller can skip (AGENT-14). The tier SHALL also select the model the run calls (REQ-agent-079). Help SHALL document the optional per-tier model keys `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`, and when any of them is set the doctor `[ok] llm` line SHALL name the model each tier calls (model names only, never the API key); with none set the line SHALL read as before. Help and `.env.example` SHALL also document the optional model order `CORVIDINHO_LLM_MODEL_ORDER` (AGENT-17.a, REQ-agent-088); it does not change the doctor line.
 
 Acceptance Criteria
 - Help documents `--tier` and LLM env vars (no secrets).
 - task run forwards ToolCall/ToolResult when not `--json`.
 - Help lists `CORVIDINHO_LLM_MODEL_READ / _TOOL / _CODE`.
+- Help lists `CORVIDINHO_LLM_MODEL_ORDER`, and `.env.example` documents it (same entries, weakest first; unset = no move).
 - With `CORVIDINHO_LLM_MODEL=big`, `_READ=cheap` and `_CODE=big2`, doctor prints `[ok] llm: … model big; per tier: read cheap, tool big, code big2` and exits 0 without the key value; with no per-tier key the line ends `model big`.
 
 ### REQ-cli-010
@@ -647,6 +648,7 @@ the suite), `CORVIDINHO_DAILY_SPEND_CAP_USD`, the LLM API keys
 `CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` (so `bun
 test` never sends a real model call), the operator's model config
 `CORVIDINHO_LLM_MODEL`, `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`,
+`CORVIDINHO_LLM_MODEL_ORDER` (AGENT-17.a: it would move a stalled test run),
 `CORVIDINHO_LLM_BASE_URL`, `CORVIDINHO_LLM_TIER` and `OLLAMA_HOST` (a keyless
 `ollama:` model would call a local server, and the no-provider tests expect
 no model; tests configure a fake provider themselves, AGENT-13), `BRAVE_SEARCH_API_KEY` (so it never sends a real, paid web
@@ -662,6 +664,7 @@ Acceptance Criteria
 - Full `bun test` with those operator vars set passes and leaves the operator data dir empty.
 - With `CORVIDINHO_NON_INTERACTIVE`, `FLEDGE_NON_INTERACTIVE`, `CORVIDINHO_DAILY_SPEND_CAP_USD`, `CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `BRAVE_SEARCH_API_KEY`, `GIPHY_API_KEY` and a `schedule_*` `CORVIDINHO_DISCORD_SESSION_ID` set, a child `bun test` sees none of them: it is not non-interactive and has no LLM API key; full `bun test` with them set passes.
 - With `ANTHROPIC_API_KEY`, `OLLAMA_HOST`, `CORVIDINHO_LLM_MODEL`, `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` / `_CODE`, `CORVIDINHO_LLM_BASE_URL` and `CORVIDINHO_LLM_TIER` set too, a child `bun test` sees none of them and has no usable model provider.
+- With `CORVIDINHO_LLM_MODEL_ORDER` set too, a child `bun test` does not see it.
 
 ### REQ-cli-419
 
@@ -765,7 +768,20 @@ the command that creates it (`fledge run --init`, `specsync init`,
 project root that has the item, that root to run from instead — and SHALL
 make the command exit 1. A verify lane whose steps (or a step task's `deps`)
 name a task no `[tasks]` table defines SHALL be `[missing]` naming that task,
-since fledge refuses to run it. A file that cannot be read or parsed, or
+since fledge refuses to run it. When the `verify` lane loads but no command
+it reaches (a step task's string form or `cmd`, that task's `deps`,
+`{ run }`, `{ task }` or a `parallel` item, from `fledge.toml` or a
+`.fledge/lanes/*.toml` import) names a runner from `TEST_SUMMARY_RUNNERS`
+(`bun test`, jest, vitest, `cargo test`, pytest, `go test`; a name followed
+by `.` or `:` is a file or script, not the runner), both commands
+SHALL print one plain-language `[warn] test-step` line naming those runners
+and saying that if the lane prints none of their summaries a run that
+changes files is never verified (AGENT-15). The detection is static (a
+wrapper such as `npm test` may still print a recognised summary), so that
+line SHALL NOT change the exit code; when `fledge.toml` or `[lanes.verify]`
+is absent or broken (not valid TOML, or `steps` fledge cannot load: none,
+empty, not a list, or a step of no known shape) there SHALL be no
+`test-step` line (the `verify-lane` line stands alone). A file that cannot be read or parsed, or
 that is not a regular file (never opened), SHALL be named without printing
 its contents or the parser's message (SAFE-6). `init` SHALL be report only: it prints the `llm`
 line (`warn` with the no-provider notice when no model provider is usable,
@@ -781,6 +797,9 @@ Acceptance Criteria
 - The verify lane counts for a `"spec-check"` step, `{ task = "spec-check" }`, `{ run = "specsync check …" }`, a `parallel` item, a task whose `deps` run `specsync check`, and a lane imported from `.fledge/lanes/`; it is `[missing]` with its own reason when there is no `[lanes.verify]`, when no step runs spec-check (`echo specsync checked` does not count), when the lane names an undefined `spec-check` task, and when a step or a step task's `deps` names any other undefined task (named in the line) even if spec-check is present; `{ run }` counts `specsync check` by path (`/usr/local/bin/specsync check`) or quoted (`sh -c 'specsync check'`).
 - A `fledge.toml` that is not TOML fails `fledge.toml` and `verify-lane` naming the file, never printing its text; a broken `.fledge/lanes/*.toml` import fails `verify-lane` naming that file; a `.specsync` that is a file is `[missing]` as not a directory; a `fledge.toml` that is a FIFO is `[missing]` without being opened (doctor does not block).
 - Run from a subdirectory of a git project whose root has `fledge.toml`, `.specsync/` and `specs/`, each `[missing]` line names that root (`<root> (the project root) has it — run corvidinho there`) instead of `fledge run --init` / `specsync init`; an item the root lacks keeps its creator command.
+- A verify lane whose steps reach only commands naming no recognised runner (`npm test`, `bun run test`, a `node --test` dep, `jest-junit`, `bun tests/…`, `bun test.ts`, `bun test:unit`, `jest.config.js`, `pytest.ini`) gets exactly one `[warn] test-step` line in doctor and in init, saying no `[lanes.verify]` step visibly runs a recognised test runner, naming `bun test`, jest, vitest, `cargo test`, pytest and `go test`, and that if the lane prints none of their summaries a run that changes files is never verified (AGENT-15); doctor still prints `All checks passed.` and exits 0, init prints `Nothing missing for task run in this project.` and exits 0; the file's text and values are never printed and nothing is created. Next to a `[missing] verify-lane` (no spec-check) the warn adds no failure.
+- There is no `test-step` line for this checkout (verify → `test` = `bun test`), a lane with `{ run = "cargo test" }`, a lane whose step task has `deps` running pytest, a lane imported from `.fledge/lanes/` running `go test`, `{ task }` on a string task running vitest, a parallel `{ run }` running jest by path, `node node_modules/vitest/vitest.mjs run`, or `sh -c 'bun  test'`.
+- With `fledge.toml` absent or not TOML, no `[lanes.verify]`, a broken `.fledge/lanes/*.toml` import, or a `[lanes.verify]` whose `steps` fledge cannot load (none, `[]`, a string, a lane that is not a table, `[{ foo = 1 }]`), the `verify-lane` `[missing]` line stands alone (no `test-step` line).
 
 ### REQ-cli-505
 
@@ -1384,4 +1403,24 @@ Acceptance Criteria
 - `package.json` version is `0.0.41`.
 - CLI `version` prints `0.0.41`.
 - CHANGELOG has a 0.0.41 section that the updater's changelog helper extracts exactly.
+
+### REQ-cli-092
+
+Before the PR, a second model reviews the diff in bounded rounds, and the PR
+lists what it raised and what changed (GITHUB-9); with no second model
+there's no PR and the reply says why (GITHUB-9.a). `task run` SHALL pass
+`runTask` the `/work` review hook (`workReviewHook` over
+`createTaskExecute`'s `review` and `takeSpendAsk`, REQ-agent-092 /
+REQ-plugins-092) exactly when `workReviewApplies(env, allowlist)`: the run's
+surface stamp is `work` (`CORVIDINHO_ACTING_SURFACE`), the /work bit is set
+(`CORVIDINHO_ACTING_WORK_TASK`), the role cap is owner or team
+(`actingRoleCap`, `CORVIDINHO_ACTING_ROLE`), it is no `delegate` or
+`council` worker (delegation depth 0), and the plugin allowlist has
+`git-push` and `github-pr-create` (GITHUB-5), so no review is spent on a PR
+that cannot open. Every other run — chat, `/session`, schedules, WATCH, a
+local `task run`, workers — gets no hook. No new flag, env var or config
+key.
+
+Acceptance Criteria
+- `workReviewApplies` is true for an owner and a team `/work` stamp with both plugins allowlisted, and false for community, another surface, no /work bit, a worker (`CORVIDINHO_DELEGATE_DEPTH=1`), no stamps, or either plugin missing from the allowlist.
 

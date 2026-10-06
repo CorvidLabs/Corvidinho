@@ -533,6 +533,13 @@ export class ScheduleStore {
    * transaction, so every writer agrees — the run row stores
    * `autoPause.ask` instead of `result.ask`, so the ask about the pause is
    * pending as soon as the outcome is.
+   *
+   * `stopped` (AGENT-3.c, REQ-discord-304): a run the owner or the
+   * schedule's creator stopped from Discord is recorded `failed` (like a
+   * stopped `/work`, REQ-discord-302) with the given summary and error, but
+   * it is not a failure of the schedule: its consecutive-failure count is
+   * left as it is (no auto-pause) and no ask is stored, so the schedule's
+   * next due run goes ahead as usual.
    */
   markRunFinished(
     schedule: Schedule,
@@ -543,13 +550,21 @@ export class ScheduleStore {
       error?: string;
       ask?: HumanAsk;
       autoPause?: { at: number; ask: HumanAsk };
+      stopped?: boolean;
     },
     now = Date.now(),
   ): void {
+    const stopped = !result.ok && result.stopped === true;
     const status: ScheduleRunStatus = result.ok ? "completed" : "failed";
-    let failures = result.ok ? 0 : schedule.consecutiveFailures + 1;
+    let failures = result.ok
+      ? 0
+      : stopped
+      ? schedule.consecutiveFailures
+      : schedule.consecutiveFailures + 1;
     // AUTONOMY-2 / AUTONOMOUS-7: the ask stays pending until a bridge posts it.
+    // AGENT-3.c: a stopped run stores none.
     const askFor = (count: number): HumanAsk | undefined => {
+      if (stopped) return undefined;
       const pausing = !result.ok && result.autoPause && count >= result.autoPause.at;
       const chosen = pausing ? result.autoPause!.ask : result.ask;
       return chosen ? storedAsk(chosen) : undefined;
@@ -560,12 +575,15 @@ export class ScheduleStore {
       failures = db
         .transaction(() => {
           // Count in SQL, not from the cached row, so every writer agrees.
+          // AGENT-3.c: a stop leaves the count as it is.
           db.run(
             `UPDATE schedules SET
-               consecutive_failures = CASE WHEN ? = 1 THEN 0 ELSE consecutive_failures + 1 END,
+               consecutive_failures = CASE WHEN ? = 1 THEN 0
+                                           WHEN ? = 1 THEN consecutive_failures
+                                           ELSE consecutive_failures + 1 END,
                updated_at = ?
              WHERE id = ?`,
-            [result.ok ? 1 : 0, now, schedule.id],
+            [result.ok ? 1 : 0, stopped ? 1 : 0, now, schedule.id],
           );
           const row = db
             .query("SELECT consecutive_failures FROM schedules WHERE id = ?")

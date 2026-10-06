@@ -89,6 +89,16 @@ in-root `env -C sub` and a link to an in-root dir still run.
 `tee`, since a `>` edit is refused first by SAFE-21.
 `tests/runners.plugins.test.ts` — the runners' child env is credential-free
 (SAFE-21.a, REQ-plugins-495).
+`tests/agent.cloud-credentials.test.ts` — `shell-exec`, the three runners and
+`fledge-lanes-run` / `fledge-run` start without cloud credentials (SAFE-21.b,
+REQ-plugins-621): stand-in `kubectl` / `aws` / `gcloud` / `az` scripts called
+by absolute path see no cloud key or value from the owner's env and none of
+the owner's default files (`~/.kube/config`, `~/.aws/*`, `~/.config/gcloud/*`,
+`~/.azure/*` under a fake HOME); `KUBECONFIG`, `AWS_SHARED_CREDENTIALS_FILE`,
+`AWS_CONFIG_FILE` and `GOOGLE_APPLICATION_CREDENTIALS` are `/dev/null`,
+`CLOUDSDK_CONFIG` / `AZURE_CONFIG_DIR` fresh dirs removed after the child, a
+"login" one child writes never reaches the next, and `AWS_REGION` /
+`GOOGLE_CLOUD_PROJECT` stay. All 7 tests fail with the base's sources.
 
 ## Language runners (REQ-plugins-313..314)
 
@@ -467,6 +477,18 @@ prints every 0.1 s for 1.5 s keeps a 500 ms idle watchdog from firing; a
 silent 1.2 s child lets it fire. Fail on base: the printing child lets it
 fire.
 
+## Non-git root instructions and read-only others (REQ-plugins-110, REQ-plugins-115, AGENT-1.b, AGENT-1.a)
+
+`tests/plugins.nongit-project-dir.test.ts` (6 tests): in a non-git folder
+`files-write` / `files-edit` / `files-delete` refuse the root `AGENTS.md` and
+`CLAUDE.md` (the names, the absolute path, a path under the name, a missing
+file, a symlink's target, a hard link) with `refused (AGENT-1.b)` for the CLI
+and the owner, other files and `sub/AGENTS.md` are written, SAFE-2 still
+refuses, a git project's root copy stays writable; `actingWorkTask` needs a
+git work tree; a team member's `/work` writes there get the role refusal and
+work in a git repo; the owner writes there. Fail on base: 4 of 6 fail; the
+SAFE-2 and git-project cases hold on both. `tests/roles.team.test.ts` now runs
+in a git fixture dir.
 ## File tools leave hi/ alone in hi repos (REQ-plugins-520, AGENT-18 hi guard)
 
 `tests/agent.hi-guard.test.ts` through `runPlugin`: in a temp hi repo,
@@ -668,3 +690,83 @@ wording) make room for it.
   them").
 - Fail on base: see the watch module's entry (9 of 12 fail with the base
   sources, 12 of 12 pass restored).
+## shell-exec never approves, reviews or finalizes a SpecSync change (REQ-plugins-1818, AGENT-18.a)
+
+`tests/shell.sdd-lifecycle.test.ts` through `runPlugin` (`shell-exec`
+allowlisted): temp dirs only, a fake `specsync` on PATH that logs its argv and
+changes the change folder like the real one (approve writes `approvals.json`,
+review `review.json`, finalize / ship archive the folder), fake `bunx` / `npx`
+that log and run it; every refused command starts with `touch spawned`.
+Each refusal is exit 2, `shell-exec refused (AGENT-18.a): …` carrying
+`HUMAN_LIFECYCLE_LINE` and "never does in any repo", `data.rule`
+`AGENT-18.a` with its `step` (null when it can't be read) and `script`, and
+leaves no marker, no specsync or runner call, the `.specsync/` tree
+byte-for-byte unchanged, no `approvals.json` / `review.json` and no
+`.specsync/archive`:
+- approve / review / finalize / ship in a SpecSync repo, in a plain folder
+  (no git, no SpecSync) and on Corvidinho (test seam) with the run's ledger
+  holding `c1` right after a green lane (`selfLifecycleRefusal` would let the
+  plugin approve it);
+- through `sh -c`, `bash -c`, `eval`, `$(…)`, backticks, a function, `if`,
+  a pipeline, quote removal (`appr\ove`, `'fin'alize`) and `$'approve'` (dash
+  reads it as an expansion: step null);
+- behind `env`, `timeout`, `nohup`, `xargs`, `sudo -u`, `exec`, `command`,
+  `find -exec`, the absolute path, `./tools/specsync`, `../tools/specsync`
+  after a `cd`, a symlink `./bin/ss`, `bunx`, `npx -y specsync@6.0.0`,
+  SpecSync's options before the step, and an expanding command word;
+- a step that expands (`"$S"`, `$(echo approve)`) or that xargs supplies;
+- in-root scripts: `sh x.sh`, `bash ./x.sh`, `. ./x.sh`, `./y.sh`, naming
+  the script.
+Read-only `change status|list|show|check|ship-status`, `specsync check`
+(with `--require-coverage 100`), options before `status` and
+`xargs specsync change status` run (the fake logs each argv, the tree is
+unchanged); words that only mention a step (`echo approve …`, a `grep`
+pattern, a `change new` / `change answer` text) run. `shellProdWhy` raises
+no Approve card for `specsync change approve c1 && kubectl get pods`
+(`kubectl get pods` alone still asks). The settle path: on Corvidinho with the
+verified ledger, `specsync-change-approve` still spawns
+`change approve c1 --actor corvid-agent` directly and writes
+`approvals.json`. A unit test of `firstLifecycleStep`: option values,
+`--root change change review`, `cargo run --bin specsync -- change` (and
+`--bin=specsync`), a here-doc handed to `sh`, `watch -n 5 specsync …`,
+`pnpm dlx @corvidlabs/specsync@6`, expanding steps and command words,
+`specsync check change approve` (not a step), `echo specsync change approve`
+(fails closed), `specsync-helper` (not specsync), separate commands, and
+the `bun -e` residual.
+- Fail on base (e1a24ed2's `plugins/shell/commands.ts` and
+  `plugins/shell/must-ask.ts` swapped in, `sdd-lifecycle.ts` removed): 9 of 11
+  fail (every refusal case, the Approve-card case and the unit test); the
+  read-only and settle cases pass on both. Restored: 11 of 11 pass.
+- `tests/agent.repo-ways.test.ts` (the `runTask` settle cases, REQ-agent-519)
+  passes unchanged.
+## The hi/ refusal names the owner's card and hi-draft (REQ-plugins-520 modified; AGENT-18 hi drafts)
+
+`tests/agent.hi-guard.test.ts`: the `files-write` refusal under `hi/` now
+says criteria change only through a capture the owner approves on a card
+(and points at `hi-draft`); every other file-tool case is unchanged and
+passes (20 of 20).
+## The /work round driver shares the review step (REQ-plugins-092 modified; GITHUB-9, GITHUB-9.a)
+
+`tests/work.review.test.ts` ("/work: an owner or team run drives the review
+rounds", temp repos with a bare origin, scripted provider): the untracked
+new file is in the reviewed diff, the reviewer gets `Title: Corvidinho /work
+task` and never the task text, the rounds are stored (round 1 open with its
+finding, round 2 `clean` with `M  src/greet.ts` changed), `workTreeReviewed`
+is true for the tree /work ships, and the /work PR body has the section; a
+spend-cap stop gives the hook's `ask` when the run left one, else a refusal,
+and records nothing; `workReviewFeedback` stays within 3800 characters
+(under the 4000 verify feedback cap) with its fence whole and later findings
+counted. The existing `github-pr-create` cases (run model, no run model,
+declined, max-rounds, refusals) still pass on the shared `reviewStep`. Fail
+on base: the file cannot load (the `/work` exports are missing).
+## `.trust.toml` is SAFE-2 protected (REQ-plugins-525 added; AGENT-18 Trust clause)
+
+`tests/agent.trust-verify.test.ts` (".trust.toml is SAFE-2 protected like
+fledge.toml"): `isProtectedPath` for `.trust.toml` in any directory and case,
+not for `trust.toml`, `docs/trust.md` or `.trust.toml.bak`; `files-write`
+(relative, `./`, absolute, new `sub/.trust.toml`), `files-edit` and an
+allowlisted `files-delete` refuse with SAFE-2 (exit 2) and leave the file
+unchanged; `files-read .trust.toml` and `files-write trust.toml` work;
+`discord-send-file`'s `fileAttachment` refuses it with SAFE-2; `git-commit`
+refuses to stage the deletion of a tracked `.trust.toml`. Both tests fail
+with the base sources.

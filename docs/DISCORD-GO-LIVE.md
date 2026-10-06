@@ -48,6 +48,7 @@ cp allowlist.example.toml ~/.config/corvidinho/allowlist.toml
 #   ollama: optional OLLAMA_HOST (default 127.0.0.1:11434), no key
 #   anthropic: ANTHROPIC_API_KEY
 #   CORVIDINHO_LLM_TIER=read|tool|code (default tool); CORVIDINHO_LLM_MODEL_READ/_TOOL/_CODE per tier
+#   optional AGENT-17.a: CORVIDINHO_LLM_MODEL_ORDER=<same entries, weakest first>   # move up after the nudge (E.9)
 # optional SESSION-5: CORVIDINHO_LLM_CONTEXT_TOKENS=8192   # model window; long chats condense at ~80% of it
 ```
 
@@ -191,6 +192,13 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   is waiting. A schedule with no channel sends its question and buttons to the owner by **direct
   message** (same DM rule as above). See [`discord.md`](discord.md) "Scheduled questions wait for
   an answer".
+- A scheduled run the bridge started can be stopped from Discord by the owner or the schedule's
+  creator, like a chat run (AGENT-3.c): its progress message in the schedule's channel carries
+  the **Stop** button (a `stop` / `cancel` reply to it works too). A schedule with no channel
+  sends each run's Stop button to the owner by **direct message** (same DM rule as above) and
+  removes it when the run ends on its own. A stop ends that run only; the schedule's next run
+  goes ahead. Runs `corvidinho daemon` claimed have no Stop button. See [`discord.md`](discord.md)
+  "Stopping a scheduled run".
 - Spend is the owner's (SAFE-14.a): with a spend cap set — the total
   `CORVIDINHO_DAILY_SPEND_CAP_USD`, or per provider `CORVIDINHO_PROVIDER_SPEND_CAPS_USD`
   (`provider=USD` entries keyed on the provider id, e.g. `api.openai.com=3,api.anthropic.com=2`;
@@ -209,7 +217,15 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
 - At a cap, with an owner configured, a run first asks the owner on a **spend card** (SAFE-8,
   SAFE-8.a): the bridge DMs a card showing the one model call it held (model and provider), the
   cap it would pass (`total` or `provider:<id>`) and that call's estimate, after the run's task
-  as quoted data. **Approve** plus the one-time code it then DMs (SAFE-19) lets exactly that call
+  as quoted data. The estimate counts the request plus the longest reply the model can return
+  (its listed maximum output, e.g. 16,384 tokens for `gpt-4o`, 128,000 for the Claude Fable,
+  Opus and Sonnet models; 128,000 for a priced model with no listed maximum), so the card comes
+  before a call whose long reply could pass a cap (AUTONOMY-8.a); replies are never cut short,
+  and the call then counts what the provider reports. A call that is stopped, times out or
+  loses its connection before the reply, or whose reply reports no usage, stays counted at that
+  worst-case estimate (it may have been billed). With a small cap, a model with a large maximum
+  output asks on most calls (one `claude-opus-5-5` call counts about $2.56 for its reply).
+  **Approve** plus the one-time code it then DMs (SAFE-19) lets exactly that call
   through; the next call past the cap asks again with a new card and code. Deny, no answer in
   4 minutes, a late code or a stopped run sends and spends nothing, and the run ends paused as
   above. The card needs the bridge running on the same data dir (WATCH, schedules, the daemon and
@@ -269,12 +285,14 @@ inside that talk's own worktree, and in a local `corvidinho task run` inside the
 | `gif-search` | true | 1 | true | secondary GIF path (native GIPHY) for owner and team at tool tier (PLUGIN-8/9); prefer allowlisted `fledge-gif` for owner code-tier Discord GIFs; needs `GIPHY_API_KEY`, see E.3.b |
 | `fledge-gif` | true | 2 | true | preferred GIF path once `fledge plugins install corvid-agent/fledge-plugin-gif` is on the box; owner code-tier only (`CORVIDINHO_LLM_TIER=code`); needs `GIPHY_API_KEY` in the bridge env (passed through to Fledge); see E.3.b |
 | `fledge-<command>` | true | 2 (native) / 1 (wasm without `exec`) | true | an operator runs `corvidinho plugins run fledge-<command>` non-interactively; one entry per Fledge command you trust, names from `plugins list` (a Fledge plugin command named `run`, `lanes-list`, `lanes-validate` or `lanes-run` is skipped: the Fledge core builtins `fledge-run`, `fledge-lanes-list`, `fledge-lanes-validate` and `fledge-lanes-run` hold those names) |
-| `fledge-lanes-run` / `fledge-run` | true | 2 | true | an operator runs `corvidinho plugins run fledge-lanes-run -- <lane>` or `fledge-run -- <task> [args…]` non-interactively; builtins that run fledge's own `lanes run` / `run` in the project dir (PLUGIN-1), so they run whatever that lane or task's commands do, starting without the owner's GitHub or git credentials like `shell-exec` and the runners (SAFE-21.a), so pushes, PRs and merges go through the checked GitHub tools; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
+| `fledge-lanes-run` / `fledge-run` | true | 2 | true | an operator runs `corvidinho plugins run fledge-lanes-run -- <lane>` or `fledge-run -- <task> [args…]` non-interactively; builtins that run fledge's own `lanes run` / `run` in the project dir (PLUGIN-1), so they run whatever that lane or task's commands do, starting without the owner's GitHub or git credentials like `shell-exec` and the runners (SAFE-21.a), so pushes, PRs and merges go through the checked GitHub tools, and without the owner's cloud credentials (SAFE-21.b, see below the table); the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
 | `git-commit` | true | 2 | true | `/work` should open draft PRs (needed when the work tree has changes) |
 | `git-push` | true | 2 | true | `/work` should open draft PRs; the remote's OWNER/REPO must also pass the GitHub allowlist (GITHUB-6) |
 | `github-pr-create` | true | 1 | true | `/work` should open draft PRs; needs `GITHUB_TOKEN`/`GH_TOKEN`. A PR opens only after a second configured model reviewed the diff (GITHUB-9 / GITHUB-9.a, see [`discord.md`](discord.md) Second-model review): configure at least two models, or every PR is refused with the reason |
 | `git-branch-create` | true | 2 | true | an operator runs `corvidinho plugins run git-branch-create` non-interactively (`/work` does not need it: the worktree makes the branch) |
-| `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, `env -C` and symlinks included, SAFE-3; refuses `sed -i` / `>` edits, downloads piped into a shell, deletes outside the worktree and secret reads, saying why, SAFE-21; starts without GitHub or git credentials, so pushes, PRs and merges go only through the typed GitHub tools, SAFE-21.a; 10 minute timeout, 64 KiB output cap, output scrubbed); the model gets it only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
+| `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, `env -C` and symlinks included, SAFE-3; refuses `sed -i` / `>` edits, downloads piped into a shell, deletes outside the worktree and secret reads, saying why, SAFE-21; starts without GitHub or git credentials, so pushes, PRs and merges go only through the typed GitHub tools, SAFE-21.a, and without cloud credentials, SAFE-21.b; 10 minute timeout, 64 KiB output cap, output scrubbed); the model gets it only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
+| `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere) without GitHub or git credentials (SAFE-21.a) or cloud credentials (SAFE-21.b), and `plugins list` names any that are not loaded; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
+| `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, `env -C` and symlinks included, SAFE-3; refuses `sed -i` / `>` edits, downloads piped into a shell, deletes outside the worktree and secret reads, saying why, SAFE-21; refuses `specsync change approve` / `review` / `finalize` / `ship` in every repo, also behind a wrapper, `bunx` / `npx`, a path, `sh -c` or an in-root script (`shell-exec refused (AGENT-18.a): …`): a human approves, reviews and finalizes, and on Corvidinho only the run's own settle step after a green lane does, never the shell, AGENT-18.a; starts without GitHub or git credentials, so pushes, PRs and merges go only through the typed GitHub tools, SAFE-21.a; 10 minute timeout, 64 KiB output cap, output scrubbed); the model gets it only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
 | `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere) without GitHub or git credentials (SAFE-21.a), and `plugins list` names any that are not loaded; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
 | `memory-forget` | true | 1 | true | the owner's chat should forget memories on request, or an operator runs `corvidinho plugins run memory-forget` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
 | `memory-override` | true | 1 | true | the owner's chat should correct memories on request, or an operator runs `corvidinho plugins run memory-override` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
@@ -286,19 +304,25 @@ inside that talk's own worktree, and in a local `corvidinho task run` inside the
 | `danger-ping` | true | 1 | true | only to test the deny path (no-op) |
 
 Not dangerous, but mutating (no allowlist entry needed; owner-only under ROLES-CHAT, E.6, except
-that a team member's `/work` run gets `files-write` / `files-edit` and the SpecSync change tools, IDENTITY-10):
+that a team member's `/work` run gets `files-write` / `files-edit` and the SpecSync change tools, IDENTITY-10,
+only in a git worktree: in a project folder that isn't a git repo the talk runs in the folder itself, so
+other people's runs only read there, AGENT-1.a):
 `files-write` (minTier 2), `files-edit` (minTier 2), `specsync-change-new` and `specsync-change-answer`
 (minTier 2; they open and answer a SpecSync change where the project's SpecSync change workflow is on,
 and in a hi repo an `acceptance_criteria` answer must cite captured hi ids, AGENT-18), `delegate` and
 `council` (minTier 2, autonomous extras, E.5). `specsync-change-status` is read-only. The file tools
 still fill a change's `.md` artifacts, but refuse SpecSync's own records in its folder (the `*.json`
 directly in `.specsync/changes/<id>/`: state, approvals, review, verification), which only the
-`specsync change` commands write (SAFE-2, AGENT-18 / AGENT-18.a). In a repo that uses hi (a
-`hi/*.md` with `hi:` front matter), `files-write`, `files-edit` and `files-delete` refuse every
+`specsync change` commands write (SAFE-2, AGENT-18 / AGENT-18.a). In a project folder that isn't a git
+repo they also refuse its root `AGENTS.md` and `CLAUDE.md` (and the file a symlink of that name leads to),
+which are read from disk into every run's instructions there; you edit those yourself (AGENT-1.b).
+In a repo that uses hi (a `hi/*.md` with `hi:` front matter), `files-write`, `files-edit` and `files-delete` refuse every
 path under `hi/` (`refused (AGENT-18): '<path>' is under hi/, …`; reads still work): the agent
 never changes a repo's criteria itself. Criteria change only through a capture the owner
-approves, and no run can make one yet, so any `hi/` change since the session base, however it
-was made, also keeps a run from being verified, `/work` from opening a PR, and the run's own
+approves on the hi card (the owner's and the team's runs draft them with `hi-draft`; see
+[`discord.md`](discord.md) "Drafted hi criteria wait for your card"), so any other `hi/` change
+since the session base, however it was made, also keeps a run from being verified, `/work` from
+opening a PR, and the run's own
 `github-pr-create` from opening one (`refused (AGENT-18): … so this run opens no PR`). The
 session base is where the run's branch left the remote's default branch (HEAD at planning
 when there is none): a capture a person made with the `hi` CLI outside any run that is already
@@ -347,9 +371,9 @@ What an entry unlocks **today**:
     `delegate` / `council` workers never get them;
   - the run's directory is that talk's own linked git worktree (`talk-…` under the worktree
     base); for a local `task run`, the top of the new worktree it made for itself in a git repo
-    (SESSION-WORKTREE-1.a, `talk-cli_…`). A non-git project (its scoped folder, or the folder
-    itself for a local run), the main checkout (a local run with `--here`), a subdirectory and
-    another talk's worktree are refused.
+    (SESSION-WORKTREE-1.a, `talk-cli_…`). A non-git project (the folder itself, where a talk or a
+    local run works there, AGENT-1.a, or a schedule's scoped folder), the main checkout (a local
+    run with `--here`), a subdirectory and another talk's worktree are refused.
   When the allowlist names one of them and the run is refused, the
   run's event stream carries one `[operator] SAFE-3.a: … allowlisted but not offered: <why>`
   line (never part of the reply). Every call still goes through the role re-check, SAFE-1,
@@ -358,11 +382,34 @@ What an entry unlocks **today**:
   the SAFE-5 audit trail
   and the tools' own SAFE-3 clamp, SAFE-21 refusals and credential-free env (the Fledge runs
   included: no GitHub tokens, no global git config or credential helper, no ssh agent, gh
-  logged out). Known limits: the runners' own code (and a Fledge lane or task) can still
+  logged out; no cloud credentials, SAFE-21.b). Known limits: the runners' own code (and a Fledge lane or task) can still
   change directory, read files or write files inside or outside the worktree as the bot's own
   user, which no lexical check sees; keep the allowlist file and other secrets outside every
   talk worktree.
   They all still run through `corvidinho plugins run`.
+- **No cloud credentials (SAFE-21.b).** The verify lane, `shell-exec`, the node / python /
+  cargo runners and `fledge-lanes-run` / `fledge-run` start without your cloud credentials, so
+  they can't reach prod by accident. Their env drops `KUBECONFIG` (and the in-cluster
+  `KUBERNETES_SERVICE_HOST` / `_PORT`), the AWS keys, session tokens, profiles, role and
+  web-identity settings and container-credential endpoints (`AWS_CONTAINER_*`),
+  `GOOGLE_APPLICATION_CREDENTIALS` and the other Google key files and tokens, every
+  `CLOUDSDK_*` override, the Azure and Terraform-azurerm (`ARM_*`) service principal, identity
+  and storage keys, any other `AWS_` / `GOOGLE_` / `GCLOUD_` / `GCP_` / `AZURE_` / `ARM_` key
+  naming a key, token, secret, password or credential, `TF_TOKEN_*`, and the tokens of
+  DigitalOcean, Hetzner, Cloudflare, Linode, Vultr, Scaleway, OCI, IBM Cloud, Alibaba,
+  OpenStack, Heroku, Fly, Vercel, Netlify, Railway, Terraform Cloud, Pulumi, Vault, Nomad and
+  Consul (the full list is `isCloudCredentialEnvKey` in `src/agent/verify.ts`). Each tool's
+  default files are covered too: `KUBECONFIG`, `AWS_SHARED_CREDENTIALS_FILE`,
+  `AWS_CONFIG_FILE` and `GOOGLE_APPLICATION_CREDENTIALS` point at `/dev/null` (not
+  `~/.kube/config`, `~/.aws` or the gcloud ADC file), `AWS_EC2_METADATA_DISABLED=true`, and
+  `CLOUDSDK_CONFIG` / `AZURE_CONFIG_DIR` point at fresh, empty dirs made for that one child
+  and removed when it exits (not `~/.config/gcloud` / `~/.azure`). Ordinary settings such as
+  `AWS_REGION` or `GOOGLE_CLOUD_PROJECT` stay. Known limits: other tools' own credential
+  files (`~/.oci`, `~/.vault-token`, `~/.terraform.d`, `~/.config/doctl`, …) and cloud
+  metadata services other than EC2's (GCE, Azure IMDS) are not blocked; a command that names a
+  credential file itself (`--kubeconfig ~/.kube/config`) still reads it, and prod commands
+  still need your Approve card (AUTONOMY-9). Fledge plugin commands (`fledge-<command>`) and
+  `delegate` workers keep the env they had.
 - Fledge commands (`fledge-<command>`) are discovered for a run only when the allowlist names
   one and the run is not a non-ADMIN session and not a scheduled run (a schedule the owner
   created gets none, like the runners, DISCORD-SCHEDULE-1.a). Naming a Fledge core builtin (`fledge-lanes-list`,
@@ -378,8 +425,10 @@ What an entry unlocks **today**:
   second-model review of the exact tree on GitHub (GITHUB-9): the reviewer is the first other
   configured model that did not write the change (no reviewer setting, GITHUB-9.a), in at most 3
   rounds, and the PR body lists what it raised and what changed. An agent run starts the rounds
-  itself; `/work` and `plugins run` have no run model, so they open only a tree a run already had
-  reviewed (the `/work` round driver is a later change) and otherwise say why on one line. In a
+  itself; an owner or team `/work` run does too, once its tree is verified, and the `/work` PR
+  step then commits and pushes only a tree whose review finished (else `not-reviewed`, nothing
+  pushed, and the line says why); `plugins run` has no run model, so it opens only a tree a run
+  already had reviewed and otherwise says why on one line. In a
   repo that uses hi, a `github-pr-create` from inside a run is refused before any review while
   `hi/` differs from the run's session base (AGENT-18 hi guard).
 
@@ -789,6 +838,21 @@ and your own stop is a stop. It tells you on every surface:
 A `delegate` or `council` worker that fell back is reported by its lead the same way, marked
 `delegate worker:` / `council worker:`. The fallback order is yours: there is no ranking by
 price or benchmark and no setting beyond the list itself.
+
+**Model order (AGENT-17 / AGENT-17.a).** The fallback list's order is not a strength order. To
+let a stalled run move to a stronger model, set `CORVIDINHO_LLM_MODEL_ORDER` to the same
+`kind:model` entries, weakest first, e.g.
+`CORVIDINHO_LLM_MODEL_ORDER=ollama:qwen3:30b,openai:gpt-4.1,anthropic:claude-sonnet-5`. When a
+run's reply only plans, or says "Done." with nothing changed, it gets one nudge (docs/discord.md);
+if it still stalls, the rest of that run moves to the next model after the current one in your
+order that the run's tier lists (its key set, not one that already failed in the run; later ones
+in the order are tried in turn), and the answer ends with one line such as `(stronger model:
+gpt-4.1-mini only planned after the nudge, so anthropic:claude-sonnet-5 took over)`. It moves at
+most once per run and never to a weaker or unordered model; the new model's calls go through the
+same spend caps and cards (SAFE-8 / SAFE-14 / AUTONOMY-8) at its own price. Unset (the default),
+there is no order: the one nudge still happens and the reply then stands. A model that is not in
+your order, or is already the last in it, never moves. Delegate workers inherit the setting and
+apply it in their own run; restart the bridge, `github watch` and the daemon after changing it.
 
 With no usable model for a tier (nothing set, or its first entry's key is missing) it says so:
 

@@ -422,13 +422,13 @@ describe("IDENTITY-12.a: the tool layer re-resolves the GitHub trigger's role on
     process.env.CORVIDINHO_ACTING_WORK_TASK = "1";
     await becomeWatchRun({ actingRole: "team", actingGithubId: TOFU_GH });
     process.env.CORVIDINHO_ACTING_WORK_TASK = "1"; // a stale stamp still is no /work task
-    expect(actingWorkTask()).toBe(false);
+    expect(actingWorkTask(process.env, process.cwd())).toBe(false);
     const role = await resolveActingRole();
     expect(role).toBe("team");
-    expect(roleAllowsPlugin(role, { name: "github-issue-comment", dangerous: true }, actingWorkTask())).toBe(true);
-    expect(roleAllowsPlugin(role, { name: "github-pr-review", dangerous: true }, actingWorkTask())).toBe(true);
-    expect(roleAllowsPlugin(role, { name: "files-edit", mutating: true }, actingWorkTask())).toBe(false);
-    expect(roleAllowsPlugin(role, { name: "git-push", dangerous: true }, actingWorkTask())).toBe(false);
+    expect(roleAllowsPlugin(role, { name: "github-issue-comment", dangerous: true }, actingWorkTask(process.env, process.cwd()))).toBe(true);
+    expect(roleAllowsPlugin(role, { name: "github-pr-review", dangerous: true }, actingWorkTask(process.env, process.cwd()))).toBe(true);
+    expect(roleAllowsPlugin(role, { name: "files-edit", mutating: true }, actingWorkTask(process.env, process.cwd()))).toBe(false);
+    expect(roleAllowsPlugin(role, { name: "git-push", dangerous: true }, actingWorkTask(process.env, process.cwd()))).toBe(false);
     await becomeWatchRun({ actingRole: "owner", actingGithubId: OWNER_GH });
     const owner = await resolveActingRole();
     expect(roleAllowsPlugin(owner, { name: "git-push", dangerous: true })).toBe(true);

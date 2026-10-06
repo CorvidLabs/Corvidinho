@@ -1,0 +1,26 @@
+---
+id: in-a-non-git-project-my-runs-work-in-the-folder-itself-its-file-tools-leave-the-root-agents-md-and-claude-md-alone
+state: accepted
+type: feature
+base_commit: 40ff628e2224d9274b96c782450de1592c3b6733
+---
+
+# In a non-git project my runs work in the folder itself, its file tools leave the root AGENTS.md and CLAUDE.md alone, schedules keep their own folder, and others only read there (AGENT-1.a, AGENT-1.b, AGENT-1.c)
+
+## Intent
+
+In a non-git project my runs work in the folder itself, its file tools leave the root AGENTS.md and CLAUDE.md alone, schedules keep their own folder, and others only read there (AGENT-1.a, AGENT-1.b, AGENT-1.c)
+
+## Affected Canonical Specs
+
+- `discord`
+- `plugins`
+- `agent`
+
+## Acceptance Criteria
+
+- AGENT-1.a (captured on main from Leif's 2026-09-28 interview): 'In a project that isn't a git repo, my own runs work in the project folder itself (protected files and the verify gate still apply); other people's runs only read there.' AGENT-1.b (captured in this change's PR with hi, Leif's 2026-09-30 decision, round 13 of the 2026-09-28 record): 'In a project folder that isn't a git repo, its file tools can't change the root AGENTS.md or CLAUDE.md; I edit those myself.' AGENT-1.c (captured in this change's PR with hi, same round): 'My schedules for a project that isn't a git repo work in their own separate folder, never in the live project folder.' 'Isn't a git repo' follows isGitRepo (inside a git work tree counts as git). Observable outcomes: (1) a Discord talk (chat, button and Answer resumes, /session start, /work, the SESSION-3.a resume) in a non-git project binds to the project folder itself: ensureTalkWorkspace with nonGit project_dir returns the folder, makes no .corvid-worktrees base and no scoped dir, its cwd is the folder, a restart re-binds it in place, ending, abandoning or TTL-purging it deletes nothing of the folder, a legacy row bound to a scoped dir is parked then re-bound in place, a folder that became a git repo is re-bound to a linked worktree, and a mid-conversation project switch is still refused; (2) park and remove never delete a dir that equals or contains the project folder by realpath, whatever kind a caller passes (a git main checkout included); (3) the owner's run there writes its files in the folder, SAFE-2 protected files are refused, the SAFE-3.a gate keeps the shell, runners and Fledge runs out of the catalog, and a change goes through the verify lane (a failing lane fails the run); (4) other people's runs only read: actingWorkTask needs a git work tree, so a team member's /work run there is not offered files-write/files-edit/SpecSync change tools and a call to one gets the role refusal (runPlugin and the tool loop alike), while in a git worktree it keeps them; (5) files-write, files-edit and files-delete refuse a non-git folder's root AGENTS.md and CLAUDE.md for every caller (the names, paths under them, the file a symlink of that name leads to, a hard link to one) with a refused (AGENT-1.b) line; a git project's root copy and other files are unchanged; (6) schedules on a non-git project keep their own scoped-talk-schedule folder under the worktree base, never the live project folder (the scheduler passes nonGit scoped_dir); (7) in a project_dir talk the owner's images go to <project>/.corvidinho/attachments/<session id>/ and every end path of the talk removes that folder (and the empty parents), anyone else's images reach the run as URLs only with nothing written. Not in this change (pending Leif): per-folder serialization of concurrent owner runs. No new env var, config key, slash command, table, column or schema version. Tests: tests/discord.nongit-project-dir.test.ts, tests/plugins.nongit-project-dir.test.ts, tests/agent.nongit-project-dir.test.ts (temp folders, in-memory or temp SQLite, fake provider, stub verify lane, mocked CDN; no network), 13 of 16 failing on the base (cf7f61b) and all passing on the branch.
+
+## No-spec Rationale
+
+Not applicable
