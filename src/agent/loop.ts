@@ -180,8 +180,17 @@ async function runLane(
   // its output shows tests ran and no test was deleted or turned off since
   // the baseline. Otherwise it is a failed verify like any other (retry
   // with the note first, then failed), with no opt-out (AGENT-14).
-  const laneOutput = result.output;
+  let laneOutput = result.output;
   let evidenceNote: string | undefined;
+  if (!result.success && result.trustNote) {
+    // AGENT-18 (REQ-agent-525): a failed or unavailable Trust step's one-line
+    // reason leads the failure summary and the retry feedback, however long
+    // the step's output after it is.
+    evidenceNote = result.trustNote;
+    laneOutput = result.output.startsWith(result.trustNote)
+      ? result.output.slice(result.trustNote.length).replace(/^\n/, "")
+      : result.output;
+  }
   if (result.success) {
     let drops: TestDrop[] | null;
     try {
@@ -203,7 +212,9 @@ async function runLane(
 /**
  * Run one task through planning → executing → verifying → done|failed.
  * Verifying is skipped only when the run changed nothing (AGENT-14).
- * Does not invent Trust/attest. Injectable execute + verifyRunner for tests.
+ * Trust only where the repo has `.trust.toml` (the default verify runner then
+ * also runs `fledge trust verify`, AGENT-18). Injectable execute +
+ * verifyRunner for tests.
  */
 export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
   let workspace: WorkspaceDiffTracker | null = null;
@@ -718,7 +729,9 @@ async function gate(
     } else {
       emit(onEvent, {
         type: "Text",
-        text: "Running fledge lanes run verify --non-interactive (includes spec-check)…",
+        text: repoWays.trust
+          ? "Running fledge lanes run verify --non-interactive (includes spec-check), then fledge trust verify (.trust.toml)…"
+          : "Running fledge lanes run verify --non-interactive (includes spec-check)…",
       });
 
       if (isAborted(signal)) {
@@ -884,7 +897,8 @@ async function gate(
       // AGENT-15: the lane passed; the note says what is missing, and the
       // rest of the cap carries the lane's output. AGENT-18: an uncovered
       // SpecSync path or a hi/ change ran no lane, so the note is the whole
-      // feedback.
+      // feedback; a failed Trust step's note is followed by that step's
+      // output, an unavailable one's stands alone.
       const head = `${VERIFY_FEEDBACK_HEAD}${evidenceNote}`;
       const room = VERIFY_FEEDBACK_MAX_CHARS - head.length - 2;
       verifyFeedback =

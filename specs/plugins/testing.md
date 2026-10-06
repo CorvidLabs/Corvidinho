@@ -645,3 +645,14 @@ and records nothing; `workReviewFeedback` stays within 3800 characters
 counted. The existing `github-pr-create` cases (run model, no run model,
 declined, max-rounds, refusals) still pass on the shared `reviewStep`. Fail
 on base: the file cannot load (the `/work` exports are missing).
+## `.trust.toml` is SAFE-2 protected (REQ-plugins-525 added; AGENT-18 Trust clause)
+
+`tests/agent.trust-verify.test.ts` (".trust.toml is SAFE-2 protected like
+fledge.toml"): `isProtectedPath` for `.trust.toml` in any directory and case,
+not for `trust.toml`, `docs/trust.md` or `.trust.toml.bak`; `files-write`
+(relative, `./`, absolute, new `sub/.trust.toml`), `files-edit` and an
+allowlisted `files-delete` refuse with SAFE-2 (exit 2) and leave the file
+unchanged; `files-read .trust.toml` and `files-write trust.toml` work;
+`discord-send-file`'s `fileAttachment` refuses it with SAFE-2; `git-commit`
+refuses to stage the deletion of a tracked `.trust.toml`. Both tests fail
+with the base sources.

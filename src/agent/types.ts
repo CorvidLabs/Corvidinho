@@ -151,6 +151,12 @@ export type ExecuteFn = (ctx: ExecuteContext) => Promise<ExecuteResult>;
 export type VerifyResult = {
   success: boolean;
   output: string;
+  /**
+   * AGENT-18: set by the default runner only when a Trust repo's Trust step
+   * failed or `fledge trust` is not available — that one-line reason (the
+   * head of `output`). It leads the run's failure summary and retry feedback.
+   */
+  trustNote?: string;
 };
 
 export type VerifyRunner = (
