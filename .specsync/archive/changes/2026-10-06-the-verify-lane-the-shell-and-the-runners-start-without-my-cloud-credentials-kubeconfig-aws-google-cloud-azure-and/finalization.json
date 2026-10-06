@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "the-verify-lane-the-shell-and-the-runners-start-without-my-cloud-credentials-kubeconfig-aws-google-cloud-azure-and",
+  "implementation_commit": "19c7e9df6afcc524cf5495a9224277f1787fcf12",
+  "implementation_tree": "b6a9c2164d6603d2464cb7c47d402ba6378e3429",
+  "contract_digest": "9ec5982b674af6bf53411a5684dbcaa2c8984c098378a3cb06981408a9f3f2d7",
+  "workspace_digest": "4dbbf72962568e5e14cac73951f7931157afffd79b09f83ebd18f34ca9c1af57",
+  "closing_digest": "22c75127c9c9b3bc8811c735c6b8c3fe27e8d845ff1e9f07b04aa6ffb17779db",
+  "review_digest": "22c75127c9c9b3bc8811c735c6b8c3fe27e8d845ff1e9f07b04aa6ffb17779db",
+  "finalization_digest": "9ec5982b674af6bf53411a5684dbcaa2c8984c098378a3cb06981408a9f3f2d7",
+  "timestamp": 1791305292,
+  "note": "tip-orphan after #373"
+}
