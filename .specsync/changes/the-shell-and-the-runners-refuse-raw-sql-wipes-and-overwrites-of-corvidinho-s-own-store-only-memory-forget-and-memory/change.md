@@ -1,0 +1,24 @@
+---
+id: the-shell-and-the-runners-refuse-raw-sql-wipes-and-overwrites-of-corvidinho-s-own-store-only-memory-forget-and-memory
+state: approved
+type: feature
+base_commit: 86d68cd0d65e1836475d5e37a49444bdd0177ecb
+---
+
+# The shell and the runners refuse raw-SQL wipes and overwrites of Corvidinho's own store; only memory-forget and memory-override, with their two-phase confirm, change it (SAFE-4)
+
+## Intent
+
+The shell and the runners refuse raw-SQL wipes and overwrites of Corvidinho's own store; only memory-forget and memory-override, with their two-phase confirm, change it (SAFE-4)
+
+## Affected Canonical Specs
+
+- `plugins`
+
+## Acceptance Criteria
+
+- SAFE-4 (captured on main, hi/safe.md: 'Destructive data ops (raw SQL wipes, memory deletes) need a two-phase confirm so a single confused tool call cannot erase the store.'): shell-exec refuses, before spawning anything, with exit 2, data.rule SAFE-4 and the message 'shell-exec refused (SAFE-4): <why>; <instead>' where <instead> names the two-phase memory-forget / memory-override, every raw-SQL wipe or overwrite of Corvidinho's own store: sqlite3 DELETE / DROP TABLE / ATTACH on corvidinho.db reached through ~, $HOME, $CORVIDINHO_DATA_DIR, the absolute path or a worktree symlink to the data dir (SQL as an argument or piped in), truncate -s 0, cp /dev/null, dd of=, python3 -c with sqlite3 inside the shell, behind sh -c or a wrapper, and in an in-root script the command runs in a shell; tests/shell.store-guard.test.ts runs each against a temp CORVIDINHO_DATA_DIR store and reads the memories rows back unchanged. The store place is the data dir from resolveDataDir (CORVIDINHO_DATA_DIR, else ~/.local/share/corvidinho), covering corvidinho.db and its -wal / -shm / -journal siblings; a SQL-client or write target the check cannot resolve (an expansion other than ~, $HOME or $CORVIDINHO_DATA_DIR, xargs input, a pattern or a find that can reach the store) is refused fail-closed like the SAFE-21 delete family. python-exec and node-exec (cargo-exec too) refuse pre-spawn, with the same SAFE-4 reason, any argv naming the store DB path or the data dir. Commands that don't name the store still run (sqlite3 ./fixture.db 'DELETE FROM t' in the worktree; runner argv not naming it); the SAFE-21 families, their order and messages are unchanged and rm <store db> still refuses under SAFE-21 delete; the spec says a SQL client on the store is refused for reads too, since the check cannot tell its reads from its writes. AUTONOMY-9 raises no Approve card for a call the guard refuses. memory-forget / memory-override keep their two-phase confirm (REQ-plugins-011). The spec states the residual: a store path an interpreter or program builds at runtime, or code that reaches the store without naming it. No new slash command, env var, must-ask class, config key or criterion. tests/shell.store-guard.test.ts fails on the base sources and passes on the branch.
+
+## No-spec Rationale
+
+Not applicable

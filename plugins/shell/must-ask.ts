@@ -30,9 +30,10 @@
  * runs with no ask. The worktree's own copy of the script is not the
  * installed one.
  *
- * A command the SAFE-21 foot-guns, the SAFE-3 clamp or the AGENT-18.a
- * lifecycle check refuse is not classified: `shell-exec` refuses it before
- * anything runs.
+ * A command the SAFE-21 foot-guns, the SAFE-4 store guard, the SAFE-3 clamp
+ * or the AGENT-18.a lifecycle check refuse is not classified: `shell-exec`
+ * refuses it before anything runs (and a runner call the store guard refuses
+ * likewise).
  */
 
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
@@ -48,6 +49,7 @@ import {
 import { scrubSecrets } from "../../src/store/scrub.ts";
 import { firstFootgun } from "./footguns.ts";
 import { firstLifecycleStep } from "./sdd-lifecycle.ts";
+import { firstStoreHit, runnerStoreHit } from "./store-guard.ts";
 
 /** Most bytes of a script, package.json, Makefile or justfile read. */
 const MAX_READ_BYTES = 1 << 20;
@@ -638,15 +640,17 @@ export function isSelfUpdateToTag(command: string, root: string, opts: ShellProd
 
 /**
  * Why `command`, run by `shell-exec` from `root`, touches prod or deploys
- * (AUTONOMY-9/9.a), else null. Null too for a command SAFE-21, the SAFE-3
- * clamp or the AGENT-18.a lifecycle check refuses (the handler refuses it
- * before anything runs) and for the self-update to a tagged release.
+ * (AUTONOMY-9/9.a), else null. Null too for a command SAFE-21, the SAFE-4
+ * store guard, the SAFE-3 clamp or the AGENT-18.a lifecycle check refuses
+ * (the handler refuses it before anything runs) and for the self-update to a
+ * tagged release.
  */
 export function shellProdWhy(command: string, root: string, opts: ShellProdOptions = {}): string | null {
   const env = opts.env ?? process.env;
   const rootAbs = resolve(root);
   if (firstLifecycleStep(command, rootAbs) != null) return null;
   if (firstFootgun(command, rootAbs, { env }) != null) return null;
+  if (firstStoreHit(command, rootAbs, { env }) != null) return null;
   if (firstDisallowedCd(command, rootAbs) != null) return null;
   if (isSelfUpdateToTag(command, rootAbs, opts)) return null;
   return shellTextWhy(command, { root: rootAbs, env, depth: 0 });
@@ -663,6 +667,8 @@ export function runnerProdWhy(
   root: string,
   opts: ShellProdOptions = {},
 ): string | null {
+  // SAFE-4: a call the store guard refuses raises no card (runRunner refuses it).
+  if (runnerStoreHit(args, root, { env: opts.env ?? process.env }) != null) return null;
   const inArgs = prodTextWhy(args.join("\n"));
   if (inArgs) return `its argv ${inArgs}`;
   return interpreterWhy(tool, args, { root: resolve(root), env: opts.env ?? process.env, depth: 0 });

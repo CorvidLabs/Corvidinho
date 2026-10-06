@@ -84,6 +84,8 @@ files:
   - tests/shell.footguns.test.ts
   - plugins/shell/sdd-lifecycle.ts
   - tests/shell.sdd-lifecycle.test.ts
+  - plugins/shell/store-guard.ts
+  - tests/shell.store-guard.test.ts
   - plugins/web/index.ts
   - plugins/web/commands.ts
   - plugins/web/fetch.ts
@@ -147,10 +149,12 @@ Plugin host includes Discord outbound post, GitHub write plugins as dangerous
 file/search plugins with SAFE-2 guards (PLUGIN-1/2 / REQ-plugins-081..084),
 `shell-exec` with SAFE-3 project-root cwd clamp (REQ-plugins-086..088) and
 SAFE-21 foot-gun refusals, starting without GitHub or git credentials
-(SAFE-21 / SAFE-21.a / REQ-plugins-494..495) and never approving, reviewing
-or finalizing a SpecSync change (AGENT-18.a / REQ-plugins-1818),
+(SAFE-21 / SAFE-21.a / REQ-plugins-494..495), never approving, reviewing
+or finalizing a SpecSync change (AGENT-18.a / REQ-plugins-1818) and never
+wiping or overwriting Corvidinho's own store (SAFE-4 / REQ-plugins-404),
 language runners `node-exec` / `python-exec` / `cargo-exec` that register only
-when their toolchain is on PATH (PLUGIN-4 / REQ-plugins-313..314), the
+when their toolchain is on PATH (PLUGIN-4 / REQ-plugins-313..314) and refuse
+argv naming that store (SAFE-4 / REQ-plugins-404), the
 SSRF-guarded `web-fetch` GET plugin (PLUGIN-1/2 / SAFE-7 / REQ-plugins-111),
 `web-search` through Brave for the owner and team (PLUGIN-7 / PLUGIN-9 /
 REQ-plugins-318) on a shared https-only, host-allowlisted keyed JSON GET
@@ -214,7 +218,10 @@ Shell plugins register via `loadShellPlugins` (`shell-exec`);
 check (`firstFootgun`, `footgunRefuseMessage`);
 `plugins/shell/sdd-lifecycle.ts` exports the AGENT-18.a lifecycle check
 (`firstLifecycleStep`, `lifecycleRefuseMessage`, `lifecycleRefusal`,
-`HUMAN_LIFECYCLE_STEPS`). Language
+`HUMAN_LIFECYCLE_STEPS`); `plugins/shell/store-guard.ts` exports the SAFE-4
+store guard (`firstStoreHit`, `storeRefuseMessage`, `storeRefusal`,
+`runnerStoreHit`, `runnerStoreRefusal`, `STORE_INSTEAD`), and
+`plugins/shell/footguns.ts` also exports `globMatches`. Language
 runners register via `loadRunnerPlugins(env?)` (`plugins/runners/index.ts`),
 which returns a `RunnerLoadReport` (`loaded` with each bound binary, `missing`
 with a reason) that `runnerStatusLines` renders for `plugins list`;
@@ -602,9 +609,10 @@ variables, inline interpreter code and an in-root or `#!` script an
 interpreter or a path runs; an unreadable script or recipe, a make / just
 file or dir option, a package-manager option that picks another package.json,
 workspace, preload or shell, and a command named by an expansion ask; the
-box updater by any other path or form asks. A command SAFE-21, the clamp or
-the AGENT-18.a lifecycle check (REQ-plugins-1818) refuses is not
-classified. `isSelfUpdateToTag`: exactly `CORVIDINHO_REF=v<X.Y.Z>` and the
+box updater by any other path or form asks. A command SAFE-21, the SAFE-4
+store guard (REQ-plugins-404), the clamp or the AGENT-18.a lifecycle check
+(REQ-plugins-1818) refuses is not classified, nor is runner argv the store
+guard refuses. `isSelfUpdateToTag`: exactly `CORVIDINHO_REF=v<X.Y.Z>` and the
 installed checkout's `scripts/corvidinho-update.sh` (or `bash` it), nothing
 else typed, and a tag that checkout has, is not a deploy (AUTONOMY-9). The
 runners (`runnerProdWhy`) ask on table words in argv and in an in-root script
@@ -791,6 +799,52 @@ AGENT-18.a residuals: code an interpreter runs (`bun -e`, `node -e`,
 parsed; neither are package-manager scripts, `make` / `just` recipes and git
 aliases (which AUTONOMY-9 does read), nor a copy of the binary under another
 name or a link made by the same command.
+
+SAFE-4 (REQ-plugins-404): memories change only through `memory-forget` /
+`memory-override` and their two-phase confirm (REQ-plugins-011); a shell or
+runner call has no second phase, so after the SAFE-21 check and before the
+clamp `shell-exec` asks `storeRefusal` (`plugins/shell/store-guard.ts`) and
+refuses a command that may wipe or overwrite Corvidinho's own store: exit 2,
+nothing spawned, `shell-exec refused (SAFE-4): <why>[ (in SCRIPT)];
+<STORE_INSTEAD>` (change or forget memories only with `memory-forget` or
+`memory-override`, whose two-phase confirm keeps a single call from erasing
+the store), `data.rule` `SAFE-4`, `data.script`. The store is the data dir
+`resolveDataDir` names (`CORVIDINHO_DATA_DIR`, else
+`~/.local/share/corvidinho`) and everything in it, `corvidinho.db` and its
+`-wal` / `-shm` / `-journal` siblings included, as written and with symlinks
+resolved; with the project root inside the data dir only the DB file family
+counts. Over the SAFE-21 ground (`forEachSimpleCommand`, every wrapper and
+`find -exec` command through `commandChain`) it refuses (a) a command that
+names the store: a word landing in it (after `~`, `$HOME`,
+`$CORVIDINHO_DATA_DIR` or another env variable, or through a symlink such as
+a worktree link to the data dir), text spelling it (its path, `~/…`,
+`$HOME/…`, its path below home), an assignment or output redirection into it
+(an in-root script's included), input naming it, and code for a SQL client
+or interpreter (words, here-docs, here-strings, what is piped in) naming it
+or `CORVIDINHO_DATA_DIR` — read-only looks (`ls`, `stat`, `du`, `cat`, the
+checksum tools, `echo`, `test`, `grep`, `cd`, a `find` with no action …)
+still run, and a SQL client (`sqlite3` and kin) on the store is refused for
+reads too, because the check cannot tell its reads from its writes; and (b),
+fail-closed, a SQL client's words and input (SQL files it reads are scanned)
+or a write target (`truncate`, `fallocate`, the `cp` / `install` / `rsync`
+destination, `dd of=`, the `tar -x` / `unzip` directory) that expands to
+anything but `~`, `$HOME` or `$CORVIDINHO_DATA_DIR` (those too once the
+command re-assigns them), uses `~user` or a brace, comes from `xargs`, is a
+pattern that can match the store, can't be walked, or is what a `find` that
+can reach the store (or follows symlinks) finds, and a tree copied or
+extracted into a directory that holds the store. SAFE-21 answers first with
+its families, order and messages unchanged (`rm <store db>` stays a SAFE-21
+delete). `runRunner` refuses, before the spawn, runner argv that names the
+store or its data dir (its text, `CORVIDINHO_DATA_DIR`, or a path from the
+root leading into it): `<runner> refused (SAFE-4): <why>; <STORE_INSTEAD>`,
+exit 2, `data.rule` `SAFE-4` (`runnerStoreRefusal`). Commands and argv that
+don't name the store still run (`sqlite3 ./fixture.db 'DELETE FROM t'`).
+SAFE-4 residuals: a store path a program builds at runtime (a command
+substitution or a variable filled from program output, handed to a command
+outside the SQL-client and write families; code that joins the path), code
+that reaches the store without naming it (a script file handed to an
+interpreter, a module it imports), and an in-root script's output
+redirection to an expanded path (as for the SAFE-21 edit family).
 
 SAFE-21.a (REQ-plugins-495): the child env is the runners' env
 (`runnerChildEnv`): the verify lane's scrub, no `CDPATH` / `OLDPWD`, and no
@@ -1052,7 +1106,9 @@ REQ-plugins-495) or cloud credentials (SAFE-21.b, REQ-plugins-621) plus
 timeout (exit 124), 64 KiB per-stream caps, and its process group killed on
 timeout or the calling run's abort (exit 130); output is secret-scrubbed. Empty
 argv is a usage error (exit 1, nothing spawned); a binary that cannot start
-returns exit 127. `plugins list` prints which runners loaded (with the binary)
+returns exit 127. Argv that names Corvidinho's own store or its data dir is
+refused before the spawn (exit 2, SAFE-4, REQ-plugins-404). `plugins list`
+prints which runners loaded (with the binary)
 and one line per missing toolchain, and still exits 0. `shell-exec` is
 always registered and uses the same env. The pinned cwd is where the runner starts,
 not a sandbox: the code it runs can `process.chdir` / `os.chdir`, and
@@ -1161,6 +1217,12 @@ command line.
 - **Given** builtins loaded and `shell-exec` allowlisted, in any repo (Corvidinho included, even right after a green lane for the run's own change)
 - **When** the agent runs `shell-exec` with `specsync change approve c1 --actor leif`, `sh -c 'specsync change finalize c1'`, `npx specsync change ship c1`, or `sh x.sh` where the in-root `x.sh` runs `specsync change review c1`
 - **Then** each fails with exit 2 and `shell-exec refused (AGENT-18.a): …` carrying `HUMAN_LIFECYCLE_LINE`; nothing is spawned, the change's `state.json` is unchanged, no `approvals.json` / `review.json` is written and nothing moves to `.specsync/archive`; `specsync change status c1` and `specsync check` still run
+
+### Scenario: the shell and the runners never wipe or overwrite Corvidinho's store (SAFE-4)
+
+- **Given** builtins loaded, `shell-exec` and the runners allowlisted, and the store (`CORVIDINHO_DATA_DIR`, else `~/.local/share/corvidinho`) holding memories
+- **When** the agent runs `shell-exec` with `sqlite3 ~/.local/share/corvidinho/corvidinho.db "DELETE FROM memories"`, `sqlite3 store/corvidinho.db 'DROP TABLE memories'` through a worktree link to the data dir, `truncate -s 0 "$CORVIDINHO_DATA_DIR/corvidinho.db"`, `cp /dev/null <db>`, `dd of=<db>` or `python3 -c` with `sqlite3` on it, or `node-exec` / `python-exec` with argv naming the DB or `CORVIDINHO_DATA_DIR`
+- **Then** each fails with exit 2 and `… refused (SAFE-4): …; change or forget stored memories only with memory-forget or memory-override, whose two-phase confirm …`; nothing is spawned and the memories rows are unchanged; `sqlite3 ./fixture.db 'DELETE FROM t'` in the worktree and `ls` of the data dir still run, and `rm <db>` is still a SAFE-21 delete
 
 ### Scenario: shell-exec starts without GitHub or git credentials (SAFE-21.a)
 
@@ -1364,6 +1426,9 @@ command line.
 | shell-exec deletes or moves outside the worktree (`rm`, `rmdir`, `unlink`, `shred`, `mv`, `find -delete` / `-exec rm`, `ln -f`, `git worktree remove` / `prune`), deletes the worktree itself, or names an expanded / input-fed / dot-matching target, in the command or an in-root script | Refuse (exit 2, SAFE-21 delete); no spawn (REQ-plugins-494) |
 | shell-exec reads a secret (secret path, host credential store, Corvidinho env / allowlist file or config dir, `/proc/<pid>/environ`, credential env var, `gh auth token`, `git credential`, ssh family) or re-points git / gh at credentials, in the command or an in-root script | Refuse (exit 2, SAFE-21 secret); no spawn (REQ-plugins-494) |
 | shell-exec runs `specsync change approve` / `review` / `finalize` / `ship` (any repo; behind a wrapper, package runner, path or link, in `-c` / `eval` / `$(…)`, or in an in-root script it runs), or a `change` step that expands or that `xargs` supplies | Refuse (exit 2, AGENT-18.a with `HUMAN_LIFECYCLE_LINE`); no spawn, no Approve card (REQ-plugins-1818) |
+| shell-exec runs a SQL client on Corvidinho's store (reads too), or names the store or its data dir in a non-read-only command, assignment, redirection or code (through `~`, `$HOME`, `$CORVIDINHO_DATA_DIR`, an env variable or a symlink), in the command or an in-root script | Refuse (exit 2, SAFE-4 naming the two-phase memory-forget / memory-override); no spawn, no Approve card (REQ-plugins-404) |
+| shell-exec gives a SQL client, or a `truncate` / `fallocate` / `cp` / `install` / `rsync` / `dd of=` / `tar -x` / `unzip` target, an expansion other than `~` / `$HOME` / `$CORVIDINHO_DATA_DIR`, `xargs` input, a pattern or `find` that can reach the store, or a tree destination holding it | Refuse fail-closed (exit 2, SAFE-4); no spawn (REQ-plugins-404) |
+| node-exec / python-exec / cargo-exec argv names Corvidinho's store or its data dir (text, `CORVIDINHO_DATA_DIR`, or a path leading into it) | Refuse (exit 2, `<runner> refused (SAFE-4)`); no spawn, no Approve card (REQ-plugins-404) |
 | shell-exec or a runner child looks for GitHub / git credentials | None: tokens, askpass, ssh agent dropped; git reads no global / system config, repo helper reset, no prompt, key-less ssh; gh config dir empty (SAFE-21.a, REQ-plugins-495) |
 | shell-exec runs past its timeout / the calling run aborts / prints past the cap | exit 124 / 130 with its process group killed; output truncated at 64 KiB per stream with a note; output secret-scrubbed (REQ-plugins-495) |
 | Dangerous run with no audit key while the audit chain is keyed | Refuse (exit 2, SAFE-5 audit log unavailable); handler not run |

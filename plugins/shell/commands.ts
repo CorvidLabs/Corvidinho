@@ -4,7 +4,9 @@
  *
  * Before spawning, `shell-exec` refuses SpecSync's human lifecycle steps
  * (sdd-lifecycle.ts, AGENT-18.a), then SAFE-21 foot-guns (footguns.ts), then
- * SAFE-3 escapes (clamp.ts); each refusal is exit 2 and spawns nothing. A
+ * raw-SQL wipes and overwrites of Corvidinho's own store (store-guard.ts,
+ * SAFE-4), then SAFE-3 escapes (clamp.ts); each refusal is exit 2 and spawns
+ * nothing. A
  * command that touches prod or deploys (must-ask.ts, AUTONOMY-9/9.a) waits
  * in `runPlugin` for the owner's Approve card and one-time code first. The
  * child runs with the runners' env (verify-lane scrub, no GitHub / git
@@ -30,6 +32,7 @@ import {
 import { firstFootgun, footgunRefuseMessage } from "./footguns.ts";
 import { shellProdWhy } from "./must-ask.ts";
 import { lifecycleRefusal } from "./sdd-lifecycle.ts";
+import { storeRefusal } from "./store-guard.ts";
 
 /** Same bounds as the language runners: a cold build fits, the run's abort stops it sooner. */
 export const SHELL_TIMEOUT_MS = RUNNER_TIMEOUT_MS;
@@ -92,7 +95,7 @@ export const shellCommands: PluginCommand[] = [
   {
     name: "shell-exec",
     description:
-      "Execute a shell command (sh -c) pinned to the project cwd, without GitHub/git credentials. dangerous + minTier=code. Refuses (and says why) cd/env -C outside the root (SAFE-3), sed -i or > edits, downloads piped into a shell, deletes outside the worktree and secret reads (SAFE-21), and specsync change approve/review/finalize/ship (AGENT-18.a). Args: <command|--command ...>. Options (--json, --command) go before the command; every later token is part of the command.",
+      "Execute a shell command (sh -c) pinned to the project cwd, without GitHub/git credentials. dangerous + minTier=code. Refuses (and says why) cd/env -C outside the root (SAFE-3), sed -i or > edits, downloads piped into a shell, deletes outside the worktree and secret reads (SAFE-21), SQL clients and writes on Corvidinho's own store (SAFE-4: use memory-forget / memory-override), and specsync change approve/review/finalize/ship (AGENT-18.a). Args: <command|--command ...>. Options (--json, --command) go before the command; every later token is part of the command.",
     dangerous: true,
     minTier: 2,
     // AUTONOMY-9/9.a: a command that touches prod or deploys (any contact,
@@ -140,6 +143,10 @@ export const shellCommands: PluginCommand[] = [
           },
         };
       }
+      // SAFE-4: a SQL client or a write on Corvidinho's own store has no
+      // second phase here; memory-forget / memory-override do (REQ-plugins-404).
+      const store = storeRefusal(cmdStr, root);
+      if (store != null) return store;
       const offending = firstDisallowedCd(cmdStr, root);
       if (offending != null) {
         const msg = clampRefuseMessage(root, offending);
