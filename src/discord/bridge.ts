@@ -80,8 +80,10 @@ import {
   type GatewayHandlers,
 } from "./gateway.ts";
 import {
+  appendAttachmentUrls,
   attachmentCacheDir,
   enrichPromptWithImages,
+  sessionAttachmentDir,
 } from "./image-attachments.ts";
 import { enrichPromptWithIdentity } from "./identity-inject.ts";
 import {
@@ -104,6 +106,7 @@ import {
   type ApprovalDeliveryResult,
 } from "./approval-cards.ts";
 import { forgetApprovalKind } from "./forget-card.ts";
+import { hiCaptureApprovalKind } from "./hi-card.ts";
 import { spendApprovalKind } from "./spend-card.ts";
 import {
   createPublicReplyGate,
@@ -186,6 +189,7 @@ import {
   resolveSessionTtlMs,
 } from "../store/index.ts";
 import { formatErrorLine } from "../store/scrub.ts";
+import { createScheduleRunStop } from "./schedule-stop.ts";
 import {
   appendAudit,
   auditKeyFromEnv,
@@ -623,6 +627,19 @@ export async function startBridge(
           // AUTONOMY-10 / 10.a: one of its first 20 public-thread replies
           // (plain), held by the reply gate below (REQ-discord-099).
           publicReplyApprovalKind({ db }),
+          // AGENT-18 hi drafts (REQ-discord-521): criteria a run drafted with
+          // hi-draft, captured only on the owner's Approve (`cvok:hi:…`).
+          hiCaptureApprovalKind({
+            db,
+            env,
+            owner: () => config.owner ?? null,
+            sendDm,
+            post: async ({ channelId, content, mentionUserIds }) =>
+              !!replyRef.fn && (await replyRef.fn({ channelId, content, mentionUserIds })) !== null,
+            // DISCORD-5: the outcome post only in a conversation still allowlisted.
+            mayPost: (channelId, parentChannelId) =>
+              isMonitoredConversation(channelId, parentChannelId, config.allowlist),
+          }),
         ],
       })
     : undefined;
@@ -753,6 +770,22 @@ export async function startBridge(
     return outcome;
   }
 
+  // AGENT-3.c (REQ-discord-304): the scheduler's stop control — each schedule
+  // run takes a turn on this run control and shows the same Stop button (in
+  // its channel, or with no channel in the owner's DM), so the owner or the
+  // schedule's creator stops it the same way as a chat run.
+  const scheduleRunStop = createScheduleRunStop({
+    runControl,
+    outbound: () => resolveOutbound(),
+    sendDm: () => sendDmRef.fn,
+    editMessage: () => embedRef.editMessage,
+    deleteMessage: () => embedRef.deleteMessage,
+    owner: () => config.owner ?? null,
+    model: () => loadLlmEnv(process.env).model,
+    debounceMs: opts.thinkingDebounceMs,
+    tickMs: opts.thinkingTickMs,
+  });
+
   /**
    * AGENT-3.a (REQ-discord-302): stop the run `runId` and answer the stop
    * message with one short ack, tracked on the run's session.
@@ -788,8 +821,13 @@ export async function startBridge(
   async function pressPassesGates(
     interaction: ComponentInteraction,
     talk: Pick<SessionStub, "channelId" | "threadId"> | undefined,
+    // AGENT-3.c: a Stop press in a DM (a schedule with no channel) skips the channel gate.
+    where: { inDm?: boolean } = {},
   ): Promise<boolean> {
-    if (!componentChannelAllowlisted(interaction.channelId, talk, config.allowlist)) {
+    if (
+      !where.inDm &&
+      !componentChannelAllowlisted(interaction.channelId, talk, config.allowlist)
+    ) {
       const admin =
         resolvePermissionLevel({
           userId: interaction.userId,
@@ -849,6 +887,15 @@ export async function startBridge(
    * the owner ⇒ "This Stop button isn't for you."; else the stop words' stop
    * path and the same short ack, all ephemeral. Waiting messages still run
    * (AGENT-3.b); the progress message becomes `⏹ Stopped`, its button gone.
+   * AGENT-3.c (REQ-discord-304): a schedule run's button works the same way,
+   * its creator in the requester's place; a schedule with no channel shows
+   * it in the owner's DM, and a press there (no guild) on that running
+   * run's DM has no channel to allowlist — like a schedule ask's
+   * (AUTONOMY-6.a) — so only the actor and mute / rate gates apply. The
+   * owner's press with no guild on a Stop button whose run is no longer
+   * going (a DM a dead bridge left) skips the channel gate too, so it gets
+   * "Nothing is running." rather than the allowlist tip. Every other press
+   * keeps the channel gate.
    */
   async function pressStopButton(interaction: ComponentInteraction, runId: string): Promise<void> {
     const messageId = interaction.messageId;
@@ -858,7 +905,12 @@ export async function startBridge(
     const talk =
       (shown ? store.get(shown.sessionId) : undefined) ??
       (messageId ? store.getByBotMessage(messageId) : undefined);
-    if (!(await pressPassesGates(interaction, talk))) return;
+    const inDm =
+      !interaction.guildId &&
+      (run !== undefined
+        ? scheduleRunStop.inOwnerDm(run.runId)
+        : shown === undefined && isOwnerDiscord(config.owner, interaction.userId));
+    if (!(await pressPassesGates(interaction, talk, { inDm }))) return;
     if (!run) {
       await interaction.reply({ content: RUN_STOP_NOTHING_RUNNING, ephemeral: true });
       return;
@@ -897,6 +949,8 @@ export async function startBridge(
       // DB and sends the owner's card at once.
       ...(db ? { requestForget: (i) => new ForgetRequestStore({ db }).request(i) } : {}),
       ...(approvals ? { deliverForgetCards: () => approvals.deliver() } : {}),
+      // AGENT-18 hi drafts: a card a /work run raised reaches the owner when it ends.
+      ...(approvals ? { deliverApprovalCards: () => approvals.deliver() } : {}),
       // Same object/arrays as the router + scheduler: /admin splices in place.
       allowlist: config.allowlist,
       agent,
@@ -1258,15 +1312,20 @@ export async function startBridge(
         try {
           // DISCORD-9 — download attachments into the session workspace (bound
           // above): the agent's file tools only open paths under its cwd
-          // (REQ-discord-013).
-          let enrichedPrompt = await enrichPromptWithImages(
-            agentPrompt,
-            msg.attachments,
-            {
-              messageId: msg.id,
-              cacheDir: attachmentCacheDir(sessionCwd ?? config.projectRoot),
-            },
-          );
+          // (REQ-discord-013). AGENT-1.a: a non-git project's talk runs in
+          // the project folder itself, so the owner's images go to this
+          // session's own folder there (removed when the session ends), and
+          // anyone else's stay URL-only — their runs only read there.
+          const inPlace = bound.workspace.kind === "project_dir";
+          let enrichedPrompt =
+            inPlace && actingRole !== "owner"
+              ? appendAttachmentUrls(agentPrompt, msg.attachments)
+              : await enrichPromptWithImages(agentPrompt, msg.attachments, {
+                  messageId: msg.id,
+                  cacheDir: inPlace
+                    ? sessionAttachmentDir(bound.workspace.workDir, session.id)
+                    : attachmentCacheDir(sessionCwd ?? config.projectRoot),
+                });
 
           const people = declaredPeople();
           // IDENTITY-4 — inject Discord user id + display / owner map (never invent names).
@@ -2397,6 +2456,8 @@ export async function startBridge(
         inflight?.end();
         // AGENT-3.a / AGENT-3.b: the next run of this session may start.
         turn.done();
+        // SAFE-18 / AGENT-18 hi drafts: a card this run raised reaches the owner now.
+        void approvals?.deliver();
       }
     },
     onSlash: async (interaction) => {
@@ -2519,6 +2580,11 @@ export async function startBridge(
       spendDm,
       // DISCORD-3.b: a failed run of someone else's schedule DMs the owner why.
       failureDm,
+      // AGENT-3.c (REQ-discord-304): each run takes a turn on the chat runs'
+      // run control and shows their Stop button (in its channel, or with no
+      // channel in the owner's DM), so the owner or the schedule's creator
+      // stops it the same way as a chat run.
+      runStop: scheduleRunStop,
       outbound: {
         post: async ({ channelId, content, mentionUserIds, components, modelText }) => {
           if (!replyRef.fn) return false;

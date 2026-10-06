@@ -151,6 +151,12 @@ export type ExecuteFn = (ctx: ExecuteContext) => Promise<ExecuteResult>;
 export type VerifyResult = {
   success: boolean;
   output: string;
+  /**
+   * AGENT-18: set by the default runner only when a Trust repo's Trust step
+   * failed or `fledge trust` is not available — that one-line reason (the
+   * head of `output`). It leads the run's failure summary and retry feedback.
+   */
+  trustNote?: string;
 };
 
 export type VerifyRunner = (
@@ -233,6 +239,45 @@ export type TaskResult = {
    * is not in a git repo, or a child a product surface spawned.
    */
   workspace?: TaskWorkspaceReport;
+  /**
+   * GITHUB-9 (REQ-agent-092): how a `/work` run's second-model review of its
+   * verified tree ended (`RunTaskOptions.review`): `finished` (a round raised
+   * nothing, the tree was left unchanged after findings, or the last round),
+   * or `refused` with one plain line of harness text saying why none could
+   * finish (GITHUB-9.a: no second model). The `/work` PR step checks the
+   * review record itself and uses `reason` only for its line (additive; no
+   * protocol change). Absent on every other run.
+   */
+  review?: TaskReview;
+};
+
+/** GITHUB-9: how a run's second-model review ended (`TaskResult.review`). */
+export type TaskReview = { state: "finished" } | { state: "refused"; reason: string };
+
+/**
+ * GITHUB-9 (REQ-agent-092): one call of a run's second-model review hook.
+ * `finished` ends the review (`note` is the Text event); `findings` hands the
+ * reviewer's findings back to the model as the next attempt's feedback;
+ * `refused` says in one plain line why no review can finish (no PR follows);
+ * `ask` is a SAFE-8 spend-cap stop of the review call (the run ends blocked
+ * with that ask).
+ */
+export type ReviewHookResult =
+  | { kind: "finished"; note: string }
+  | { kind: "findings"; note: string; feedback: string }
+  | { kind: "refused"; reason: string }
+  | { kind: "ask"; summary: string; ask: HumanAsk };
+
+/** GITHUB-9 (REQ-agent-092): a run's second-model review before the PR (`RunTaskOptions.review`). */
+export type ReviewHook = {
+  /**
+   * The review's round cap. Round `maxRounds` always ends a review, so at
+   * most `maxRounds - 1` rounds hand findings back; one more fails closed
+   * (refused). Counted apart from the AGENT-4.a verify retries.
+   */
+  maxRounds: number;
+  /** One review step of the verified tree as it stands now. */
+  run: (ctx: { signal: AbortSignal }) => Promise<ReviewHookResult>;
 };
 
 /** What became of a local `task run`'s own worktree at the end of the run (REQ-cli-122). */
@@ -349,4 +394,13 @@ export type RunTaskOptions = {
   idleTimeoutMs?: number;
   /** Config loaded from fledge.toml; used as defaults when overrides omitted. */
   config?: AgentConfig;
+  /**
+   * GITHUB-9 (REQ-agent-092): an owner or team `/work` run's second-model
+   * review (`task run` wires it, REQ-cli-092). After the tree is verified
+   * (and any SpecSync change this run opened is settled), the run is done
+   * only once the review finished or was refused; findings go back to the
+   * model as the next attempt's feedback, and that attempt is verified again
+   * first. Absent on every other run.
+   */
+  review?: ReviewHook;
 };

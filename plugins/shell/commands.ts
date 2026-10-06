@@ -2,7 +2,8 @@
  * Shell plugins (PLUGIN-1 / SAFE-3 / SAFE-21 / REQ-plugins-086..088, 494..495).
  * Steal: Merlin fledge-plugin-shell project-root clamp (#570).
  *
- * Before spawning, `shell-exec` refuses SAFE-21 foot-guns (footguns.ts), then
+ * Before spawning, `shell-exec` refuses SpecSync's human lifecycle steps
+ * (sdd-lifecycle.ts, AGENT-18.a), then SAFE-21 foot-guns (footguns.ts), then
  * SAFE-3 escapes (clamp.ts); each refusal is exit 2 and spawns nothing. A
  * command that touches prod or deploys (must-ask.ts, AUTONOMY-9/9.a) waits
  * in `runPlugin` for the owner's Approve card and one-time code first. The
@@ -28,6 +29,7 @@ import {
 } from "./clamp.ts";
 import { firstFootgun, footgunRefuseMessage } from "./footguns.ts";
 import { shellProdWhy } from "./must-ask.ts";
+import { lifecycleRefusal } from "./sdd-lifecycle.ts";
 
 /** Same bounds as the language runners: a cold build fits, the run's abort stops it sooner. */
 export const SHELL_TIMEOUT_MS = RUNNER_TIMEOUT_MS;
@@ -90,7 +92,7 @@ export const shellCommands: PluginCommand[] = [
   {
     name: "shell-exec",
     description:
-      "Execute a shell command (sh -c) pinned to the project cwd, without GitHub/git credentials. dangerous + minTier=code. Refuses (and says why) cd/env -C outside the root (SAFE-3), sed -i or > edits, downloads piped into a shell, deletes outside the worktree and secret reads (SAFE-21). Args: <command|--command ...>. Options (--json, --command) go before the command; every later token is part of the command.",
+      "Execute a shell command (sh -c) pinned to the project cwd, without GitHub/git credentials. dangerous + minTier=code. Refuses (and says why) cd/env -C outside the root (SAFE-3), sed -i or > edits, downloads piped into a shell, deletes outside the worktree and secret reads (SAFE-21), and specsync change approve/review/finalize/ship (AGENT-18.a). Args: <command|--command ...>. Options (--json, --command) go before the command; every later token is part of the command.",
     dangerous: true,
     minTier: 2,
     // AUTONOMY-9/9.a: a command that touches prod or deploys (any contact,
@@ -115,7 +117,11 @@ export const shellCommands: PluginCommand[] = [
       }
 
       const root = resolve(ctx.cwd);
-      // SAFE-21 first, so a foot-gun names its own reason (`curl … | sh` is a
+      // AGENT-18.a: the shell never approves, reviews or finalizes a SpecSync
+      // change, in any repo (REQ-plugins-1818).
+      const lifecycle = lifecycleRefusal(cmdStr, root);
+      if (lifecycle != null) return lifecycle;
+      // SAFE-21 next, so a foot-gun names its own reason (`curl … | sh` is a
       // download run as code, not a cd).
       const footgun = firstFootgun(cmdStr, root);
       if (footgun != null) {

@@ -12,6 +12,7 @@ import type {
   ModelFallback,
   ModelUsage,
   SpendWarning,
+  TaskReview,
   TaskStopReason,
 } from "../agent/types.ts";
 import type { InjectionNotice } from "../agent/untrusted.ts";
@@ -209,6 +210,11 @@ export type AgentSpawnResult = {
     cancelled?: boolean;
     /** AGENT-12: a limit I set stopped the run (validated); footer plumbing only. */
     stopReason?: TaskStopReason;
+    /**
+     * GITHUB-9: how the run's second-model review ended (validated; the
+     * reason scrubbed, one line, capped). Words the /work `not-reviewed` line.
+     */
+    review?: TaskReview;
   };
 };
 

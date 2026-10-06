@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "i-or-the-schedule-s-creator-can-stop-a-scheduled-run-in-progress-from-discord-the-same-way-as-a-chat-run-agent-3-c",
+  "implementation_commit": "ea53d38686f8733215bce663fb4d8bbd7ff216a4",
+  "implementation_tree": "ff128a50cf61122e41640a90896cc2c3b77c981c",
+  "contract_digest": "a3b7a4515af379d0baa3bdf9b782d4cb1d1e0f91a5ba5f2b4dfb85aa6fdf5d3d",
+  "workspace_digest": "3f276b49b87e1408778efa22c4d3252f6947769e92317731b8f7ff070ddd744e",
+  "closing_digest": "a869b838cccba02351c7b4b660e76a885c89b02170d95b99ecfb0bf6ace45f47",
+  "review_digest": "a869b838cccba02351c7b4b660e76a885c89b02170d95b99ecfb0bf6ace45f47",
+  "finalization_digest": "a3b7a4515af379d0baa3bdf9b782d4cb1d1e0f91a5ba5f2b4dfb85aa6fdf5d3d",
+  "timestamp": 1791303367,
+  "note": "tip-orphan after #369"
+}

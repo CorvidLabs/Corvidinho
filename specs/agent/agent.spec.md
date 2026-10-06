@@ -46,6 +46,7 @@ files:
   - tests/agent.spend-caps.test.ts
   - tests/agent.spend-approve.test.ts
   - tests/agent.spend-unknown.test.ts
+  - tests/agent.spend-reserve.test.ts
   - tests/spend.surfaces.test.ts
   - tests/agent.ask.test.ts
   - tests/agent.verify-env.test.ts
@@ -62,8 +63,10 @@ files:
   - tests/autonomous.worker-failure.test.ts
   - tests/agent.verify-gate.test.ts
   - tests/fixtures/talk-worktree.ts
+  - tests/agent.nongit-project-dir.test.ts
   - tests/agent.loop-guards.test.ts
   - tests/agent.stall-nudge.test.ts
+  - tests/agent.stall-escalate.test.ts
   - tests/agent.test-evidence.test.ts
   - tests/fixtures/lane-output.ts
   - src/agent/providers.ts
@@ -74,6 +77,11 @@ files:
   - tests/agent.safe3a-owner-shell.test.ts
   - tests/agent.repo-ways.test.ts
   - tests/agent.hi-guard.test.ts
+  - src/agent/hi-drafts.ts
+  - src/agent/hi-capture-store.ts
+  - tests/agent.hi-draft.test.ts
+  - tests/fixtures/stand-in-hi.ts
+  - tests/agent.trust-verify.test.ts
   - src/agent/limits.ts
   - tests/agent.limits.test.ts
 
@@ -148,8 +156,12 @@ Plan-only or empty "Done." replies (AGENT-17, nudge half, REQ-agent-087;
 round offered a state-changing tool, SAFE-13 has not tripped and nothing
 changed (the verify gate's real git diff, or tool-reported changes and
 stored memories with no git tree), gets one harness nudge to the same model,
-once per run; a second stall stands with an operator note. Moving to a
-stronger model is not built yet.
+once per run. A stall after the nudge moves the rest of the run to the next
+stronger model in the order I set (AGENT-17.a, REQ-agent-088:
+`CORVIDINHO_LLM_MODEL_ORDER`, the model list's own entries, weakest first;
+only a model the run's tier lists, with its key, that has not failed in the
+run), once per run, saying so in one closing line; with no order, at the top
+of it, or with none available, the reply stands with an operator note.
 
 ## Public API
 
@@ -199,13 +211,27 @@ plan or for nothing to change yet: a plan reply is then null),
 `changedForStall(name, result)` (`changedState`, or a successful
 `STALL_CHANGE_TOOLS` call), `nothingChanged({ sawChange, unreportedEdits,
 workspaceChanged? })` (async), `stallNudge(kind, askOffered)`,
-`stallNudgedNote(kind)`, `stallStandsNote(kind)` and
-`createStallNudgeGuard()` → `StallNudgeGuard` (`changed()` and
-`sawChange()` — a change in any attempt of the run; `next()` → `"nudge"`
-once, then `"stand"`). `ExecuteContext` gains the optional `workspaceChanged()` →
+`stallNudgedNote(kind)`, `stallStandsNote(kind, why)` (`why` a
+`StallStandReason`: `no-order`, `unordered`, `top`, `unavailable` or
+`moved`), `stallMovedNote(kind, from, to)` and `createStallNudgeGuard()` →
+`StallNudgeGuard` (`changed()` and `sawChange()` — a change in any attempt of
+the run; `next()` → `"nudge"` once, then `"escalate"` until `moved()`, then
+`"stand"`). `ExecuteContext` gains the optional `workspaceChanged()` →
 `Promise<string[] | null>`: `runTask` passes its `WorkspaceDiffTracker`'s
-`changed` when the run has a git snapshot. No env var, config key, flag,
-HumanAsk reason or NDJSON field is added.
+`changed` when the run has a git snapshot. No config key, flag, HumanAsk
+reason or NDJSON field is added.
+
+Stronger model (REQ-agent-088, AGENT-17 / AGENT-17.a): `src/agent/providers.ts`
+exports `MODEL_ORDER_ENV` (`CORVIDINHO_LLM_MODEL_ORDER`, the only setting:
+optional, same `kind:model` entries as the model list, weakest first),
+`modelOrderFromEnv(env)` (`parseModelChain`; [] when unset = no order),
+`StayReason` (`no-order` / `unordered` / `top` / `unavailable`),
+`StrongerModel` (`{ ok: true, index, from, to }` or `{ ok: false, why }`),
+`strongerModel(chain, order)` (pure), `moveToStronger(chain, order)` (sets
+`chain.index` only when there is one), `StrongerMove` (`{ from, to, kind }`),
+`STRONGER_MODEL_NOTE_PREFIX` (`(stronger model: `), `strongerModelNote(move)`
+and `withStrongerModelNote(summary, move)`; `closingNotesTail` keeps that
+note after the AGENT-11 fallback note.
 
 Export `MEMORY_AGENT_SYSTEM_INSTRUCTIONS` from `src/agent/execute.ts` (and
 `src/agent/index.ts`).
@@ -263,7 +289,9 @@ entry without its key is skipped with `<KEY> is not set`), `ModelFailure` /
 `modelFailureReason` (`HTTP <status>`, `timed out`, `network error`,
 `malformed reply`), `modelFallbackEventText`, `MODEL_FALLBACK_NOTE_PREFIX`,
 `modelFallbackNote`, `withModelFallbackNote`, `formatModelFallbackLog`
-(`llm.fallback: …`), `answeredModelLabel` (`b (fell back from a)`),
+(`llm.fallback: …`), `answeredModelLabel` (`b (fell back from a)`), the
+AGENT-17.a model order (`MODEL_ORDER_ENV`, `strongerModel`, `moveToStronger`,
+REQ-agent-088, above),
 `modelIdOfLabel`, `modelFallbackFromUnknown` / `modelUsageFromUnknown` /
 `modelLabelFromUnknown` (a child's result read back: scrubbed, one line,
 bounded, at most `MODEL_FALLBACK_MAX` 16), `mergeModelFallbacks` and
@@ -315,7 +343,11 @@ completions request (headers and body); `createTaskExecute` takes
 Daily spend cap (REQ-agent-098, issue #98, SAFE-8 as amended / AUTONOMOUS-8):
 `src/agent/spend.ts` exports `SPEND_CAP_ENV`
 (`CORVIDINHO_DAILY_SPEND_CAP_USD`), `SPEND_WINDOW_MS` (rolling 24 h),
-`SPEND_WARN_PERCENT` (80), `MODEL_PRICES_USD_PER_MTOK`, `priceForModel`,
+`SPEND_WARN_PERCENT` (80), `MODEL_PRICES_USD_PER_MTOK` (each priced model's
+input/output price and its listed maximum output, `ModelPrice.maxOutputTokens`),
+`priceForModel`, `REPLY_RESERVE_DEFAULT_TOKENS` (128000) and
+`replyReserveTokens` (the worst-case reply a call is estimated at,
+AUTONOMY-8.a, REQ-agent-298),
 `parseSpendCap`, `costMicroUsd`, `estimateCallMicroUsd`, `formatUsd`,
 `ensureSpendLedger`, `SpendLedger` (`reserve` / `settle` / `window` /
 `noteWarning` over the module-owned `spend_ledger` and `spend_alerts` tables
@@ -483,6 +515,23 @@ findings is not run; `withReviewRefusalNote(summary, line)` adds the run's
 latest `github-pr-create` refusal line ("PR not opened: …") once, before the
 role note.
 
+The `/work` review rounds (REQ-agent-092, GITHUB-9 / GITHUB-9.a):
+`createTaskExecute` returns a `TaskExecuteFn` — the execute fn plus `review`
+(the run's `PrReviewRun`) and `takeSpendAsk()` (the spend-cap ask a stopped
+review call left, cleared; else null). `RunTaskOptions.review` (a
+`ReviewHook`: `maxRounds`, `run({signal})` → `ReviewHookResult`: `finished`
+with its Text note, `findings` with a note and the next attempt's feedback,
+`refused` with a one-line reason, or `ask`, a spend-cap stop) is called after
+a passing lane and any settle of the run's own SpecSync change, before done:
+findings become the next attempt's `verifyFeedback` (verified again first),
+counted apart from the AGENT-4.a retries; at most `maxRounds - 1` hand
+findings back, and another, or a throw, fails closed (`reviewOverRoundsReason`,
+`REVIEW_HOOK_FAILED_REASON`, exported from `src/agent/loop.ts`);
+`TaskResult.review` (`TaskReview`: `{state: "finished"}` or `{state:
+"refused", reason}`) says how it ended; an `ask` ends the run `blocked`.
+`task run` passes the hook only for an owner or team `/work` run whose PR
+path is allowlisted (REQ-cli-092; `workReviewHook`, `src/work/review.ts`).
+
 Council core (REQ-agent-118, issue #118, AUTONOMOUS-6):
 `src/autonomous/council.ts` exports `parseCouncilArgs`, `resolveCouncilTier`,
 `councilLens`, `capCouncilText`, `buildProposeText`, `buildCritiqueText`,
@@ -515,6 +564,19 @@ git plugins' `gitEnv`) and `working-tree` otherwise. A loaded file carries
 `uncommitted: true` when its working-tree copy differs from `HEAD`.
 `LoadProjectInstructionsOptions.exactRoot` reads at the given directory
 instead of walking up to the nearest `.git` (the persona file).
+In a working-tree (non-git) project the file tools never change the root
+`AGENTS.md` / `CLAUDE.md` (AGENT-1.b, REQ-plugins-110), so a run cannot plant
+instructions for later runs there.
+
+Non-git project folder (REQ-agent-110, AGENT-1.a): a run whose cwd is a
+project folder that isn't a git repo works there. `createTaskExecute` passes
+the run's cwd to `actingWorkTask(env, cwd)` for the catalog's `workTask`, for
+`refusedForRole` and for the missing-capability facts (`capabilityFacts`,
+REQ-agent-742), so a team member's `/work` run there gets no work tools
+and a call to one gets the role refusal (REQ-plugins-115); the owner's run
+keeps SAFE-2, the AGENT-1.b refusal, the SAFE-3.a withholding of the shell,
+runners and Fledge runs (the cwd is no talk worktree, REQ-agent-503) and the
+verify gate (REQ-agent-002 / REQ-agent-185).
 
 Persona file (REQ-agent-069, PERSONA-1/2/3, issue #69): `src/agent/persona.ts`
 exports `PERSONA_FILE` (`persona.md`), `PERSONA_MAX_BYTES` (8 KiB),
@@ -538,8 +600,9 @@ Personality traits, Background, Communication style, Example messages).
 `chatBodyFromTaskRunOutput` alongside `summarizeTaskResult`, plus
 `ROLE_REFUSED_SUMMARY_NOTE`, `closingNotesTail` and `clipKeepingRoleNote`
 (REQ-agent-333; it keeps the AGENT-11 `(model fallback: …)` note before the
-role note too, REQ-agent-080, and the REQ-agent-318 attribution note between
-them), and `REPLY_ATTRIBUTION_BY_TOOL` (tool name → the visible line its
+role note too, REQ-agent-080, the AGENT-17 `(stronger model: …)` note right
+after it, REQ-agent-088, and the REQ-agent-318 attribution note before the
+role note), and `REPLY_ATTRIBUTION_BY_TOOL` (tool name → the visible line its
 provider's terms ask a reply to end with: `web-search` → "Search by Brave"),
 `replyAttributionNote`, `withoutReplyAttribution` and `withReplyAttribution`
 (REQ-agent-318). Discord/NDJSON
@@ -604,6 +667,22 @@ when the process exits). The verify lane, `shell-exec`, the language runners
 and the Fledge core runs use it (REQ-plugins-621), so none starts with the
 owner's cloud credentials or reads them from `~/.kube/config`, `~/.aws`,
 `~/.config/gcloud` or `~/.azure`.
+
+Trust where the repo uses Trust (AGENT-18, REQ-agent-525): `src/agent/verify.ts`
+also exports `TRUST_VERIFY_ARGS` (`--non-interactive trust verify`),
+`TRUST_PROBE_ARGS` (`--non-interactive trust --help`),
+`trustUnavailableReason(detail)`, `trustFailedHead(code)` and
+`TRUST_PASSED_LINE`; `VerifyResult` gains optional `trustNote` (that one-line
+reason, set only when the Trust step failed or is unavailable), which leads
+`runTask`'s failure summary and retry feedback;
+`src/agent/repo-ways.ts` exports `usesTrust(cwd)` (the run's start scan, else
+`detectRepoWays` now with the run's base or `repoWaysBase`). When it is true,
+`defaultVerifyRunner` probes `fledge trust` (a non-zero exit fails closed with
+the exact reason before the lane), runs the lane, and only after a passing
+lane runs `fledge trust verify`; both must exit 0. Each step uses the lane's
+env, process group, idle-watchdog pipe reading and abort handling. A repo
+without `.trust.toml` runs the lane alone as before. Corvidinho's own repo
+has no `.trust.toml`. No env var, config key, flag or schema.
 
 Verify retry feedback (REQ-agent-002, AGENT-4.a): `src/agent/verify.ts` also
 exports `VERIFY_FEEDBACK_MAX_CHARS` (4000) and `verifyFeedbackExcerpt(output,
@@ -715,6 +794,27 @@ gate's comparison for a run) and `hiPrRefusal(cwd)` (`github-pr-create`
 inside a run, REQ-plugins-521); `SddRun` gains
 `hiStart` (hi/ at planning for a run with no git session base). No env var,
 config key, flag or schema.
+hi drafts (AGENT-18 hi clause, drafting half, REQ-agent-521 / REQ-agent-522):
+`src/agent/hi-drafts.ts` exports `HI_DRAFT_TOOL` (`hi-draft`),
+`HI_DRAFT_TOOL_RESULT_DETAIL`, `HI_DRAFT_MAX` (5), `HI_DRAFT_TEXT_MAX` (400),
+`HiDraftMode` (`card` | `cli`), `hiDraftGate({ env, cwd, ways })`,
+`HiDraftToolDef` / `buildHiDraftToolDef(mode)` / `withHiDraftTool(tools,
+mode)`, `parseHiDraftArgs(raw)`, `HiExport` / `parseHiExport(json)` /
+`readHiExport(cwd, env)`, `hiBin(env)`, `validateHiDrafts(drafts, exp)`,
+`hiCaptureCommand(draft)`, `hiDraftCardQuestion(drafts, id)`,
+`hiDraftCliQuestion(drafts)`, `handleHiDraftCall({ rawArgs, cwd, env, ways
+})`, `hiCaptureWorktreeProblem(req)`, `ensureHiCaptureWorktree(req)`,
+`hiCaptureCommitMessage(req)`, `releaseHiCaptureWorktree(req, commit)` and
+`runHiCapture({ db, req, actor, env })`
+(its result carries the capture's `commit`). `src/agent/hi-capture-store.ts`
+exports `HiDraft`, `HiCaptureRequest`, `HiCaptureStore`, `HI_CAPTURE_TTL_MS`
+(24 h), `HI_ABSENT`, `hiContentKey(text, executable)`,
+`ensureHiCaptureTables(db)`, `recordHiCaptureFiles`, `hiCaptureEdges`,
+`hiCaptureChainAllows` and `loadHiCaptureEdges(repo, env)`; its two tables
+(`hi_capture_requests`, `hi_capture_files`) are created by the module
+(`CREATE TABLE IF NOT EXISTS`), with no schema version bump.
+`renderRepoWaysBlock(ways, { hiDraft })` takes the run's offer; `ChatToolDef`
+includes `HiDraftToolDef`. No env var, config key or flag.
 
 A failed run's plain reason (DISCORD-3.b, REQ-agent-032): `TaskResult` gains
 an optional `error?: string` (additive; no protocol bump) and `ExecuteResult`
@@ -797,8 +897,19 @@ reports in any attempt of the run — the stall guard remembers both — and an
 empty real diff where there is a git tree; an unreadable diff counts as a
 change; the diff is read only for a reply that stalls). The nudge is one user message to
 the same conversation and model chain, never uses up a tool round, and comes
-at most once per `createTaskExecute`; a later stall stands with one
-`[operator] AGENT-17` line (no ask, no error). `stallKind` is null for any
+at most once per `createTaskExecute`. A later stall moves the run to a
+stronger model at most once per `createTaskExecute` (AGENT-17.a,
+REQ-agent-088): only the next entry after the chain's current model in
+`CORVIDINHO_LLM_MODEL_ORDER` that the chain itself (the run's tier's list)
+holds, with its key, that has not failed in the run (later ones in the order
+in turn) — never a weaker or unordered one, never a price or benchmark
+ranking; the stalled reply is dropped and the same request goes to that
+model through the same chain and spend guard (no second nudge, no tool round
+used), with one `[operator] AGENT-17 … moving from <a> to the stronger model
+<b>` line and the `(stronger model: …)` closing note on every later summary.
+With no order, an unordered current model, the top of the order, no stronger
+model available, or after the move, the stall stands with one `[operator]
+AGENT-17 … the reply stands (<why>)` line (no ask, no error). `stallKind` is null for any
 "?", code fence, "let me know" or offer, decline, toy / demo / joke or
 deferral, for answers and social replies, and for a plan when the task text
 asks for one or for nothing to change yet. The model chain (AGENT-11), the
@@ -904,7 +1015,11 @@ events are unchanged.
 No spend cap set (neither the total nor a provider cap) means no spend
 behavior: the fetch is untouched and the DB is not opened. With a cap, a
 provider call is never sent unless its estimate was reserved under the total
-cap and its provider's cap in one IMMEDIATE transaction; each cap warns and
+cap and its provider's cap in one IMMEDIATE transaction; that estimate counts
+the model's worst-case reply (its listed maximum output, else 128000 tokens;
+AUTONOMY-8.a, REQ-agent-298), so a call whose long reply could pass a cap
+asks first, and no request ever carries `max_tokens` (replies are never cut
+short); each cap warns and
 stops on its own (SAFE-15), and a cap stop never falls back to another model
 (AGENT-11). A call that would pass
 the cap, and every call while the cap value is invalid or the ledger is
@@ -1132,19 +1247,43 @@ skip-worktree `hi/` entry whose file is not its index blob counts too; for a
 run with no git session base, hi/ as it was at planning, `hiSnapshot`). Any difference — a criterion added, removed or reworded, a
 retired entry changed, or any other `hi/` file (intent prose, notes) — made
 by this run or left by an earlier one, is a failed verify whose `hi guard:`
-note (what changed, that no run can make an approved capture yet, and to undo
+note (what changed, that only what approved captures made passes, and to undo
 a hi/ change this run made but leave one that was already there for the
 owner) is the retry's feedback, with no lane run; after the retries the run fails with the
-stuck ask. What cannot be read fails closed. No run can make an approved
-capture yet (drafting criteria and the capture card come later), so every
-`hi/` change blocks. The tool loop's hi block says the file tools refuse
-`hi/` and that any `hi/` change blocks done and the PR; the run's own
+stuck ask. What cannot be read fails closed. The one exception is a path
+whose change approved captures alone explain (REQ-agent-522): the ledger of
+the repository's approved captures leads from its content at the base to its
+content now. The tool loop's hi block says the file tools refuse
+`hi/` and that any other `hi/` change blocks done and the PR; the run's own
 `github-pr-create` holds to the same comparison (REQ-plugins-521). A run that
 changed nothing is not checked. The guard runs only inside Corvidinho runs
 and `/work`'s PR step: a capture made with the `hi` CLI outside any run that
 is already in the session base never blocks, but a `hi/` commit on the run's
 own branch that is not yet on the remote's default branch counts whoever
 made it, since the run cannot tell.
+
+hi drafts (AGENT-18 hi clause, drafting half, REQ-agent-521 / REQ-agent-522):
+in a repo that uses hi, the owner's and the team's own interactive Discord
+runs (chat, an ask answer, `/session start`, `/work`) in that talk's own
+linked worktree, and a local CLI run nothing spawned, are offered `hi-draft`; community runs, WATCH,
+schedules and delegate or council workers never are, and the role is
+re-resolved for every attempt and at the call. A call carries 1–5 drafts
+(`{"drafts":[{"id","text"}]}`); each is checked against `hi export` (a new
+id in a declared family, not retired, a dotted id under a captured or
+earlier-drafted parent) and must be one line of at most 400 characters, not
+starting with `-`, that SAFE-6 scrubbing leaves unchanged; in a Discord run
+an id already waiting on an open card is refused too. A refusal goes back to
+the model and records nothing. In a Discord run it records a hi capture request (the
+drafts, the session worktree's path, branch and HEAD, the repository, who
+asked from where) for the owner's `hi` card (REQ-discord-521) and ends the
+run blocked with a clarify ask naming the drafts and the request; in the CLI
+it records nothing and ends with an ask listing the exact `hi <ID> '<text>'`
+commands. The run itself never captures. When the owner approves, the
+capture is committed on the session's branch (REQ-discord-521), its ledger
+records each `hi/` path it changed (content before and after), and the hi
+guard leaves out a path that a chain of approved steps explains, so a later done or `/work` PR is not blocked by it; an edit on top
+of it, any other `hi/` file, or steps of a request that was not approved
+still block.
 
 Own SpecSync change (AGENT-18.a, REQ-agent-519): `runTask` keeps a per-cwd
 ledger for the run. `specsync-change-new` records the ids its own spawn added
@@ -1171,11 +1310,29 @@ A change the run did not open is never touched.
 - **When** the attempt ends
 - **Then** one `SpecSync gate:` note names `src/app.ts` and says to open a change with `specsync-change-new`; no lane runs; the retry gets the note as its feedback; once a change's `affected_paths` covers the path, the lane runs and the run is verified (REQ-agent-518)
 
+### Scenario: a /work run's verified tree gets a second-model review before the PR
+
+- **Given** an owner `/work` run with two configured models and the PR path allowlisted
+- **When** its tree passes verify and round 1 of the review raises a finding
+- **Then** the finding is the next attempt's feedback, that attempt is verified again, round 2 reviews the changed tree, and once a round raises nothing the run is done with `review: {state: "finished"}` (REQ-agent-092)
+
 ### Scenario: a run changes a criterion in a hi repo
 
 - **Given** a repo whose `hi/agent.md` has `hi:` front matter, and a run that rewords `AGENT-19` there through the shell while editing `src/app.ts`
 - **When** the attempt ends
-- **Then** one `hi guard:` note names `criteria AGENT-19` and says no run can make an approved capture yet; no lane runs; the retry gets the note as its feedback; once `hi/` is back as it was at the session base, the lane runs and the run is verified (REQ-agent-520)
+- **Then** one `hi guard:` note names `criteria AGENT-19` and says only what approved captures made passes; no lane runs; the retry gets the note as its feedback; once `hi/` is back as it was at the session base, the lane runs and the run is verified (REQ-agent-520)
+
+### Scenario: a team member asks for a criterion in a hi repo
+
+- **Given** a declared team member's chat run in its talk worktree of a repo whose `hi/agent.md` has `hi:` front matter, and a configured owner
+- **When** the model calls `hi-draft` with `AGENT-20` and its one-line text
+- **Then** `hi export` shows `AGENT-20` is new; a pending hi capture request records the draft and the worktree's branch; the run ends blocked with an ask naming `AGENT-20` and the request; `hi/` is unchanged and the lane does not run (REQ-agent-521)
+
+### Scenario: the next run after the owner approved the capture
+
+- **Given** that request approved on the owner's card, so `hi/agent.md` in the worktree carries `AGENT-20` and the ledger records the step
+- **When** the next run in that worktree edits `src/app.ts`
+- **Then** the hi guard leaves the capture out, the lane runs and the run is verified; an extra criterion added on top would still block (REQ-agent-522)
 
 ### Scenario: its own change on Corvidinho once verify is green
 
@@ -1201,6 +1358,12 @@ A change the run did not open is never touched.
 - **Given** `CORVIDINHO_DAILY_SPEND_CAP_USD=1`, $0.999 spent in the last 24 h and a configured owner
 - **When** the run's next `gpt-4o` call would pass the cap
 - **Then** the call is held and a `spend` card (money) is recorded with action `send one model call to gpt-4o via <host>`, target `total` and that call's estimate as amount; the run emits `[operator] AUTONOMY-8: waiting for the owner's OK on an Approve card with the one-time code …` (no amounts); once the owner approves with the code the call goes out once, recorded at that estimate; the next call past the cap raises a new card; a Deny or a lapse sends nothing and the run ends `blocked` on a `spend-cap` ask (REQ-agent-198)
+
+### Scenario: a call whose worst-case reply would pass the cap asks first
+
+- **Given** `CORVIDINHO_DAILY_SPEND_CAP_USD=0.10`, nothing spent in the last 24 h and a configured owner
+- **When** the run's next `gpt-4o` call would go out (request ~$0.0001, worst-case reply 16384 tokens ≈ $0.1638)
+- **Then** the call is held and a `spend` card (money) is recorded at that worst-case estimate before anything is sent; approved with the code it goes out once, unchanged (no `max_tokens`), and afterwards counts the provider-reported usage; with no owner the run ends `blocked` on a `spend-cap` ask and nothing is sent (AUTONOMY-8.a, REQ-agent-298)
 
 ### Scenario: an unpriced model under a cap asks on a card showing the amount as unknown
 
@@ -1327,7 +1490,13 @@ A change the run did not open is never touched.
 
 - **Given** a code-tier run (the catalog offers `files-write`) in a project whose tree has not changed
 - **When** the model's final reply is "Done." (or only a plan, or empty)
-- **Then** the same model gets one `[Corvidinho harness — AGENT-17]` nudge and its next reply is the answer; if that reply stalls again it stands with an `[operator] AGENT-17 … the reply stands` line; a Q&A answer, a social reply, a question, "let me know", a decline or a toy demo is never nudged (REQ-agent-087)
+- **Then** the same model gets one `[Corvidinho harness — AGENT-17]` nudge and its next reply is the answer; with no model order set, if that reply stalls again it stands with an `[operator] AGENT-17 … the reply stands (no model order is set …)` line; a Q&A answer, a social reply, a question, "let me know", a decline or a toy demo is never nudged (REQ-agent-087)
+
+### Scenario: it still only says "Done." after the nudge and I set a model order
+
+- **Given** `CORVIDINHO_LLM_MODEL=gpt-4.1-mini,anthropic:claude-sonnet-5` and `CORVIDINHO_LLM_MODEL_ORDER=gpt-4.1-mini,anthropic:claude-sonnet-5`, a code-tier run whose tree has not changed
+- **When** `gpt-4.1-mini` says "Done." and, after the one nudge, "Done." again
+- **Then** that second reply is dropped and the same request goes to `anthropic:claude-sonnet-5` (no second nudge), which keeps the rest of the run; its calls are counted under its own model by the spend guard; the answer ends with `(stronger model: gpt-4.1-mini said it was done with nothing changed after the nudge, so anthropic:claude-sonnet-5 took over)`; with no order, or with `gpt-4.1-mini` last in the order, it does not move and the reply stands (REQ-agent-088)
 
 ### Scenario: the owner's schedule posts to a channel and the owner says no
 
@@ -1378,7 +1547,11 @@ A change the run did not open is never touched.
 | That call is made again after the model saw the steer | not run; `ToolResult` success=false with `REPEAT_FAILURE_BLOCK_DETAIL`, one `[operator] AGENT-16` Text line; state blocked with a `stuck` ask naming only the tool (REQ-agent-086) |
 | Identical failing calls in one batch, or in a fresh verify-retry conversation | they run and get the steer again; never the ask before the model saw the steer (REQ-agent-086) |
 | Final reply is only a plan or a short "Done."-style / empty claim, a state-changing tool was offered, no SAFE-13 trip, nothing changed | one `[Corvidinho harness — AGENT-17]` user message to the same model (no tool round used), one `[operator] AGENT-17 … nudged once` line; its next reply is the answer (REQ-agent-087) |
-| It stalls again after the run's nudge | the reply stands; one `[operator] AGENT-17 … the reply stands` line; no ask, no error (REQ-agent-087) |
+| It stalls again after the run's nudge, with no model order set | the reply stands; one `[operator] AGENT-17 … the reply stands (no model order is set …)` line; no ask, no error (REQ-agent-087, REQ-agent-088) |
+| It stalls again after the nudge and the order has a stronger model the tier lists, with its key, not failed in the run | that reply is dropped; the same request goes to it (no second nudge, no tool round used); one `moving from <a> to the stronger model <b>` operator line; every later summary ends with `(stronger model: …)` (REQ-agent-088) |
+| The current model is not in the order, is the last in it, or no stronger one is available (another tier's, no key, failed in this run) | no move: the reply stands with the operator line naming why (REQ-agent-088) |
+| The stronger model stalls too | the reply stands (`it already moved to a stronger model once`); one move per run (REQ-agent-088) |
+| The stronger model's call would pass a spend cap (or is unpriced under one) | it stops and asks like any call (SAFE-8 / AUTONOMY-8); never routed to another model (REQ-agent-088) |
 | The git diff cannot be read (null or throws) when a reply stalls | counted as a change: no nudge (REQ-agent-087) |
 | "Done." after a memory was stored (`memory-store` / `memory-forget-me` ok) | counted as a change: no nudge, so nothing is stored twice (REQ-agent-087) |
 | A plan-only reply to a task that asks for the plan, or for no changes yet | the plan is the answer: no nudge (REQ-agent-087) |
@@ -1525,8 +1698,14 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |
 | 2026-10-01 | my-local-cli-task-run-may-use-the-allowlisted-shell-and-runners-inside-its-own-worktree-safe-3-a-local-cli-half: My local CLI task run may use the allowlisted shell and runners inside its own worktree (SAFE-3.a, local CLI half) |
 | 2026-10-01 | a-failed-delegate-worker-or-council-voice-hands-its-lead-one-plain-failure-line-the-worker-s-result-error-without-the: A failed delegate worker or council voice hands its lead one plain failure line (the worker's result error without the provider's host, the no-provider notice, or the exit code), never the worker's summary or stderr, which for a model failure is the provider's raw error body |
+| 2026-10-01 | in-a-non-git-project-my-runs-work-in-the-folder-itself-its-file-tools-leave-the-root-agents-md-and-claude-md-alone: In a non-git project my runs work in the folder itself, its file tools leave the root AGENTS.md and CLAUDE.md alone, schedules keep their own folder, and others only read there (AGENT-1.a, AGENT-1.b, AGENT-1.c) |
 | 2026-10-01 | in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent: In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard) |
 | 2026-09-30 | web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered: Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap |
 | 2026-10-01 | gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins: GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap |
 | 2026-10-03 | missing-plugin-asks-soft-land-with-the-real-gap: Missing-plugin asks soft-land with the real gap |
 | 2026-10-06 | the-verify-lane-the-shell-and-the-runners-start-without-my-cloud-credentials-kubeconfig-aws-google-cloud-azure-and: The verify lane, the shell and the runners start without my cloud credentials (KUBECONFIG, AWS, Google Cloud, Azure and similar), so they can't reach prod by accident (SAFE-21.b) |
+| 2026-10-06 | before-each-call-the-spend-guard-counts-a-worst-case-reply-toward-the-cap-the-model-s-listed-maximum-output-or-128k: Before each call the spend guard counts a worst-case reply toward the cap, the model's listed maximum output or 128K tokens for a priced model with none listed, so it asks before a long reply could take spend past it; replies are never cut short (AUTONOMY-8.a) |
+| 2026-10-06 | after-the-one-nudge-a-stalled-run-moves-to-the-next-stronger-model-in-the-order-i-set-and-says-so-agent-17-agent-17-a: After the one nudge a stalled run moves to the next stronger model in the order I set, and says so (AGENT-17, AGENT-17.a) |
+| 2026-10-05 | where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts: Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts) |
+| 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
+| 2026-10-05 | in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2: In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause) |

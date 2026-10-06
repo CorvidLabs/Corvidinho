@@ -17,6 +17,9 @@ import { join } from "node:path";
 import { Octokit } from "@octokit/rest";
 import { githubBranchTree } from "../plugins/github/commands.ts";
 import { createTaskExecute } from "../src/agent/execute.ts";
+import { runTask } from "../src/agent/loop.ts";
+import { VERIFY_FEEDBACK_MAX_CHARS } from "../src/agent/verify.ts";
+import { workReviewApplies } from "../src/cli.ts";
 import type { AgentEvent, ExecuteResult, ModelUsage } from "../src/agent/types.ts";
 import {
   buildDelegateSpawn,
@@ -37,6 +40,7 @@ import type {
 import { openCorvidinhoDb } from "../src/store/db.ts";
 import { SCRUB_TARGETS } from "../src/store/scrub.ts";
 import { openWorkPr } from "../src/work/pr.ts";
+import { WORK_PR_REVIEWED_LINE } from "../src/work/pr-body.ts";
 import {
   checkoutAuthors,
   configuredModels,
@@ -57,6 +61,12 @@ import {
   ReviewSpendStop,
   reviewTree,
   withReviewSection,
+  WORK_REVIEW_FEEDBACK_MAX,
+  WORK_REVIEW_REFUSAL,
+  WORK_REVIEW_TITLE,
+  workReviewFeedback,
+  workReviewHook,
+  workTreeReviewed,
   type ReviewRound,
 } from "../src/work/review.ts";
 import { LANE_PASS_OUTPUT } from "./fixtures/lane-output.ts";
@@ -508,7 +518,7 @@ describe("github-pr-create without a run model (plugins run, /work): no round, o
     expect((await prCreate(fx)).error).toBe(`${REVIEW_REFUSED_PREFIX}${REVIEW_REFUSAL.noRunModel}`);
   });
 
-  test("/work: with no finished review the PR line says why (not-reviewed) and the changes stay on the pushed branch; with one it opens with the section", async () => {
+  test("/work: with no finished review for the tree it would ship, nothing is committed or pushed (not-reviewed) and the line says why; with one it opens with the section", async () => {
     const make = () => {
       const fx = makeReviewRepo({ branch: nextBranch(), push: false });
       writeFileSync(join(fx.dir, "src", "greet.ts"), "export const hi = 'hi';\n");
@@ -534,12 +544,23 @@ describe("github-pr-create without a run model (plugins run, /work): no round, o
     });
 
     const fx = make();
+    const headBefore = git(fx.dir, "rev-parse", "HEAD").trim();
     const r = await openWorkPr(input(fx), deps);
     expect(r).toMatchObject({ opened: false, reason: "not-reviewed" });
     expect(r.line).toBe(
-      `PR: not opened — ${REVIEW_REFUSAL.noRunModel} The changes stay on branch \`${fx.branch}\`.`,
+      `PR: not opened — ${WORK_REVIEW_REFUSAL.notFinished} The changes stay on branch \`${fx.branch}\`.`,
     );
-    expect(git(fx.bare, "rev-parse", `refs/heads/${fx.branch}`).trim()).toBe(git(fx.dir, "rev-parse", "HEAD").trim());
+    // Checked before the commit: nothing committed, nothing pushed, no plugin ran.
+    expect(results).toEqual([]);
+    expect(git(fx.dir, "rev-parse", "HEAD").trim()).toBe(headBefore);
+    expect(git(fx.dir, "status", "--porcelain")).toContain("src/greet.ts");
+    expect(git(fx.bare, "for-each-ref", "--format=%(refname)", `refs/heads/${fx.branch}`).trim()).toBe("");
+
+    // A finished review for another tree (the tree changed after it) is not this tree's.
+    seedFinishedReview({ repo: REPO, branch: fx.branch, tree: fullWorkTree(fx.dir) });
+    writeFileSync(join(fx.dir, "src", "greet.ts"), "export const hi = 'hello';\n");
+    expect(await openWorkPr(input(fx), deps)).toMatchObject({ opened: false, reason: "not-reviewed" });
+    expect(results).toEqual([]);
 
     const fx2 = make();
     seedFinishedReview({ repo: REPO, branch: fx2.branch, tree: fullWorkTree(fx2.dir) });
@@ -547,6 +568,7 @@ describe("github-pr-create without a run model (plugins run, /work): no round, o
     const ok = await openWorkPr(input(fx2), deps);
     expect(ok).toMatchObject({ opened: true, dryRun: true });
     expect(bodyOf(results.at(-1)!)).toContain(REVIEW_SECTION_HEADING);
+    expect(bodyOf(results.at(-1)!)).toContain(WORK_PR_REVIEWED_LINE);
   });
 });
 
@@ -1043,5 +1065,213 @@ describe("rounds a PR listed are not listed again; change authors are kept per c
       db.close();
     }
     expect(SCRUB_TARGETS).toContainEqual({ table: "pr_change_authors", columns: ["model"] });
+  });
+});
+
+// ─── /work: the run drives the rounds (REQ-agent-092 / REQ-cli-092 / REQ-discord-088) ───
+
+describe("/work: an owner or team run drives the review rounds before the PR step (GITHUB-9)", () => {
+  const RUN_ENV = {
+    CORVIDINHO_LLM_MODEL: "author-model",
+    CORVIDINHO_LLM_MODEL_READ: "reviewer-model",
+    CORVIDINHO_LLM_API_KEY: "fake-key-not-real",
+    CORVIDINHO_LLM_BASE_URL: "http://fake-llm.invalid/v1",
+  };
+  const write = (path: string, text: string) => ({ name: "files-write", args: JSON.stringify({ argv: [path, text] }) });
+  const passLane = async () => ({ success: true, output: LANE_PASS_OUTPUT });
+  const prDeps = (results: PluginHandlerResult[]) => ({
+    allowlist: new Set(["git-commit", "git-push", "github-pr-create"]),
+    repoGate: () => ({ ok: true as const, repo: REPO }),
+    runPlugin: async (opts: RunOptions) => {
+      const r = await runPlugin(opts);
+      results.push(r);
+      return r;
+    },
+  });
+  const userText = (b: Body) => b.messages?.find((m) => m.role === "user")?.content ?? "";
+  const remoteBranch = (fx: ReviewRepo) =>
+    git(fx.bare, "for-each-ref", "--format=%(objectname)", `refs/heads/${fx.branch}`).trim();
+
+  /** A /work-style run in `fx` through the real tool loop and verify gate, with the review hook `task run` wires. */
+  async function workRun(fx: ReviewRepo, env: Record<string, string>, fetchImpl: ReturnType<typeof scriptedFetch>["fetchImpl"]) {
+    const events: AgentEvent[] = [];
+    const exec = createTaskExecute({
+      taskText: "add a greeting",
+      env,
+      fetchImpl,
+      // files-write is a code-tier tool.
+      tier: "code",
+      cwd: fx.dir,
+      allowlist: ["files-write"],
+      projectInstructions: false,
+      maxToolRounds: 6,
+      onEvent: (e) => events.push(e),
+    });
+    const result = await runTask({
+      cwd: fx.dir,
+      execute: exec,
+      verifyRunner: passLane,
+      // The review rounds are not AGENT-4.a verify retries.
+      maxRetries: 0,
+      onEvent: (e) => events.push(e),
+      review: workReviewHook({ cwd: fx.dir, run: exec.review, takeSpendAsk: exec.takeSpendAsk }),
+    });
+    return { result, events };
+  }
+
+  test("round 1's findings go back to the model, which changes the tree; round 2 raises nothing; the PR step then commits, pushes and opens listing what each round raised and what changed", async () => {
+    const fx = makeReviewRepo({ branch: nextBranch(), push: false });
+    const { fetchImpl, bodies } = scriptedFetch({
+      author: "author-model",
+      turns: [
+        [write("src/greet.ts", "export const hi = 'helo';\n")],
+        "Added the greeting.",
+        [write("src/greet.ts", "export const hi = 'hello';\n")],
+        "Fixed the spelling.",
+      ],
+      review: (n) => (n === 0 ? '{"findings":["src/greet.ts: helo is misspelled"]}' : '{"findings":[]}'),
+    });
+    const { result, events } = await workRun(fx, RUN_ENV, fetchImpl);
+    expect(result).toMatchObject({ state: "done", verified: true, attempts: 2 });
+    expect(result.review).toEqual({ state: "finished" });
+
+    const reviews = bodies.filter((b) => b.model === "reviewer-model");
+    expect(reviews.length).toBe(2);
+    expect(reviews[0]!.tools).toBeUndefined();
+    // The new, untracked file is what /work commits, so it is what is reviewed.
+    expect(userText(reviews[0]!)).toContain("+export const hi = 'helo';");
+    expect(userText(reviews[0]!)).toContain(`Title: ${WORK_REVIEW_TITLE}`);
+    expect(userText(reviews[0]!)).not.toContain("add a greeting");
+    expect(userText(reviews[1]!)).toContain("+export const hi = 'hello';");
+    // Attempt 2 got round 1's findings as its feedback, fenced as data.
+    const attempt2 = bodies.find((b) => b.model === "author-model" && userText(b).includes("Attempt 2."));
+    expect(userText(attempt2!)).toContain("Second-model review round 1 of 3");
+    expect(userText(attempt2!)).toContain("helo is misspelled");
+    expect(userText(attempt2!)).toContain("<<<UNTRUSTED_DATA id=");
+    const texts = events.filter((e) => e.type === "Text").map((e) => (e as { text: string }).text);
+    expect(texts.some((t) => t.startsWith("Second-model review finished (GITHUB-9): reviewer `reviewer-model`, 2 of 3 rounds"))).toBe(true);
+
+    const rounds = cycle(fx);
+    expect(rounds.map((r) => [r.round, r.findings.length, r.ended])).toEqual([
+      [1, 1, null],
+      [2, 0, "clean"],
+    ]);
+    expect(rounds[1]!.changed).toEqual(["M  src/greet.ts"]);
+
+    // The PR step finds the finished review for exactly the tree it ships.
+    expect(await workTreeReviewed({ cwd: fx.dir, repo: REPO, branch: fx.branch })).toBe(true);
+    const results: PluginHandlerResult[] = [];
+    const pr = await openWorkPr(
+      {
+        worktreePath: fx.dir,
+        branch: fx.branch,
+        taskId: "work_rounds",
+        description: "Add a greeting",
+        run: { ok: true, exitCode: 0, task: { verified: true, verifySkipped: false, state: "done", review: result.review! } },
+      },
+      prDeps(results),
+    );
+    expect(pr).toMatchObject({ opened: true, dryRun: true });
+    const body = bodyOf(results.at(-1)!);
+    expect(body).toContain(REVIEW_SECTION_HEADING);
+    expect(body).toContain("2 of 3 rounds used");
+    expect(body).toContain("1. src/greet.ts: helo is misspelled");
+    expect(body).toContain("What changed after round 1 (paths from git):");
+    expect(body).toContain("M  src/greet.ts");
+    expect(body).toContain(WORK_PR_REVIEWED_LINE);
+    expect(remoteBranch(fx)).toBe(git(fx.dir, "rev-parse", "HEAD").trim());
+  });
+
+  test("with no second model configured the run is done but there is no PR: the PR step commits and pushes nothing and says why (GITHUB-9.a)", async () => {
+    const fx = makeReviewRepo({ branch: nextBranch(), push: false });
+    const { fetchImpl, bodies } = scriptedFetch({
+      author: "author-model",
+      turns: [[write("src/greet.ts", "export const hi = 'hi';\n")], "Added the greeting."],
+    });
+    const { CORVIDINHO_LLM_MODEL_READ: _second, ...oneModel } = RUN_ENV;
+    const { result } = await workRun(fx, oneModel, fetchImpl);
+    expect(result).toMatchObject({ state: "done", verified: true, attempts: 1 });
+    expect(result.review).toEqual({ state: "refused", reason: REVIEW_REFUSAL.noSecondModel });
+    expect(bodies.every((b) => b.model === "author-model")).toBe(true);
+
+    const head = git(fx.dir, "rev-parse", "HEAD").trim();
+    const results: PluginHandlerResult[] = [];
+    const pr = await openWorkPr(
+      {
+        worktreePath: fx.dir,
+        branch: fx.branch,
+        taskId: "work_one_model",
+        description: "Add a greeting",
+        run: { ok: true, exitCode: 0, task: { verified: true, verifySkipped: false, state: "done", review: result.review! } },
+      },
+      prDeps(results),
+    );
+    expect(pr).toMatchObject({ opened: false, reason: "not-reviewed" });
+    expect(pr.line).toBe(
+      `PR: not opened — ${REVIEW_REFUSAL.noSecondModel} The changes stay on branch \`${fx.branch}\`.`,
+    );
+    expect(results).toEqual([]);
+    expect(git(fx.dir, "rev-parse", "HEAD").trim()).toBe(head);
+    expect(git(fx.dir, "status", "--porcelain")).toContain("src/greet.ts");
+    expect(remoteBranch(fx)).toBe("");
+  });
+
+  test("a spend-cap stop of the review call hands the run the cap's ask; with no ask left it is a refusal (SAFE-8)", async () => {
+    const fx = makeReviewRepo({ branch: nextBranch(), push: false });
+    writeFileSync(join(fx.dir, "src", "greet.ts"), "export const hi = 'hi';\n");
+    const stopped: ReviewCompletion = { ok: false, error: "LLM request failed: spend cap", failure: null };
+    const ask = { reason: "spend-cap" as const, question: "Spend cap reached." };
+    const signal = new AbortController().signal;
+    const withAsk = workReviewHook({ cwd: fx.dir, run: fakeRun([stopped]), takeSpendAsk: () => ({ summary: "Paused for budget.", ask }) });
+    expect(await withAsk.run({ signal })).toEqual({ kind: "ask", summary: "Paused for budget.", ask });
+    const withoutAsk = workReviewHook({ cwd: fx.dir, run: fakeRun([stopped]), takeSpendAsk: () => null });
+    expect((await withoutAsk.run({ signal })).kind).toBe("refused");
+    expect(cycle(fx)).toEqual([]);
+  });
+
+  test("the next attempt's feedback fits the verify feedback cap whole, findings fenced, later ones counted", () => {
+    expect(WORK_REVIEW_FEEDBACK_MAX).toBeLessThan(VERIFY_FEEDBACK_MAX_CHARS);
+    const row: ReviewRound = {
+      id: 1,
+      repo: REPO,
+      branch: "b",
+      cycle: 1,
+      round: 2,
+      tree: "t",
+      reviewer: "reviewer-model",
+      authors: [],
+      findings: Array.from({ length: REVIEW_FINDINGS_MAX }, (_, i) => `src/f${i}.ts: ${"x".repeat(380)}`),
+      dropped: 2,
+      changed: null,
+      ended: null,
+      createdAt: 0,
+    };
+    const text = workReviewFeedback(row);
+    expect(text.length).toBeLessThanOrEqual(WORK_REVIEW_FEEDBACK_MAX);
+    expect(text).toContain(`Second-model review round 2 of ${REVIEW_MAX_ROUNDS}`);
+    expect(text).toContain("round 3, the last");
+    expect(text).toContain("1. src/f0.ts:");
+    expect(text).toMatch(/<<<END_UNTRUSTED_DATA id=/);
+    expect(text).toMatch(/\(and \d+ more, not shown\)/);
+  });
+
+  test("only an owner or team /work run whose PR path is allowlisted gets the review: never another surface, community or a worker (REQ-cli-092)", () => {
+    const allow = new Set(["git-commit", "git-push", "github-pr-create"]);
+    const work = {
+      CORVIDINHO_ACTING_SURFACE: "work",
+      CORVIDINHO_ACTING_WORK_TASK: "1",
+      CORVIDINHO_ACTING_ROLE: "owner",
+      CORVIDINHO_ACTING_IS_ADMIN: "1",
+    };
+    expect(workReviewApplies(work, allow)).toBe(true);
+    expect(workReviewApplies({ ...work, CORVIDINHO_ACTING_ROLE: "team", CORVIDINHO_ACTING_IS_ADMIN: "0" }, allow)).toBe(true);
+    expect(workReviewApplies({ ...work, CORVIDINHO_ACTING_ROLE: "community", CORVIDINHO_ACTING_IS_ADMIN: "0" }, allow)).toBe(false);
+    expect(workReviewApplies({ ...work, CORVIDINHO_ACTING_SURFACE: "chat" }, allow)).toBe(false);
+    expect(workReviewApplies({ ...work, CORVIDINHO_ACTING_WORK_TASK: "0" }, allow)).toBe(false);
+    expect(workReviewApplies({ ...work, CORVIDINHO_DELEGATE_DEPTH: "1" }, allow)).toBe(false);
+    expect(workReviewApplies({}, allow)).toBe(false);
+    // No review is spent on a PR that cannot open (GITHUB-5).
+    expect(workReviewApplies(work, new Set(["git-commit", "git-push"]))).toBe(false);
+    expect(workReviewApplies(work, new Set(["git-commit", "github-pr-create"]))).toBe(false);
   });
 });

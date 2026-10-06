@@ -9,7 +9,7 @@ import {
   serializeFrame,
 } from "../src/agent/events-ndjson.ts";
 import { runTask } from "../src/agent/loop.ts";
-import type { AgentEvent, VerifyRunner } from "../src/agent/types.ts";
+import type { AgentEvent, HumanAsk, ReviewHook, ReviewHookResult, VerifyRunner } from "../src/agent/types.ts";
 import { startWorkspaceDiff, WORKSPACE_DIFF_MAX_FILES } from "../src/agent/workspace-diff.ts";
 import { failingLaneLog, HELP_HEAD, LANE_FAILED_LINE } from "./fixtures/verify-lane-log.ts";
 import { LANE_PASS_OUTPUT, NON_GIT_CWD } from "./fixtures/lane-output.ts";
@@ -775,5 +775,147 @@ describe("runTask verify gate uses the real git working-tree diff (AGENT-4, REQ-
     expect(result.verified).toBe(true);
     expect(result.verifySkipped).toBe(false);
     expect(result.filesChanged).toEqual(["app.ts"]);
+  });
+});
+
+describe("runTask second-model review before the PR (GITHUB-9, REQ-agent-092)", () => {
+  const pass: VerifyRunner = async () => ({ success: true, output: LANE_PASS_OUTPUT });
+  const NO_SECOND_MODEL = "there is no second model to review the diff (GITHUB-9.a).";
+
+  /** A review hook that answers `steps` in order (the last one repeats). */
+  function hook(steps: ReviewHookResult[], maxRounds = 3) {
+    const calls: number[] = [];
+    const review: ReviewHook = {
+      maxRounds,
+      run: async () => {
+        calls.push(calls.length + 1);
+        return steps[Math.min(calls.length - 1, steps.length - 1)]!;
+      },
+    };
+    return { review, calls };
+  }
+
+  test("findings go back as the next attempt's feedback, that attempt is verified again first, and the run is done only once the review finished; the rounds are not AGENT-4.a retries", async () => {
+    const c = collect();
+    let verifyCalls = 0;
+    const feedbacks: (string | undefined)[] = [];
+    const { review, calls } = hook([
+      { kind: "findings", note: "round 1 raised 1 finding", feedback: "Second-model review round 1 of 3 raised: src/a.ts is wrong" },
+      { kind: "finished", note: "review finished after 2 rounds" },
+    ]);
+    const result = await runTask({
+      cwd: NON_GIT_CWD,
+      // No verify retries at all: the review round is not one.
+      maxRetries: 0,
+      verifyRunner: async (cwd) => {
+        verifyCalls += 1;
+        return pass(cwd);
+      },
+      onEvent: c.onEvent,
+      review,
+      execute: async ({ attempt, verifyFeedback }) => {
+        feedbacks.push(verifyFeedback);
+        return { summary: `attempt ${attempt}`, filesChanged: ["src/a.ts"] };
+      },
+    });
+    expect(result).toMatchObject({ state: "done", verified: true, cancelled: false, attempts: 2 });
+    expect(result.review).toEqual({ state: "finished" });
+    expect(calls.length).toBe(2);
+    expect(verifyCalls).toBe(2);
+    expect(feedbacks).toEqual([undefined, "Second-model review round 1 of 3 raised: src/a.ts is wrong"]);
+    expect(c.states()).toEqual(["planning", "executing", "verifying", "executing", "verifying", "done"]);
+    const texts = c.events.filter((e) => e.type === "Text").map((e) => (e as { text: string }).text);
+    expect(texts).toContain("round 1 raised 1 finding");
+    expect(texts).toContain("review finished after 2 rounds");
+  });
+
+  test("a refusal (no second model) ends the run done and verified with the reason on result.review, so no PR follows", async () => {
+    const c = collect();
+    const { review, calls } = hook([{ kind: "refused", reason: NO_SECOND_MODEL }]);
+    const result = await runTask({
+      cwd: NON_GIT_CWD,
+      verifyRunner: pass,
+      onEvent: c.onEvent,
+      review,
+      execute: async () => ({ summary: "wrote it", filesChanged: ["src/a.ts"] }),
+    });
+    expect(result).toMatchObject({ state: "done", verified: true, attempts: 1 });
+    expect(result.review).toEqual({ state: "refused", reason: NO_SECOND_MODEL });
+    expect(calls.length).toBe(1);
+    expect(c.events).toContainEqual({ type: "Text", text: `Second-model review: no PR — ${NO_SECOND_MODEL}` });
+  });
+
+  test("a review that still raises findings at its last round, or a hook that throws, fails closed: refused, no PR", async () => {
+    const { review, calls } = hook([{ kind: "findings", note: "n", feedback: "again" }], 3);
+    const looping = await runTask({
+      cwd: NON_GIT_CWD,
+      verifyRunner: pass,
+      review,
+      execute: async () => ({ summary: "s", filesChanged: ["src/a.ts"] }),
+    });
+    // Rounds 1 and 2 hand findings back; a third set is past the cap.
+    expect(calls.length).toBe(3);
+    expect(looping.attempts).toBe(3);
+    expect(looping.review).toEqual({
+      state: "refused",
+      reason: "the second-model review did not end within 3 rounds, so there is no PR (GITHUB-9).",
+    });
+
+    const throwing = await runTask({
+      cwd: NON_GIT_CWD,
+      verifyRunner: pass,
+      review: {
+        maxRounds: 3,
+        run: async () => {
+          throw new Error("boom");
+        },
+      },
+      execute: async () => ({ summary: "s", filesChanged: ["src/a.ts"] }),
+    });
+    expect(throwing).toMatchObject({ state: "done", verified: true });
+    expect(throwing.review).toEqual({
+      state: "refused",
+      reason: "the second-model review could not run, so there is no PR (GITHUB-9).",
+    });
+  });
+
+  test("a spend-cap stop of the review call ends the run blocked on that ask (SAFE-8)", async () => {
+    const ask: HumanAsk = { reason: "spend-cap", question: "Daily spend cap reached." };
+    const { review } = hook([{ kind: "ask", summary: "Paused for budget.", ask }]);
+    const c = collect();
+    const result = await runTask({
+      cwd: NON_GIT_CWD,
+      verifyRunner: pass,
+      onEvent: c.onEvent,
+      review,
+      execute: async () => ({ summary: "s", filesChanged: ["src/a.ts"] }),
+    });
+    expect(result).toMatchObject({ state: "blocked", verified: false, summary: "Paused for budget.", ask });
+    expect(result.review).toBeUndefined();
+    expect(c.states().at(-1)).toBe("blocked");
+  });
+
+  test("the review runs only on a verified tree: a run that changed nothing, or one whose verify failed, never calls it", async () => {
+    const quiet = hook([{ kind: "finished", note: "n" }]);
+    const nothing = await runTask({
+      cwd: NON_GIT_CWD,
+      verifyRunner: pass,
+      review: quiet.review,
+      execute: async () => ({ summary: "nothing to do", filesChanged: [] }),
+    });
+    expect(nothing).toMatchObject({ state: "done", verifySkipped: true });
+    expect(nothing.review).toBeUndefined();
+    expect(quiet.calls.length).toBe(0);
+
+    const failing = hook([{ kind: "finished", note: "n" }]);
+    const failed = await runTask({
+      cwd: NON_GIT_CWD,
+      maxRetries: 0,
+      verifyRunner: async () => ({ success: false, output: "tests failed" }),
+      review: failing.review,
+      execute: async () => ({ summary: "s", filesChanged: ["src/a.ts"] }),
+    });
+    expect(failed.state).toBe("failed");
+    expect(failing.calls.length).toBe(0);
   });
 });

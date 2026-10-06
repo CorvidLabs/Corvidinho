@@ -183,6 +183,8 @@ export {
   costMicroUsd,
   ensureSpendLedger,
   estimateCallMicroUsd,
+  REPLY_RESERVE_DEFAULT_TOKENS,
+  replyReserveTokens,
   formatUsd,
   MODEL_PRICES_USD_PER_MTOK,
   configuredProviderIds,
