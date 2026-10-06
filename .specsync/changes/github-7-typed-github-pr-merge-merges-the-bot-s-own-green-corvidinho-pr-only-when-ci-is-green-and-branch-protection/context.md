@@ -17,3 +17,5 @@ artifact: context
 - No merge command yet. Prefer minimal complete GITHUB-7 (tool + specs/docs)
   over wiring auto-merge into `/work` in this slice. No package bump; no
   live bridge restart.
+
+- Also classifies `github-pr-merge` in `STATE_CHANGING_TOOLS` (REQ-agent-086) and drops the STATUS `(this PR)` placeholder.
