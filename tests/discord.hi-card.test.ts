@@ -310,10 +310,13 @@ describe("the owner's hi card (REQ-discord-521)", () => {
     await cards.deliver();
     const ok = await press(cards, OWNER_ID, "approve", req.id, true);
     expect(ok[0]!.content).toContain("Approved by you — captured AGENT-20, AGENT-18.b");
-    expect(existsSync(f.work)).toBe(true);
-    expect(gitIn(f.work, "symbolic-ref", "--short", "HEAD").trim()).toBe(f.branch);
-    expect(agentText(f)).toContain("- **AGENT-20**  ");
-    expect(gitIn(f.work, "log", "-2", "--format=%s").trim().split("\n")[1]).toBe("work");
+    // Captured and committed on the branch; the worktree re-created only for
+    // the capture is removed again (the branch keeps the commit).
+    const done = new HiCaptureStore({ db }).get(req.id)!;
+    expect(existsSync(f.work)).toBe(false);
+    expect(gitIn(f.project, "rev-parse", `refs/heads/${f.branch}`).trim()).toBe(done.commit!);
+    expect(gitIn(f.project, "show", `${f.branch}:hi/agent.md`)).toContain("- **AGENT-20**  ");
+    expect(gitIn(f.project, "log", "-2", "--format=%s", f.branch).trim().split("\n")[1]).toBe("work");
 
     // The talk idled out before the owner answered: parking removed the
     // worktree and deleted its branch (no commits of its own). Approve
@@ -328,9 +331,10 @@ describe("the owner's hi card (REQ-discord-521)", () => {
     await e.cards.deliver();
     const r = await press(e.cards, OWNER_ID, "approve", gone.id, true);
     expect(r[0]!.content).toContain("Approved by you — captured AGENT-20, AGENT-18.b");
-    expect(gitIn(g.work, "symbolic-ref", "--short", "HEAD").trim()).toBe(g.branch);
-    expect(gitIn(g.work, "rev-parse", "HEAD~1").trim()).toBe(gone.head);
+    expect(gitIn(g.project, "rev-parse", `${g.branch}~1`).trim()).toBe(gone.head);
     expect(gitIn(g.project, "show", `${g.branch}:hi/agent.md`)).toContain("- **AGENT-20**  ");
+    expect(existsSync(g.work)).toBe(false);
+    expect(gitIn(g.project, "worktree", "list", "--porcelain")).not.toContain(g.work);
 
     // Branch and commit both gone: nothing is captured, the request stays open.
     const h = await fixture();

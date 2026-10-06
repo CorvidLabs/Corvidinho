@@ -36,7 +36,13 @@ import {
   HiCaptureStore,
   type HiCaptureRequest,
 } from "../agent/hi-capture-store.ts";
-import { ensureHiCaptureWorktree, hiCaptureCommand, runHiCapture, type HiCaptureResult } from "../agent/hi-drafts.ts";
+import {
+  ensureHiCaptureWorktree,
+  hiCaptureCommand,
+  releaseHiCaptureWorktree,
+  runHiCapture,
+  type HiCaptureResult,
+} from "../agent/hi-drafts.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
 import type { ApprovalCardView, ApprovalKind } from "./approval-cards.ts";
 
@@ -129,6 +135,8 @@ export function hiCaptureApprovalKind(deps: HiCardDeps): ApprovalKind<HiCaptureR
   const now = deps.now ?? Date.now;
   const env = deps.env ?? process.env;
   const store = new HiCaptureStore({ db: deps.db, now });
+  /** Requests whose worktree `prepare` re-created for this Approve (the talk had ended). */
+  const recreated = new Set<string>();
 
   /** Tell the asker; true when it went out (their conversation, else a DM). */
   const notify = async (req: HiCaptureRequest): Promise<boolean> => {
@@ -178,7 +186,8 @@ export function hiCaptureApprovalKind(deps: HiCardDeps): ApprovalKind<HiCaptureR
     snapshot: (req) => ({ view: hiCardView(req), actionHash: hiCardActionHash(req) }),
     summary: hiCardView,
     prepare: async (req) => {
-      await ensureHiCaptureWorktree(req);
+      recreated.delete(req.id);
+      if ((await ensureHiCaptureWorktree(req)).recreated) recreated.add(req.id);
     },
     onApprove: (req, actor) => {
       // The engine's own owner check ran on this press; the presser must
@@ -188,6 +197,11 @@ export function hiCaptureApprovalKind(deps: HiCardDeps): ApprovalKind<HiCaptureR
         throw new Error("only Corvidinho's configured owner can approve a capture");
       }
       return runHiCapture({ db: deps.db, req, actor, env, now });
+    },
+    // A worktree re-created only for this capture goes again once the
+    // capture is committed (the branch keeps it); nobody would park it.
+    afterApprove: (req, done) => {
+      if (recreated.delete(req.id)) releaseHiCaptureWorktree(req, done.commit);
     },
     approvedOutcome: (req, done) =>
       `Approved by you — captured ${done.captured.join(", ")} into hi/ on branch ${req.branch}, commit ${done.commit.slice(0, 12)} (AGENT-18).`,

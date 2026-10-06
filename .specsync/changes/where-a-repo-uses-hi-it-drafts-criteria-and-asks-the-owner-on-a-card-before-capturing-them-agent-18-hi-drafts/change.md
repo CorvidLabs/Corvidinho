@@ -1,6 +1,6 @@
 ---
 id: where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts
-state: implementing
+state: verifying
 type: feature
 base_commit: 387dadab1f9bc11869a512e57dadd54a6e5cac6c
 ---

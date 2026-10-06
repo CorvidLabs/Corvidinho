@@ -704,6 +704,32 @@ function oneLineError(text: string): string {
   return line.length > 300 ? `${line.slice(0, 299)}…` : line;
 }
 
+/**
+ * After an approved capture in a worktree {@link ensureHiCaptureWorktree}
+ * re-created (its talk had ended), remove that worktree again: the capture is
+ * committed on the branch, which stays, and no talk will ever park the
+ * folder. Only when it is still that worktree, on that branch, at exactly the
+ * capture's commit, with nothing in it but a root `INTENT.md` the hi CLI
+ * made; otherwise it is left alone. Best effort; never throws. True when it
+ * was removed.
+ */
+export function releaseHiCaptureWorktree(req: HiCaptureRequest, commit: string): boolean {
+  try {
+    if (!COMMIT_RE.test(commit) || basename(req.repo) !== ".git") return false;
+    if (hiCaptureWorktreeProblem(req) !== null) return false;
+    const top = realpathSync(req.worktree);
+    if (gitSync(top, ["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]) !== commit) return false;
+    const st = gitSyncRun(top, ["-c", "core.fsmonitor=false", "status", "--porcelain=v1", "-z", "--untracked-files=all"]);
+    if (!st.ok) return false;
+    const entries = st.out.split("\0").filter(Boolean);
+    if (entries.some((e) => e !== "?? INTENT.md")) return false;
+    const main = dirname(req.repo);
+    return gitSyncRun(main, ["worktree", "remove", "--force", top]).ok && !existsSync(top);
+  } catch {
+    return false;
+  }
+}
+
 /** The commit message of an approved capture (ids only, never the drafted text). */
 export function hiCaptureCommitMessage(req: HiCaptureRequest): string {
   return `hi: capture ${req.drafts.map((d) => d.id).join(", ")} (AGENT-18; approved on the owner's hi card, request ${req.id})`;

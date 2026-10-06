@@ -62,6 +62,69 @@
         "discord": "00aad24ff6cc4b3d36caca22d87b604bd6498c94a51f74a677ee58beb0b9dbe5",
         "plugins": "18d0d38e34b4fe7b32fbc0fc7591088e1d6902db79e862e88744562c28201681"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791246857,
+      "digest": "01c2565bfa1df196819f19a320dba516c37751c23ae6d58ebf6d6f826a78d31a",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts",
+        "title": "Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts)",
+        "description": "Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "plugins/files/protectedPaths.ts",
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/testing.md",
+          "src/agent/ask.ts",
+          "src/agent/execute.ts",
+          "src/agent/hi-capture-store.ts",
+          "src/agent/hi-drafts.ts",
+          "src/agent/loop.ts",
+          "src/agent/repo-ways.ts",
+          "src/discord/approval-cards.ts",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/work.ts",
+          "src/discord/hi-card.ts",
+          "src/discord/slash-types.ts",
+          "src/work/pr.ts",
+          "tests/agent.hi-draft.test.ts",
+          "tests/agent.hi-guard.test.ts",
+          "tests/agent.repo-ways.test.ts",
+          "tests/discord.hi-card.test.ts",
+          "tests/fixtures/stand-in-hi.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "AGENT-18 (captured on main from Leif's 2026-09-28 interview; this builds the 'drafts criteria and asks before capturing' half of its hi clause): in a repo that uses hi, hi-draft is offered only to the owner's and the team's own chat, ask-answer, /session start and /work runs in that talk's own linked worktree and to a local CLI run nothing spawned, never to community runs, WATCH, schedules or delegate/council workers (role re-resolved at every attempt and call). A call's 1-5 drafts are validated with hi export (new id, declared family, not retired, dotted id under a captured or earlier-drafted parent) and refused when SAFE-6 scrubbing would change one or (in a Discord run) when the id already waits on an open card; a refusal records nothing. In a Discord run it records a hi capture request in the module-owned hi_capture_requests table (no schema bump) and ends the run blocked with an ask naming the drafts; in the CLI it records nothing and ends with an ask listing the exact hi commands. The owner's DM card of kind hi on the approvals engine (cvok:hi, class plain) re-checks the owner on every press and again at Approve; Approve makes sure the session worktree is there (re-created on its branch, the branch re-made at the drafts' recorded commit when parking deleted it, else fails closed with the request left open; never a main checkout), refuses a hi/ with uncommitted changes or a symlink, runs hi <ID> <text> for each draft there and commits exactly the hi/ paths that changed on the session's branch (local, never pushed, so the capture outlives the talk), all or nothing, with one SAFE-5 hi-capture-criterion row per criterion, a ledger of what changed under hi/, and one outcome post to the asker naming the ids, branch and commit. Nobody else's press or reply captures anything; Deny or no answer in 24 h is a no. Cards go out after chat and /work runs and on the engine poll. The hi guard (#348) leaves out exactly what approved captures made (a chain of ledger steps from the base content to now), so a later done or /work PR is not blocked by it; every other hi/ change still blocks. tests/agent.hi-draft.test.ts and tests/discord.hi-card.test.ts fail on the base (main) sources and pass on the branch."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "b06c905031e0f557b401f51ecb56537a8e43b8ba21e45225406c4233d8748533",
+        "discord": "4211d395c12bc9e49e88a6edb8f594c0193eba12757d55794b6d610a658be291",
+        "plugins": "18d0d38e34b4fe7b32fbc0fc7591088e1d6902db79e862e88744562c28201681"
+      }
     }
   ],
   "reopenings": []

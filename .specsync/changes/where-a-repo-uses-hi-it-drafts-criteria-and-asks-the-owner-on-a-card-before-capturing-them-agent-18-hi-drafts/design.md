@@ -59,7 +59,10 @@ artifact: design
   own), the branch is re-made at the commit the drafts were made on (the
   request's recorded HEAD, still in the object store). Only when that commit
   is gone too does the request stay open with a clear error (the owner can
-  Deny or let it lapse).
+  Deny or let it lapse). A worktree re-created only for the capture is
+  removed again after the approval commits (only while it is at exactly the
+  capture's commit with nothing else in it), since no talk would ever park
+  it; the branch keeps the commit.
 - **One open card per id.** A draft whose id already waits in an open request
   of the same repository is refused at the call, so the owner never gets a
   second card for it (the second could only fail once the first is

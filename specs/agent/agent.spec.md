@@ -707,7 +707,8 @@ mode)`, `parseHiDraftArgs(raw)`, `HiExport` / `parseHiExport(json)` /
 `hiCaptureCommand(draft)`, `hiDraftCardQuestion(drafts, id)`,
 `hiDraftCliQuestion(drafts)`, `handleHiDraftCall({ rawArgs, cwd, env, ways
 })`, `hiCaptureWorktreeProblem(req)`, `ensureHiCaptureWorktree(req)`,
-`hiCaptureCommitMessage(req)` and `runHiCapture({ db, req, actor, env })`
+`hiCaptureCommitMessage(req)`, `releaseHiCaptureWorktree(req, commit)` and
+`runHiCapture({ db, req, actor, env })`
 (its result carries the capture's `commit`). `src/agent/hi-capture-store.ts`
 exports `HiDraft`, `HiCaptureRequest`, `HiCaptureStore`, `HI_CAPTURE_TTL_MS`
 (24 h), `HI_ABSENT`, `hiContentKey(text, executable)`,

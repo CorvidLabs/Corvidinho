@@ -50,7 +50,11 @@ changed SHALL be committed on the session's branch (`git commit --only`,
 hooks off, the host's git identity; message `hi: capture <ids> (AGENT-18;
 approved on the owner's hi card, request <id>)`; local only, never pushed),
 so the capture outlives the talk (parking force-removes a worktree and
-deletes a branch with no commits of its own). On any failure the commit and
+deletes a branch with no commits of its own). A worktree `prepare` re-created
+only for this capture SHALL be removed again after the approval commits
+(`releaseHiCaptureWorktree`: only while it is still that worktree at exactly
+the capture's commit with nothing in it but a root `INTENT.md` the CLI made);
+the branch keeps the commit. On any failure the commit and
 what it staged SHALL be undone, `hi/` (and a root `INTENT.md` the CLI
 created) SHALL be put back as it was and nothing SHALL count as captured (the
 transaction rolls back; the request stays open). On success each criterion
@@ -72,7 +76,7 @@ Acceptance Criteria
 - With the owner config changed after the card went out, Approve fails ("only Corvidinho's configured owner can approve a capture") and nothing is captured.
 - Deny and a lapsed card capture nothing and tell the asker.
 - A removed worktree whose branch has a commit is re-created on that branch and captured into; a talk parked with `parkWorktree` (worktree removed, branch deleted) is re-made at the recorded commit and captured into, the capture on the re-made branch; with that commit gone too, Approve fails closed ("so are its branch … and the commit the drafts were made on"), nothing is created and the request stays open.
-- An approved capture outlives its talk: after `parkWorktree` the branch is kept and its tip is the capture's commit.
+- An approved capture outlives its talk: after `parkWorktree` the branch is kept and its tip is the capture's commit; a worktree re-created only for a capture is gone again afterwards, its branch holding the commit.
 - A worktree switched to another branch, a request naming the main checkout, an id captured by hand since the draft, a capture that fails on its second draft, a failing `hi check`, a failing `git commit`, an uncommitted `hi/notes.md`, and a `hi/agent.md` that is a symlink each capture nothing, leave `hi/` (and `INTENT.md`), HEAD and the index as before, and never write through the link.
 - Through the bridge with a fake gateway, the `hi` card is delivered, a stranger's `cvok:hi:approve` press is refused, the owner's captures, and the hi guard then lists nothing for the talk.
 - `tests/discord.hi-card.test.ts` fails on the base (main) sources and passes after.

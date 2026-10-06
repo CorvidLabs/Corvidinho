@@ -1651,8 +1651,10 @@ nothing captured; Deny and a lapsed card capture nothing and tell the asker;
 a removed worktree whose branch has a commit is re-created and captured
 into, a talk parked with `parkWorktree` (worktree removed, branch deleted) is
 re-made at the recorded commit and captured into, and with that commit gone
-too Approve fails closed and the request stays open; after `parkWorktree`
-an approved capture's branch is kept with the capture's commit at its tip; a
+too Approve fails closed and the request stays open; a worktree re-created
+only for a capture is removed again afterwards with its branch holding the
+commit; after `parkWorktree` an approved capture's branch is kept with the
+capture's commit at its tip; a
 worktree on another branch, a request naming the main checkout, an id
 captured by hand since, a second draft that fails, a failing `hi check`, a
 failing `git commit`, an uncommitted `hi/notes.md` and a symlinked
