@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 51
+version: 52
 status: draft
 files:
   - src/agent/types.ts
@@ -73,6 +73,7 @@ files:
   - tests/agent.safe3a-owner-shell.test.ts
   - tests/agent.repo-ways.test.ts
   - tests/agent.hi-guard.test.ts
+  - tests/agent.trust-verify.test.ts
   - src/agent/limits.ts
   - tests/agent.limits.test.ts
 
@@ -582,6 +583,22 @@ carries a `stuck` ask. Additive on the NDJSON wire: protocol stays 2.
 Verify runner env (REQ-agent-002, SAFE-6): `src/agent/verify.ts` exports
 `isVerifyEnvDropped` and `buildVerifyEnv`; `defaultVerifyRunner` spawns fledge
 with `buildVerifyEnv()`.
+
+Trust where the repo uses Trust (AGENT-18, REQ-agent-525): `src/agent/verify.ts`
+also exports `TRUST_VERIFY_ARGS` (`--non-interactive trust verify`),
+`TRUST_PROBE_ARGS` (`--non-interactive trust --help`),
+`trustUnavailableReason(detail)`, `trustFailedHead(code)` and
+`TRUST_PASSED_LINE`; `VerifyResult` gains optional `trustNote` (that one-line
+reason, set only when the Trust step failed or is unavailable), which leads
+`runTask`'s failure summary and retry feedback;
+`src/agent/repo-ways.ts` exports `usesTrust(cwd)` (the run's start scan, else
+`detectRepoWays` now with the run's base or `repoWaysBase`). When it is true,
+`defaultVerifyRunner` probes `fledge trust` (a non-zero exit fails closed with
+the exact reason before the lane), runs the lane, and only after a passing
+lane runs `fledge trust verify`; both must exit 0. Each step uses the lane's
+env, process group, idle-watchdog pipe reading and abort handling. A repo
+without `.trust.toml` runs the lane alone as before. Corvidinho's own repo
+has no `.trust.toml`. No env var, config key, flag or schema.
 
 Verify retry feedback (REQ-agent-002, AGENT-4.a): `src/agent/verify.ts` also
 exports `VERIFY_FEEDBACK_MAX_CHARS` (4000) and `verifyFeedbackExcerpt(output,
@@ -1507,3 +1524,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-30 | web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered: Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap |
 | 2026-10-01 | gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins: GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap |
 | 2026-10-03 | missing-plugin-asks-soft-land-with-the-real-gap: Missing-plugin asks soft-land with the real gap |
+| 2026-10-05 | in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2: In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause) |

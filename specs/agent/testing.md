@@ -1067,3 +1067,35 @@ In `tests/gif.search.test.ts`:
   nothing is sent and the result carries the `spend-cap` ask; in the tool
   loop that search ends the attempt with `SPEND_CAP_SUMMARY` and the ask
   after one model call.
+
+## Trust where the repo uses Trust (REQ-agent-525 added; AGENT-18 Trust clause)
+
+`tests/agent.trust-verify.test.ts` (temp git repos, a stand-in `fledge` on
+PATH that logs its argv, never the host's; the default runner runs in a
+child `bun` process because it reads PATH as its process started):
+
+- no `.trust.toml` (a `trust.toml` and `docs/trust.md` present): only
+  `lanes run verify --non-interactive` runs and the output is the lane's,
+  unchanged (passes on the base too: the regression guard);
+- with `.trust.toml`: probe, lane, then `trust verify`, in that order; passes
+  with the lane's output and `TRUST_PASSED_LINE` (one test summary); the
+  Trust step's env has no `GITHUB_TOKEN` (SAFE-6);
+- a failing `trust verify` fails with the `Trust gate:` head and its output,
+  the head as `trustNote`; a failing lane runs no `trust verify` and has no
+  `trustNote`; an abort once `trust verify` has started (the child polls the
+  stand-in's log, so a slow probe or lane cannot race it) stops it and
+  returns `verify lane aborted`;
+- a fledge with no `trust` command (fledge 1.8.0's `unrecognized subcommand
+  'trust'`) fails with exactly the unavailable reason (also its `trustNote`)
+  and runs no lane;
+- `.trust.toml` deleted from the working tree, committed away on a branch
+  (only the merge-base with `main` has it), or only in a run's start scan
+  still runs the probe;
+- `runTask` in a Trust repo names the step in its ways and verifying lines;
+- `runTask` with a failed Trust step whose output is over the 4000-char
+  feedback cap: the retry feedback starts with the feedback head and the
+  `Trust gate:` line, keeps the step's failure line and stays within the cap,
+  and the failure summary carries the head; with Trust unavailable the reason
+  is the whole feedback.
+
+All but the no-Trust case fail with the base sources swapped in.

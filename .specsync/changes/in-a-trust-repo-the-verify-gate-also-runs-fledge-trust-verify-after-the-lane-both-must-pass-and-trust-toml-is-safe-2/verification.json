@@ -1,0 +1,19 @@
+{
+  "timestamp": 1791246469,
+  "commit": "88e6db92a3c0ab9f9742f669d4ac1013ad58f182",
+  "contract_digest": "bbda6839cea5ee29669494581fd28f1c1068fbc65e40a2b63253632c453a1195",
+  "execution_digest": "110d8c27a6625e4c2b7e4d806db76676f8a6907344b743cd6833c9d2f5d43b40",
+  "workspace_digest": "a8d3ab746914da411238573ccd6015d6f5dbe55b0656ed56eba3a0dd06882c69",
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec agent --spec cli --spec plugins",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": [
+    "REQ-agent-525",
+    "REQ-plugins-525"
+  ]
+}
