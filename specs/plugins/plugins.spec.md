@@ -180,9 +180,11 @@ REQ-plugins-097).
 bounded rounds, and the PR body lists what it raised and what changed
 (GITHUB-9 / GITHUB-9.a, REQ-plugins-092, `src/work/review.ts`): the reviewer
 is the first other configured model that did not write the change (no
-reviewer setting); an agent run starts the rounds, a caller with no run model
-opens only a tree whose review already finished, and no second model means no
-PR, with one line saying why. Before any of that, a `github-pr-create` called
+reviewer setting); an agent run starts the rounds, an owner or team `/work`
+run drives them itself once its tree is verified (the tree `/work` will
+commit, untracked files included; `workReviewHook`, REQ-agent-092), a caller
+with no run model opens only a tree whose review already finished, and no
+second model means no PR, with one line saying why. Before any of that, a `github-pr-create` called
 while a Corvidinho run is in progress in its cwd, in a repo that uses hi,
 refuses with exit 2 and `refused (AGENT-18): this repo's hi/ changed since the
 session base (…) …, so this run opens no PR; …` while anything under `hi/`
@@ -269,14 +271,19 @@ models as `data.models` (REQ-plugins-117). `runGit` takes `indexFile`
 (200 KiB), `REVIEW_FINDINGS_MAX` (10), `REVIEW_FINDING_MAX_CHARS`,
 `REVIEW_PATHS_MAX`, `REVIEW_TITLE_MAX`, `REVIEW_SECTION_HEADING`,
 `REVIEW_REFUSED_PREFIX`, `REVIEW_REFUSAL`, `REVIEW_SYSTEM_PROMPT`,
-`configuredModels(env)`, `resolveReviewer(env, authors)`, `reviewTree(root)`,
+`configuredModels(env)`, `resolveReviewer(env, authors)`, `reviewTree(root,
+{untracked?})` (`/work`: `git add --all`, untracked non-ignored files count),
 `reviewMergeBase`, `reviewDiffText`, `changedPaths`, `pushRemoteTree(cwd,
 branch)`, `reviewMessages(title, diff)`, `parseReviewFindings(text)`,
 `reviewDiff(o)`, `ReviewSpendStop`, `PR_REVIEW_ROUNDS_SQL`,
 `ensurePrReviewRounds`, `reviewRepoKey`, `latestReviewCycle`,
 `branchReviewAuthors`, `recordReviewRound`, `endReviewCycle`, `ReviewRound`,
-`ReviewEnd`, `reviewSection(rounds)`, `withReviewSection(body, section)` and
-`reviewRefusalReason(error)`; `plugins/github/commands.ts` exports
+`ReviewEnd`, `reviewSection(rounds)`, `withReviewSection(body, section)`,
+`reviewRefusalReason(error)`, `ReviewStep`, and for `/work` `reviewWorkRound`,
+`workReviewHook`, `workReviewTarget`, `workReviewFeedback`,
+`workTreeReviewed`, `WorkReviewOutcome`, `WorkReviewTarget`,
+`WORK_REVIEW_TITLE`, `WORK_REVIEW_FEEDBACK_MAX` (3800) and
+`WORK_REVIEW_REFUSAL`; `plugins/github/commands.ts` exports
 `githubBranchTree(octokit, owner, repo, head)`.
 `src/plugins/proc-group.ts` (REQ-plugins-154) exports `killProcessTree`,
 `signalProcessTree`, `collectProcessTree`, `readProcTable`, `parseProcStat`,
@@ -1428,4 +1435,5 @@ and current rows for plugins host evolution.
 | 2026-10-01 | in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent: In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard) |
 | 2026-09-30 | web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered: Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap |
 | 2026-10-01 | gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins: GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap |
+| 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
 | 2026-10-05 | in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2: In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause) |

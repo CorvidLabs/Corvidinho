@@ -483,6 +483,23 @@ findings is not run; `withReviewRefusalNote(summary, line)` adds the run's
 latest `github-pr-create` refusal line ("PR not opened: …") once, before the
 role note.
 
+The `/work` review rounds (REQ-agent-092, GITHUB-9 / GITHUB-9.a):
+`createTaskExecute` returns a `TaskExecuteFn` — the execute fn plus `review`
+(the run's `PrReviewRun`) and `takeSpendAsk()` (the spend-cap ask a stopped
+review call left, cleared; else null). `RunTaskOptions.review` (a
+`ReviewHook`: `maxRounds`, `run({signal})` → `ReviewHookResult`: `finished`
+with its Text note, `findings` with a note and the next attempt's feedback,
+`refused` with a one-line reason, or `ask`, a spend-cap stop) is called after
+a passing lane and any settle of the run's own SpecSync change, before done:
+findings become the next attempt's `verifyFeedback` (verified again first),
+counted apart from the AGENT-4.a retries; at most `maxRounds - 1` hand
+findings back, and another, or a throw, fails closed (`reviewOverRoundsReason`,
+`REVIEW_HOOK_FAILED_REASON`, exported from `src/agent/loop.ts`);
+`TaskResult.review` (`TaskReview`: `{state: "finished"}` or `{state:
+"refused", reason}`) says how it ended; an `ask` ends the run `blocked`.
+`task run` passes the hook only for an owner or team `/work` run whose PR
+path is allowlisted (REQ-cli-092; `workReviewHook`, `src/work/review.ts`).
+
 Council core (REQ-agent-118, issue #118, AUTONOMOUS-6):
 `src/autonomous/council.ts` exports `parseCouncilArgs`, `resolveCouncilTier`,
 `councilLens`, `capCouncilText`, `buildProposeText`, `buildCritiqueText`,
@@ -1166,6 +1183,12 @@ A change the run did not open is never touched.
 - **When** the attempt ends
 - **Then** one `SpecSync gate:` note names `src/app.ts` and says to open a change with `specsync-change-new`; no lane runs; the retry gets the note as its feedback; once a change's `affected_paths` covers the path, the lane runs and the run is verified (REQ-agent-518)
 
+### Scenario: a /work run's verified tree gets a second-model review before the PR
+
+- **Given** an owner `/work` run with two configured models and the PR path allowlisted
+- **When** its tree passes verify and round 1 of the review raises a finding
+- **Then** the finding is the next attempt's feedback, that attempt is verified again, round 2 reviews the changed tree, and once a round raises nothing the run is done with `review: {state: "finished"}` (REQ-agent-092)
+
 ### Scenario: a run changes a criterion in a hi repo
 
 - **Given** a repo whose `hi/agent.md` has `hi:` front matter, and a run that rewords `AGENT-19` there through the shell while editing `src/app.ts`
@@ -1524,4 +1547,5 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-30 | web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered: Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap |
 | 2026-10-01 | gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins: GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap |
 | 2026-10-03 | missing-plugin-asks-soft-land-with-the-real-gap: Missing-plugin asks soft-land with the real gap |
+| 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
 | 2026-10-05 | in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2: In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause) |

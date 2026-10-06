@@ -7,6 +7,12 @@
  * Every piece of repo, model or chat text sits in a code fence, so it cannot
  * @-mention people or link issues. Title and body are secret-scrubbed
  * (SAFE-6) before they leave the machine.
+ *
+ * GITHUB-9: a body for a reviewed tree says so under "## Verify" and points
+ * to the "## Second-model review" section — what each round raised and what
+ * changed after it — which `github-pr-create` writes after this body from
+ * the review record (src/work/review.ts `reviewSection`), so only Corvidinho
+ * writes it and a model's text can never pass for it.
  */
 
 import { scrubSecrets } from "../store/scrub.ts";
@@ -26,7 +32,13 @@ export type WorkPrFacts = {
   /** `<short sha> <subject>` lines, newest first. */
   commits: string[];
   verify: WorkPrVerifySource;
+  /** GITHUB-9: a second-model review finished for this exact tree. */
+  reviewed?: boolean;
 };
+
+/** GITHUB-9: the Verify section's line for a reviewed tree. */
+export const WORK_PR_REVIEWED_LINE =
+  "A second model reviewed this tree before the PR (GITHUB-9): what it raised and what changed after each round are listed under **Second-model review** below.";
 
 export const WORK_PR_LIMITS = {
   title: 72,
@@ -116,5 +128,6 @@ export function buildWorkPrBody(f: WorkPrFacts): string {
     "",
     verifyLine,
   );
+  if (f.reviewed) parts.push("", WORK_PR_REVIEWED_LINE);
   return scrubSecrets(parts.join("\n"));
 }

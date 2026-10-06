@@ -18,7 +18,7 @@ import {
   modelUsageFromUnknown,
 } from "../agent/providers.ts";
 import { ACTING_SURFACE_ENV, type ActingSurface } from "../agent/shell-gate.ts";
-import type { ModelFallback } from "../agent/types.ts";
+import type { ModelFallback, TaskReview } from "../agent/types.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
 import { spendWarningFromUnknown } from "../agent/spend-notice.ts";
 import { injectionNoticeFromUnknown } from "../agent/untrusted.ts";
@@ -31,6 +31,7 @@ import {
   trackChildProcess,
   type ProcEntry,
 } from "../plugins/proc-group.ts";
+import { scrubSecrets } from "../store/scrub.ts";
 export { summarizeTaskRunOutput } from "../agent/task-summary.ts";
 import { failureReasonFromUnknown } from "./failure-reason.ts";
 import { privateRepliesFromUnknown } from "./private-reply.ts";
@@ -309,6 +310,8 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       const failureReason = failed ? failureReasonFromUnknown(result?.error) : undefined;
       // AGENT-12: a limit I set stopped the run (validated; footer plumbing only).
       const stopReason = stopReasonFromUnknown(result?.stopReason);
+      // GITHUB-9: how the run's second-model review ended (validated).
+      const review = taskReviewFromUnknown(result?.review);
       return {
         ok: exitCode === 0,
         sessionId,
@@ -336,11 +339,34 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
                 cancelled: result.cancelled === true,
                 // AGENT-12: shown only as `stopped=…` in the footer plumbing.
                 ...(stopReason ? { stopReason } : {}),
+                // GITHUB-9: words the /work `not-reviewed` line (validated).
+                ...(review ? { review } : {}),
               },
             }
           : {}),
       };
     },
+  };
+}
+
+/** Longest review reason a result frame may carry (GITHUB-9). */
+const REVIEW_REASON_MAX = 300;
+
+/**
+ * GITHUB-9: a result frame's `review` — `{state: "finished"}` or
+ * `{state: "refused", reason}` with the reason scrubbed (SAFE-6), on one line
+ * and capped; anything else is dropped.
+ */
+export function taskReviewFromUnknown(v: unknown): TaskReview | undefined {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
+  const r = v as { state?: unknown; reason?: unknown };
+  if (r.state === "finished") return { state: "finished" };
+  if (r.state !== "refused" || typeof r.reason !== "string") return undefined;
+  const line = scrubSecrets(r.reason).replace(/\s+/g, " ").trim();
+  if (!line) return undefined;
+  return {
+    state: "refused",
+    reason: line.length > REVIEW_REASON_MAX ? `${line.slice(0, REVIEW_REASON_MAX - 1)}…` : line,
   };
 }
 

@@ -1129,14 +1129,35 @@ frame's `verified` / `verifySkipped` / `state` through as
 SHALL say plainly why and SHALL NOT claim a PR. No new slash command, option,
 env var, table or column.
 
-`github-pr-create` itself SHALL hold the PR unless a second-model review
-finished for the exact tree of the branch on GitHub (GITHUB-9,
-REQ-plugins-092). This step has no run model, so it starts no review round
-(the /work round driver is a later change): when the call is held
-(`reviewHold`), the outcome SHALL be `opened: false` with reason
-`not-reviewed` and the line `PR: not opened — <the gate's reason> The
-changes stay on branch <branch>.` (the branch stays pushed), never a
-claimed PR.
+A second-model review SHALL have finished for exactly the tree about to be
+committed and pushed (GITHUB-9 / GITHUB-9.a, REQ-plugins-092): an owner or
+team `/work` run drives the review rounds itself once its tree is verified
+(REQ-agent-092; `task run` wires it, REQ-cli-092). Right before the commit
+(after the verify re-run, before `git-commit`, `git-push` and
+`github-pr-create`), `openWorkPr` SHALL check `workTreeReviewed`: the latest
+review cycle for (OWNER/REPO, branch) ended, and its last round reviewed the
+tree a commit of every path `git status` shows would have (tracked and
+untracked, non-ignored files as they are in the work tree); a tree or record
+that cannot be read fails closed. With none, the outcome SHALL be
+`opened: false` with reason `not-reviewed` and the line `PR: not opened —
+<why> The changes stay on branch <branch>.`, where <why> is the run's own
+one-line reason from its result frame (`review` with state `refused`; with
+no second model configured, that there is none, GITHUB-9.a), else `no
+second-model review finished for the tree this /work run would ship, so
+there is no PR (GITHUB-9).`; nothing SHALL be committed or pushed. The
+Discord spawn client SHALL pass the result frame's `review` through on
+`AgentSpawnResult.task` (`{state: "finished"}`, or `{state: "refused",
+reason}` with the reason secret-scrubbed, on one line and at most 300
+characters; any other shape is dropped). `github-pr-create` still holds the
+PR to the same review (the branch on GitHub must be the reviewed tree, and
+this step has no run model, so it starts no round): when that call is held
+(`reviewHold`), the outcome SHALL be `not-reviewed` with the line `PR: not
+opened — <the gate's reason> The changes stay on branch <branch>.` (the
+branch is then pushed), never a claimed PR. The PR body's Verify section
+SHALL say that a second model reviewed the tree and point to the
+`## Second-model review` section, which `github-pr-create` writes after the
+body from the review record: what each round raised and what changed after
+it.
 
 Acceptance Criteria
 - A dirty verified worktree with the three plugins allowlisted is committed, pushed and opened as a draft PR whose body lists the changed files, diffstat, commits and verify result.
@@ -1148,7 +1169,10 @@ Acceptance Criteria
 - A /work by anyone other than ADMIN (the owner) or a declared team member (IDENTITY-10, re-resolved from the people list after the run) never runs the PR step (ROLES-CHAT-3): a community /work never runs at all (IDENTITY-11.a; the reply is the ephemeral `not authorized`), and a team member demoted during the run gets a reply that says the changes stay on the work branch.
 - A team member's /work reaches the PR step with the same gates as the owner's; a team member demoted during the run does not.
 - Nothing is committed or pushed unless the worktree HEAD is the work branch and not the base; a switched or detached HEAD opens no PR.
-- With no finished second-model review for the pushed tree, the PR step ends `not-reviewed` with `PR: not opened — no second-model review has finished for this branch's tree on GitHub, and only an agent run can start one (GITHUB-9). The changes stay on branch …` and the branch pushed; with one finished for that tree it opens, and the PR body carries the `## Second-model review` section.
+- With no finished second-model review for the tree it would ship, the PR step ends `not-reviewed` with `PR: not opened — no second-model review finished for the tree this /work run would ship, so there is no PR (GITHUB-9). The changes stay on branch …`, runs no plugin and commits and pushes nothing; a finished review of an earlier tree of the branch does not count; with one finished for exactly that tree (its untracked files included) it opens, and the PR body carries the reviewed line and the `## Second-model review` section.
+- With the run's refusal on its result frame (no second model), the line is `PR: not opened — there is no second model to review the diff — … (GITHUB-9.a). The changes stay on branch …` and nothing is committed or pushed.
+- An owner /work run through the real tool loop, verify gate and review hook (round 1's findings changed, round 2 clean) then opens the PR whose section lists round 1's finding and the path that changed after it.
+- The spawn client passes the result frame's `review` through: `finished` as is, `refused` with its reason scrubbed onto one line; any other shape is dropped.
 
 ### REQ-discord-085
 

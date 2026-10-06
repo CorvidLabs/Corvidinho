@@ -631,6 +631,20 @@ under the default budget of 9000: `gif-search` adds about 92 tokens, and
 shorter `web-fetch` and `web-search` descriptions (the same rules, less
 wording) make room for it.
 
+## The /work round driver shares the review step (REQ-plugins-092 modified; GITHUB-9, GITHUB-9.a)
+
+`tests/work.review.test.ts` ("/work: an owner or team run drives the review
+rounds", temp repos with a bare origin, scripted provider): the untracked
+new file is in the reviewed diff, the reviewer gets `Title: Corvidinho /work
+task` and never the task text, the rounds are stored (round 1 open with its
+finding, round 2 `clean` with `M  src/greet.ts` changed), `workTreeReviewed`
+is true for the tree /work ships, and the /work PR body has the section; a
+spend-cap stop gives the hook's `ask` when the run left one, else a refusal,
+and records nothing; `workReviewFeedback` stays within 3800 characters
+(under the 4000 verify feedback cap) with its fence whole and later findings
+counted. The existing `github-pr-create` cases (run model, no run model,
+declined, max-rounds, refusals) still pass on the shared `reviewStep`. Fail
+on base: the file cannot load (the `/work` exports are missing).
 ## `.trust.toml` is SAFE-2 protected (REQ-plugins-525 added; AGENT-18 Trust clause)
 
 `tests/agent.trust-verify.test.ts` (".trust.toml is SAFE-2 protected like

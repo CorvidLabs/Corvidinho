@@ -279,3 +279,13 @@ child sees none of them, so the suite never sends a real, paid web search.
 REQ-cli-262 (#318 slice B): the same child `bun test` also starts with
 `GIPHY_API_KEY` set; the probe's run-settings list includes it and the child
 sees none of them, so the suite never sends a real GIF search.
+
+## task run wires the /work review hook (REQ-cli-092; GITHUB-9)
+
+`tests/work.review.test.ts` ("only an owner or team /work run whose PR path
+is allowlisted gets the review"): `workReviewApplies` is true for the owner
+and a team `/work` stamp with `git-push` and `github-pr-create` allowlisted,
+false for community, the `chat` surface, no /work bit, a worker
+(`CORVIDINHO_DELEGATE_DEPTH=1`), no stamps, and either plugin missing. Fail
+on base: the file cannot load (`workReviewApplies` is not exported from
+`src/cli.ts`).

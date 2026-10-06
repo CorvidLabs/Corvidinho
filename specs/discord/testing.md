@@ -1556,7 +1556,9 @@ work tree /work commits) it opens and the PR body has the section.
 
 Fail on base: the /work case fails (base `pr.ts` has no `not-reviewed`);
 restored, it passes. `tests/work.pr.test.ts` only adapts to the gate (with
-the base's sources it passes).
+the base's sources it passes). Superseded by "/work commits and pushes only a
+reviewed tree" below: the check now runs before the commit, so nothing is
+pushed.
 ## Turn cap / idle timeout plumbing and card waits (REQ-discord-125, AGENT-12)
 
 `tests/agent.limits.test.ts` ("it says so on each surface", "waiting on an
@@ -1633,3 +1635,30 @@ within 2000 characters it is plain content with the footer embed, and long
 plain prose with such a link is split into parts with the link in a part's
 content; another link, a `giphy.com` page URL or a look-alike host keeps the
 one-embed path (`tests/discord.rich-reply.unit.test.ts`).
+
+## /work commits and pushes only a reviewed tree (REQ-discord-088 modified; GITHUB-9, GITHUB-9.a)
+
+`tests/work.pr.test.ts` ("GITHUB-9: no finished second-model review for the
+tree it would ship"): `not-reviewed` with `PR: not opened — no second-model
+review finished for the tree this /work run would ship, so there is no PR
+(GITHUB-9). The changes stay on branch …`, no plugin call, nothing pushed,
+the edit still in the tree; with the run's refusal on its frame (no second
+model) the line is that reason. Its opening, push-failure, PR-failure and
+SAFE-1 cases seed a finished review for the tree they ship (`fullWorkTree`).
+"GITHUB-9: the result frame's review outcome rides AgentSpawnResult.task":
+`finished` passes, `refused` comes through with a token scrubbed and its line
+break gone, a `refused` without a reason and a bare string are dropped.
+
+`tests/work.review.test.ts`: "/work: with no finished review for the tree it
+would ship, nothing is committed or pushed" (no plugin ran, HEAD unchanged,
+no remote branch; a finished review of an earlier tree does not count; a
+review of the whole work tree opens with the section and the reviewed line);
+and the owner run through the real tool loop, verify gate and review hook
+(round 1 findings changed, round 2 clean) whose /work PR opens listing round
+1's finding and `M  src/greet.ts`, while with one configured model the PR
+step commits and pushes nothing and its line is the GITHUB-9.a reason.
+
+Fail on base: with the stacked base's (387dada) sources swapped in, both
+`tests/work.pr.test.ts` GITHUB-9 cases fail (the base commits and pushes
+before `github-pr-create` refuses, and drops the frame's `review`);
+`tests/work.review.test.ts` cannot load. Restored, all pass.

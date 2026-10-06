@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9",
+  "slug": "work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9",
+  "title": "/work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9)",
+  "description": "/work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9)",
+  "kind": "feature",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "387dadab1f9bc11869a512e57dadd54a6e5cac6c",
+  "created_at": 1791243268,
+  "updated_at": 1791300449,
+  "affected_specs": [
+    "agent",
+    "cli",
+    "discord",
+    "plugins"
+  ],
+  "affected_paths": [
+    "src/agent/loop.ts",
+    "src/agent/types.ts",
+    "src/agent/execute.ts",
+    "src/work/review.ts",
+    "src/work/pr.ts",
+    "src/work/pr-body.ts",
+    "src/cli.ts",
+    "src/discord/agent-client.ts",
+    "src/discord/types.ts",
+    "tests/agent.loop.test.ts",
+    "tests/work.pr.test.ts",
+    "tests/work.review.test.ts",
+    "tests/agent.test-evidence.test.ts",
+    "tests/agent.repo-ways.test.ts",
+    "tests/agent.hi-guard.test.ts",
+    "docs/discord.md",
+    "docs/DISCORD-GO-LIVE.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "GITHUB-9 / GITHUB-9.a (captured on main from Leif's 2026-09-28 and 2026-09-30 interviews; #341 built the github-pr-create half): an owner or team /work run whose PR path is allowlisted (git-push, github-pr-create) is done only after a second model reviewed its verified tree in bounded rounds. task run wires RunTaskOptions.review (workReviewHook, src/work/review.ts) when the bridge's stamps say surface work, the /work bit and role owner or team, and it is no delegate or council worker. After the green lane (and any SpecSync change the run opened is settled), runTask calls the hook: it reviews the tree /work will commit (tracked and untracked, non-ignored files) for the (repo, branch) its PR opens on through the same reviewStep, reviewer, rounds and pr_review_rounds records github-pr-create uses; findings go back to the model as the next attempt's feedback (fenced, at most 3800 chars) and that attempt is verified again first; the review rounds have their own counter, apart from the AGENT-4.a verify retries; a round that raises nothing, an unchanged tree after findings, or round 3 ends it (finished); with no second model, or any other refusal, the run is done with result.review refused and the one-line reason (no PR); a hook that throws or keeps raising findings past its rounds fails closed; a spend-cap stop of a review call ends the run blocked on that cap's ask. openWorkPr checks, right before the commit, that a finished review cycle reviewed exactly the tree it would commit and push (workTreeReviewed, fail closed): with none it skips with not-reviewed, nothing committed or pushed, the changes stay on the branch, and the line gives the run's reason (GITHUB-9.a: no second model) or that no review finished. The /work PR body points to the Second-model review section github-pr-create writes from the record (what each round raised and what changed). The spawn client passes the result frame's review through, validated and scrubbed. Regression tests in tests/agent.loop.test.ts, tests/work.pr.test.ts and tests/work.review.test.ts fail on the stacked base sources and pass on the branch."
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

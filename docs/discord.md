@@ -20,7 +20,7 @@ Registered via `buildSlashCommandBodies()` → guild PUT overwrite + clear globa
 | `/session start` | `topic` (required), optional `project` | public (deferred) | Start session + agent run in isolated worktree |
 | `/status` | — | yes | Bridge metrics (version, uptime, protocol, channels, sessions, work, LLM line — the configured model @ host, or `LLM: none — No model provider is configured.` when none is set (AGENT-10/13; the setting names to fix it for the owner only) —, slash names, announce channel, owner configured, audit chain, 24 h spend vs cap for the owner only, one line for the total cap and one per provider cap (SAFE-14) — anyone else sees just “Work is paused for budget.” while runs are paused at a cap, never which one (SAFE-14.a), optional git tip) |
 | `/agents` | — | yes | List local Corvidinho agent |
-| `/work` | `description` (required), optional `project` | public (deferred) | Drive a work task in isolated worktree. Owner and team only: community (anyone undeclared included) gets the ephemeral `not authorized` and nothing starts (IDENTITY-11.a) |
+| `/work` | `description` (required), optional `project` | public (deferred) | Drive a work task in isolated worktree. Owner and team only: community (anyone undeclared included) gets the ephemeral `not authorized` and nothing starts (IDENTITY-11.a). Once its tree is verified, a second model reviews the diff in up to 3 rounds before the draft PR, and the PR lists what it raised and what changed; with no finished review there is no PR (`not-reviewed`), and with no second model configured the `PR:` line says so (GITHUB-9 / GITHUB-9.a) |
 | `/mute` | `user` (user, required) | yes | Mute user (ADMIN; DISCORD-7 re-check). Refuses yourself and the configured owner (DISCORD-6 / IDENTITY-2) |
 | `/unmute` | `user` (user, required) | yes | Unmute user (ADMIN) |
 | `/schedule list` | — | yes | List schedules (non-owners see each project by name, never the host path; REQ-discord-418) |
@@ -423,7 +423,7 @@ opened only when every gate holds; otherwise the line says plainly why not.
 | In a repo whose SpecSync workflow requires a change for meaningful files (`.specsync/sdd.json`, read from the merge-base, HEAD and the work tree, so turning it off on the branch does not skip this), every such path changed since the merge-base is covered by an open SpecSync change or one archived on the branch | `PR: not opened — N changed path(s) this repo's SpecSync workflow needs a change for are not covered by a SpecSync change (…)`, nothing committed or pushed (AGENT-18, REQ-discord-518) |
 | In a repo that uses hi (a `hi/*.md` with `hi:` front matter, read from the merge-base, HEAD and the work tree), nothing under `hi/` differs from the merge-base, committed on the branch or left in the tree: no criterion, retired entry or other `hi/` file. The agent never changes a repo's criteria itself; they change only through a capture the owner approves, and no run can make one yet, so any `hi/` change blocks. Checked before the verify re-run below, so a trusted and a re-run verify both hold to it | `PR: not opened — this repo's hi/ changed since the branch left … (criteria …; retired entries …; other hi/ files …) and no approved capture made the change; …` (or "could not read what changed under hi/ …"), nothing committed or pushed (AGENT-18, REQ-discord-520) |
 | Tree passed `fledge lanes run verify --non-interactive` (from the run's result frame, else re-run once; a re-run must also print a test summary showing tests ran) | Nothing pushed (AGENT-4, AGENT-15) |
-| A second-model review finished for the exact tree on GitHub (GITHUB-9, see below). This step has no run model, so it starts no review round itself (the `/work` round driver is a later change): today it opens only a tree an agent run already had reviewed | `PR: not opened — no second-model review has finished for this branch's tree on GitHub, and only an agent run can start one (GITHUB-9). The changes stay on branch …` (the branch is pushed, no PR) |
+| A second-model review finished for exactly the tree about to be committed and pushed (GITHUB-9, see below). The run drives the rounds itself once its tree is verified; checked right before the commit | `PR: not opened — no second-model review finished for the tree this /work run would ship, so there is no PR (GITHUB-9). The changes stay on branch …` — or the run's own reason, e.g. `there is no second model to review the diff — …, and there is no reviewer setting (GITHUB-9.a).` — nothing committed or pushed |
 
 Steps run through the existing typed plugins (`git-commit` → `git-push` →
 `github-pr-create --draft`), so SAFE-1 deny and SAFE-5 audit apply. The PR body
@@ -472,9 +472,24 @@ every path: a chat, slash or button run, `/session`, a schedule, a local
   changed after each round (from git), fenced, with no amounts. It lists every
   round since the last PR opened from the branch, so a review that ended before
   the tree changed again (and started a new one) stays listed.
-- **No run model** (`/work`, `plugins run`): no round starts; the PR opens only
-  when a finished review exists for the exact tree of the branch on GitHub,
-  else one plain line refuses.
+- **`/work`** (REQ-agent-092 / REQ-cli-092): an owner or team `/work` run
+  whose PR path is allowlisted (`git-push`, `github-pr-create`) drives the
+  rounds itself once its tree is verified (and any SpecSync change it opened
+  is settled), before the PR step: the tree `/work` will commit — tracked and
+  untracked, non-ignored files as they are in the work tree — keyed by the repo
+  and branch its PR opens on, with the same reviewer, rounds and records. The
+  reviewer is told only that it is a `/work` task (the task text, with its
+  identity and memory blocks, is not sent). Findings go back to the model as
+  the next attempt's feedback (fenced as data), and that attempt is verified
+  again before the next round; the rounds have their own counter, apart from
+  the verify retries (AGENT-4.a). The `PR:` step then checks, before it commits
+  or pushes anything, that a finished review covers exactly that tree: with
+  none, nothing is committed or pushed and the line says why (with no second
+  model, that there is none, GITHUB-9.a). A spend cap that stops a review call
+  ends the run on that cap's ask, like any model call (SAFE-8).
+- **No run model** (`plugins run`, the `/work` PR step itself): no round
+  starts; the PR opens only when a finished review exists for the exact tree
+  of the branch on GitHub, else one plain line refuses.
 - **Refusals** are one plain line (`PR not opened: …`): no second model, a
   provider error (a fixed reason, never the provider's text), a diff over the
   cap, no changes against the base, a branch not pushed or not the reviewed
