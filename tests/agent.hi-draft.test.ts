@@ -614,6 +614,8 @@ describe("an approved capture passes the hi guard; every other hi/ change still 
       allowlist: new Set(["git-commit", "git-push", "github-pr-create"]),
       repoGate: () => ({ ok: true as const, repo: "acme/widget" }),
       verify: async () => ({ success: true, output: LANE_PASS_OUTPUT }),
+      // GITHUB-9: shipping cases inject a finished review (same as hi-guard tests).
+      reviewed: async () => true,
       runPlugin: async (o: RunOptions): Promise<PluginHandlerResult> => {
         calls.push(o.name);
         return { ok: true, data: { url: "https://github.com/acme/widget/pull/1", number: 1 } };
