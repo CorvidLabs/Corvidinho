@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "in-a-non-git-project-my-runs-work-in-the-folder-itself-its-file-tools-leave-the-root-agents-md-and-claude-md-alone",
+  "implementation_commit": "d91ec70596a785fa98d198ee1d858ddda14b07d6",
+  "implementation_tree": "f62c47ec0b2d3b14506a9450051d61ed08a11216",
+  "contract_digest": "bf36be14c195506d625a7da4400a67305f08bbe6417d7f06abeda883791886cb",
+  "workspace_digest": "41c895e75b86dea39f3fdf340ab29113a0961628a66bdd439dc1d49235b0ada1",
+  "closing_digest": "0b09e0b6063ca31611e4a6857eaac543e34f10ee35cc3d54447e763060c483d6",
+  "review_digest": "762730c632e0e150578de4ea6cafd4a00e5fb33c27b6563dc3f06476cafcf691",
+  "finalization_digest": "85e5e964fd95728e53a9be59e9d3a8f21a072f0db7a1631c65bd1154ccbc0f26",
+  "timestamp": 1791248310
+}

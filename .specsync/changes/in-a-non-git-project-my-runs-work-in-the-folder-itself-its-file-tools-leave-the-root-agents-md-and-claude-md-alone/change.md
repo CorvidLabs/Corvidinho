@@ -1,6 +1,6 @@
 ---
 id: in-a-non-git-project-my-runs-work-in-the-folder-itself-its-file-tools-leave-the-root-agents-md-and-claude-md-alone
-state: verifying
+state: accepted
 type: feature
 base_commit: 40ff628e2224d9274b96c782450de1592c3b6733
 ---

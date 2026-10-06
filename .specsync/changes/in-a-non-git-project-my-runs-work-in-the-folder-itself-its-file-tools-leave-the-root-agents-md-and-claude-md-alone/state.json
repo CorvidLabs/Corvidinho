@@ -7,11 +7,11 @@
   "title": "In a non-git project my runs work in the folder itself, its file tools leave the root AGENTS.md and CLAUDE.md alone, schedules keep their own folder, and others only read there (AGENT-1.a, AGENT-1.b, AGENT-1.c)",
   "description": "In a non-git project my runs work in the folder itself, its file tools leave the root AGENTS.md and CLAUDE.md alone, schedules keep their own folder, and others only read there (AGENT-1.a, AGENT-1.b, AGENT-1.c)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "40ff628e2224d9274b96c782450de1592c3b6733",
   "created_at": 1790830655,
-  "updated_at": 1791248017,
+  "updated_at": 1791248310,
   "affected_specs": [
     "discord",
     "plugins",
