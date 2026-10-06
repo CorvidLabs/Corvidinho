@@ -82,6 +82,8 @@ files:
   - plugins/shell/footguns.ts
   - plugins/shell/must-ask.ts
   - tests/shell.footguns.test.ts
+  - plugins/shell/sdd-lifecycle.ts
+  - tests/shell.sdd-lifecycle.test.ts
   - plugins/web/index.ts
   - plugins/web/commands.ts
   - plugins/web/fetch.ts
@@ -145,7 +147,8 @@ Plugin host includes Discord outbound post, GitHub write plugins as dangerous
 file/search plugins with SAFE-2 guards (PLUGIN-1/2 / REQ-plugins-081..084),
 `shell-exec` with SAFE-3 project-root cwd clamp (REQ-plugins-086..088) and
 SAFE-21 foot-gun refusals, starting without GitHub or git credentials
-(SAFE-21 / SAFE-21.a / REQ-plugins-494..495),
+(SAFE-21 / SAFE-21.a / REQ-plugins-494..495) and never approving, reviewing
+or finalizing a SpecSync change (AGENT-18.a / REQ-plugins-1818),
 language runners `node-exec` / `python-exec` / `cargo-exec` that register only
 when their toolchain is on PATH (PLUGIN-4 / REQ-plugins-313..314), the
 SSRF-guarded `web-fetch` GET plugin (PLUGIN-1/2 / SAFE-7 / REQ-plugins-111),
@@ -208,7 +211,10 @@ gate can make a deny on the thread or its parent win (REQ-plugins-005). File/sea
 Shell plugins register via `loadShellPlugins` (`shell-exec`);
 `plugins/shell/index.ts` also exports the clamp (`firstDisallowedCd`,
 `isCdEscape`, `forEachSimpleCommand`, `clampRefuseMessage`) and the SAFE-21
-check (`firstFootgun`, `footgunRefuseMessage`). Language
+check (`firstFootgun`, `footgunRefuseMessage`);
+`plugins/shell/sdd-lifecycle.ts` exports the AGENT-18.a lifecycle check
+(`firstLifecycleStep`, `lifecycleRefuseMessage`, `lifecycleRefusal`,
+`HUMAN_LIFECYCLE_STEPS`). Language
 runners register via `loadRunnerPlugins(env?)` (`plugins/runners/index.ts`),
 which returns a `RunnerLoadReport` (`loaded` with each bound binary, `missing`
 with a reason) that `runnerStatusLines` renders for `plugins list`;
@@ -593,7 +599,8 @@ variables, inline interpreter code and an in-root or `#!` script an
 interpreter or a path runs; an unreadable script or recipe, a make / just
 file or dir option, a package-manager option that picks another package.json,
 workspace, preload or shell, and a command named by an expansion ask; the
-box updater by any other path or form asks. A command SAFE-21 or the clamp refuses is not
+box updater by any other path or form asks. A command SAFE-21, the clamp or
+the AGENT-18.a lifecycle check (REQ-plugins-1818) refuses is not
 classified. `isSelfUpdateToTag`: exactly `CORVIDINHO_REF=v<X.Y.Z>` and the
 installed checkout's `scripts/corvidinho-update.sh` (or `bash` it), nothing
 else typed, and a tag that checkout has, is not a deploy (AUTONOMY-9). The
@@ -747,6 +754,40 @@ or a recursive reader inside the worktree (`grep -r` reads an in-root
 `.env`); a delete target changed between the check and the run (a symlink
 swapped in); and `[[ a > b ]]` / `(( a > b ))`, read as redirections and
 refused.
+
+AGENT-18.a (REQ-plugins-1818): before the SAFE-21 check, `shell-exec` asks
+`lifecycleRefusal` (`plugins/shell/sdd-lifecycle.ts`) and refuses
+`specsync change approve|review|finalize|ship` in every repo, with no repo
+check and synchronously: exit 2, nothing spawned,
+`shell-exec refused (AGENT-18.a): <invocation> would <step> a SpecSync change
+from the shell[ (in SCRIPT)], which the shell never does in any repo; <HUMAN_LIFECYCLE_LINE
+without "refused: ">, through its own settle step and never the shell`,
+`data.rule` `AGENT-18.a`, `data.step` (null when it can't be read) and
+`data.script`. On Corvidinho the run's own change is approved and archived
+only by `runTask`'s settle step after a green lane, through the SpecSync
+plugin, which spawns `specsync` itself (REQ-plugins-519, REQ-agent-519);
+elsewhere a human does it. The check reads every simple command over the
+SAFE-21 ground with the same walker (`forEachSimpleCommand`: dash and bash
+readings, `eval` / `trap` / `-c` strings, command substitutions, and the
+in-root scripts the command runs in a shell). An invocation starts at any
+word named `specsync` (basename, so an absolute or relative path; an
+npm-style `specsync@<version>` or an option's value such as
+`--bin=specsync` too), so every wrapper (`env`, `timeout`,
+`nohup`, `xargs`, `sudo`, `exec`, `find -exec`) and package runner (`bunx`,
+`npx`, `bun x`, `pnpm dlx`, `watch`) in front of it is covered; at a command word that
+is a link to the binary; and at a command word that expands, where only a
+literal step refuses. The step is the first word past SpecSync's options
+after `change`; a word right after an option may be its value or the step,
+so a lifecycle step there counts. A step that expands, or one `xargs`
+supplies from its input (no step word, or one that is not another
+`specsync change` subcommand), refuses. Read-only `specsync change
+status|list|show|check|ship-status|…` and `specsync check` still run.
+AGENT-18.a residuals: code an interpreter runs (`bun -e`, `node -e`,
+`python -c`, a script handed to `node` / `python`, the `node-exec` /
+`python-exec` / `cargo-exec` runners) that spawns specsync itself is not
+parsed; neither are package-manager scripts, `make` / `just` recipes and git
+aliases (which AUTONOMY-9 does read), nor a copy of the binary under another
+name or a link made by the same command.
 
 SAFE-21.a (REQ-plugins-495): the child env is the runners' env
 (`runnerChildEnv`): the verify lane's scrub, no `CDPATH` / `OLDPWD`, and no
@@ -1079,6 +1120,12 @@ command line.
 - **When** the agent runs `shell-exec` with `rm -rf ../other`, `cat ~/.config/corvidinho/env` or `gh auth token`
 - **Then** each fails with exit 2 and a SAFE-21 reason (delete outside the worktree; a secret); nothing is spawned; `rm -rf build` and `cat README.md` still run
 
+### Scenario: shell-exec never approves, reviews or finalizes a SpecSync change (AGENT-18.a)
+
+- **Given** builtins loaded and `shell-exec` allowlisted, in any repo (Corvidinho included, even right after a green lane for the run's own change)
+- **When** the agent runs `shell-exec` with `specsync change approve c1 --actor leif`, `sh -c 'specsync change finalize c1'`, `npx specsync change ship c1`, or `sh x.sh` where the in-root `x.sh` runs `specsync change review c1`
+- **Then** each fails with exit 2 and `shell-exec refused (AGENT-18.a): …` carrying `HUMAN_LIFECYCLE_LINE`; nothing is spawned, the change's `state.json` is unchanged, no `approvals.json` / `review.json` is written and nothing moves to `.specsync/archive`; `specsync change status c1` and `specsync check` still run
+
 ### Scenario: shell-exec starts without GitHub or git credentials (SAFE-21.a)
 
 - **Given** the bot's env holds `GH_TOKEN` and the owner's `~/.gitconfig` names a credential helper
@@ -1273,6 +1320,7 @@ command line.
 | shell-exec downloads and runs the download as code (piped into a shell / interpreter, `$(curl …)`, `<(curl …)`, a downloaded script run), in the command or an in-root script it runs | Refuse (exit 2, SAFE-21 download); no spawn (REQ-plugins-494) |
 | shell-exec deletes or moves outside the worktree (`rm`, `rmdir`, `unlink`, `shred`, `mv`, `find -delete` / `-exec rm`, `ln -f`, `git worktree remove` / `prune`), deletes the worktree itself, or names an expanded / input-fed / dot-matching target, in the command or an in-root script | Refuse (exit 2, SAFE-21 delete); no spawn (REQ-plugins-494) |
 | shell-exec reads a secret (secret path, host credential store, Corvidinho env / allowlist file or config dir, `/proc/<pid>/environ`, credential env var, `gh auth token`, `git credential`, ssh family) or re-points git / gh at credentials, in the command or an in-root script | Refuse (exit 2, SAFE-21 secret); no spawn (REQ-plugins-494) |
+| shell-exec runs `specsync change approve` / `review` / `finalize` / `ship` (any repo; behind a wrapper, package runner, path or link, in `-c` / `eval` / `$(…)`, or in an in-root script it runs), or a `change` step that expands or that `xargs` supplies | Refuse (exit 2, AGENT-18.a with `HUMAN_LIFECYCLE_LINE`); no spawn, no Approve card (REQ-plugins-1818) |
 | shell-exec or a runner child looks for GitHub / git credentials | None: tokens, askpass, ssh agent dropped; git reads no global / system config, repo helper reset, no prompt, key-less ssh; gh config dir empty (SAFE-21.a, REQ-plugins-495) |
 | shell-exec runs past its timeout / the calling run aborts / prints past the cap | exit 124 / 130 with its process group killed; output truncated at 64 KiB per stream with a note; output secret-scrubbed (REQ-plugins-495) |
 | Dangerous run with no audit key while the audit chain is keyed | Refuse (exit 2, SAFE-5 audit log unavailable); handler not run |
@@ -1448,6 +1496,7 @@ and current rows for plugins host evolution.
 | 2026-10-01 | in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent: In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard) |
 | 2026-09-30 | web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered: Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap |
 | 2026-10-01 | gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins: GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap |
+| 2026-10-06 | shell-exec-refuses-specsync-change-approve-review-finalize-and-ship-in-every-repo-only-a-human-or-corvidinho-s-own: Shell-exec refuses specsync change approve, review, finalize and ship in every repo: only a human, or Corvidinho's own green-lane settle, does them (AGENT-18.a) |
 | 2026-10-05 | where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts: Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts) |
 | 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
 | 2026-10-05 | in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2: In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause) |
