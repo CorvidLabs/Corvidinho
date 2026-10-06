@@ -17,7 +17,7 @@ workReviewApplies passes cwd into actingWorkTask after AGENT-1 nongit
 
 ## Acceptance Criteria
 
-- <!-- TODO: add observable acceptance criteria -->
+- workReviewApplies(env, allowlist, cwd) forwards cwd to actingWorkTask; taskRunIn passes its run cwd; bunx tsc --noEmit is clean on tip
 
 ## No-spec Rationale
 

@@ -10,7 +10,7 @@
   "state": "draft",
   "base_commit": "10b5fcaf98abcfb302574ce854e4989c73574677",
   "created_at": 1791301520,
-  "updated_at": 1791301520,
+  "updated_at": 1791301532,
   "affected_specs": [
     "cli"
   ],
@@ -19,12 +19,17 @@
   ],
   "no_spec_change": true,
   "no_spec_change_rationale": "Call-site fix only: actingWorkTask gained cwd in #351; workReviewApplies must forward the run cwd. No requirement text change.",
-  "acceptance_criteria": [],
+  "acceptance_criteria": [
+    "workReviewApplies(env, allowlist, cwd) forwards cwd to actingWorkTask; taskRunIn passes its run cwd; bunx tsc --noEmit is clean on tip"
+  ],
   "selected_artifacts": [
     "context",
     "testing",
     "tasks"
   ],
   "dependencies": [],
-  "answers": {}
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
 }
