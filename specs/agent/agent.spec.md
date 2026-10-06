@@ -46,6 +46,7 @@ files:
   - tests/agent.spend-caps.test.ts
   - tests/agent.spend-approve.test.ts
   - tests/agent.spend-unknown.test.ts
+  - tests/agent.spend-reserve.test.ts
   - tests/spend.surfaces.test.ts
   - tests/agent.ask.test.ts
   - tests/agent.verify-env.test.ts
@@ -314,7 +315,11 @@ completions request (headers and body); `createTaskExecute` takes
 Daily spend cap (REQ-agent-098, issue #98, SAFE-8 as amended / AUTONOMOUS-8):
 `src/agent/spend.ts` exports `SPEND_CAP_ENV`
 (`CORVIDINHO_DAILY_SPEND_CAP_USD`), `SPEND_WINDOW_MS` (rolling 24 h),
-`SPEND_WARN_PERCENT` (80), `MODEL_PRICES_USD_PER_MTOK`, `priceForModel`,
+`SPEND_WARN_PERCENT` (80), `MODEL_PRICES_USD_PER_MTOK` (each priced model's
+input/output price and its listed maximum output, `ModelPrice.maxOutputTokens`),
+`priceForModel`, `REPLY_RESERVE_DEFAULT_TOKENS` (128000) and
+`replyReserveTokens` (the worst-case reply a call is estimated at,
+AUTONOMY-8.a, REQ-agent-298),
 `parseSpendCap`, `costMicroUsd`, `estimateCallMicroUsd`, `formatUsd`,
 `ensureSpendLedger`, `SpendLedger` (`reserve` / `settle` / `window` /
 `noteWarning` over the module-owned `spend_ledger` and `spend_alerts` tables
@@ -882,7 +887,11 @@ events are unchanged.
 No spend cap set (neither the total nor a provider cap) means no spend
 behavior: the fetch is untouched and the DB is not opened. With a cap, a
 provider call is never sent unless its estimate was reserved under the total
-cap and its provider's cap in one IMMEDIATE transaction; each cap warns and
+cap and its provider's cap in one IMMEDIATE transaction; that estimate counts
+the model's worst-case reply (its listed maximum output, else 128000 tokens;
+AUTONOMY-8.a, REQ-agent-298), so a call whose long reply could pass a cap
+asks first, and no request ever carries `max_tokens` (replies are never cut
+short); each cap warns and
 stops on its own (SAFE-15), and a cap stop never falls back to another model
 (AGENT-11). A call that would pass
 the cap, and every call while the cap value is invalid or the ledger is
@@ -1179,6 +1188,12 @@ A change the run did not open is never touched.
 - **Given** `CORVIDINHO_DAILY_SPEND_CAP_USD=1`, $0.999 spent in the last 24 h and a configured owner
 - **When** the run's next `gpt-4o` call would pass the cap
 - **Then** the call is held and a `spend` card (money) is recorded with action `send one model call to gpt-4o via <host>`, target `total` and that call's estimate as amount; the run emits `[operator] AUTONOMY-8: waiting for the owner's OK on an Approve card with the one-time code …` (no amounts); once the owner approves with the code the call goes out once, recorded at that estimate; the next call past the cap raises a new card; a Deny or a lapse sends nothing and the run ends `blocked` on a `spend-cap` ask (REQ-agent-198)
+
+### Scenario: a call whose worst-case reply would pass the cap asks first
+
+- **Given** `CORVIDINHO_DAILY_SPEND_CAP_USD=0.10`, nothing spent in the last 24 h and a configured owner
+- **When** the run's next `gpt-4o` call would go out (request ~$0.0001, worst-case reply 16384 tokens ≈ $0.1638)
+- **Then** the call is held and a `spend` card (money) is recorded at that worst-case estimate before anything is sent; approved with the code it goes out once, unchanged (no `max_tokens`), and afterwards counts the provider-reported usage; with no owner the run ends `blocked` on a `spend-cap` ask and nothing is sent (AUTONOMY-8.a, REQ-agent-298)
 
 ### Scenario: an unpriced model under a cap asks on a card showing the amount as unknown
 

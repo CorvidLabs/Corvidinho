@@ -749,6 +749,36 @@ Unchanged suites that cover the touched files pass: `tests/agent.spend.test.ts`,
   `agent.ask`).
 - Fail on base: with the base's sources the argv case and both gate
   assertions fail.
+## The worst-case reply counts before each call (REQ-agent-298 added, REQ-agent-098 modified; AUTONOMY-8.a)
+
+`tests/agent.spend-reserve.test.ts` (11 tests; mocked provider fetch,
+in-memory ledger, owner in the run's env, cards decided in the approval
+store):
+
+- REQ-agent-298: every priced model lists `maxOutputTokens` above 4096 and
+  `replyReserveTokens` returns it; gpt-4o's estimate for 3000 bytes is
+  1000 × 2.5 + 16384 × 10 micro-USD; a priced model with no (or a bad)
+  figure counts 128000.
+- REQ-agent-298: a $0.10 total cap and a gpt-4o call — with no owner a
+  `spend-cap` ask naming the worst-case estimate and no fetch or row; with an
+  owner one `spend` / `money` card at that amount, Approve sends the body
+  once and the row settles `actual` at the usage; Deny sends and records
+  nothing; a $0.10 provider cap stops it with the SAFE-15 ask naming
+  `provider:llm.test`.
+- REQ-agent-298: a $1 cap — no card; the in-flight `reserved` row holds the
+  worst case, then `actual` at 7500; the sent body is the built body with no
+  `max_tokens` / `max_completion_tokens`, also in a capped
+  `createTaskExecute` run.
+- REQ-agent-298 / REQ-agent-199: unpriced models still ask on the
+  unknown-amount card (recorded `unknown`), stop with the unpriced ask with
+  no owner, and run unrecorded with no covering cap.
+- REQ-agent-098: `tests/agent.spend.test.ts` checks the estimate formula with
+  the worst-case reply and `priceForModel` carrying `maxOutputTokens`.
+
+Fail on main's `src/agent/spend.ts` / `src/agent/index.ts`: 8 of 11 (the
+reserve units, the four ask-first cases and the in-flight hold); the three
+unchanged-behaviour cases pass on both.
+
 ## Unknown prices ask on the card; every surface asks (REQ-agent-199; SAFE-16 / SAFE-16.a, AUTONOMY-8)
 
 `tests/agent.spend-unknown.test.ts` (18 tests; mocked fetch, in-memory or temp
