@@ -750,9 +750,10 @@ SAFE-21 ground with the same walker (`forEachSimpleCommand`: dash and bash
 readings, `eval` / `trap` / `-c` strings, command substitutions, and the
 in-root scripts the command runs in a shell). An invocation starts at any
 word named `specsync` (basename, so an absolute or relative path; an
-npm-style `specsync@<version>` too), so every wrapper (`env`, `timeout`,
+npm-style `specsync@<version>` or an option's value such as
+`--bin=specsync` too), so every wrapper (`env`, `timeout`,
 `nohup`, `xargs`, `sudo`, `exec`, `find -exec`) and package runner (`bunx`,
-`npx`, `bun x`, `pnpm dlx`) in front of it is covered; at a command word that
+`npx`, `bun x`, `pnpm dlx`, `watch`) in front of it is covered; at a command word that
 is a link to the binary; and at a command word that expands, where only a
 literal step refuses. The step is the first word past SpecSync's options
 after `change`; a word right after an option may be its value or the step,

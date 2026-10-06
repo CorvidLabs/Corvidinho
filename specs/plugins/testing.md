@@ -668,10 +668,12 @@ no Approve card for `specsync change approve c1 && kubectl get pods`
 verified ledger, `specsync-change-approve` still spawns
 `change approve c1 --actor corvid-agent` directly and writes
 `approvals.json`. A unit test of `firstLifecycleStep`: option values,
-`--root change change review`, `cargo run --bin specsync -- change`,
+`--root change change review`, `cargo run --bin specsync -- change` (and
+`--bin=specsync`), a here-doc handed to `sh`, `watch -n 5 specsync …`,
 `pnpm dlx @corvidlabs/specsync@6`, expanding steps and command words,
 `specsync check change approve` (not a step), `echo specsync change approve`
-(fails closed), separate commands, and the `bun -e` residual.
+(fails closed), `specsync-helper` (not specsync), separate commands, and
+the `bun -e` residual.
 - Fail on base (e1a24ed2's `plugins/shell/commands.ts` and
   `plugins/shell/must-ask.ts` swapped in, `sdd-lifecycle.ts` removed): 9 of 11
   fail (every refusal case, the Approve-card case and the unit test); the

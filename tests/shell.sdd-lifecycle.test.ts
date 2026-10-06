@@ -401,6 +401,10 @@ describe("firstLifecycleStep reads the step past options and fails closed (REQ-p
     expect(step("specsync --root change change review c1")).toBe("review");
     expect(step("specsync change --note approve status")).toBe("approve"); // may be the value: counts
     expect(step("cargo run --bin specsync -- change finalize c1")).toBe("finalize");
+    expect(step("cargo run --bin=specsync -- change finalize c1")).toBe("finalize");
+    expect(step("sh <<'EOF'\nspecsync change approve c1\nEOF")).toBe("approve");
+    expect(step("watch -n 5 specsync change review c1")).toBe("review"); // a wrapper the chain doesn't know
+    expect(found("specsync-helper change approve")).toBe(false);
     expect(step("pnpm dlx @corvidlabs/specsync@6 change ship c1")).toBe("ship");
     expect(step('specsync change "$S" c1')).toBeNull();
     expect(found('specsync change "$S" c1')).toBe(true);

@@ -72,10 +72,14 @@ function baseName(v: string): string {
   return v.slice(v.lastIndexOf("/") + 1);
 }
 
-/** `specsync`, `/usr/bin/specsync`, `./bin/specsync`, `specsync@6.0.0`, `@scope/specsync@1`. */
+/**
+ * `specsync`, `/usr/bin/specsync`, `./bin/specsync`, `specsync@6.0.0`,
+ * `@scope/specsync@1`, and an option's value (`--bin=specsync`).
+ */
 function namesSpecsync(w: Word): boolean {
   if (w.expands) return false;
-  let base = baseName(w.value);
+  const v = w.value.startsWith("-") ? w.value.slice(w.value.indexOf("=") + 1) : w.value;
+  let base = baseName(v);
   const at = base.indexOf("@", 1);
   if (at > 0) base = base.slice(0, at);
   return base === "specsync";
