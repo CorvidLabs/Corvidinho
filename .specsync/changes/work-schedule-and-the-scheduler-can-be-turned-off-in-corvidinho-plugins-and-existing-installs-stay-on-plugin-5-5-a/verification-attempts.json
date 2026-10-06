@@ -160,6 +160,26 @@
         "REQ-cli-157",
         "REQ-discord-157"
       ]
+    },
+    {
+      "timestamp": 1791306617,
+      "commit": "6c6a6a549a9b855eca5f31d83c7049a3397bfd9d",
+      "contract_digest": "c38d66a6e85b57208ebd539964de58db689561bef3906c4caf7bf66550e5c308",
+      "execution_digest": "3afe71aff10c6245447f43089e00ab87cfcdcafbb8fa46b9696c721f885c1cc5",
+      "workspace_digest": "b86d5046837626228499fea0b95f3feb1f056c4cd4338250b2f7843629169ef3",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec discord",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-157",
+        "REQ-cli-157",
+        "REQ-discord-157"
+      ]
     }
   ]
 }
