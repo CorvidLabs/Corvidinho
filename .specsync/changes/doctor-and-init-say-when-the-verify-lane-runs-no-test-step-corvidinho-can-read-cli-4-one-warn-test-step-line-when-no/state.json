@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "doctor-and-init-say-when-the-verify-lane-runs-no-test-step-corvidinho-can-read-cli-4-one-warn-test-step-line-when-no",
+  "slug": "doctor-and-init-say-when-the-verify-lane-runs-no-test-step-corvidinho-can-read-cli-4-one-warn-test-step-line-when-no",
+  "title": "Doctor and init say when the verify lane runs no test step Corvidinho can read (CLI-4): one [warn] test-step line when no [lanes.verify] step visibly runs bun test, jest, vitest, cargo test, pytest or go test, since such a lane can never verify a run that changes files (AGENT-15)",
+  "description": "doctor and init say when the verify lane runs no test step Corvidinho can read (CLI-4): one [warn] test-step line when no [lanes.verify] step visibly runs bun test, jest, vitest, cargo test, pytest or go test, since such a lane can never verify a run that changes files (AGENT-15)",
+  "kind": "feature",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "8bf4422f74d6a7d995300a48e302957ee2ef56da",
+  "created_at": 1791245093,
+  "updated_at": 1791302574,
+  "affected_specs": [
+    "cli"
+  ],
+  "affected_paths": [
+    "src/doctor.ts",
+    "tests/cli.doctor-truth.test.ts",
+    "specs/cli/cli.spec.md",
+    "specs/cli/testing.md",
+    "README.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "CLI-4 (captured on main, hi/cli.md; confirmed by Leif): for a project whose [lanes.verify] steps run no command naming bun test, jest, vitest, cargo test, pytest or go test (following steps through tasks as string or { cmd }, their deps, { run }, { task }, parallel items and .fledge/lanes/*.toml imports), corvidinho doctor and corvidinho init each print one plain-language [warn] test-step line naming those runners and saying that if the lane prints none of their summaries a run that changes files is never verified (AGENT-15); the exit code is unchanged (static detection: a wrapper like npm test may still print a recognised summary). No such line for this checkout (verify -> test = bun test), a lane with { run = \"cargo test\" }, a lane whose step task has deps running pytest, or a lane imported from .fledge/lanes/. When fledge.toml or [lanes.verify] is absent or broken, the existing verify-lane [missing] line stands alone. File contents and parser messages are never printed (SAFE-6); nothing is created or changed. README.md no longer says doctor skips the test step. No new flag, env var, config key or slash command. The runner names come from TEST_SUMMARY_RUNNERS in src/agent/test-evidence.ts. tests/cli.doctor-truth.test.ts's new warn test fails on the base sources and passes on the branch."
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}
