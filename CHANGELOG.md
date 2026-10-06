@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### GitHub (GITHUB-7)
+
+- **Typed `github-pr-merge` merges the bot's own green Corvidinho PR only** — (closes #99): Octokit `pulls.merge` behind SAFE-1 / GITHUB-6; CorvidLabs/Corvidinho only; author must be the authenticated token user; CI verdict green (reuse `github-ci-status`); open + mergeable + not draft; never admin/bypass so branch protection, reviews and CODEOWNERS stay enforced; outside Corvidinho refused (`outside Corvidinho a human still merges`). Default squash. Fixture/mock tests; no live tokens in CI. No package bump and no live-bridge cut in this PR.
+
 ## 0.0.42
 
 ### Agent / land-wave
