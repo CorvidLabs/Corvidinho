@@ -216,7 +216,8 @@ provider fetch unchanged and the database SHALL NOT be opened, so behavior
 is unchanged. When it is set, `createTaskExecute` SHALL send every
 OpenAI-compatible call through the capped fetch, which SHALL price the call
 from a per-model table (standard USD per 1M input/output tokens, exact model
-id match), estimate it from the request size plus a fixed reply reserve,
+id match), estimate it from the request size plus the model's worst-case
+reply (REQ-agent-298, AUTONOMY-8.a; no `max_tokens` is sent),
 and, in one IMMEDIATE transaction on the shared SQLite `spend_ledger` table,
 reserve the estimate unless spend in the last 24 hours plus the estimate
 would exceed the cap. After the reply, the reservation SHALL be settled to
@@ -305,6 +306,7 @@ Acceptance Criteria
 - A warning recorded by one process is taken once by the outbox with current spend, can be released and taken again, and stays pending (not delivered, not dropped) while spend is back under 80%: 80% at T0, then 72%, then 96% delivers exactly one warning at 96% and records no second warning; without a database the outbox returns the run's own warning.
 - `claimCapPing` returns a claim once per cap episode and again after spend is seen under 70% or 24 hours pass; a released claim lets the next claim in the same episode succeed.
 - `SPEND_PAUSED_TEXT` is "Work is paused for budget." and `SPEND_CAP_SUMMARY` equals it; `formatSpendPublicStatusLine` is undefined with no cap and under the cap, and "Spend: Work is paused for budget." at the cap, for an unpriced model, an invalid value and an unreadable ledger; `spendPaused` flips exactly at the cap; the owner's `formatSpendStatusLine` keeps the amounts.
+- The call estimate counts the model's worst-case reply (its listed maximum output, else 128000 tokens; REQ-agent-298), never a fixed 4096-token reserve, and the sent request carries no `max_tokens`.
 
 ### REQ-agent-117
 
@@ -2562,6 +2564,45 @@ Acceptance Criteria
 - A model `ask-human` of "what do you mean by install?" when the named tool is offered does not end as a clarify ask.
 - Fixture: `tests/agent.missing-capability.test.ts`.
 
+### REQ-agent-298
+
+Worst-case reply reserve (AUTONOMY-8.a, captured in this change from Leif's
+2026-09-28 interview, round 16: "Before each call it counts a worst-case
+reply toward the cap, so it asks before a long reply could take spend past
+it; replies are never cut short."). While any spend cap is set
+(REQ-agent-098, REQ-agent-114), the pre-call estimate of a priced provider
+call (`estimateCallMicroUsd` in `src/agent/spend.ts`) SHALL be the
+request's UTF-8 bytes / 3 as prompt tokens at the input price plus the
+model's worst-case reply at the output price: `replyReserveTokens(price)`,
+which SHALL be the model's listed maximum output
+(`ModelPrice.maxOutputTokens` in `MODEL_PRICES_USD_PER_MTOK`, reasoning
+tokens included) when that is a positive whole number, and otherwise
+`REPLY_RESERVE_DEFAULT_TOKENS` (128000, the largest listed maximum). Every
+priced model in the table SHALL list its maximum output. That estimate SHALL
+be what the IMMEDIATE ledger transaction checks against every cap that
+covers the call and reserves while the call is in flight, so a call whose
+worst case would cross any cap SHALL ask first exactly as REQ-agent-098,
+REQ-agent-114 and REQ-agent-198 describe (the owner's spend card at that
+amount when an owner is configured and the run passes `approval`, otherwise
+the `spend-cap` ask), and a call whose worst case fits SHALL be sent with no
+ask. The guard SHALL NOT add `max_tokens` (or `max_completion_tokens`) to
+the request and the runner SHALL NOT send one, so a reply is never cut
+short. After the reply the reservation SHALL be settled as before
+(REQ-agent-098: the provider-reported usage, else kept at the estimate, 0 on
+an HTTP error). Unpriced models are unchanged (REQ-agent-199: no estimate,
+the unknown-price card under a covering cap, unrecorded when no cap covers
+them), and so are flat-priced tool calls (`reserveFlatSpend`). No env var,
+config key, schema, NDJSON field or card text change.
+
+Acceptance Criteria
+- Every entry of `MODEL_PRICES_USD_PER_MTOK` lists `maxOutputTokens` above 4096 (gpt-4o 16384, claude-opus-5-5 128000, claude-haiku-4-5 64000) and `replyReserveTokens` returns it; a priced model with none (or with 0, a negative number, a fraction or NaN) counts `REPLY_RESERVE_DEFAULT_TOKENS` (128000).
+- `estimateCallMicroUsd` for gpt-4o and 3000 request bytes is 1000 × 2.5 + 16384 × 10 micro-USD.
+- A $0.10 total cap with nothing spent and a gpt-4o call: with no owner there is no fetch, no ledger row and a `spend-cap` ask naming the worst-case estimate; with an owner the call raises one `spend` / `money` card whose amount is that estimate, Approve sends exactly the built body once and the row settles `actual` at the reported usage, and Deny sends and records nothing.
+- A $0.10 provider cap on the call's provider stops the same call with the SAFE-15 ask naming `provider:<id>`.
+- A $1 cap with an owner configured: the gpt-4o call raises no card; while it is in flight its `reserved` row holds the worst case; afterwards the row is `actual` at the usage cost.
+- The sent body equals the built body and has no `max_tokens` or `max_completion_tokens`, also in a capped `createTaskExecute` run.
+- Unpriced models under a cap still ask on the unknown-amount card (recorded `unknown`) or stop with the unpriced ask; with no cap covering them they run unrecorded.
+- Fixture: `tests/agent.spend-reserve.test.ts` (fails on main's `src/agent/spend.ts` and `src/agent/index.ts`).
 ### REQ-agent-088
 
 After the one nudge it moves to the next stronger model in the order I set
