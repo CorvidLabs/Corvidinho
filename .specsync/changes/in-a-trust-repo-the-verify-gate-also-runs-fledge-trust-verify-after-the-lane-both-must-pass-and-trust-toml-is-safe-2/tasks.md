@@ -11,5 +11,7 @@ artifact: tasks
 - [x] `.trust.toml` SAFE-2 protected; refusal text lists it.
 - [x] `tests/agent.trust-verify.test.ts` (stand-in fledge); fails on the base sources, passes after.
 - [x] Specs REQ-agent-525 / REQ-plugins-525, testing notes, agent spec files list.
-- [x] STATUS.md Trust row and docs/discord.md.
+- [x] STATUS.md Trust row (docs/discord.md's refused list waits for #348's change to be archived; see docs).
+- [x] Review: a failed or unavailable Trust step's one-line reason travels as `VerifyResult.trustNote`; `runTask` leads the failure summary and retry feedback with it, so a long Trust output no longer pushes the head out of the 4000-char feedback (`src/agent/types.ts`, `src/agent/loop.ts`). `/work`'s rare pre-push re-verify still says "the verify lane failed" for a Trust failure: naming the reason there touches the discord module (`src/work/pr.ts`) and is a follow-up.
+- [x] Review: the abort test aborts once `trust verify` has started (polls the stand-in's log), not after a fixed 1.5 s; `discord-send-file` refusing `.trust.toml` is asserted.
 - [x] SpecSync approve and `change check --commit`; draft PR. Review and finalize follow after merge.

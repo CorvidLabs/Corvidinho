@@ -166,8 +166,17 @@ async function runLane(
   // its output shows tests ran and no test was deleted or turned off since
   // the baseline. Otherwise it is a failed verify like any other (retry
   // with the note first, then failed), with no opt-out (AGENT-14).
-  const laneOutput = result.output;
+  let laneOutput = result.output;
   let evidenceNote: string | undefined;
+  if (!result.success && result.trustNote) {
+    // AGENT-18 (REQ-agent-525): a failed or unavailable Trust step's one-line
+    // reason leads the failure summary and the retry feedback, however long
+    // the step's output after it is.
+    evidenceNote = result.trustNote;
+    laneOutput = result.output.startsWith(result.trustNote)
+      ? result.output.slice(result.trustNote.length).replace(/^\n/, "")
+      : result.output;
+  }
   if (result.success) {
     let drops: TestDrop[] | null;
     try {
@@ -831,7 +840,8 @@ async function gate(
       // AGENT-15: the lane passed; the note says what is missing, and the
       // rest of the cap carries the lane's output. AGENT-18: an uncovered
       // SpecSync path or a hi/ change ran no lane, so the note is the whole
-      // feedback.
+      // feedback; a failed Trust step's note is followed by that step's
+      // output, an unavailable one's stands alone.
       const head = `${VERIFY_FEEDBACK_HEAD}${evidenceNote}`;
       const room = VERIFY_FEEDBACK_MAX_CHARS - head.length - 2;
       verifyFeedback =

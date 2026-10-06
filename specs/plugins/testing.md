@@ -639,5 +639,6 @@ not for `trust.toml`, `docs/trust.md` or `.trust.toml.bak`; `files-write`
 (relative, `./`, absolute, new `sub/.trust.toml`), `files-edit` and an
 allowlisted `files-delete` refuse with SAFE-2 (exit 2) and leave the file
 unchanged; `files-read .trust.toml` and `files-write trust.toml` work;
-`git-commit` refuses to stage the deletion of a tracked `.trust.toml`. Both
-tests fail with the base sources.
+`discord-send-file`'s `fileAttachment` refuses it with SAFE-2; `git-commit`
+refuses to stage the deletion of a tracked `.trust.toml`. Both tests fail
+with the base sources.

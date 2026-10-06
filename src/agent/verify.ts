@@ -53,6 +53,17 @@ export function trustUnavailableReason(detail: string): string {
 export const TRUST_PASSED_LINE = "Trust gate: fledge trust verify passed (.trust.toml, AGENT-18).";
 
 /**
+ * AGENT-18: the one-line head of a failed Trust step after a passing lane;
+ * the step's own output follows it.
+ */
+export function trustFailedHead(code: number): string {
+  return (
+    `Trust gate: fledge lanes run verify passed, but fledge trust verify failed (exit ${code}), ` +
+    "so the run is not verified (.trust.toml, AGENT-18)."
+  );
+}
+
+/**
  * LLM provider keys: a worker needs them, the verify lane does not. Also the
  * vendor keys the Fledge plugin child env drops (plugins/fledge/spawn.ts).
  */
@@ -225,7 +236,8 @@ export const defaultVerifyRunner: VerifyRunner = async (cwd, signal) => {
     const probe = await runFledgeStep(fledge, TRUST_PROBE_ARGS, cwd, signal);
     if (probe === null || signal?.aborted) return { success: false, output: "verify lane aborted" };
     if (probe.code !== 0) {
-      return { success: false, output: trustUnavailableReason(probeDetail(probe)) };
+      const reason = trustUnavailableReason(probeDetail(probe));
+      return { success: false, output: reason, trustNote: reason };
     }
   }
   const lane = await runFledgeStep(fledge, VERIFY_ARGS, cwd, signal);
@@ -242,13 +254,11 @@ export const defaultVerifyRunner: VerifyRunner = async (cwd, signal) => {
   }
   if (trustRun.code !== 0) {
     // The lane passed; the Trust step's own output is the failure the model
-    // and the summary need, so it alone follows the one-line head.
-    return {
-      success: false,
-      output:
-        `Trust gate: fledge lanes run verify passed, but fledge trust verify failed (exit ${trustRun.code}), ` +
-        `so the run is not verified (.trust.toml, AGENT-18).\n${trustRun.output}`,
-    };
+    // and the summary need, so it alone follows the one-line head, which is
+    // also the result's `trustNote` (it leads the summary and the retry
+    // feedback however long that output is).
+    const head = trustFailedHead(trustRun.code);
+    return { success: false, output: `${head}\n${trustRun.output}`, trustNote: head };
   }
   // Only the lane's own output is judged for test evidence (AGENT-15): the
   // Trust step adds one line, not a second copy of the lane's test summary.

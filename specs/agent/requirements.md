@@ -2426,9 +2426,15 @@ this machine.`). Otherwise it SHALL run `fledge lanes run verify
 trust verify` (`TRUST_VERIFY_ARGS`); the verify SHALL pass only when both
 exit 0. A failing Trust step SHALL give `Trust gate: fledge lanes run verify
 passed, but fledge trust verify failed (exit <code>), so the run is not
-verified (.trust.toml, AGENT-18).` followed by that step's output; a passing
-one SHALL add only `TRUST_PASSED_LINE` after the lane's output, so the
-AGENT-15 test evidence is judged on the lane's own output once. Every fledge
+verified (.trust.toml, AGENT-18).` (`trustFailedHead`) followed by that
+step's output; a passing one SHALL add only `TRUST_PASSED_LINE` after the
+lane's output, so the AGENT-15 test evidence is judged on the lane's own
+output once. A failed or unavailable Trust step's result SHALL also carry
+that one line as `trustNote` (`VerifyResult.trustNote`,
+`src/agent/types.ts`; set by nothing else): `runTask` SHALL lead the failure
+summary and the retry feedback with it, the Trust step's output after it
+(in the feedback, cut to what is left of the 4000-char cap, never the head;
+an unavailable Trust's reason is the whole feedback). Every fledge
 step SHALL run with the same verify env (SAFE-6, `buildVerifyEnv`), its own
 process group, pipe reading that feeds the idle watchdog (AGENT-12) and
 abort handling (an abort is `verify lane aborted`) as the lane. A repo with
@@ -2449,5 +2455,7 @@ Acceptance Criteria
 - `.trust.toml` deleted from the working tree (HEAD has it), committed away on a branch (only the merge-base with `main` has it), or seen only in the run's start scan still runs the Trust probe.
 - A repo without `.trust.toml` (a `trust.toml` or `docs/trust.md` do not count) runs only `lanes run verify --non-interactive` and returns the lane's output unchanged.
 - `runTask` in a Trust repo emits the Trust ways line and the verifying line naming `fledge trust verify`.
+- The failed and unavailable results carry `trustNote` (the head, or the whole reason); a failing lane's does not. With a Trust step output over the feedback cap, the retry feedback starts with the feedback head and the `Trust gate:` line, keeps the step's failure line and stays within 4000 chars, and the failure summary carries the head; an unavailable Trust's reason is the whole feedback.
+- An abort once `trust verify` has started stops it and gives `verify lane aborted`.
 - `tests/agent.trust-verify.test.ts` fails on the base sources (all but the no-Trust case) and passes after.
 

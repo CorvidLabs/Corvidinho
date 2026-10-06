@@ -587,7 +587,10 @@ with `buildVerifyEnv()`.
 Trust where the repo uses Trust (AGENT-18, REQ-agent-525): `src/agent/verify.ts`
 also exports `TRUST_VERIFY_ARGS` (`--non-interactive trust verify`),
 `TRUST_PROBE_ARGS` (`--non-interactive trust --help`),
-`trustUnavailableReason(detail)` and `TRUST_PASSED_LINE`;
+`trustUnavailableReason(detail)`, `trustFailedHead(code)` and
+`TRUST_PASSED_LINE`; `VerifyResult` gains optional `trustNote` (that one-line
+reason, set only when the Trust step failed or is unavailable), which leads
+`runTask`'s failure summary and retry feedback;
 `src/agent/repo-ways.ts` exports `usesTrust(cwd)` (the run's start scan, else
 `detectRepoWays` now with the run's base or `repoWaysBase`). When it is true,
 `defaultVerifyRunner` probes `fledge trust` (a non-zero exit fails closed with

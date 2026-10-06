@@ -26,9 +26,10 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileAttachment } from "../plugins/discord/send-file.ts";
 import { isProtectedPath } from "../plugins/files/protectedPaths.ts";
 import { runTask } from "../src/agent/loop.ts";
-import type { AgentEvent, VerifyRunner } from "../src/agent/types.ts";
+import type { AgentEvent, ExecuteContext, VerifyRunner } from "../src/agent/types.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { runPlugin } from "../src/plugins/run.ts";
 import { LANE_PASS_OUTPUT } from "./fixtures/lane-output.ts";
@@ -44,6 +45,8 @@ const UNAVAILABLE_REASON =
   `(\`fledge trust --help\` exited 2: ${NO_TRUST_LINE}), so \`fledge trust verify\` cannot run and the run is not verified (AGENT-18). ` +
   "Nothing in the repo can fix this: the owner installs Trust for fledge on this machine.";
 const PASSED_LINE = "Trust gate: fledge trust verify passed (.trust.toml, AGENT-18).";
+const FAILED_HEAD =
+  "Trust gate: fledge lanes run verify passed, but fledge trust verify failed (exit 3), so the run is not verified (.trust.toml, AGENT-18).";
 const SECRET = "ghp_trustverifysecret0000000000000000000";
 
 const bases: string[] = [];
@@ -135,7 +138,7 @@ function makeRepo(files: Record<string, string> = {}): string {
   return dir;
 }
 
-type Outcome = { success: boolean; output: string };
+type Outcome = { success: boolean; output: string; trustNote?: string };
 
 /**
  * The default verify runner in a child process with the stand-in fledge
@@ -143,7 +146,7 @@ type Outcome = { success: boolean; output: string };
  */
 async function runDefault(
   cwd: string,
-  opts: { lane?: "fail"; trust?: "missing" | "fail" | "hang"; ledger?: boolean; abortAfterMs?: number } = {},
+  opts: { lane?: "fail"; trust?: "missing" | "fail" | "hang"; ledger?: boolean; abortOnTrust?: boolean } = {},
 ): Promise<{ res: Outcome; calls: string[] }> {
   const log = join(tempBase(), "fledge.log");
   const verify = join(import.meta.dir, "..", "src", "agent", "verify.ts");
@@ -154,9 +157,15 @@ async function runDefault(
       ? `const { beginSddRun } = await import(${JSON.stringify(ways)});` +
         `beginSddRun(${JSON.stringify(cwd)}).scan.ways.trust = true;`
       : "") +
-    (opts.abortAfterMs
-      ? `const ac = new AbortController(); setTimeout(() => ac.abort(), ${opts.abortAfterMs});` +
-        `const r = await defaultVerifyRunner(${JSON.stringify(cwd)}, ac.signal);`
+    (opts.abortOnTrust
+      ? // Abort once the Trust step has started (its env line is logged), however
+        // slow the probe and the lane were; a runner that never starts it is
+        // aborted after 20 s.
+        `const { readFileSync } = await import("node:fs");` +
+        `const ac = new AbortController(); const t0 = Date.now();` +
+        `const poll = setInterval(() => { let t = ""; try { t = readFileSync(${JSON.stringify(log)}, "utf8"); } catch {}` +
+        ` if (t.includes("trust-env") || Date.now() - t0 > 20000) { clearInterval(poll); ac.abort(); } }, 20);` +
+        `const r = await defaultVerifyRunner(${JSON.stringify(cwd)}, ac.signal); clearInterval(poll);`
       : `const r = await defaultVerifyRunner(${JSON.stringify(cwd)});`) +
     `process.stdout.write(JSON.stringify(r));`;
   const env: Record<string, string> = {};
@@ -211,10 +220,9 @@ describe("in a Trust repo the verify gate also runs fledge trust verify (AGENT-1
     const { res, calls } = await runDefault(repo, { trust: "fail" });
     expect(calls.slice(0, 3)).toEqual([PROBE_ARGV, LANE_ARGV, TRUST_ARGV]);
     expect(res.success).toBe(false);
-    expect(res.output).toStartWith(
-      "Trust gate: fledge lanes run verify passed, but fledge trust verify failed (exit 3), so the run is not verified (.trust.toml, AGENT-18).\n",
-    );
+    expect(res.output).toStartWith(`${FAILED_HEAD}\n`);
     expect(res.output).toContain("attest: commit abc1234 has no attestation");
+    expect(res.trustNote).toBe(FAILED_HEAD);
   });
 
   test("a failing lane is not followed by fledge trust verify", async () => {
@@ -224,19 +232,20 @@ describe("in a Trust repo the verify gate also runs fledge trust verify (AGENT-1
     expect(res.success).toBe(false);
     expect(res.output).toContain("Lane 'verify' failed at step 1 (test)");
     expect(res.output).not.toContain("Trust gate");
+    expect(res.trustNote).toBeUndefined();
   });
 
   test("a fledge with no trust command fails closed with the exact reason, and the lane never runs", async () => {
     const repo = makeRepo({ ".trust.toml": "[trust]\n" });
     const { res, calls } = await runDefault(repo, { trust: "missing" });
     expect(calls).toEqual([PROBE_ARGV]);
-    expect(res).toEqual({ success: false, output: UNAVAILABLE_REASON });
+    expect(res).toEqual({ success: false, output: UNAVAILABLE_REASON, trustNote: UNAVAILABLE_REASON });
   });
 
   test("an abort during fledge trust verify stops it and the verify is not passed", async () => {
     const repo = makeRepo({ ".trust.toml": "[trust]\n" });
     const started = Date.now();
-    const { res, calls } = await runDefault(repo, { trust: "hang", abortAfterMs: 1500 });
+    const { res, calls } = await runDefault(repo, { trust: "hang", abortOnTrust: true });
     expect(Date.now() - started).toBeLessThan(15_000);
     expect(res).toEqual({ success: false, output: "verify lane aborted" });
     expect(calls).toEqual([PROBE_ARGV, LANE_ARGV, TRUST_ARGV, "trust-env GITHUB_TOKEN=unset"]);
@@ -286,10 +295,60 @@ describe("in a Trust repo the verify gate also runs fledge trust verify (AGENT-1
       "Running fledge lanes run verify --non-interactive (includes spec-check), then fledge trust verify (.trust.toml)…",
     );
   });
+
+  test("a failed Trust step's reason leads the failure summary and the retry feedback, however long its output", async () => {
+    const repo = makeRepo({ ".trust.toml": "[trust]\n" });
+    // Over the 4000-char feedback cap: the excerpt alone would drop the head.
+    const stepOutput =
+      Array.from({ length: 200 }, (_, i) => `trust: checked commit ${String(i).padStart(4, "0")} ok`).join("\n") +
+      "\nattest: commit abc1234 has no attestation\n";
+    expect(stepOutput.length).toBeGreaterThan(4000);
+    const runner: VerifyRunner = async () => ({
+      success: false,
+      output: `${FAILED_HEAD}\n${stepOutput}`,
+      trustNote: FAILED_HEAD,
+    });
+    const seen: ExecuteContext[] = [];
+    const result = await runTask({
+      cwd: repo,
+      maxRetries: 1,
+      verifyRunner: runner,
+      execute: async (ctx) => {
+        seen.push(ctx);
+        writeFileSync(join(repo, "app.txt"), `changed ${ctx.attempt}\n`);
+        return { summary: `attempt ${ctx.attempt}`, filesChanged: ["app.txt"] };
+      },
+    });
+    expect(result.verified).toBe(false);
+    expect(result.state).toBe("failed");
+    expect(seen).toHaveLength(2);
+    const feedback = seen[1]!.verifyFeedback ?? "";
+    expect(feedback).toStartWith(`Verification failed. Fix these errors and try again:\n\n${FAILED_HEAD}\n\n`);
+    expect(feedback).toContain("attest: commit abc1234 has no attestation");
+    expect(feedback.length).toBeLessThanOrEqual(4000);
+    expect(result.summary).toContain(`Verification failed after 1 retries:\n${FAILED_HEAD}\n\n`);
+
+    // Unavailable Trust: the reason is the whole feedback.
+    const repo2 = makeRepo({ ".trust.toml": "[trust]\n" });
+    const seen2: ExecuteContext[] = [];
+    const unavailable = await runTask({
+      cwd: repo2,
+      maxRetries: 1,
+      verifyRunner: async () => ({ success: false, output: UNAVAILABLE_REASON, trustNote: UNAVAILABLE_REASON }),
+      execute: async (ctx) => {
+        seen2.push(ctx);
+        writeFileSync(join(repo2, "app.txt"), `changed ${ctx.attempt}\n`);
+        return { summary: `attempt ${ctx.attempt}`, filesChanged: ["app.txt"] };
+      },
+    });
+    expect(unavailable.verified).toBe(false);
+    expect(seen2[1]!.verifyFeedback).toBe(`Verification failed. Fix these errors and try again:\n\n${UNAVAILABLE_REASON}`);
+    expect(unavailable.summary).toContain(`Verification failed after 1 retries:\n${UNAVAILABLE_REASON}\n\n`);
+  });
 });
 
 describe(".trust.toml is SAFE-2 protected like fledge.toml (REQ-plugins-525)", () => {
-  test("files-write, files-edit and files-delete refuse it; reads and look-alike names stay open", async () => {
+  test("files-write, files-edit, files-delete and discord-send-file refuse it; reads and look-alike names stay open", async () => {
     expect(isProtectedPath(".trust.toml")).toBe(true);
     expect(isProtectedPath("./.trust.toml")).toBe(true);
     expect(isProtectedPath("pkg/.Trust.TOML")).toBe(true);
@@ -332,6 +391,8 @@ describe(".trust.toml is SAFE-2 protected like fledge.toml (REQ-plugins-525)", (
 
     const read = await runPlugin({ name: "files-read", args: [".trust.toml"], cwd: dir, nonInteractive: true });
     expect(read.ok).toBe(true);
+    // discord-send-file never attaches it either.
+    expect(() => fileAttachment(dir, ".trust.toml")).toThrow("refused (SAFE-2)");
     const other = await runPlugin({ name: "files-write", args: ["trust.toml", "ok"], cwd: dir, nonInteractive: true });
     expect(other.ok).toBe(true);
   });
