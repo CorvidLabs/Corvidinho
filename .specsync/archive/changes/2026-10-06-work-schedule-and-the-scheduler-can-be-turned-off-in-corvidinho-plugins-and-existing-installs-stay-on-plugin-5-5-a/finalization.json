@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "work-schedule-and-the-scheduler-can-be-turned-off-in-corvidinho-plugins-and-existing-installs-stay-on-plugin-5-5-a",
+  "implementation_commit": "4251fade87655e6fb2684fff8c95d6e05d378673",
+  "implementation_tree": "87b6923219b878fb86179e6a4842afce5313c6f5",
+  "contract_digest": "c38d66a6e85b57208ebd539964de58db689561bef3906c4caf7bf66550e5c308",
+  "workspace_digest": "b86d5046837626228499fea0b95f3feb1f056c4cd4338250b2f7843629169ef3",
+  "closing_digest": "3afe71aff10c6245447f43089e00ab87cfcdcafbb8fa46b9696c721f885c1cc5",
+  "review_digest": "3afe71aff10c6245447f43089e00ab87cfcdcafbb8fa46b9696c721f885c1cc5",
+  "finalization_digest": "c38d66a6e85b57208ebd539964de58db689561bef3906c4caf7bf66550e5c308",
+  "timestamp": 1791306838,
+  "note": "tip-orphan after #350"
+}
