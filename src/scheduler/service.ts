@@ -456,6 +456,7 @@ export type SchedulerServiceOpts = {
    * logged. Unset ⇒ on.
    */
   schedulesEnabled?: () => boolean;
+  /**
    * AGENT-3.c — the bridge's stop control: each run's Stop button, so the
    * owner or the schedule's creator can stop it from Discord. Without it
    * (the daemon) a run has no Stop control.
