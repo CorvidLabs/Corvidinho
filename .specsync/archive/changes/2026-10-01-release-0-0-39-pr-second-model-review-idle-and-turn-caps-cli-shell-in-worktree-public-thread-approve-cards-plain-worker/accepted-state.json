@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "release-0-0-39-pr-second-model-review-idle-and-turn-caps-cli-shell-in-worktree-public-thread-approve-cards-plain-worker",
+  "slug": "release-0-0-39-pr-second-model-review-idle-and-turn-caps-cli-shell-in-worktree-public-thread-approve-cards-plain-worker",
+  "title": "Release 0.0.39: PR second-model review, idle and turn caps, CLI shell in worktree, public-thread approve cards, plain worker and WATCH failure lines",
+  "description": "Release 0.0.39: PR second-model review, idle and turn caps, CLI shell in worktree, public-thread approve cards, plain worker and WATCH failure lines",
+  "kind": "operations",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "6ea722e17df07467737ce10d8949de85e4c04089",
+  "created_at": 1790866752,
+  "updated_at": 1790867845,
+  "affected_specs": [
+    "cli"
+  ],
+  "affected_paths": [
+    "package.json",
+    "CHANGELOG.md",
+    "STATUS.md",
+    "tests/version.test.ts",
+    "tests/update-helpers.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "package.json 0.0.39; version prints 0.0.39; CHANGELOG 0.0.39 extractable; STATUS rows"
+  ],
+  "selected_artifacts": [
+    "context",
+    "plan",
+    "testing",
+    "design",
+    "tasks",
+    "requirements",
+    "docs"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "yes"
+  }
+}

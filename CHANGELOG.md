@@ -1,5 +1,58 @@
 # Changelog
 
+## 0.0.41
+
+### Agent
+
+- **When an ask names a plugin, or asks for a GIF, that this run cannot offer, it soft-lands with the real gap** — [#360](https://github.com/CorvidLabs/Corvidinho/pull/360) (REQ-agent-742): instead of inventing a tool or asking a vague "what do you mean by install?" clarify, the reply names the concrete gap. **not installed** — not registered, or not in this project's Fledge plugin list when discovery ran. **not allowlisted** — dangerous tool, SAFE-1. **not configured** — the tool's real key (`GIPHY_API_KEY` or `BRAVE_SEARCH_API_KEY`). **role** — community stays read/chat (ROLES-CHAT-2 / PLUGIN-9); Fledge commands stay owner-only. **tier** — below the run's capability tier. An HI id or an open PR number is cited only when a lookup actually returned it (`hi/*.md`, and `gh pr list` on this repo). Tenor, and any other provider that is not an offered tool, is not invented. If `fledge-gif` or `gif-search` is already offered, the model still runs (prefer `fledge-gif`). A vague install `ask-human` is replaced by the gap or steered back to the offered tool. No new HI id (AGENT-18 still needs a human confirm of new criteria). No schema bump. SpecSync tip orphan after the squash is archived in [#361](https://github.com/CorvidLabs/Corvidinho/pull/361).
+
+### Already on the previous tip
+
+- **Prefer `fledge-gif` over native `gif-search`** — [#358](https://github.com/CorvidLabs/Corvidinho/pull/358) (tip orphan [#359](https://github.com/CorvidLabs/Corvidinho/pull/359)) is already on the previous tip, the main commit this bump sits on, not new behaviour introduced by the version number. Live dogfood still needs `GIPHY_API_KEY` in the bridge env. This release does not inject a key, does not add `discord-send-file` or `discord-post-message` to the allowlist, and does not remove `gif-search`. `fledge-gif` stays the preferred GIF path when it is offered; native `gif-search` stays the secondary GIPHY path from 0.0.40.
+
+### Ops
+
+- Package version **0.0.41** — restart the Discord bridge, `corvidinho daemon` and `github watch` after update so presence (DISCORD-12) reports 0.0.41. No schema bump; no new slash command; NDJSON protocol stays 2. No new allowlist names. v0.0.41 gets its tag and Release from CI when this bump lands on main.
+- Needs operator action: (1) Restart bridge, daemon and `github watch`. (2) GIF dogfood still needs `GIPHY_API_KEY` (and `fledge-gif` allowlisted at code tier, which the live allowlist already includes along with `gif-search` and `web-search`). (3) Do not add `discord-send-file` or `discord-post-message` for this cut. Parked drafts #348, #350 and #351 are not in 0.0.41.
+- Rollback to the v0.0.40 tag: schema unchanged. That tag does not include the missing-plugin soft-land (#360) or the fledge-gif prefer path (#358), both of which landed on main after the 0.0.40 package bump. The previous tip (main immediately before this bump) already has #358 and #360; only the package version, changelog and STATUS rows are new here.
+
+## 0.0.40
+
+### Plugins
+
+- **It can search the web through Brave when I set a key, for me and the team only** — [#326](https://github.com/CorvidLabs/Corvidinho/pull/326) (PLUGIN-7, PLUGIN-9): `web-search` in `plugins/web` via Brave Search API (`BRAVE_SEARCH_API_KEY`). Dangerous, minTier 1, SAFE-1 allowlist, owner and declared team only (`TEAM_SEARCH_TOOLS`). Results fenced + SAFE-13 scanned. Each search reserves ~$0.005 against SAFE-8. Replies that got an answer end with `Search by Brave` once.
+- **It can find a GIF through GIPHY, with the safety filter at medium, and post it as a link when asked, for me and the team only** — [#331](https://github.com/CorvidLabs/Corvidinho/pull/331) (PLUGIN-8, PLUGIN-9): `gif-search` in `plugins/gif` via GIPHY (`GIPHY_API_KEY`, `contentfilter=medium`). Link-only posting (no download/attach). Team shares the tool with web-search. Spend recorded at $0. Summary carries `Powered By GIPHY`. SpecSync tip orphans after squash archived in [#354](https://github.com/CorvidLabs/Corvidinho/pull/354) / [#355](https://github.com/CorvidLabs/Corvidinho/pull/355).
+
+### Ops
+
+- Package version **0.0.40** — restart the Discord bridge, `corvidinho daemon` and `github watch` after update. Allowlist `web-search` and `gif-search` in `CORVIDINHO_ALLOWLIST` and set `BRAVE_SEARCH_API_KEY` / `GIPHY_API_KEY` for live dogfood (PLUGIN-9 docs E.3 / E.3.b). No schema bump; NDJSON protocol stays 2.
+- Needs operator action: (1) Restart bridge/daemon/watch. (2) Add `web-search,gif-search` to `CORVIDINHO_ALLOWLIST`. (3) Set API keys. (4) Team members already get both tools when allowlisted (IDENTITY-10).
+- Rollback to 0.0.39: schema unchanged. 0.0.39 has neither tool; drop the new allowlist names and keys.
+
+## 0.0.39
+
+### Real dev teammate (M3)
+
+- **Before every PR opens, a second model reviews the diff in bounded rounds, and the PR body lists what it raised and what changed** — [#341](https://github.com/CorvidLabs/Corvidinho/pull/341) (GITHUB-9, GITHUB-9.a; REQ-plugins / work review gate): `github-pr-create` now runs a second-model review gate after the repo gate. The reviewer is the first other configured model (GITHUB-9.a). Bounded rounds; the PR lists findings and what changed. `/work` that is held for review gets reason `not-reviewed` and keeps the branch pushed. Reviewer tokens ride `usageByModel` for the owner's DISCORD-15.a spend footer.
+- **An idle timeout and a turn cap I set stop stalled or endless runs, and it says so** — [#342](https://github.com/CorvidLabs/Corvidinho/pull/342) (AGENT-12; REQ-agent-244, REQ-agent-312, REQ-cli-125, REQ-discord-125, REQ-watch-125, REQ-plugins-125): optional `CORVIDINHO_MAX_TURNS` caps model/tool rounds per execute attempt (default stays 8). Optional `CORVIDINHO_IDLE_TIMEOUT_MS` (default 600000) runs a per-run idle watchdog in `src/agent/limits.ts`. Soft-land stop reasons name idle vs turn-cap; workers and schedules honour the same limits. Docs: `--help`, `.env.example`, DISCORD-GO-LIVE E.10, discord/WATCH/DAEMON.
+- **My local CLI `task run` may use the allowlisted shell, language runners and Fledge lane/task runs inside the worktree it made for itself** — [#346](https://github.com/CorvidLabs/Corvidinho/pull/346) (SAFE-3.a CLI half; REQ-cli-681, REQ-agent-503): completes SAFE-3.a for local CLI. `taskRun` passes the worktree top as `talkWorktree` only when it made its own worktree and there is no role session; `shellToolsGate` grants allowlisted `SAFE3A_TOOLS` there. `--here`, non-git folders and spawned children stay refused. Must-ask (#319) still applies. In-place local runs keep the prior SAFE-3.a refusal line.
+
+### Talk anywhere (M2)
+
+- **Its first 20 replies in a public thread each wait for my OK on an Approve card** — [#347](https://github.com/CorvidLabs/Corvidinho/pull/347) (AUTONOMY-10, AUTONOMY-10.a): public threads (`PublicThread`, `AnnouncementThread`, forum/media posts) hold each of the first 20 replies for the owner's must-ask Approve card — even dictated text and replies to the owner. Clarify asks go pending only after they are posted. `discord-send-file` gets `CORVIDINHO_DISCORD_REPLY_PUBLIC_THREAD` while replies still wait. Stop button, failed-run lines and spend paths do not wait.
+
+### Fixes
+
+- **A failed GitHub (WATCH) run's comment says the model call failed in one plain line, never the provider's raw error body** — [#343](https://github.com/CorvidLabs/Corvidinho/pull/343): spawn client returns `failureReason` / `stderrTail`; summary uses `watchPublicFailureLine` (host stripped). Aligns WATCH with Discord's DISCORD-3.b reason line from 0.0.38.
+- **A failed delegate or council worker hands the lead model one plain failure line, never the model provider's raw error body** — [#349](https://github.com/CorvidLabs/Corvidinho/pull/349) (REQ-agent-117, REQ-agent-118, REQ-watch-009): `workerFailureLine` builds harness text only (timeout / interrupt, result error without provider host via shared `withoutProviderHost`, protocol-mismatch notice, no-provider notice, or `the worker failed (exit N)` / spawn scrub). Lead tool results and council voice transcript entries never carry provider bodies, org names or request ids from a failed worker.
+- **The DISCORD-3.b 401 check masks the run's own random ids, so an id holding `401` no longer fails the test** — [#345](https://github.com/CorvidLabs/Corvidinho/pull/345) (REQ-discord-032): test-only flake fix in `tests/discord.failed-reply.test.ts`.
+
+### Ops
+
+- Package version **0.0.39** — restart the Discord bridge, `corvidinho daemon` and `github watch` after update so presence (DISCORD-12) and spawners pick up the new version and the AGENT-12 / SAFE-3.a / AUTONOMY-10 / GITHUB-9 / plain-failure behaviour. No schema bump; no new slash command; NDJSON protocol stays 2. New optional env: `CORVIDINHO_MAX_TURNS`, `CORVIDINHO_IDLE_TIMEOUT_MS` (#342). Internal stamp `CORVIDINHO_DISCORD_REPLY_PUBLIC_THREAD` is set by the bridge for `discord-send-file` only (#347) — do not export it. v0.0.39 gets its tag and Release from CI when this bump lands on main.
+- Needs operator action: (1) Restart bridge, daemon and `github watch`. (2) Optionally set `CORVIDINHO_MAX_TURNS` / `CORVIDINHO_IDLE_TIMEOUT_MS` if the defaults (8 turns / 10 min idle) are wrong for your box. (3) Local CLI shell (#346): only runs that made their own worktree get `SAFE3A_TOOLS` when allowlisted; `--here` still has no shell.
+- Rollback to 0.0.38: schema unchanged. 0.0.38 ignores the new env knobs and the public-thread reply gate; failed workers / WATCH comments may again surface provider bodies; local CLI has no SAFE-3.a shell; PRs open without the second-model review gate.
+
 ## 0.0.38
 
 ### Talk anywhere (M2)

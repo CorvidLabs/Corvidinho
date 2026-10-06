@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "prefer-fledge-gif-giphy-tenor-compat-over-native-gif-search-for-discord-gifs-pass-giphy-api-key-to-fledge-children-keep",
+  "implementation_commit": "2095c2ac715b1eb5a875b82214baf814f958470e",
+  "implementation_tree": "954880d6c863a7e6d0290e3bf714373b63ee406c",
+  "contract_digest": "d888c19da894842b9fb6a1eeeba58d01f260df6eda15d98b1cc0781b5755dd4a",
+  "workspace_digest": "81fae49ec5484f7ba302e98d8828e25e23832a63cee5bf4b3314a24901b8e784",
+  "closing_digest": "ef84c06c5bf1fdb40d3b1913940716d393791ae351dab821aa2b3af92e43b9db",
+  "review_digest": "0666545f7c8f689a5c9e9bf4b7ce9b866df52e832be82f1e9bcc9c326bd9bb77",
+  "finalization_digest": "72400cf3cd9087a86f6ae73e3911ef6fe578b529a80296db3c6b58e787d68f90",
+  "timestamp": 1790872413,
+  "note": "tip-orphan archive after #358 squash (same class as #355)"
+}

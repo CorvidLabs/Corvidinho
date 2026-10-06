@@ -51,6 +51,13 @@ export function fledgeMinTier(info: FledgePluginInfo): number {
 
 /** Small description on purpose: it is paid for in every tool catalog (FLEDGE-5). */
 export function fledgeDescription(info: FledgePluginInfo, command: string): string {
+  // Preferred Discord GIF path (owner decision 2026-10-01): keep this short and first-choice.
+  if (command === "gif") {
+    return (
+      "Preferred GIF search (Fledge → GIPHY Tenor-compat, contentfilter medium). " +
+      "Only when someone asks; post one as a link. Args: search|trending|random <query…> [--limit N] [--json]. Needs GIPHY_API_KEY."
+    );
+  }
   const sandbox = info.runtime === "wasm" ? "wasm sandbox" : "native, unsandboxed";
   const c = info.capabilities;
   const caps: string[] = c

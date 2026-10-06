@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "release-0-0-40-brave-web-search-and-giphy-gif-search-for-owner-and-team-plugin-7-8-9",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "6492e3c2bac272890bd66dff6b5f01a958661130",
+      "contract_digest": "c077225ba86a42abc0fff76bb82fab096064878f68a3fa21e691958bd202e00b",
+      "execution_digest": "8052249d14a19c0a54c90b888cdd56b5f9f388e48c9ccc9c362a472942f7a055",
+      "workspace_digest": "4f209e43c1c2906cda86aa8560b45ff8273c11e31d4cdeeb935bf12b40cad93a",
+      "timestamp": 1790870986
+    }
+  ]
+}

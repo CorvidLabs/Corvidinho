@@ -3,6 +3,7 @@ import { loadDiscordPlugins } from "../../plugins/discord/index.ts";
 import { loadFilesPlugins } from "../../plugins/files/index.ts";
 import { loadFledgeCorePlugins } from "../../plugins/fledge/index.ts";
 import { loadGitPlugins } from "../../plugins/git/index.ts";
+import { loadGifPlugins } from "../../plugins/gif/index.ts";
 import { loadGithubPlugins } from "../../plugins/github/index.ts";
 import { loadMemoryPlugins } from "../../plugins/memory/index.ts";
 import { loadMetaPlugins } from "../../plugins/meta/index.ts";
@@ -29,6 +30,8 @@ export function loadBuiltins(): void {
   // PLUGIN-4: node/python/cargo runners only when their toolchain is on PATH.
   loadRunnerPlugins();
   loadWebPlugins();
+  // PLUGIN-8: gif-search through GIPHY (dangerous, owner and team, PLUGIN-9).
+  loadGifPlugins();
   loadGitPlugins();
   // PLUGIN-1: Fledge itself (lanes list/validate/run, run <task>) as typed commands.
   loadFledgeCorePlugins();

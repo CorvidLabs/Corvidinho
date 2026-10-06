@@ -493,6 +493,143 @@ hi/ edit but no run in progress, the hi guard does not refuse (GITHUB-9
 answers next).
 - Fail on base (b84c75f's `plugins/github/commands.ts` swapped in): the
   refusal case fails (no AGENT-18 refusal); restored it passes.
+## Web search through Brave (REQ-plugins-318 / -3181 added, REQ-plugins-065 / -111 / -113 modified, PLUGIN-7 / PLUGIN-9)
+
+`tests/web.search.test.ts` (no network: a fake resolver and a fake transport
+that answers like Brave, the fake key `test-key-not-real`, in-memory ledger
+DBs):
+
+- Gating: `web-search` is dangerous, minTier 1, next to `web-fetch`; the
+  catalog offers it only when allowlisted, at tool/code tier, never at read
+  tier; owner, no role session and team (chat and `/work`) get it, community
+  never, team still without `web-fetch`; `TEAM_SEARCH_TOOLS` is `web-search`
+  only; SAFE-1 deny with a `denied` audit row, allowlisted runs audited
+  `started` / outcome; a community role session is refused at `runPlugin`, a
+  team one reaches the handler; a schedule the owner created is offered it,
+  a team member's schedule is not (DISCORD-SCHEDULE-1.a).
+- Request: one GET to the pinned public address of `api.search.brave.com`
+  `/res/v1/web/search` with `q`, `count` (default 5, `--count 20`),
+  `safesearch=moderate` and `freshness` when given, the key only in
+  `X-Subscription-Token`; usage errors (query words together with
+  `--query`, a `--` term outside `--query` among them), the `not-configured`
+  result (no, blank, malformed key; the error starts `web-search
+  not-configured: web search is not configured`) and secret-carrying queries
+  (the key split by a joiner too) send nothing.
+- Output: hostile hits only inside the untrusted web fence (unique end
+  marker, HTML / entities / controls reduced), nothing of a hit outside it,
+  attribution in the summary, at most `count` hits, non-http and
+  credentialed URLs dropped, `(no results)`; the visible reply line "Search
+  by Brave" is the reply path's (REQ-agent-318, `specs/agent/testing.md`).
+- SAFE-6: the key echoed by results, error bodies, a non-JSON body, a
+  transport error or a DNS error never comes back; through `runPlugin` the
+  result and the audit rows hold neither the key, the request path, the
+  header name nor the pinned address; the key split by a zero-width space,
+  a soft hyphen, a bidi isolate, a tag character or BEL in a title, URL,
+  description and age, in a resolver answer a SAFE-7 refusal names, or
+  straight into `fenceSearchResults`, never comes back whole (the scrub runs
+  last); the env drop lists (workers, verify lane, Fledge children) and
+  `formatErrorLine`.
+- Keyed JSON GET (REQ-plugins-3181): http, other hosts, a look-alike host,
+  port 8443 and URL credentials refused before DNS; non-public answers
+  refused before connecting; 301/302/303/307/308 refused after one dial,
+  Location not echoed; non-JSON, gzip, missing content type, malformed JSON
+  and oversized bodies refused; a stalled transport times out; the run's
+  abort stops it; in both cases the transport's own request signal is
+  aborted; a body that fails mid-read is `network` with the host and
+  `ECONNRESET` only; `web-fetch` unchanged for any public host with its own
+  headers.
+- Brave error mapping (401, 403, 422 `SUBSCRIPTION_TOKEN_INVALID`, 422
+  `VALIDATION`, 429, 503) without server text; the run's abort through the
+  handler ends a pending search `aborted` and aborts the transport's signal,
+  and a run already stopped sends nothing; an unexpected failure is the fixed
+  `web-search unexpected: the search failed unexpectedly` line.
+
+Updated: `tests/web.fetch.test.ts` (REQ-plugins-111: `web-search` now
+exists as its own command), `tests/roles.team.test.ts` (REQ-plugins-065:
+`roleAllowsPlugin` over every plugin with the team search rule; the team
+catalog offers `web-search`, the community catalog does not).
+`tests/fledge.plugins.test.ts` keeps the whole tool surface (builtins plus a
+fake Fledge plugin) under `TOOL_SURFACE_BUDGET_TOKENS` (9000 on main since
+AGENT-18) with `web-search`'s short description (builtins alone: 8078 tokens,
+7951 on main 0aeb345; the reply line adds nothing to any tool schema).
+
+## GIF search through GIPHY (REQ-plugins-3182 added, REQ-plugins-318 / -3181 / -065 / -113 modified, PLUGIN-8 / PLUGIN-9)
+
+`tests/gif.search.test.ts` (no network: a fake resolver and a fake transport
+that answers like GIPHY's Tenor-compatible search, the fake key
+`test-key-not-real`, in-memory ledger DBs):
+
+- Gating: `gif-search` is dangerous, minTier 1, no must-ask entry, in
+  `NO_STATE_CHANGE_TOOLS`; the catalog offers it only when allowlisted, at
+  tool/code tier, never at read tier; owner, no role session and team (chat
+  and `/work`) get it, community never, team still without `web-fetch` and
+  `discord-send-file`; `TEAM_SEARCH_TOOLS` is `web-search` and `gif-search`;
+  SAFE-1 deny with a `denied` audit row, allowlisted runs audited `started`
+  / outcome; a community role session is refused at `runPlugin`, a team one
+  reaches the handler.
+- Request: exactly one GET (no GIF downloaded) to the pinned public address
+  of `api.giphy.com` `/v2/search` with exactly `q`, `key`,
+  `client_key=corvidinho`, `limit` (default 5, `--limit 10`),
+  `media_filter=gif,tinygif` and `contentfilter=medium`, and only the fixed
+  API headers; `cats&contentfilter=off&rating=r` and similar stay the `q`
+  value with one `contentfilter=medium`; `--contentfilter`, `--rating`,
+  `--media-filter`, `--download`, bad limits, words with `--query`,
+  `--query` / `--limit` given twice and missing / 51-character queries are
+  usage errors that send nothing; no /
+  blank / spaced / 5-character key → `not-configured`; secret-carrying
+  queries (the GIPHY and Brave keys, a Discord token, a `ghp_` token, the key
+  split by a joiner) refused before anything is sent.
+- Output: titles and links only inside the fence, in GIPHY's order (a hostile
+  title, a guessed end marker and control characters included), nothing of a
+  result outside it, `postAs: "link"`, the guidance to post one only when
+  someone asks, as a link, and "Powered By GIPHY" in `data` / the summary,
+  and a description that says `only when someone asks`; media-link
+  validation (http, look-alike and suffix hosts, `giphy.com` page URLs,
+  `media5`, credentials, port 8443, trailing dot, over 2048 characters, and
+  Discord markdown or a mention after the host — `)[click](…)` in the path or
+  query, `<@…>`, `**`, `|`, `@everyone` — dropped; a fragment cut off;
+  GIPHY's own `?cid=…&rid=…&ct=g` links kept whole; `tinygif`-only results
+  keep their `Small GIF:` line; results without a valid link dropped and
+  counted in `data.dropped` and the summary; at most `--limit`); results
+  that all fail the link check are an ok `(no results)` that says how many
+  were left out, while a real empty search says nothing of the kind;
+  `(no results)`; a 2xx `error` body → `api-error`, a body without
+  `results` → `bad-response`.
+- SAFE-6: GIPHY echoing the key or the request URL in titles, links, a 401 /
+  500 / 2xx error body, a non-JSON body, a redirect Location, a transport
+  error or a DNS error never brings back the key or the request's query
+  string (GIPHY's own echo inside the fence reads `key=[redacted:env-secret]`,
+  and no error names the path, `key=` or the Location); the key split by a
+  zero-width space, a soft hyphen, a bidi isolate, a tag character or BEL
+  never comes back whole; through `runPlugin` the result and the audit rows
+  hold neither the key, the path, `key=`, the API host nor the pinned
+  address; the env drop lists (workers, verify lane, Fledge children),
+  `redactSecretEnvValues` and `formatErrorLine`.
+- Transport: a non-public answer for `api.giphy.com` is refused before
+  connecting (exit 2), a redirect after one dial (exit 2, Location not
+  echoed); 401 / 403 / 400 / 422 / 429 / 503, `text/html`, malformed JSON, a
+  body over the byte cap (`too-large`) and a failed connection (`network`,
+  host and fixed reason only) map to fixed codes; the run's abort ends a pending search (`aborted`, the
+  transport's signal aborted), a stalled one times out, a run already stopped
+  sends nothing; an unexpected failure is the fixed line.
+- SAFE-8 ($0 rows): a 2xx settles `actual` at 0, also for an `error` body
+  or a body without `results`; an HTTP error or a refusal before connecting
+  settles `failed`, a network failure `estimated`; an invalid
+  `CORVIDINHO_DAILY_SPEND_CAP_USD` stops the search with the spend-cap ask,
+  with no DNS, request or ledger row.
+- Docs: `.env.example` has `# GIPHY_API_KEY=`; `docs/DISCORD-GO-LIVE.md` has
+  the `gif-search` table row, `GIPHY_API_KEY`, `contentfilter=medium` and
+  "Powered By GIPHY".
+
+Updated: `tests/roles.team.test.ts` and `tests/web.search.test.ts`
+(REQ-plugins-065: `TEAM_SEARCH_TOOLS` is `gif-search` and `web-search`; the
+team catalog offers `gif-search`, the community catalog does not;
+REQ-plugins-318: `--query`, `--count` or `--freshness` given twice is a
+usage error). `tests/fledge.plugins.test.ts` (REQ-plugins-114, unchanged
+test) keeps the whole tool surface (builtins plus a fake Fledge plugin)
+under the default budget of 9000: `gif-search` adds about 92 tokens, and
+shorter `web-fetch` and `web-search` descriptions (the same rules, less
+wording) make room for it.
 
 ## The hi/ refusal names the owner's card and hi-draft (REQ-plugins-520 modified; AGENT-18 hi drafts)
 
