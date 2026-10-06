@@ -1034,6 +1034,29 @@ through `SlashContext.sendDm`.
 - Fails on the base sources (main 5aaf7f0 `src/discord/announce.ts`): 5 of 7
   (the bridge posted an 838-character `bridge live **v0.0.34**` + bullets
   note); passes after.
+## The bridge-live note is system text: no Approve card (REQ-discord-024 modified, AUTONOMY-10.b)
+
+- `tests/discord.update-post.test.ts` › "AUTONOMY-10.b: the bridge-live note
+  is system text, so it posts without the owner's OK" (4 tests): two
+  `startBridge` starts on one in-memory DB (a restart), an owner configured,
+  a gateway that reports every channel as a public thread, a 5 ms card-engine
+  poll with recorded DMs and an agent that would answer with model text. After
+  each `onReady`: exactly one post, to the announcements channel, equal to
+  `formatBridgeLiveAnnouncement("0.0.34")` and matching the fixed template; no
+  hold line, no `approval_requests` row, no DM, the approved public-thread
+  count still 0 and no agent call. A version of `1.0.0` plus model-looking
+  text gives the fixed Releases-page note with none of it; the running build's
+  own note matches the template. A `discord-post-message` with exactly the
+  note's text through `runPlugin` raises one `mustask-post` card showing that
+  text and a deny refuses it (AUTONOMY-10.a). `docs/discord.md`'s must-ask
+  "Not on the list" line names the bridge-live note and cites AUTONOMY-10.b,
+  which `hi/autonomy.md` holds.
+- Fails on the base sources (main e1a24ed `docs/discord.md`,
+  `hi/autonomy.md`, `src/discord/announce.ts`, `src/discord/bridge.ts`): 1 of
+  11 (the doc / hi citation case); the behaviour cases pass on the base because
+  the bridge already posted the note without a card, and this change records
+  that as Leif's decision. A mutation that routes the note through the
+  public-thread reply gate fails the two bridge cases. Passes after (11 of 11).
 ## One verify gate; talk worktrees start verified (REQ-discord-085)
 
 - `tests/agent.verify-gate.test.ts`: a talk worktree made by

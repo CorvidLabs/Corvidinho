@@ -7,6 +7,11 @@
  * note in the persona's voice with a link to the release notes, not a
  * changelog dump (PERSONA-1.a, #69). It is a fixed template: no model call,
  * no spend, and nothing read from CHANGELOG.md.
+ *
+ * AUTONOMY-10.b: that note is system text, not an announcement it starts, so
+ * it posts with no must-ask card and never goes through the public-thread
+ * reply gate. Keep it model-free: only the fixed template and a validated
+ * version ever reach it.
  */
 
 import { CORVIDINHO_URL } from "../attribution.ts";

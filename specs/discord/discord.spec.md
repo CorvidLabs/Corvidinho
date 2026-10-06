@@ -301,7 +301,7 @@ Error lines (REQ-discord-417, SAFE-6): `formatErrorLine` / `ERROR_LINE_MAX`
 `formatRegisterCommandsFailure` (`register-commands.ts`) words a failed slash
 registration (CLI `register-commands` and the bridge's registration on ready).
 
-Update post (DISCORD-ANNOUNCE-4, PERSONA-1.a / REQ-discord-025): `formatBridgeLiveAnnouncement(version?)` (`src/discord/announce.ts`) returns the one-line note the bridge posts on every ClientReady through `postAnnouncement` (announcements channel only): a fixed template in persona.md's voice naming the running version with a `<…>`-wrapped link to that version's GitHub Release (`https://github.com/CorvidLabs/Corvidinho/releases/tag/v<version>`, from `CORVIDINHO_URL`), under 200 characters, no bullets, no model call, nothing read from CHANGELOG.md, scrubbed (SAFE-6) and mass mentions defanged; a version that is not a plain `X.Y.Z` is never echoed and the note links the Releases page instead.
+Update post (DISCORD-ANNOUNCE-4, PERSONA-1.a / REQ-discord-025): `formatBridgeLiveAnnouncement(version?)` (`src/discord/announce.ts`) returns the one-line note the bridge posts on every ClientReady through `postAnnouncement` (announcements channel only): a fixed template in persona.md's voice naming the running version with a `<…>`-wrapped link to that version's GitHub Release (`https://github.com/CorvidLabs/Corvidinho/releases/tag/v<version>`, from `CORVIDINHO_URL`), under 200 characters, no bullets, no model call, nothing read from CHANGELOG.md, scrubbed (SAFE-6) and mass mentions defanged; a version that is not a plain `X.Y.Z` is never echoed and the note links the Releases page instead. The note is system text, not an announcement it starts (AUTONOMY-10.b, REQ-discord-024): the bridge posts it with no Approve card and the public-thread reply gate never holds it or counts it, so it must stay model-free; a `discord-post-message` with the same words still asks (AUTONOMY-10.a).
 
 Export `AnnounceStore` / `postAnnouncement` / `formatBridgeLiveAnnouncement` and `enrichPromptWithMemories`, `formatMemoryInjectBlock`, and related
 constants/types from `src/discord/memory-inject.ts` (also re-exported via
@@ -1218,6 +1218,12 @@ lookup is public), shows only the fixed hold line meanwhile, and posts
 exactly the text the card showed; a deny, a lapse, a stop or the bridge
 closing posts none of it, opens no question and does not count; with no
 owner nothing waiting is posted. Fixed harness text never waits.
+
+The bridge-live note after a restart is system text, not an announcement it
+starts (AUTONOMY-10.b, REQ-discord-024): it goes out at `ClientReady` only to
+the announcements channel with no Approve card, no hold line and no wait,
+never counts toward the 20, and carries only the fixed REQ-discord-025
+template (no model call, no model text).
 
 ## Behavioral Examples
 

@@ -168,6 +168,8 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   showed, and a deny or no answer posts nothing (AUTONOMY-10 / 10.a). The bot needs to see the
   thread's channel type (View Channel, as for any reply); after 20 approvals replies go out at once. Updating to a tagged release with
   `CORVIDINHO_REF=v<X.Y.Z> scripts/corvidinho-update.sh` in the installed checkout is not a deploy.
+  The fixed bridge-live note in the `/announce` channel after a restart is system text, not an
+  announcement, so it never waits for a card (AUTONOMY-10.b).
   Needs the bridge running and an owner configured; nothing else to set. See [`discord.md`](discord.md)
   "The must-ask list".
 - Private reads by DM (MEMORY-7.a): private notes, profile reads (`memory-profile`) and the owner's
