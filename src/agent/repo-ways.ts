@@ -1,7 +1,8 @@
 /**
  * AGENT-18 / AGENT-18.a (#89): it works each repo's own way. This module
  * covers the SpecSync clause and the guard half of the hi clause; hi
- * drafting with the capture card and the Trust clause come later.
+ * drafting and the capture card are src/agent/hi-drafts.ts and
+ * src/discord/hi-card.ts, and the Trust clause comes later.
  *
  * - {@link detectRepoWays} finds the ways a repo uses: a SpecSync change
  *   workflow (`.specsync/sdd.json` with `enabled: true`), hi criteria (a

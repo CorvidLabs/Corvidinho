@@ -12,7 +12,7 @@
  */
 import type { Database } from "bun:sqlite";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HiCaptureStore, type HiCaptureRequest, type HiDraft } from "../src/agent/hi-capture-store.ts";
@@ -22,9 +22,10 @@ import { approveCardCustomId } from "../src/discord/approve-card.ts";
 import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway, type ComponentInteraction, type GatewayHandlers } from "../src/discord/gateway.ts";
 import { HI_CARD_KIND, hiCaptureApprovalKind } from "../src/discord/hi-card.ts";
+import { hiCaptureCommitMessage } from "../src/agent/hi-drafts.ts";
 import type { OwnerRecord } from "../src/identity/owner.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
-import { ensureTalkWorkspace } from "../src/worktree/manager.ts";
+import { ensureTalkWorkspace, parkWorktree } from "../src/worktree/manager.ts";
 import { pathWithHi, writeStandInHi } from "./fixtures/stand-in-hi.ts";
 import { gitIn } from "./fixtures/talk-worktree.ts";
 
@@ -182,6 +183,9 @@ function audit(db: Database): string[] {
 }
 
 const agentText = (f: Fixture) => readFileSync(join(f.work, "hi", "agent.md"), "utf8");
+const headOf = (dir: string) => gitIn(dir, "rev-parse", "HEAD").trim();
+/** `git status` for hi/ in `dir` (empty when hi/ is exactly what is committed). */
+const hiStatus = (dir: string) => gitIn(dir, "status", "--porcelain", "--untracked-files=all", "--", "hi").trim();
 
 describe("the owner's hi card (REQ-discord-521)", () => {
   test("the card goes to the owner: the exact hi commands first, then the action, target and ids; plain Approve / Deny", async () => {
@@ -218,13 +222,22 @@ describe("the owner's hi card (REQ-discord-521)", () => {
     expect(agentText(f)).toBe(HI_AGENT);
     expect(new HiCaptureStore({ db }).get(req.id)!.status).toBe("pending");
 
+    const head = headOf(f.work);
     const ok = await press(cards, OWNER_ID, "approve", req.id, true);
-    expect(ok[0]!.content).toContain(`Approved by you — captured AGENT-20, AGENT-18.b into hi/ on branch ${f.branch} (AGENT-18).`);
     const text = agentText(f);
     expect(text).toContain("- **AGENT-20**  It drafts criteria and asks before capturing them.");
     expect(text).toContain("  - **AGENT-18.b**  A drafted criterion keeps the requester's words.");
     const done = new HiCaptureStore({ db }).get(req.id)!;
     expect(done).toMatchObject({ status: "approved", decidedBy: OWNER_ID, captured: ["AGENT-20", "AGENT-18.b"] });
+    // The capture is committed on the session's branch, exactly hi/agent.md.
+    expect(done.commit).toBe(headOf(f.work));
+    expect(gitIn(f.work, "rev-parse", "HEAD~1").trim()).toBe(head);
+    expect(gitIn(f.work, "log", "-1", "--format=%s").trim()).toBe(hiCaptureCommitMessage(done));
+    expect(gitIn(f.work, "diff", "--name-only", "HEAD~1", "HEAD").trim()).toBe("hi/agent.md");
+    expect(hiStatus(f.work)).toBe("");
+    expect(ok[0]!.content).toContain(
+      `Approved by you — captured AGENT-20, AGENT-18.b into hi/ on branch ${f.branch}, commit ${done.commit!.slice(0, 12)} (AGENT-18).`,
+    );
     expect(audit(db)).toEqual([
       "hi-capture-card:ok",
       "hi-capture-approve:denied",
@@ -235,7 +248,9 @@ describe("the owner's hi card (REQ-discord-521)", () => {
     ]);
     expect(posts).toHaveLength(1);
     expect(posts[0]).toMatchObject({ channelId: CHAN, mentionUserIds: [TEAM] });
-    expect(posts[0]!.content).toContain(`<@${TEAM}> The owner approved the drafted hi criteria (AGENT-20, AGENT-18.b; request ${req.id}): captured AGENT-20, AGENT-18.b`);
+    expect(posts[0]!.content).toContain(
+      `<@${TEAM}> The owner approved the drafted hi criteria (AGENT-20, AGENT-18.b; request ${req.id}): captured AGENT-20, AGENT-18.b into hi/ on branch ${f.branch}, commit ${done.commit!.slice(0, 12)}`,
+    );
     expect(posts[0]!.content).not.toContain("It drafts criteria");
     // A second press finds it closed.
     const again = await press(cards, OWNER_ID, "approve", req.id, true);
@@ -282,7 +297,7 @@ describe("the owner's hi card (REQ-discord-521)", () => {
     db.close();
   });
 
-  test("a parked session worktree is re-created on its branch and captured into; with its branch gone nothing is captured", async () => {
+  test("a parked session worktree is re-created on its branch and captured into; with its branch gone too, at the commit the drafts were made on", async () => {
     const f = await fixture();
     const db = tempDb(f);
     // The branch has a commit of its own, so parking keeps it.
@@ -298,22 +313,56 @@ describe("the owner's hi card (REQ-discord-521)", () => {
     expect(existsSync(f.work)).toBe(true);
     expect(gitIn(f.work, "symbolic-ref", "--short", "HEAD").trim()).toBe(f.branch);
     expect(agentText(f)).toContain("- **AGENT-20**  ");
+    expect(gitIn(f.work, "log", "-2", "--format=%s").trim().split("\n")[1]).toBe("work");
 
+    // The talk idled out before the owner answered: parking removed the
+    // worktree and deleted its branch (no commits of its own). Approve
+    // re-makes the branch at the commit the drafts were made on.
     const g = await fixture();
     const gdb = tempDb(g);
     const gone = record(gdb, g);
-    gitIn(g.project, "worktree", "remove", "--force", g.work);
-    gitIn(g.project, "branch", "-D", g.branch);
+    await parkWorktree(g.project, g.work, { kind: "worktree", branchName: g.branch });
+    expect(existsSync(g.work)).toBe(false);
+    expect(gitIn(g.project, "branch", "--list", g.branch).trim()).toBe("");
     const e = engine(gdb, g);
     await e.cards.deliver();
     const r = await press(e.cards, OWNER_ID, "approve", gone.id, true);
-    expect(r[0]!.content).toContain("Capture failed — nothing was captured; the request stays open.");
-    expect(r[0]!.content).toContain(`so is its branch ${g.branch}`);
-    expect(existsSync(g.work)).toBe(false);
-    expect(new HiCaptureStore({ db: gdb }).get(gone.id)!.status).toBe("pending");
-    expect(audit(gdb)).toContain("hi-capture-approve:error");
+    expect(r[0]!.content).toContain("Approved by you — captured AGENT-20, AGENT-18.b");
+    expect(gitIn(g.work, "symbolic-ref", "--short", "HEAD").trim()).toBe(g.branch);
+    expect(gitIn(g.work, "rev-parse", "HEAD~1").trim()).toBe(gone.head);
+    expect(gitIn(g.project, "show", `${g.branch}:hi/agent.md`)).toContain("- **AGENT-20**  ");
+
+    // Branch and commit both gone: nothing is captured, the request stays open.
+    const h = await fixture();
+    const hdb = tempDb(h);
+    const lost = record(hdb, h, { head: "0".repeat(40) });
+    await parkWorktree(h.project, h.work, { kind: "worktree", branchName: h.branch });
+    const he = engine(hdb, h);
+    await he.cards.deliver();
+    const r2 = await press(he.cards, OWNER_ID, "approve", lost.id, true);
+    expect(r2[0]!.content).toContain("Capture failed — nothing was captured; the request stays open.");
+    expect(r2[0]!.content).toContain(`so are its branch ${h.branch} and the commit the drafts were made on`);
+    expect(existsSync(h.work)).toBe(false);
+    expect(new HiCaptureStore({ db: hdb }).get(lost.id)!.status).toBe("pending");
+    expect(audit(hdb)).toContain("hi-capture-approve:error");
     db.close();
     gdb.close();
+    hdb.close();
+  });
+
+  test("an approved capture outlives its talk: parking keeps the branch and its commit", async () => {
+    const f = await fixture();
+    const db = tempDb(f);
+    const req = record(db, f);
+    const { cards } = engine(db, f);
+    await cards.deliver();
+    expect((await press(cards, OWNER_ID, "approve", req.id, true))[0]!.content).toContain("Approved by you");
+    const commit = new HiCaptureStore({ db }).get(req.id)!.commit!;
+    await parkWorktree(f.project, f.work, { kind: "worktree", branchName: f.branch });
+    expect(existsSync(f.work)).toBe(false);
+    expect(gitIn(f.project, "rev-parse", `refs/heads/${f.branch}`).trim()).toBe(commit);
+    expect(gitIn(f.project, "show", `${f.branch}:hi/agent.md`)).toContain("  - **AGENT-18.b**  A drafted criterion keeps the requester's words.");
+    db.close();
   });
 
   test("a worktree on another branch, an id captured meanwhile, or a capture that fails part-way: nothing is captured and hi/ is put back", async () => {
@@ -326,6 +375,15 @@ describe("the owner's hi card (REQ-discord-521)", () => {
     const r1 = await press(cards, OWNER_ID, "approve", moved.id, true);
     expect(r1[0]!.content).toContain(`is not on branch ${f.branch} any more`);
     gitIn(f.work, "checkout", "-q", f.branch);
+
+    // A request naming the main checkout is never captured (or committed) there.
+    const mainHead = headOf(f.project);
+    const inMain = record(db, f, { worktree: realpathSync(f.project), branch: "main", head: mainHead });
+    await cards.deliver();
+    const rm = await press(cards, OWNER_ID, "approve", inMain.id, true);
+    expect(rm[0]!.content).toContain("is the repository's main checkout, not a session worktree");
+    expect(readFileSync(join(f.project, "hi", "agent.md"), "utf8")).toBe(HI_AGENT);
+    expect(headOf(f.project)).toBe(mainHead);
 
     // Someone captured AGENT-20 by hand since the draft.
     const raced = record(db, f);
@@ -355,6 +413,7 @@ describe("the owner's hi card (REQ-discord-521)", () => {
     expect(existsSync(join(g.work, "INTENT.md"))).toBe(false);
     expect(new HiCaptureStore({ db: gdb }).get(partial.id)!.status).toBe("pending");
     expect(audit(gdb).filter((a) => a.startsWith("hi-capture-criterion"))).toEqual([]);
+    const gHead = headOf(g.work);
 
     // hi check failing after the capture undoes it too.
     marker("check-fail", "1");
@@ -366,6 +425,47 @@ describe("the owner's hi card (REQ-discord-521)", () => {
       marker("check-fail", null);
     }
     expect(agentText(g)).toBe(HI_AGENT);
+
+    // The commit fails (signing that can't work): no commit, nothing staged,
+    // hi/ put back, no SAFE-5 criterion row, the request still open.
+    gitIn(g.project, "config", "commit.gpgsign", "true");
+    gitIn(g.project, "config", "gpg.format", "openpgp");
+    gitIn(g.project, "config", "gpg.program", "false");
+    try {
+      const e = engine(gdb, g);
+      const r5 = await press(e.cards, OWNER_ID, "approve", partial.id, true);
+      expect(r5[0]!.content).toContain("Capture failed — nothing was captured; the request stays open.");
+      expect(r5[0]!.content).toContain("git commit failed");
+    } finally {
+      gitIn(g.project, "config", "commit.gpgsign", "false");
+    }
+    expect(headOf(g.work)).toBe(gHead);
+    expect(hiStatus(g.work)).toBe("");
+    expect(agentText(g)).toBe(HI_AGENT);
+    expect(new HiCaptureStore({ db: gdb }).get(partial.id)!.status).toBe("pending");
+    expect(audit(gdb).filter((a) => a.startsWith("hi-capture-criterion"))).toEqual([]);
+
+    // hi/ with a change nobody committed: the capture's commit could not be
+    // told apart from it, so nothing is captured.
+    writeFileSync(join(g.work, "hi", "notes.md"), "# Notes\n");
+    const e6 = engine(gdb, g);
+    const r6 = await press(e6.cards, OWNER_ID, "approve", partial.id, true);
+    expect(r6[0]!.content).toContain("hi/ in the session worktree has changes that are not committed");
+    expect(agentText(g)).toBe(HI_AGENT);
+    expect(headOf(g.work)).toBe(gHead);
+    rmSync(join(g.work, "hi", "notes.md"));
+
+    // A hi file that is a link is never written through or over.
+    const outside = join(g.base, "outside-agent.md");
+    writeFileSync(outside, HI_AGENT);
+    rmSync(join(g.work, "hi", "agent.md"));
+    symlinkSync(outside, join(g.work, "hi", "agent.md"));
+    gitIn(g.work, "commit", "-q", "-am", "link");
+    const e7 = engine(gdb, g);
+    const r7 = await press(e7.cards, OWNER_ID, "approve", partial.id, true);
+    expect(r7[0]!.content).toContain("hi/agent.md is a link, and a capture never writes through or over one");
+    expect(readFileSync(outside, "utf8")).toBe(HI_AGENT);
+    expect(new HiCaptureStore({ db: gdb }).get(partial.id)!.status).toBe("pending");
     db.close();
     gdb.close();
   });

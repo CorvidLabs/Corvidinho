@@ -17,13 +17,16 @@
  * checks once more that the presser is the owner configured now. Nobody
  * else's press, and no reply anywhere, captures anything; no answer within
  * a day, or Deny, is a no. On Approve the engine first makes sure the
- * session worktree is there (re-created on its branch when it is gone, else
- * it fails closed and the request stays open), then — inside its
+ * session worktree is there (re-created on its branch when it is gone, the
+ * branch re-made at the commit the drafts were made on when parking deleted
+ * it; else it fails closed and the request stays open), then — inside its
  * transaction, after its SAFE-5 `hi-capture-approve` `started` row — runs
- * `hi <ID> "<text>"` for each draft there, all or nothing, writes one SAFE-5
- * `hi-capture-criterion` row per criterion and records what changed under
- * hi/ for the hi guard. The asker gets one outcome post in the conversation
- * they asked in (still allowlisted), else a DM; it names ids only.
+ * `hi <ID> "<text>"` for each draft there, all or nothing, commits what that
+ * changed under hi/ on the session's branch (local, never pushed), writes one
+ * SAFE-5 `hi-capture-criterion` row per criterion and records what changed
+ * under hi/ for the hi guard. The asker gets one outcome post in the
+ * conversation they asked in (still allowlisted), else a DM; it names ids
+ * only.
  */
 
 import { createHash } from "node:crypto";
@@ -84,7 +87,7 @@ export function hiCardView(req: HiCaptureRequest): ApprovalCardView {
     amount: `${n === 1 ? "1 criterion" : `${n} criteria`}: ${req.drafts.map((d) => d.id).join(", ")}`,
     notes: [
       "Only you can approve; nothing is captured without your Approve, and no reply anywhere captures anything.",
-      "Approve runs these commands in that session's worktree (re-created on its branch when it is gone; else nothing is captured).",
+      "Approve runs these commands in that session's worktree and commits the change on its branch (local, never pushed); a worktree that is gone is re-created on its branch, or at the commit the drafts were made on when the branch is gone too; else nothing is captured.",
     ],
     text: { label: "text", body: req.drafts.map(hiCaptureCommand).join("\n") },
   };
@@ -114,7 +117,8 @@ export function hiCardOutcomeText(req: HiCaptureRequest): string {
   const drafted = `the drafted hi criteria (${req.drafts.map((d) => d.id).join(", ")}; request ${req.id})`;
   if (req.status === "approved") {
     const ids = (req.captured && req.captured.length > 0 ? req.captured : req.drafts.map((d) => d.id)).join(", ");
-    return `The owner approved ${drafted}: captured ${ids} into hi/ on branch ${req.branch} (AGENT-18).`;
+    const commit = req.commit ? `, commit ${req.commit.slice(0, 12)}` : "";
+    return `The owner approved ${drafted}: captured ${ids} into hi/ on branch ${req.branch}${commit} (AGENT-18).`;
   }
   if (req.status === "denied") return `The owner did not approve ${drafted}, so nothing was captured (AGENT-18).`;
   return `Nobody answered the card for ${drafted} in time, so nothing was captured (AGENT-18).`;
@@ -186,7 +190,7 @@ export function hiCaptureApprovalKind(deps: HiCardDeps): ApprovalKind<HiCaptureR
       return runHiCapture({ db: deps.db, req, actor, env, now });
     },
     approvedOutcome: (req, done) =>
-      `Approved by you — captured ${done.captured.join(", ")} into hi/ on branch ${req.branch} (AGENT-18).`,
+      `Approved by you — captured ${done.captured.join(", ")} into hi/ on branch ${req.branch}, commit ${done.commit.slice(0, 12)} (AGENT-18).`,
     tell: async (req) => {
       const ok = await notify(req);
       const giveUp = (req.decidedAt ?? req.createdAt) + HI_CAPTURE_TTL_MS <= now();

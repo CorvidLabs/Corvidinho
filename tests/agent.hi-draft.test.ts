@@ -313,7 +313,7 @@ describe("who is offered hi-draft (REQ-agent-521)", () => {
     expect(await hiDraftGate({ env: cliEnv(f), cwd: f.work, ways: HI_WAYS })).toEqual({ offered: true, mode: "cli", role: null });
   });
 
-  test("never: community, WATCH, schedules, workers, another surface, a repo without hi, no git worktree", async () => {
+  test("never: community, WATCH, schedules, workers, another surface, a repo without hi, not this talk's own worktree", async () => {
     const f = await fixture();
     const why = async (env: NodeJS.ProcessEnv, cwd = f.work, ways = HI_WAYS) => {
       const g = await hiDraftGate({ env, cwd, ways });
@@ -333,7 +333,10 @@ describe("who is offered hi-draft (REQ-agent-521)", () => {
     expect(await why(discordEnv(f), f.work, { sdd: true, hi: false, trust: false })).toContain("does not keep criteria in hi/");
     const plain = join(f.base, "plain");
     mkdirSync(plain);
-    expect(await why(discordEnv(f), plain)).toContain("has none");
+    expect(await why(discordEnv(f), plain)).toContain("this run is not in it");
+    // The main checkout, or another talk's worktree, is never where a capture goes.
+    expect(await why(discordEnv(f), f.project)).toContain("this run is not in it");
+    expect(await why(discordEnv(f, { CORVIDINHO_DISCORD_SESSION_ID: "sess_someone_else" }))).toContain("this run is not in it");
     expect(await why(cliEnv(f, { CORVIDINHO_DISCORD_SESSION_ID: "sess_x" }))).toContain("only as a local CLI run");
     expect(await why(cliEnv(f, { [TOOL_CHILD_ENV]: f.work }))).toContain("inside a tool");
   });
@@ -373,6 +376,21 @@ describe("a run drafts, asks and captures nothing (REQ-agent-521)", () => {
     });
     // Nothing captured.
     expect(readFileSync(join(f.work, "hi", "agent.md"), "utf8")).toBe(HI_AGENT);
+  });
+
+  test("an id already waiting on the owner's card is not drafted again", async () => {
+    const f = await fixture();
+    const first = model([toolCall(HI_DRAFT_TOOL, { drafts: [TWO[0]] })]);
+    const exec1 = createTaskExecute({ taskText: "add a criterion", env: discordEnv(f), cwd: f.work, fetchImpl: first.fetchImpl, tier: "tool" });
+    expect((await exec1({ attempt: 1, signal: new AbortController().signal, repoWays: HI_WAYS })).ask?.reason).toBe("clarify");
+    const [open] = requestsFor(f.work);
+    const again = model([toolCall(HI_DRAFT_TOOL, { drafts: TWO }), { role: "assistant", content: "It already waits on the card." }]);
+    const exec2 = createTaskExecute({ taskText: "add it again", env: discordEnv(f), cwd: f.work, fetchImpl: again.fetchImpl, tier: "tool" });
+    const r = await exec2({ attempt: 1, signal: new AbortController().signal, repoWays: HI_WAYS });
+    expect(r.ask).toBeUndefined();
+    const toolMsg = again.bodies[1]!.messages.find((x) => x.role === "tool")!;
+    expect(toolMsg.content).toContain(`AGENT-20 already waits on the owner's card (request ${open!.id}); nothing new was drafted`);
+    expect(requestsFor(f.work).map((x) => x.id)).toEqual([open!.id]);
   });
 
   test("through runTask the run ends blocked, never done, and the lane does not run", async () => {
@@ -499,14 +517,20 @@ function texts(events: AgentEvent[]): string[] {
 }
 
 describe("an approved capture passes the hi guard; every other hi/ change still blocks (REQ-agent-522)", () => {
-  test("the capture is exactly the drafts, in the session worktree", async () => {
+  test("the capture is exactly the drafts, in the session worktree, committed on its branch", async () => {
     const f = await fixture();
+    const head = gitIn(f.work, "rev-parse", "HEAD").trim();
     approveAndCapture(f);
     const text = readFileSync(join(f.work, "hi", "agent.md"), "utf8");
     expect(text).toContain("- **AGENT-20**  It drafts criteria and asks before capturing them.");
     expect(text).toContain("  - **AGENT-18.b**  A drafted criterion names the requester's own words.");
+    // One commit on the session's branch holds exactly hi/agent.md.
+    expect(gitIn(f.work, "rev-parse", "HEAD~1").trim()).toBe(head);
+    expect(gitIn(f.work, "diff", "--name-only", "HEAD~1", "HEAD").trim()).toBe("hi/agent.md");
+    expect(gitIn(f.work, "status", "--porcelain", "--", "hi").trim()).toBe("");
     // The project checkout is untouched.
     expect(readFileSync(join(f.project, "hi", "agent.md"), "utf8")).toBe(HI_AGENT);
+    expect(gitIn(f.project, "rev-parse", "HEAD").trim()).toBe(head);
   });
 
   test("the next run in that worktree is verified: the gate and hiChangesSince leave the approved capture out", async () => {
@@ -529,9 +553,9 @@ describe("an approved capture passes the hi guard; every other hi/ change still 
     expect(result.verified).toBe(true);
     expect(v.calls).toEqual([f.work]);
     expect(texts(events).some((t) => t.startsWith("hi guard"))).toBe(false);
-    // Committed on the branch, it still passes.
+    // With the run's own edit committed on top, it still passes.
     gitIn(f.work, "add", "-A");
-    gitIn(f.work, "commit", "-q", "-m", "capture");
+    gitIn(f.work, "commit", "-q", "-m", "work");
     expect(await hiChangesSince(f.work, base)).toEqual({ criteria: [], retired: [], files: [] });
   });
 

@@ -28,7 +28,7 @@
  *   that changed under hi/ for the guard.
  */
 
-import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { type Stats, chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import type { Database } from "bun:sqlite";
 import { gitEnv, runGit } from "../../plugins/git/exec.ts";
@@ -53,7 +53,7 @@ import {
   type HiDraftRole,
 } from "./hi-capture-store.ts";
 import type { RepoWays } from "./repo-ways.ts";
-import { ACTING_SURFACE_ENV, actingSurface, SAFE3A_SURFACES, TOOL_CHILD_ENV } from "./shell-gate.ts";
+import { ACTING_SURFACE_ENV, actingSurface, isOwnTalkWorktree, SAFE3A_SURFACES, TOOL_CHILD_ENV } from "./shell-gate.ts";
 import type { HumanAsk } from "./types.ts";
 
 export const HI_DRAFT_TOOL = "hi-draft";
@@ -75,17 +75,6 @@ export type HiDraftGate = { offered: true; mode: HiDraftMode; role: HiDraftRole 
 const HI_ID_RE = /^([A-Z][A-Z0-9]*(?:-[A-Z][A-Z0-9]*)*)-(\d+)((?:\.[a-z0-9]+)*)$/;
 
 // ------------------------------------------------------------------ gate
-
-async function isGitTop(cwd: string): Promise<boolean> {
-  try {
-    const root = realpathSync(resolve(cwd));
-    const r = await runGit(root, ["rev-parse", "--show-toplevel"]);
-    if (r.code !== 0) return false;
-    return realpathSync(r.stdout.trim()) === root;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * AGENT-18 hi drafts: may this run be offered `hi-draft`, and how does it
@@ -129,8 +118,10 @@ export async function hiDraftGate(opts: {
     if (role !== "owner" && role !== "team") {
       return { offered: false, reason: "only the owner's and the team's runs draft hi criteria" };
     }
-    if (!(await isGitTop(cwd))) {
-      return { offered: false, reason: "drafts are captured in the session's git worktree, and this run has none" };
+    // The capture is made and committed in this talk's own linked worktree,
+    // never in a main checkout or another talk's worktree.
+    if (!isOwnTalkWorktree(cwd, env.CORVIDINHO_DISCORD_SESSION_ID ?? "")) {
+      return { offered: false, reason: "drafts are captured in this talk's own git worktree, and this run is not in it" };
     }
     return { offered: true, mode: "card", role };
   } catch {
@@ -443,8 +434,19 @@ export async function handleHiDraftCall(opts: {
     let req: HiCaptureRequest;
     try {
       const store = new HiCaptureStore({ db, ...(opts.now ? { now: opts.now } : {}) });
+      // One open card per id: a draft already waiting on the owner's card in
+      // this repository is not drafted again (a second card could only fail).
+      const repo = realpathSync(common);
+      const t = (opts.now ?? Date.now)();
+      for (const open of store.pending()) {
+        if (open.repo !== repo || open.expiresAt <= t) continue;
+        const twice = args.drafts.find((d) => open.drafts.some((o) => o.id === d.id));
+        if (twice) {
+          return refuse(`${twice.id} already waits on the owner's card (request ${open.id}); nothing new was drafted`);
+        }
+      }
       req = store.request({
-        repo: realpathSync(common),
+        repo,
         project: projectLabel(projectKeyFor(top)) ?? "this repo",
         worktree: top,
         branch,
@@ -470,7 +472,8 @@ export async function handleHiDraftCall(opts: {
 
 // ------------------------------------------------------------------ capture
 
-function gitSync(cwd: string, args: string[]): string | null {
+/** A git child in `cwd` with hooks off: exit 0 and its stdout, or its stderr. */
+function gitSyncRun(cwd: string, args: string[]): { ok: true; out: string } | { ok: false; err: string } {
   try {
     const p = Bun.spawnSync(["git", "-c", "core.hooksPath=/dev/null", ...args], {
       cwd,
@@ -480,11 +483,20 @@ function gitSync(cwd: string, args: string[]): string | null {
       stdin: "ignore",
       timeout: 30_000,
     });
-    return p.exitCode === 0 ? p.stdout.toString().trim() : null;
-  } catch {
-    return null;
+    if (p.exitCode === 0) return { ok: true, out: p.stdout.toString().trim() };
+    return { ok: false, err: p.stderr.toString() || `exit ${p.exitCode}` };
+  } catch (err) {
+    return { ok: false, err: err instanceof Error ? err.message : String(err) };
   }
 }
+
+function gitSync(cwd: string, args: string[]): string | null {
+  const r = gitSyncRun(cwd, args);
+  return r.ok ? r.out : null;
+}
+
+/** A full commit id as `git rev-parse` prints it (never something that reads as a flag). */
+const COMMIT_RE = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
 
 /**
  * Why the request's session worktree is not the one the drafts were made in
@@ -511,6 +523,13 @@ export function hiCaptureWorktreeProblem(req: HiCaptureRequest): string | null {
   } catch {
     return "belongs to another repository";
   }
+  // Never a main checkout: the capture is committed on a session's branch.
+  const own = gitSync(top, ["rev-parse", "--absolute-git-dir"]);
+  try {
+    if (!own || realpathSync(own) === req.repo) return "is the repository's main checkout, not a session worktree";
+  } catch {
+    return "is not a git worktree top";
+  }
   const branch = gitSync(top, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
   if (branch !== req.branch) return `is not on branch ${req.branch} any more`;
   return null;
@@ -518,11 +537,14 @@ export function hiCaptureWorktreeProblem(req: HiCaptureRequest): string | null {
 
 /**
  * Before Approve captures anything: the session worktree must be the one
- * the drafts were made in. When its directory is gone (the talk was parked),
- * it is re-created at the same path on the same branch from the main
- * checkout; when that can't be done — the branch is gone, the path is taken
- * by something else, a bare repository — it throws and nothing is captured
- * (fail closed). Resolves whether it was re-created.
+ * the drafts were made in. When its directory is gone (the talk ended and
+ * was parked), it is re-created at the same path on the same branch from the
+ * main checkout; when parking also deleted that branch (a talk with no
+ * commits of its own), the branch is re-made at the commit the drafts were
+ * made on (the request's recorded HEAD). When that can't be done — that
+ * commit is gone too, the path is taken by something else, a bare
+ * repository — it throws and nothing is captured (fail closed). Resolves
+ * whether it was re-created.
  */
 export async function ensureHiCaptureWorktree(req: HiCaptureRequest): Promise<{ recreated: boolean }> {
   if (existsSync(req.worktree)) {
@@ -533,14 +555,30 @@ export async function ensureHiCaptureWorktree(req: HiCaptureRequest): Promise<{ 
   if (basename(req.repo) !== ".git") {
     throw new Error("the session worktree is gone and its repository has no main checkout to re-create it from, so nothing was captured");
   }
+  if (!req.branch || req.branch.startsWith("-")) {
+    throw new Error("the session worktree is gone and its branch name can't be used, so nothing was captured");
+  }
   const main = dirname(req.repo);
   await runGit(main, ["worktree", "prune"]);
   const has = await runGit(main, ["rev-parse", "--verify", "--quiet", `refs/heads/${req.branch}`]);
-  if (has.code !== 0) {
-    throw new Error(`the session worktree is gone and so is its branch ${req.branch}, so nothing was captured`);
+  let add;
+  if (has.code === 0) {
+    mkdirSync(dirname(req.worktree), { recursive: true });
+    add = await runGit(main, ["worktree", "add", req.worktree, req.branch]);
+  } else {
+    // Parking deleted the branch (it had no commits of its own): re-make it
+    // at the commit the drafts were made on, when that commit is still there.
+    const at = COMMIT_RE.test(req.head)
+      ? await runGit(main, ["rev-parse", "--verify", "--quiet", `${req.head}^{commit}`])
+      : null;
+    if (!at || at.code !== 0) {
+      throw new Error(
+        `the session worktree is gone, and so are its branch ${req.branch} and the commit the drafts were made on, so nothing was captured`,
+      );
+    }
+    mkdirSync(dirname(req.worktree), { recursive: true });
+    add = await runGit(main, ["worktree", "add", "-b", req.branch, req.worktree, req.head]);
   }
-  mkdirSync(dirname(req.worktree), { recursive: true });
-  const add = await runGit(main, ["worktree", "add", req.worktree, req.branch]);
   if (add.code !== 0) {
     throw new Error(`could not re-create the session worktree on ${req.branch}, so nothing was captured`);
   }
@@ -549,8 +587,8 @@ export async function ensureHiCaptureWorktree(req: HiCaptureRequest): Promise<{ 
   return { recreated: true };
 }
 
-/** A file under hi/ (or the root INTENT.md the hi CLI may create), as bytes and mode. */
-type RawEntry = { bytes: Buffer; mode: number } | { link: string };
+/** A plain file under hi/ (or the root INTENT.md the hi CLI may create), as bytes and mode. */
+type RawEntry = { bytes: Buffer; mode: number };
 type RawTree = Map<string, RawEntry>;
 
 /** Bytes one capture step reads per file before it gives up (fail closed). */
@@ -559,14 +597,19 @@ const RAW_MAX_ENTRIES = 2000;
 /** Paths outside hi/ the hi CLI may create on a first capture. */
 const HI_SIDE_FILES = ["INTENT.md"];
 
-function readRaw(top: string): RawTree {
+/**
+ * Every path under hi/ (and the side files) that is not a directory, sorted;
+ * `onEntry` sees each one with its lstat. Throws when hi/ is not a real
+ * directory or holds too many entries.
+ */
+function walkRaw(top: string, onEntry: (rel: string, abs: string, st: Stats) => void): void {
   // hi/ itself must be a real directory: a capture through a link would
   // write somewhere the undo below can't reach.
   if (!lstatSync(join(top, "hi")).isDirectory()) throw new Error("hi/ is not a plain directory a capture can put back");
-  const out: RawTree = new Map();
+  let n = 0;
   const add = (rel: string): void => {
     const abs = join(top, rel);
-    let st;
+    let st: Stats;
     try {
       st = lstatSync(abs);
     } catch (e) {
@@ -574,37 +617,42 @@ function readRaw(top: string): RawTree {
       throw e;
     }
     if (st.isDirectory()) {
-      for (const n of readdirSync(abs).sort()) add(`${rel}/${n}`);
+      for (const name of readdirSync(abs).sort()) add(`${rel}/${name}`);
       return;
     }
-    if (out.size >= RAW_MAX_ENTRIES) throw new Error("hi/ has too many files to capture safely");
-    if (st.isSymbolicLink()) {
-      out.set(rel, { link: readlinkSync(abs) });
-      return;
-    }
-    if (!st.isFile() || st.size > RAW_MAX_BYTES) throw new Error(`${rel} is not a plain file a capture can put back`);
-    out.set(rel, { bytes: readFileSync(abs), mode: st.mode & 0o777 });
+    if (++n > RAW_MAX_ENTRIES) throw new Error("hi/ has too many files to capture safely");
+    onEntry(rel, abs, st);
   };
   add("hi");
   for (const f of HI_SIDE_FILES) add(f);
+}
+
+function readRaw(top: string): RawTree {
+  const out: RawTree = new Map();
+  walkRaw(top, (rel, abs, st) => {
+    // A link is refused before anything runs: the hi CLI replaces it with a
+    // plain file, which neither the undo nor the hi guard could account for.
+    if (st.isSymbolicLink()) throw new Error(`${rel} is a link, and a capture never writes through or over one`);
+    if (!st.isFile() || st.size > RAW_MAX_BYTES) throw new Error(`${rel} is not a plain file a capture can put back`);
+    out.set(rel, { bytes: readFileSync(abs), mode: st.mode & 0o777 });
+  });
   return out;
 }
 
 function sameEntry(a: RawEntry | undefined, b: RawEntry | undefined): boolean {
   if (!a || !b) return a === b;
-  if ("link" in a || "link" in b) return "link" in a && "link" in b && a.link === b.link;
   return a.mode === b.mode && a.bytes.equals(b.bytes);
 }
 
 /** Put hi/ (and the side files) back as `before` was. Best effort; never throws. */
 function restoreRaw(top: string, before: RawTree): void {
-  let after: RawTree;
+  const now: string[] = [];
   try {
-    after = readRaw(top);
+    walkRaw(top, (rel) => now.push(rel));
   } catch {
-    after = new Map();
+    /* restore what `before` names below */
   }
-  for (const p of after.keys()) {
+  for (const p of now) {
     if (before.has(p)) continue;
     try {
       rmSync(join(top, p), { force: true });
@@ -613,11 +661,14 @@ function restoreRaw(top: string, before: RawTree): void {
     }
   }
   for (const [p, e] of before) {
-    if (sameEntry(e, after.get(p)) || "link" in e) continue;
     try {
-      mkdirSync(dirname(join(top, p)), { recursive: true });
-      writeFileSync(join(top, p), e.bytes);
-      chmodSync(join(top, p), e.mode);
+      const abs = join(top, p);
+      const st = lstatSync(abs, { throwIfNoEntry: false });
+      if (st?.isFile() && (st.mode & 0o777) === e.mode && readFileSync(abs).equals(e.bytes)) continue;
+      if (st && !st.isFile()) rmSync(abs, { force: true, recursive: true });
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, e.bytes);
+      chmodSync(abs, e.mode);
     } catch {
       /* best effort */
     }
@@ -626,28 +677,50 @@ function restoreRaw(top: string, before: RawTree): void {
 
 function rawKey(e: RawEntry | undefined): string | null {
   if (!e) return HI_ABSENT;
-  if ("link" in e) return null;
   return hiContentKey(e.bytes.toString("utf8"), (e.mode & 0o111) !== 0);
 }
 
-export type HiCaptureResult = { captured: string[]; steps: HiCaptureFileStep[] };
+/**
+ * hi/ in `top` holds nothing git does not already have committed (no
+ * staged, unstaged or untracked change), so a capture's commit is exactly
+ * the capture. Throws otherwise.
+ */
+function assertHiCommitted(top: string): void {
+  const st = gitSyncRun(top, ["-c", "core.fsmonitor=false", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", "hi"]);
+  if (!st.ok) throw new Error(`could not read git status for hi/ (${oneLineError(st.err)})`);
+  if (st.out.length > 0) {
+    throw new Error("hi/ in the session worktree has changes that are not committed, so a capture could not be told apart from them");
+  }
+}
+
+export type HiCaptureResult = { captured: string[]; steps: HiCaptureFileStep[]; commit: string };
 
 function oneLineError(text: string): string {
   const line = scrubSecrets(text).replace(/\s+/g, " ").trim();
   return line.length > 300 ? `${line.slice(0, 299)}…` : line;
 }
 
+/** The commit message of an approved capture (ids only, never the drafted text). */
+export function hiCaptureCommitMessage(req: HiCaptureRequest): string {
+  return `hi: capture ${req.drafts.map((d) => d.id).join(", ")} (AGENT-18; approved on the owner's hi card, request ${req.id})`;
+}
+
 /**
  * The owner approved: run `hi <ID> "<text>"` for each draft of `req` in its
  * session worktree (already made sure of by {@link ensureHiCaptureWorktree}),
- * synchronously, inside the card engine's transaction on `db`. All or
- * nothing: before anything runs the worktree, the drafts (`hi export` again,
- * the scrub check again) and the hi CLI are checked; after, `hi export` must
- * show each id with exactly its text and `hi check` must pass. On any
- * failure hi/ (and a root INTENT.md the hi CLI made) are put back and it
- * throws, so the transaction rolls back and nothing counts as captured.
- * Then each capture writes a SAFE-5 `hi-capture-criterion` row, and every
- * hi/ path it changed goes in the ledger the hi guard reads.
+ * synchronously, inside the card engine's transaction on `db`, and commit
+ * what that changed under hi/ on the session's branch (local only, never
+ * pushed), so the capture outlives the talk: parking a talk removes its
+ * worktree, uncommitted changes included, and deletes a branch with no
+ * commits of its own. All or nothing: before anything runs the worktree, the
+ * drafts (`hi export` again, the scrub check again), the hi CLI and a hi/
+ * with nothing uncommitted (so the commit is exactly the capture) are
+ * checked; after, `hi export` must show each id with exactly its text and
+ * `hi check` must pass. On any failure the commit is undone, hi/ (and a root
+ * INTENT.md the hi CLI made) are put back and it throws, so the transaction
+ * rolls back and nothing counts as captured. Each capture writes a SAFE-5
+ * `hi-capture-criterion` row, and every hi/ path it changed goes in the
+ * ledger the hi guard reads.
  */
 export function runHiCapture(opts: {
   db: Database;
@@ -668,8 +741,17 @@ export function runHiCapture(opts: {
   if (!exp) throw new Error("could not read the captured criteria with `hi export`, so nothing was captured");
   const invalid = validateHiDrafts(req.drafts, exp);
   if (invalid) throw new Error(`${invalid}, so nothing was captured`);
+  try {
+    assertHiCommitted(top);
+  } catch (err) {
+    throw new Error(`${err instanceof Error ? err.message : String(err)}, so nothing was captured`);
+  }
+  const headBefore = gitSync(top, ["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]);
+  if (!headBefore || !COMMIT_RE.test(headBefore)) throw new Error("could not read the session branch's commit, so nothing was captured");
 
   const before = readRaw(top);
+  let committed: string | null = null;
+  let staged: string[] = [];
   try {
     for (const d of req.drafts) {
       const p = Bun.spawnSync([bin, d.id, d.text], {
@@ -699,8 +781,10 @@ export function runHiCapture(opts: {
       const b = rawKey(before.get(p));
       const a = rawKey(now2.get(p));
       if (b === null || a === null) throw new Error(`${p} is not a plain text file the hi guard can recognise`);
+      if (a === HI_ABSENT) throw new Error(`the capture removed ${p}`);
       steps.push({ path: p, before: b, after: a });
     }
+    if (steps.length === 0) throw new Error("the capture changed nothing under hi/");
     const at = now();
     recordHiCaptureFiles(opts.db, req.id, req.repo, steps, at);
     const key = auditKeyFromEnv(env);
@@ -717,9 +801,27 @@ export function runHiCapture(opts: {
         { key, now: at },
       );
     }
-    new HiCaptureStore({ db: opts.db, now }).markCaptured(req.id, req.drafts.map((d) => d.id));
-    return { captured: req.drafts.map((d) => d.id), steps };
+
+    // Commit exactly the hi/ paths the capture changed, on the session's
+    // branch (hooks off; `--only` leaves anything else staged as it was).
+    const paths = steps.map((s) => s.path);
+    staged = paths;
+    const add = gitSyncRun(top, ["add", "--", ...paths]);
+    if (!add.ok) throw new Error(`git add failed: ${oneLineError(add.err)}`);
+    const commit = gitSyncRun(top, ["commit", "--only", "--no-verify", "-q", "-m", hiCaptureCommitMessage(req), "--", ...paths]);
+    if (!commit.ok) throw new Error(`git commit failed: ${oneLineError(commit.err)}`);
+    const sha = gitSync(top, ["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]);
+    if (!sha || !COMMIT_RE.test(sha) || sha === headBefore) throw new Error("could not read the capture's commit");
+    committed = sha;
+    new HiCaptureStore({ db: opts.db, now }).markCaptured(req.id, req.drafts.map((d) => d.id), sha);
+    return { captured: req.drafts.map((d) => d.id), steps, commit: sha };
   } catch (err) {
+    // Undo in reverse: the commit (only when it is still the branch tip),
+    // the index entries this staged, then the files.
+    if (committed && gitSync(top, ["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]) === committed) {
+      gitSyncRun(top, ["reset", "-q", "--soft", headBefore]);
+    }
+    if (staged.length > 0) gitSyncRun(top, ["reset", "-q", headBefore, "--", ...staged]);
     restoreRaw(top, before);
     throw err;
   }

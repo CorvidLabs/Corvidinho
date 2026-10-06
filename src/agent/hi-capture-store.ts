@@ -11,8 +11,9 @@
  * - `hi_capture_requests`: one request per `hi-draft` call — the drafts
  *   (ids and texts, already refused when scrubbing would change one), the
  *   session worktree they are captured in (its path, branch, HEAD and the
- *   repository's git common dir), who asked from where, the card and the
- *   decision. No answer by `expires_at` is a no (SAFE-20).
+ *   repository's git common dir), who asked from where, the card, the
+ *   decision and, once approved, the commit on the branch that holds the
+ *   capture. No answer by `expires_at` is a no (SAFE-20).
  * - `hi_capture_files`: for each approved capture, every `hi/` path it
  *   changed, as a content key before and after ({@link hiContentKey}, or
  *   {@link HI_ABSENT}). The hi guard allows a changed path only when a chain
@@ -61,6 +62,8 @@ export type HiCaptureRequest = {
   decidedBy?: string;
   /** Ids captured on Approve. */
   captured?: string[];
+  /** The commit on `branch` that holds the approved capture. */
+  commit?: string;
   notifiedAt?: number;
 };
 
@@ -95,6 +98,7 @@ CREATE TABLE IF NOT EXISTS hi_capture_requests (
   decided_at INTEGER,
   decided_by TEXT,
   captured TEXT,
+  capture_commit TEXT,
   notified_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS hi_capture_requests_status ON hi_capture_requests (status, created_at);
@@ -149,6 +153,7 @@ type Row = {
   decided_at: number | null;
   decided_by: string | null;
   captured: string | null;
+  capture_commit: string | null;
   notified_at: number | null;
 };
 
@@ -197,6 +202,7 @@ function toRequest(r: Row): HiCaptureRequest {
       /* none */
     }
   }
+  if (r.capture_commit) out.commit = r.capture_commit;
   if (r.notified_at != null) out.notifiedAt = r.notified_at;
   return out;
 }
@@ -325,9 +331,13 @@ export class HiCaptureStore {
     return Number(res.changes) === 1;
   }
 
-  /** The ids an approved request captured. */
-  markCaptured(id: string, ids: readonly string[]): void {
-    this.db.run(`UPDATE hi_capture_requests SET captured = ? WHERE id = ?`, [JSON.stringify([...ids]), id]);
+  /** The ids an approved request captured, and the commit that holds them. */
+  markCaptured(id: string, ids: readonly string[], commit: string): void {
+    this.db.run(`UPDATE hi_capture_requests SET captured = ?, capture_commit = ? WHERE id = ?`, [
+      JSON.stringify([...ids]),
+      commit,
+      id,
+    ]);
   }
 
   markNotified(id: string): void {
