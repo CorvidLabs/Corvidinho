@@ -7,10 +7,11 @@
   "title": "Doctor and init say when the verify lane runs no test step Corvidinho can read (CLI-4): one [warn] test-step line when no [lanes.verify] step visibly runs bun test, jest, vitest, cargo test, pytest or go test, since such a lane can never verify a run that changes files (AGENT-15)",
   "description": "doctor and init say when the verify lane runs no test step Corvidinho can read (CLI-4): one [warn] test-step line when no [lanes.verify] step visibly runs bun test, jest, vitest, cargo test, pytest or go test, since such a lane can never verify a run that changes files (AGENT-15)",
   "kind": "feature",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "8bf4422f74d6a7d995300a48e302957ee2ef56da",
   "created_at": 1791245093,
-  "updated_at": 1791245399,
+  "updated_at": 1791245417,
   "affected_specs": [
     "cli"
   ],
