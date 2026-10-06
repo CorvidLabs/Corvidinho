@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 80
+version: 81
 status: draft
 files:
   - src/cli.ts
@@ -367,3 +367,4 @@ Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), 
 | 2026-10-01 | gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins: GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap |
 | 2026-10-01 | release-0-0-40-brave-web-search-and-giphy-gif-search-for-owner-and-team-plugin-7-8-9: Release 0.0.40: Brave web-search and GIPHY gif-search for owner and team (PLUGIN-7/8/9) |
 | 2026-10-03 | release-0-0-41-missing-plugin-soft-land-with-the-real-gap: Release 0.0.41: missing-plugin soft-land with the real gap |
+| 2026-10-06 | after-the-one-nudge-a-stalled-run-moves-to-the-next-stronger-model-in-the-order-i-set-and-says-so-agent-17-agent-17-a: After the one nudge a stalled run moves to the next stronger model in the order I set, and says so (AGENT-17, AGENT-17.a) |

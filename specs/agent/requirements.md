@@ -2027,8 +2027,8 @@ Acceptance Criteria
 If it only plans, or says 'Done.' without changing anything, it gets one
 nudge (AGENT-17, captured on main from Leif's 2026-09-28 interview, round 2:
 "If it only plans, or says 'Done.' without changing anything, it gets one
-nudge, then moves to a stronger model I've configured."; this builds the
-nudge half; moving to a stronger model is not built). When the task-run tool
+nudge, then moves to a stronger model I've configured."; this is the
+nudge; the move to a stronger model is REQ-agent-088, AGENT-17.a). When the task-run tool
 loop (`runToolLoop`, every surface's `task run`: CLI, Discord chat,
 `/session`, `/work`, button and Answer resumes, schedules, WATCH, delegate
 and council workers) gets a final reply (no tool calls, after the MEMORY-9
@@ -2065,10 +2065,12 @@ round, and one Text event `[operator] AGENT-17: the reply was <only a plan |
 a 'Done.'-style or empty claim> with nothing changed; nudged once (same
 model)` is emitted. A run SHALL get at most one nudge
 (`createStallNudgeGuard`, one per `createTaskExecute`, across verify
-retries). A stall after that SHALL stand as the reply, with one Text event
-`[operator] AGENT-17: the reply was … with nothing changed, after the nudge;
-the reply stands (moving to a stronger model is not built yet)`: no ask, no
-error, no other change to the result.
+retries). A stall after that SHALL move the rest of the run to a stronger
+model when REQ-agent-088 finds one; otherwise it SHALL stand as the reply,
+with one Text event `[operator] AGENT-17: the reply was … with nothing
+changed, after the nudge; the reply stands (<why>)` (`stallStandsNote(kind,
+why)`; with no model order set, `(no model order is set, so it does not move
+to another model)`): no ask, no error, no other change to the result.
 
 `stallKind(text, task?)` SHALL be a narrow English heuristic: `done-claim` for an
 empty reply, or a whole reply of at most `STALL_DONE_MAX_CHARS` (60)
@@ -2092,8 +2094,8 @@ AUTONOMY-7), "toy", "demo" or "joke" (AUTONOMY-7), a deferral ("later",
 "soon", "tomorrow", "next time", "from now on", "going forward"), and for
 answers and social replies ("Yes, it's done.",
 "Let me check… yes: …", "Thanks!", "I'll be here."). Constants, no knob: no
-env var, config key, flag, HumanAsk reason, NDJSON field or schema change is
-added.
+config key, flag, HumanAsk reason, NDJSON field or schema change is added;
+the only setting is REQ-agent-088's optional model order.
 
 Acceptance Criteria
 - `stallKind` is `done-claim` for "", "Done.", "All done!", "Done! ✅", "Task complete.", "It's done now.", "I've done it." and "Changes made."; `plan` for "I'll update src/cli.ts to add the flag, then run the tests.", "Let me look at the failing test first.", a "Plan:" list of work steps and "First, I'll read the file. Then I'll fix it."; null for a Q&A answer, "Let me check the file. It has 3 functions.", "Yes, it's done.", social replies, a deferral (a promise for "next time" too), clarifying questions, "let me know" and offers, AUTONOMY-7 declines (witty ones included) and toy demos, code, and replies over the length caps; null for a plan when the task asks for a plan or for nothing to change yet ("What's your plan …?", "How would you fix …", "… don't change anything yet"), while "Done." on such a task is still `done-claim`.
@@ -2102,6 +2104,8 @@ Acceptance Criteria
 - A plan-only reply is nudged; a model that then makes a real change ends with that change's files and its reply.
 - An empty reply is nudged.
 - A second stall after the nudge stands (summary "Done.", no ask, no error) with the `the reply stands` operator line; exactly two requests.
+- With no model order set (AGENT-17.a), that stand line ends `the reply stands (no model order is set, so it does not move to another model)`.
+- The stall guard gives `nudge` once, then `escalate` until `moved()`, then `stand`.
 - A later attempt of the same run that stalls stands without a second nudge.
 - Q&A, social replies, clarifying questions, "let me know", AUTONOMY-7 declines and toy demos make one request and are never nudged.
 - A tool-reported file change, a Fledge plugin command's success, or a stored memory ("remember …" → `memory-store` → "Done!") before "Done." means no nudge (the memory is stored once).
@@ -2401,3 +2405,68 @@ Acceptance Criteria
 - An unknown name is not installed; the reply does not invent Tenor or a `fledge-` command the user did not say.
 - A model `ask-human` of "what do you mean by install?" when the named tool is offered does not end as a clarify ask.
 - Fixture: `tests/agent.missing-capability.test.ts`.
+
+### REQ-agent-088
+
+After the one nudge it moves to the next stronger model in the order I set
+(AGENT-17, on main: "If it only plans, or says 'Done.' without changing
+anything, it gets one nudge, then moves to a stronger model I've
+configured."; AGENT-17.a, captured from Leif's 2026-09-28 interview, round
+16: "A stronger model is the next one in an order I set in the model list;
+with no order set it doesn't move, and the one nudge still happens.").
+
+The order SHALL be the optional `CORVIDINHO_LLM_MODEL_ORDER`
+(`MODEL_ORDER_ENV`, `src/agent/providers.ts`): a comma list of the same
+`kind:model` entries as the model list (`parseModelChain`), weakest first.
+Unset or empty is no order. The model list's own (fallback) order is not a
+strength order, and nothing SHALL be ranked by price or benchmark.
+
+When the REQ-agent-087 stall guard gives a stall after the run's nudge
+(`next()` → `"escalate"`), `runToolLoop` SHALL call the run's
+`ModelCalls.escalate(kind)`, which `createTaskExecute` backs with
+`moveToStronger(chain, order)` on the run's own model chain. `strongerModel`
+SHALL pick the first entry after the chain's current model in the order
+(entries compared by `entryLabel`, so `openai:x` and `x` are one entry) that
+is one of the chain's own entries (the run's tier's model list, AGENT-5),
+whose kind has its key, and that has not failed in this run (not a
+`from` of the chain's failovers), trying later entries in the order in turn.
+It SHALL NOT move with no order (`no-order`), when the current model is not in
+the order (`unordered`), when it is the last in it (`top`), or when no entry
+after it is available (`unavailable`); it SHALL never move to a weaker or an
+unordered model.
+
+On a move the chain keeps the stronger model for every later call of the run
+(later rounds and verify retries; a failure of it falls back the AGENT-11
+way). The stalled reply SHALL be dropped from the conversation and the same
+request sent to the stronger model (no second nudge, no tool round used),
+the text that stood before it standing again; the guard records `moved()`, so
+a run moves at most once. One Text event `[operator] AGENT-17: the reply was
+<only a plan | a 'Done.'-style or empty claim> with nothing changed, after the
+nudge; moving from <a> to the stronger model <b> (next in the model order)`
+(`stallMovedNote`) SHALL be emitted, and every later summary of the run SHALL
+end, after any AGENT-11 fallback note and before every other closing note,
+with one plain line `(stronger model: <a> only planned | said it was done
+with nothing changed after the nudge, so <b> took over)`
+(`withStrongerModelNote`), which `closingNotesTail` keeps through clips and
+Discord's split. Without a move the stall stands with
+`stallStandsNote(kind, why)` (`moved` once the run already moved). The
+stronger model's calls SHALL go through the same chat transport and SAFE-8 /
+SAFE-14 spend guard as every call, counted and priced under its own model
+(`onUsage` per model), so a cap stop or an unpriced-model ask applies to it
+(AUTONOMY-8) and is never routed around. Delegate workers inherit the order
+(it is not a dropped worker key) and apply the same rule in their own run.
+No config key, flag, slash command, HumanAsk reason, NDJSON field, table or
+schema version is added.
+
+Acceptance Criteria
+- `modelOrderFromEnv` is [] unset or blank and parses `kind:model` entries in order; `MODEL_ORDER_ENV` is `CORVIDINHO_LLM_MODEL_ORDER`.
+- `strongerModel`: no order ⇒ `no-order`; the next entry the tier's chain holds ⇒ that entry (bare and `openai:` match); the order, not the fallback list, decides; the last in the order ⇒ `top`; a model not in the order ⇒ `unordered`; an order entry the tier's list lacks, one without its key, or another tier's model is skipped (none left ⇒ `unavailable`); a model that failed in the run is never moved back to; `moveToStronger` changes `chain.index` only on a move.
+- `strongerModelNote` reads `(stronger model: <a> only planned after the nudge, so <b> took over)` / `… said it was done with nothing changed after the nudge …`; `withStrongerModelNote` adds it once; `closingNotesTail` and a clip keep it after the fallback note and before the role note.
+- With an order set, a code-tier run whose weak model says "Done." twice makes requests weak, weak (with the one nudge), then the second request's exact messages to the stronger model; the stronger model's work stands, the summary ends with the note, both operator lines are emitted, usage is counted per model and the answering model is the stronger one; a plan moves the same way and a later attempt stays on the stronger model.
+- With no order set: the nudge, then the reply stands (two requests, both to the first model).
+- Already at the top of the order, an unordered current model, or a stronger model only another tier lists: no move, the reply stands with the line naming why.
+- A model that failed earlier in the run is not moved back to; the stronger model stalling too stands (`it already moved to a stronger model once in this run`); an answer after the nudge is no stall.
+- Under a spend cap the stronger model's call is in the spend ledger under its own model; an unpriced stronger model under a cap stops and asks (`spend-cap`) before it is sent.
+- A delegate worker's env keeps `CORVIDINHO_LLM_MODEL_ORDER`.
+- The real CLI (`task run --output ndjson`, two localhost `ollama:` models, the order set) makes three requests (weak, weak, strong), emits both operator lines, and ends `done` with the note and `model` naming the stronger model.
+
