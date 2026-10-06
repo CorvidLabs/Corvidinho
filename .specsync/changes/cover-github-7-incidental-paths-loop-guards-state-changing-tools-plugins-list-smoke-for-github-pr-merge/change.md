@@ -1,6 +1,6 @@
 ---
 id: cover-github-7-incidental-paths-loop-guards-state-changing-tools-plugins-list-smoke-for-github-pr-merge
-state: implementing
+state: verifying
 type: bug_fix
 base_commit: 89f4d1efdaf5a5b495ab566e4cd1b51cafa53e81
 ---

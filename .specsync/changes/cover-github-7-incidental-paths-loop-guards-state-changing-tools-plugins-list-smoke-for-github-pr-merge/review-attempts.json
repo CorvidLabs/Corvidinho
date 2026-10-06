@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "cover-github-7-incidental-paths-loop-guards-state-changing-tools-plugins-list-smoke-for-github-pr-merge",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "54adb79d9fdd7a71dc757570ed45e267dcbea2ec",
+      "contract_digest": "5312779e5025d4daf8863b4884ff004991a6006f440888ae723e0224980acb0c",
+      "execution_digest": "627052d6172d77a00de6a17344470ab109b5e67827a0376fdf6495b6d4d93897",
+      "workspace_digest": "a28df5b0a06740bff64715485834578494a3abe26f93504ef5c3d00e7a51f23d",
+      "timestamp": 1791330784
+    }
+  ]
+}

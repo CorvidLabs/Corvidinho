@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "89f4d1efdaf5a5b495ab566e4cd1b51cafa53e81",
   "created_at": 1791330490,
-  "updated_at": 1791330778,
+  "updated_at": 1791330816,
   "affected_specs": [],
   "affected_paths": [
     "src/agent/loop-guards.ts",
@@ -28,6 +28,17 @@
     "tasks"
   ],
   "dependencies": [],
+  "acceptance_owner_corrections": [
+    {
+      "schema_version": 1,
+      "sequence": 1,
+      "path": "src/agent/loop-guards.ts",
+      "module": "agent",
+      "actor": "corvid-agent",
+      "reason": "src/agent/loop-guards.ts is owned by the agent module; assign canonical owner for GITHUB-7 incidental cover",
+      "timestamp": 1791330807
+    }
+  ],
   "answers": {
     "architecture_risk": "no",
     "public_contract": "no"
