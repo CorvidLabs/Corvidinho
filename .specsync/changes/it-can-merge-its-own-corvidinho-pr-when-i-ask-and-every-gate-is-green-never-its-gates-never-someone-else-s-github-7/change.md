@@ -1,6 +1,6 @@
 ---
 id: it-can-merge-its-own-corvidinho-pr-when-i-ask-and-every-gate-is-green-never-its-gates-never-someone-else-s-github-7
-state: implementing
+state: approved
 type: feature
 base_commit: 19f8cd8c9b8363361de431d380d956021e75d5e0
 ---

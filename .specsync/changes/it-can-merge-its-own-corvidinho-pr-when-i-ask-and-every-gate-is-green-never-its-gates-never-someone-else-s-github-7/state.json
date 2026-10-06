@@ -7,11 +7,10 @@
   "title": "It can merge its own Corvidinho PR when I ask and every gate is green; never its gates, never someone else's (GITHUB-7, GITHUB-7.a)",
   "description": "It can merge its own Corvidinho PR when I ask and every gate is green; never its gates, never someone else's (GITHUB-7, GITHUB-7.a)",
   "kind": "feature",
-  "state": "verifying",
-  "canonical_applied": true,
+  "state": "approved",
   "base_commit": "19f8cd8c9b8363361de431d380d956021e75d5e0",
   "created_at": 1791329119,
-  "updated_at": 1791329155,
+  "updated_at": 1791330350,
   "affected_specs": [
     "plugins",
     "agent"

@@ -60,12 +60,23 @@ artifact: design
   AUTONOMY-11 prompt sentence names merging its own PR among the things that
   ask.
 - **Gate paths** (GITHUB-7.a's list plus what it already protects): `.github/`,
-  `hi/`, any `fledge.toml`, `.fledge/`, any `AGENTS.md`, any `CODEOWNERS`,
-  any `.trust.toml` and any `bunfig.toml` (SAFE-2), SpecSync's config
-  (`.specsync/` outside `changes/` and `archive/`), and the merge gate's own
-  code (`SELF_MERGE_CODE`: `plugins/github/merge.ts`, `ciStatus.ts`,
-  `src/plugins/githubPublic.ts`, `must-ask.ts`, `run.ts`, `roles.ts`,
-  `src/agent/shell-gate.ts`, `src/approvals/code.ts`, `store.ts`,
-  `src/discord/approval-cards.ts` — the CI verdict, repo gate, caller and
-  role checks, must-ask gate and audit rows, and the card's store, code and
-  engine).
+  `hi/`, any `fledge.toml`, `.fledge/`, any `AGENTS.md` and any `CLAUDE.md`
+  (the project instructions every run loads, AGENT-1), any `CODEOWNERS`,
+  any `.trust.toml` and any `bunfig.toml` (SAFE-2), any `tsconfig.json` (the
+  verify lane's and CI's typecheck config), SpecSync's config (`.specsync/`
+  outside `changes/` and `archive/`), and the merge gate's own code
+  (`SELF_MERGE_CODE`: `plugins/github/merge.ts`, `ciStatus.ts`, `api.ts`,
+  `src/agent/repo-ways.ts` (it holds `CORVIDINHO_REPO`, the repo it merges
+  in), `src/autonomous/delegate.ts`, `src/plugins/githubPublic.ts`,
+  `must-ask.ts`, `run.ts`, `roles.ts`, `src/agent/shell-gate.ts`,
+  `src/approvals/code.ts`, `store.ts`, `src/discord/approval-cards.ts` — the
+  CI verdict, the GitHub client, the repo it merges in, the repo gate, caller,
+  worker and role checks, must-ask gate and audit rows, and the card's store,
+  code and engine).
+- **Ready by a person**: the last `ready_for_review` event (issue events come
+  oldest first) must be a person's; a person's earlier ready, then a draft
+  again and an app's ready last, waits for a person (round 13: only PRs a
+  human has marked ready).
+- **Stop after the Approve**: the handler checks the run's signal right before
+  `pulls.merge`; a run stopped while the gate re-ran merges nothing
+  (`aborted`, exit 130), as a stop while the card waits does.

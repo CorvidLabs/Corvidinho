@@ -22,10 +22,10 @@
  *   ({@link TALK_BRANCH_RE}) in the same repo, and its author is the token's
  *   own user (author id == the token's user id): it merges only PRs it opened
  *   from its own talk branches with its own token;
- * - the PR is not a draft, its own token never marked it ready, and a person
- *   (not its own token, not an app) did (it never marks its own /work draft
- *   ready, and this tool has no way to; a PR it opened ready waits for a
- *   person too);
+ * - the PR is not a draft, its own token never marked it ready, and the last
+ *   to mark it ready was a person (not its own token, not an app) (it never
+ *   marks its own /work draft ready, and this tool has no way to; a PR it
+ *   opened ready waits for a person too);
  * - the head is still the sha the caller named (`--sha`), so the card and
  *   the merge are about the same commit;
  * - no changed path (renames' old paths included) is one of its own gates
@@ -46,7 +46,8 @@
  * failing gate refuses with no card. After the approval the handler runs the
  * whole gate again and squash-merges through the normal merge API with the
  * expected head sha (`pulls.merge`, never an admin or bypass flag), titled
- * with the PR title; the reply names the merge sha. Every attempt leaves a
+ * with the PR title; the reply names the merge sha (a run stopped before
+ * that call merges nothing). Every attempt leaves a
  * SAFE-5 row: `denied` under `github-pr-merge:<reason>`, or `started` then
  * `ok` / `error` (src/plugins/run.ts).
  */
@@ -93,13 +94,18 @@ export const TALK_BRANCH_RE = /^talk\/[A-Za-z0-9_-]{1,16}-[0-9a-f]{16}$/;
 
 /**
  * The files that hold the self-merge gate (a PR changing one waits for a
- * human): this tool, the CI verdict it reads, the repo gate, the caller and
- * role checks (roles, surfaces), the must-ask gate and its audit rows, and
- * the Approve card's store, one-time code and engine.
+ * human): this tool, the CI verdict it reads, its GitHub client and
+ * owner/repo split, the repo it merges in (`CORVIDINHO_REPO`), the repo gate,
+ * the caller and role checks (roles, surfaces, worker depth), the must-ask
+ * gate and its audit rows, and the Approve card's store, one-time code and
+ * engine.
  */
 export const SELF_MERGE_CODE: readonly string[] = [
   "plugins/github/merge.ts",
   "plugins/github/ciStatus.ts",
+  "plugins/github/api.ts",
+  "src/agent/repo-ways.ts",
+  "src/autonomous/delegate.ts",
   "src/plugins/githubPublic.ts",
   "src/plugins/must-ask.ts",
   "src/plugins/run.ts",
@@ -127,12 +133,15 @@ const LEAVE = "leave it for a human merge";
 /**
  * Why a changed path is one of its own gates (GITHUB-7.a), else null:
  * CI (`.github/`), the verify lane (`fledge.toml`, `.fledge/`), the
- * criteria (`hi/`), `AGENTS.md`, `CODEOWNERS`, and the gate files it already
- * protects (SAFE-2): the Trust step of the verify gate (`.trust.toml`), the
- * test runtime config (`bunfig.toml`), SpecSync's own config (`.specsync/`
- * outside `changes/` and `archive/`), and the self-merge gate itself
- * ({@link SELF_MERGE_CODE}). Names compare without case, and `fledge.toml`,
- * `.trust.toml`, `AGENTS.md`, `CODEOWNERS` and `bunfig.toml` count in any
+ * criteria (`hi/`), `AGENTS.md` (and `CLAUDE.md`, the other project
+ * instructions file every run loads, AGENT-1), `CODEOWNERS`, the gate files
+ * it already protects (SAFE-2): the Trust step of the verify gate
+ * (`.trust.toml`), the test runtime config (`bunfig.toml`), SpecSync's own
+ * config (`.specsync/` outside `changes/` and `archive/`), the verify lane's
+ * typecheck config (`tsconfig.json`, read by `bunx tsc --noEmit` in the lane
+ * and in CI), and the self-merge gate itself ({@link SELF_MERGE_CODE}). Names
+ * compare without case, and `fledge.toml`, `.trust.toml`, `AGENTS.md`,
+ * `CLAUDE.md`, `CODEOWNERS`, `bunfig.toml` and `tsconfig.json` count in any
  * folder.
  */
 export function selfMergeGatePath(path: string): string | null {
@@ -149,8 +158,10 @@ export function selfMergeGatePath(path: string): string | null {
   if (lower.includes(".fledge")) return "the verify lane (.fledge/)";
   if (base === ".trust.toml") return "the verify gate's Trust step (.trust.toml)";
   if (base === "agents.md") return "AGENTS.md";
+  if (base === "claude.md") return "the project instructions (CLAUDE.md)";
   if (base === "codeowners") return "CODEOWNERS";
   if (base === "bunfig.toml" || base === ".bunfig.toml") return "the test runtime config (bunfig.toml)";
+  if (base === "tsconfig.json") return "the verify lane's typecheck config (tsconfig.json)";
   if (first === ".specsync" && lower[1] !== "changes" && lower[1] !== "archive") {
     return "the SpecSync check's config (.specsync/)";
   }
@@ -524,16 +535,20 @@ export async function checkSelfMerge(
     if (events.truncated) {
       return { ok: false, result: refused("events-truncated", `${where}'s event list is too long to read whole; ${LEAVE}`, at) };
     }
-    if (events.items.some((e) => e.event === "ready_for_review" && e.actor?.id === me.id)) {
+    // Issue events come oldest first.
+    const readied = events.items.filter((e) => e.event === "ready_for_review");
+    if (readied.some((e) => e.actor?.id === me.id)) {
       return {
         ok: false,
         result: refused("self-marked-ready", `${where} was marked ready for review by its own token, and it never marks its own draft ready; ${LEAVE}`, at),
       };
     }
     // GITHUB-7.a "it never marks its own /work draft ready" (round 13: only
-    // PRs a human has marked ready): a PR it opened ready, or one only an app
-    // marked ready, waits until a person marks it ready.
-    if (!events.items.some((e) => e.event === "ready_for_review" && isHumanActor(e.actor, me))) {
+    // PRs a human has marked ready): a PR it opened ready, or one an app
+    // marked ready last (a person's earlier ready, then a draft again, does
+    // not count), waits until a person marks it ready.
+    const lastReady = readied[readied.length - 1];
+    if (!lastReady || !isHumanActor(lastReady.actor, me)) {
       return {
         ok: false,
         result: refused(
@@ -693,6 +708,11 @@ export function makeGithubPrMergeCommand(deps: SelfMergeDeps = {}): PluginComman
       }
       const c = (deps.client ?? defaultClient)();
       if (isApiResult(c)) return refused("no-token", c.error ?? "no GitHub token");
+      // A run stopped after the owner's Approve (while the gate re-ran)
+      // merges nothing: the stop wins, as it does while the card waits.
+      if (ctx.signal?.aborted) {
+        return refused("aborted", `the run was stopped before the merge of PR #${f.number}; nothing was merged`, { pr: f.number }, 130);
+      }
       try {
         const res = await c.rest.pulls.merge({
           owner: f.owner,

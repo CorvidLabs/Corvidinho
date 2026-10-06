@@ -56,6 +56,63 @@
         "agent": "1631ac27fc79f195b1c7a6a12da0901e298cfb312de0a37a988329270007e129",
         "plugins": "5bd1276acd10e5d4a5c93777cfa61e7066d7e3fd485f49b2d0849f6eb2c8f2a7"
       }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791330350,
+      "digest": "02e417df97d142eeb549cbf6af75f707b1f9d93c328243178848e120d3a0828a",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "it-can-merge-its-own-corvidinho-pr-when-i-ask-and-every-gate-is-green-never-its-gates-never-someone-else-s-github-7",
+        "title": "It can merge its own Corvidinho PR when I ask and every gate is green; never its gates, never someone else's (GITHUB-7, GITHUB-7.a)",
+        "description": "It can merge its own Corvidinho PR when I ask and every gate is green; never its gates, never someone else's (GITHUB-7, GITHUB-7.a)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "plugins"
+        ],
+        "affected_paths": [
+          "INTENT.md",
+          "README.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/WATCH.md",
+          "docs/discord.md",
+          "hi/github.md",
+          "plugins/github/index.ts",
+          "plugins/github/merge.ts",
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/testing.md",
+          "src/agent/ask.ts",
+          "src/agent/events-ndjson.ts",
+          "src/agent/execute.ts",
+          "src/agent/loop-guards.ts",
+          "src/agent/tools.ts",
+          "src/plugins/must-ask.ts",
+          "src/plugins/run.ts",
+          "src/plugins/types.ts",
+          "tests/github.self-merge.test.ts",
+          "tests/must-ask.boundary.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "GITHUB-7 (on main) and GITHUB-7.a (captured with hi in this change from Leif's 2026-09-28 interview record, round 16 of 2026-10-06) hold through one checked tool, github-pr-merge (plugins/github/merge.ts, dangerous, mutating, minTier 1): it refuses with no card unless the call comes from the owner's own interactive run (the owner's Discord chat, /session start, /work or an ask answer of one, role re-resolved now; or the local CLI nothing spawned — never team, community, WATCH (the owner's own GitHub-triggered run included), a schedule or a delegate/council worker), the repo is CorvidLabs/Corvidinho (outside it a human still merges), the PR is open, comes from one of its own talk/<id>-<16 hex> branches in that repo and was opened by the token's own user (author id == token id), is not a draft, was never marked ready by its own token and was marked ready by a person (not an app), its head is still the --sha named, no changed path (rename old paths included; list read whole) is a gate (.github/, fledge.toml, .fledge/, hi/, AGENTS.md, CODEOWNERS, .trust.toml, bunfig.toml, .specsync config, the merge gate's own files), no reviewer's latest review requests changes, the smoke and spec-sync check runs from GitHub Actions passed at exactly that head with the whole CI verdict there green, and GitHub says mergeable with mergeable_state clean or has_hooks; a passing gate raises the owner's mustask-merge Approve card (class destructive: Approve plus the one-time code) showing the PR, head sha and squash title; after approval the handler re-runs the whole gate and squash-merges via pulls.merge with the expected head sha and the PR title (#N), and its reply names the merge sha; every attempt leaves a SAFE-5 row (denied as github-pr-merge:<reason>, or started then ok/error); the tool loop offers it only to the owner's own interactive run with one operator line otherwise; tests with a fake GitHub client cover each refusal reason, a passing merge, the card engine and the catalog."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "1631ac27fc79f195b1c7a6a12da0901e298cfb312de0a37a988329270007e129",
+        "plugins": "657b380eb62fefe871cd7ee3720045edfd4574aeffc15f9d30c8b837bb820309"
+      }
     }
   ],
   "reopenings": []

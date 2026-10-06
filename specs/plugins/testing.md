@@ -782,13 +782,15 @@ dir and allowlist file, the real must-ask gate, card store and SAFE-5 chain.
   named sha, `squash` and `<title> (#12)`; the reply names the merge sha;
   `started` + `ok` rows. On the bridge's real card engine Approve alone merges
   nothing and Approve plus the one-time code merges once.
-- Each refusal reason (a PR it opened ready that no person marked ready, or
-  one only an app marked ready, is `not-marked-ready`) raises no card, merges
+- Each refusal reason (a PR it opened ready that no person marked ready, one
+  only an app marked ready, or one an app marked ready last after a person's
+  ready and a draft again, is `not-marked-ready`) raises no card, merges
   nothing and leaves one `github-pr-merge:<reason>` `denied` row; a denied
   card leaves
   `card-denied`; a PR turned draft while the card waits is refused after
-  `started`; a GitHub 405 is `github-refused`; a dry run asks and merges
-  nothing.
+  `started`; a run stopped after the Approve, while the gate re-runs, merges
+  nothing (`started`, then `aborted`); a GitHub 405 is `github-refused`; a
+  dry run asks and merges nothing.
 - The caller check refuses WATCH (a WATCH session id, a `watch` stamp, and
   the owner's own GitHub-triggered run as #374's WATCH spawn stamps it), the
   owner's own schedule, a worker, a missing surface stamp, a muted owner,
@@ -796,9 +798,10 @@ dir and allowlist file, the real must-ask gate, card store and SAFE-5 chain.
   is refused before any call. Through `runPlugin` the owner's WATCH run
   passes the role gate (IDENTITY-12.a) and is refused by the tool with one
   `github-pr-merge:watch` row and no card.
-- Gate paths (`.trust.toml` in any folder and case and every
-  `SELF_MERGE_CODE` file included; ordinary paths such as `trust.toml` are
-  not gates), talk-branch names
+- Gate paths (`.trust.toml` in any folder and case, `CLAUDE.md` and
+  `tsconfig.json` in any folder, and every `SELF_MERGE_CODE` file —
+  `repo-ways.ts`, `delegate.ts` and `api.ts` included; ordinary paths such as
+  `trust.toml`, `package.json` and `src/agent/tools.ts` are not gates), talk-branch names
   against `generateTalkBranchName`, and the required check names against
   `.github/workflows/ci.yml` / `spec-sync.yml`.
 - `tests/must-ask.boundary.test.ts`: `github-pr-merge` is among the

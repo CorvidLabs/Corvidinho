@@ -413,6 +413,39 @@ describe("GITHUB-7.a: a passing merge, only after the owner's Approve card", () 
     expect(auditRows().at(-1)).toEqual({ action: `${TOOL}:github-refused`, outcome: "denied" });
   });
 
+  test("a run stopped after the Approve, while the gate re-ran, merges nothing: started, then `github-pr-merge:aborted`", async () => {
+    const gh = greenGh();
+    const cmd = useFake(gh);
+    const stop = new AbortController();
+    const handler = cmd.handler;
+    // The owner approved; the stop lands while the handler re-reads the PR.
+    cmd.handler = (ctx) => {
+      stop.abort();
+      return handler({ ...ctx, signal: stop.signal });
+    };
+    answer("approved");
+    const r = await runPlugin({ name: TOOL, args: ARGS, nonInteractive: true, allowlist: [TOOL] });
+    expect(r.ok).toBe(false);
+    expect(r.exitCode).toBe(130);
+    expect(r.error).toContain("nothing was merged");
+    expect(merges(gh)).toEqual([]);
+    expect(auditRows()).toEqual([
+      { action: TOOL, outcome: "started" },
+      { action: `${TOOL}:aborted`, outcome: "denied" },
+    ]);
+  });
+
+  test("a person marked it ready again after an app did: it may merge", async () => {
+    const gh = greenGh();
+    const app = { id: 41898282, login: "some-app[bot]", type: "Bot" };
+    gh.events = [
+      { event: "ready_for_review", actor: app },
+      { event: "convert_to_draft", actor: LEIF },
+      { event: "ready_for_review", actor: LEIF },
+    ];
+    expect((await verdictFor(gh)).ok).toBe(true);
+  });
+
   test("dry run: every check, no card and no merge", async () => {
     const gh = greenGh();
     useFake(gh);
@@ -437,6 +470,15 @@ describe("GITHUB-7.a: each refusal raises no card, merges nothing and leaves a `
     ["its own token marked it ready", (gh) => gh.events.push({ event: "ready_for_review", actor: ME }), "self-marked-ready"],
     ["it opened the PR ready: no person marked it ready", (gh) => (gh.events = [{ event: "labeled", actor: LEIF }]), "not-marked-ready"],
     ["only an app marked it ready", (gh) => (gh.events = [{ event: "ready_for_review", actor: { id: 41898282, login: "some-app[bot]", type: "Bot" } }]), "not-marked-ready"],
+    [
+      "a person marked it ready, then it went back to draft and an app marked it ready last",
+      (gh) =>
+        gh.events.push(
+          { event: "convert_to_draft", actor: { id: 41898282, login: "some-app[bot]", type: "Bot" } },
+          { event: "ready_for_review", actor: { id: 41898282, login: "some-app[bot]", type: "Bot" } },
+        ),
+      "not-marked-ready",
+    ],
     ["changes a gate file", (gh) => gh.files.push({ filename: ".github/workflows/ci.yml" }), "gate-path"],
     ["renames a gate file away", (gh) => gh.files.push({ filename: "docs/old-hi.md", previous_filename: "hi/github.md" }), "gate-path"],
     ["changed-file list not read whole", (gh) => (gh.pr.changed_files = 4), "files-truncated"],
@@ -523,6 +565,14 @@ describe("GITHUB-7.a: its own gates", () => {
     ".trust.toml",
     "sub/.TRUST.toml",
     "bunfig.toml",
+    "CLAUDE.md",
+    "docs/claude.md",
+    "tsconfig.json",
+    "tests/tsconfig.json",
+    // The merge gate's own code: the repo it merges in, the worker check, its client.
+    "src/agent/repo-ways.ts",
+    "src/autonomous/delegate.ts",
+    "plugins/github/api.ts",
     ".specsync/config.toml",
     ".specsync/sdd.json",
     ...SELF_MERGE_CODE,
@@ -541,6 +591,8 @@ describe("GITHUB-7.a: its own gates", () => {
     "README.md",
     "trust.toml",
     "docs/trust.md",
+    "package.json",
+    "src/agent/tools.ts",
   ])("%s is not a gate", (path) => {
     expect(selfMergeGatePath(path)).toBeNull();
   });

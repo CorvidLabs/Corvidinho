@@ -48,17 +48,22 @@ refuse with exit 2, `refused (GITHUB-7.a): <why>`, `data.reason` and
   `talk/<1-16 of [A-Za-z0-9_-]>-<16 hex>`, as `generateTalkBranchName` names
   it; else `not-own-branch`), it is not a draft (`draft`), its head sha is the
   `--sha` named (`head-moved`), no `ready_for_review` event on it was by
-  the token's user (`self-marked-ready`), and at least one was by a person —
-  not the token's user and not an app (actor type `Bot` or a `…[bot]` login)
-  — so a PR it opened ready, or one only an app marked ready, waits until a
-  human marks it ready (`not-marked-ready`; an event list not read whole is
-  `events-truncated`);
+  the token's user (`self-marked-ready`), and the last one (events oldest
+  first) was by a person — not the token's user and not an app (actor type
+  `Bot` or a `…[bot]` login) — so a PR it opened ready, or one an app marked
+  ready last (a person's earlier ready, then a draft again, does not count),
+  waits until a human marks it ready (`not-marked-ready`; an event list not
+  read whole is `events-truncated`);
 - no changed path or a rename's old path is a gate (`selfMergeGatePath`:
   `.github/`, `hi/`, any `fledge.toml`, a `.fledge` folder, any `AGENTS.md`,
-  any `CODEOWNERS`, any `.trust.toml`, any `bunfig.toml`, `.specsync/`
-  outside `changes/` and `archive/`, and `SELF_MERGE_CODE`:
+  any `CLAUDE.md` (the other project instructions file, AGENT-1), any
+  `CODEOWNERS`, any `.trust.toml`, any `bunfig.toml`, any `tsconfig.json`
+  (the verify lane's and CI's typecheck config), `.specsync/` outside
+  `changes/` and `archive/`, and `SELF_MERGE_CODE`:
   `plugins/github/merge.ts`, `plugins/github/ciStatus.ts`,
-  `src/plugins/githubPublic.ts`, `src/plugins/must-ask.ts`,
+  `plugins/github/api.ts`, `src/agent/repo-ways.ts` (it holds
+  `CORVIDINHO_REPO`, the repo it merges in), `src/autonomous/delegate.ts`
+  (the worker check), `src/plugins/githubPublic.ts`, `src/plugins/must-ask.ts`,
   `src/plugins/run.ts`, `src/plugins/roles.ts`, `src/agent/shell-gate.ts`,
   `src/approvals/code.ts`, `src/approvals/store.ts`,
   `src/discord/approval-cards.ts`; names without case; else `gate-path`), and the file list was read whole
@@ -86,7 +91,10 @@ with `sha` = the named head, `merge_method: "squash"` and `commit_title`
 option; its result SHALL name the merge sha (`Merged PR #<n> "<title>" into
 <base> as <sha> (squash, GITHUB-7.a).`, `data.sha`). GitHub not merging, or
 answering 405 / 409 / 422, SHALL be a `github-refused` refusal saying nothing
-was merged; a dry run SHALL merge nothing and return what it would do. Every
+was merged; a run whose signal is aborted by then (stopped after the
+Approve, while the gate re-ran) SHALL NOT call `pulls.merge` and SHALL be an
+`aborted` refusal (exit 130) saying nothing was merged; a dry run SHALL merge
+nothing and return what it would do. Every
 attempt SHALL leave SAFE-5 rows (REQ-plugins-095): one `denied` row named
 `github-pr-merge:<reason>` for a refusal from the gate or the card (no
 `started`), or `started` then `ok`, `error` or `github-pr-merge:<reason>`
@@ -101,7 +109,9 @@ Acceptance Criteria
 - Each refusal — draft, foreign author, non-talk branch, fork head, closed, head moved, self-marked ready, opened ready with no person marking it ready, marked ready only by an app, a gate path (and a rename away from one), a short file list, changes requested, smoke or spec-sync missing, failed, pending, at another commit or from another app, another check failing, blocked, unknown or conflicting mergeability, an unreadable token user — raises no card, merges nothing and leaves one `github-pr-merge:<reason>` `denied` row.
 - A non-Corvidinho repo and a bad usage are refused before any GitHub call; WATCH (a WATCH session id, a `watch` stamp, and the owner's own GitHub-triggered run as the WATCH spawn stamps it), a schedule (the owner's own), a worker, a missing surface stamp, a muted owner, team and a spawned local run are refused before any GitHub call; the owner's chat, `/session start`, `/work`, ask answers and the local CLI pass.
 - Through `runPlugin`, the owner's own GitHub-triggered WATCH run passes the role gate but is refused with no card, no GitHub call and one `github-pr-merge:watch` `denied` row.
-- `.trust.toml` in any folder (any case) and every `SELF_MERGE_CODE` file are gate paths; `trust.toml` and `docs/trust.md` are not.
+- `.trust.toml` in any folder (any case), `CLAUDE.md` and `tsconfig.json` in any folder, and every `SELF_MERGE_CODE` file (`src/agent/repo-ways.ts`, `src/autonomous/delegate.ts` and `plugins/github/api.ts` included) are gate paths; `trust.toml`, `docs/trust.md`, `package.json` and `src/agent/tools.ts` are not.
+- A person's ready, then a draft again and an app's ready last, is `not-marked-ready`; a person's ready after an app's merges.
+- A run stopped after the Approve, while the gate re-runs, merges nothing and leaves `started` then `github-pr-merge:aborted`.
 - A PR turned back into a draft while the card waits is refused after the approval (`started`, then `github-pr-merge:draft`), and a denied card leaves `github-pr-merge:card-denied`.
 - `tests/github.self-merge.test.ts` fails on the base sources and passes after.
 
