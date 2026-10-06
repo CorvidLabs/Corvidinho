@@ -50,6 +50,7 @@ files:
   - tests/spend.surfaces.test.ts
   - tests/agent.ask.test.ts
   - tests/agent.verify-env.test.ts
+  - tests/agent.cloud-credentials.test.ts
   - tests/agent.verify-feedback.test.ts
   - tests/safe.injection.test.ts
   - tests/fixtures/verify-lane-log.ts
@@ -644,7 +645,28 @@ carries a `stuck` ask. Additive on the NDJSON wire: protocol stays 2.
 
 Verify runner env (REQ-agent-002, SAFE-6): `src/agent/verify.ts` exports
 `isVerifyEnvDropped` and `buildVerifyEnv`; `defaultVerifyRunner` spawns fledge
-with `buildVerifyEnv()`.
+with `withoutCloudCredentials(buildVerifyEnv())`.
+
+Cloud credentials (SAFE-21.b, REQ-agent-621): `src/agent/verify.ts` also
+exports `isCloudCredentialEnvKey` (the documented family: `KUBECONFIG`,
+`KUBERNETES_SERVICE_HOST` / `_PORT`; AWS keys, session tokens, profiles,
+credential / config files, role and web-identity settings, `AWS_CONTAINER_*`;
+`GOOGLE_APPLICATION_CREDENTIALS` and other Google key files and tokens, every
+`CLOUDSDK_*`; Azure and `ARM_*` principals, identities (`IDENTITY_*`,
+`MSI_*`) and storage keys; any `AWS_` / `GOOGLE_` / `GCLOUD_` / `GCP_` /
+`AZURE_` / `ARM_` key naming a key, token, secret, password or credential;
+`TF_TOKEN_*`; and listed tokens of other clouds and infrastructure APIs),
+`CLOUD_CREDENTIAL_STAND_INS` (`KUBECONFIG`, `AWS_SHARED_CREDENTIALS_FILE`,
+`AWS_CONFIG_FILE`, `GOOGLE_APPLICATION_CREDENTIALS` = `/dev/null`,
+`AWS_EC2_METADATA_DISABLED=true`), `withoutCloudCredentials(env)` (drops the
+family in place, sets the stand-ins, and points `CLOUDSDK_CONFIG` /
+`AZURE_CONFIG_DIR` at fresh empty 0700 dirs inside one `corvidinho-no-cloud-*`
+temp dir made for that one child) and `releaseCloudStandIns(env)` (removes that
+temp dir once the child has exited; a no-op for any other env; leftovers go
+when the process exits). The verify lane, `shell-exec`, the language runners
+and the Fledge core runs use it (REQ-plugins-621), so none starts with the
+owner's cloud credentials or reads them from `~/.kube/config`, `~/.aws`,
+`~/.config/gcloud` or `~/.azure`.
 
 Trust where the repo uses Trust (AGENT-18, REQ-agent-525): `src/agent/verify.ts`
 also exports `TRUST_VERIFY_ARGS` (`--non-interactive trust verify`),
@@ -1681,6 +1703,7 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-09-30 | web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered: Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap |
 | 2026-10-01 | gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins: GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap |
 | 2026-10-03 | missing-plugin-asks-soft-land-with-the-real-gap: Missing-plugin asks soft-land with the real gap |
+| 2026-10-06 | the-verify-lane-the-shell-and-the-runners-start-without-my-cloud-credentials-kubeconfig-aws-google-cloud-azure-and: The verify lane, the shell and the runners start without my cloud credentials (KUBECONFIG, AWS, Google Cloud, Azure and similar), so they can't reach prod by accident (SAFE-21.b) |
 | 2026-10-06 | before-each-call-the-spend-guard-counts-a-worst-case-reply-toward-the-cap-the-model-s-listed-maximum-output-or-128k: Before each call the spend guard counts a worst-case reply toward the cap, the model's listed maximum output or 128K tokens for a priced model with none listed, so it asks before a long reply could take spend past it; replies are never cut short (AUTONOMY-8.a) |
 | 2026-10-06 | after-the-one-nudge-a-stalled-run-moves-to-the-next-stronger-model-in-the-order-i-set-and-says-so-agent-17-agent-17-a: After the one nudge a stalled run moves to the next stronger model in the order I set, and says so (AGENT-17, AGENT-17.a) |
 | 2026-10-05 | where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts: Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts) |

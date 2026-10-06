@@ -807,6 +807,19 @@ reads without git or gh (an interpreter opening `~/.ssh/id_*`, `ssh` started
 by a program), and tools with their own credential stores (`cargo publish`
 with `~/.cargo/credentials.toml`, npm tokens); a sandbox (G13) is deferred.
 
+SAFE-21.b (REQ-plugins-621, REQ-agent-621): `runnerChildEnv` and
+`fledgeCoreChildEnv` also apply `withoutCloudCredentials`
+(`src/agent/verify.ts`, the verify lane's own cloud scrub), so `shell-exec`,
+the runners and the Fledge core runs start without the owner's cloud
+credentials: every `isCloudCredentialEnvKey` key is dropped (KUBECONFIG and the
+in-cluster switch, AWS keys / profiles / roles / container endpoints, Google
+ADC and key files, `CLOUDSDK_*`, Azure / `ARM_*` principals and identities,
+other clouds' tokens), `KUBECONFIG`, `AWS_SHARED_CREDENTIALS_FILE`,
+`AWS_CONFIG_FILE` and `GOOGLE_APPLICATION_CREDENTIALS` are `/dev/null`,
+`AWS_EC2_METADATA_DISABLED=true`, and `CLOUDSDK_CONFIG` / `AZURE_CONFIG_DIR`
+are fresh empty dirs for that one child, removed (`releaseCloudStandIns`)
+once it exits. Fledge plugin commands (`fledgeChildEnv`) are unchanged.
+
 
 File write/edit are `mutating: true` even when `dangerous: false` (ROLES-CHAT-5).
 When `CORVIDINHO_ACTING_IS_ADMIN` is set (Discord/WATCH/schedule acting session),
@@ -1012,7 +1025,8 @@ registers nothing (never offered, never a tool that cannot start). Each runner
 is `dangerous: true`, `minTier: 2`, and spawns `[bin, ...argv]` (no shell) with
 cwd = the plugin cwd, the verify lane's scrubbed env (`buildVerifyEnv`) minus
 `CDPATH` / `OLDPWD` and without GitHub or git credentials (SAFE-21.a,
-REQ-plugins-495) plus `CORVIDINHO_PROJECT_ROOT`, stdin closed, a 10 minute
+REQ-plugins-495) or cloud credentials (SAFE-21.b, REQ-plugins-621) plus
+`CORVIDINHO_PROJECT_ROOT`, stdin closed, a 10 minute
 timeout (exit 124), 64 KiB per-stream caps, and its process group killed on
 timeout or the calling run's abort (exit 130); output is secret-scrubbed. Empty
 argv is a usage error (exit 1, nothing spawned); a binary that cannot start
@@ -1496,6 +1510,7 @@ and current rows for plugins host evolution.
 | 2026-10-01 | in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent: In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard) |
 | 2026-09-30 | web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered: Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap |
 | 2026-10-01 | gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins: GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap |
+| 2026-10-06 | the-verify-lane-the-shell-and-the-runners-start-without-my-cloud-credentials-kubeconfig-aws-google-cloud-azure-and: The verify lane, the shell and the runners start without my cloud credentials (KUBECONFIG, AWS, Google Cloud, Azure and similar), so they can't reach prod by accident (SAFE-21.b) |
 | 2026-10-06 | shell-exec-refuses-specsync-change-approve-review-finalize-and-ship-in-every-repo-only-a-human-or-corvidinho-s-own: Shell-exec refuses specsync change approve, review, finalize and ship in every repo: only a human, or Corvidinho's own green-lane settle, does them (AGENT-18.a) |
 | 2026-10-05 | where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts: Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts) |
 | 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |

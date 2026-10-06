@@ -1151,6 +1151,42 @@ In `tests/gif.search.test.ts`:
   loop that search ends the attempt with `SPEND_CAP_SUMMARY` and the ask
   after one model call.
 
+## The verify lane and the tool children start without cloud credentials (REQ-agent-621 added, REQ-agent-002 modified, REQ-plugins-621; SAFE-21.b)
+
+`tests/agent.cloud-credentials.test.ts` — stand-in `kubectl`, `aws`, `gcloud`
+and `az` scripts in a temp dir (each child calls them by absolute path, never
+the host's tools) print what a real one reads: the env it names, else its
+default files under a fake HOME (`~/.kube/config`, `~/.aws/credentials` /
+`config`, `~/.config/gcloud/*` and the ADC well-known file, `~/.azure/*`).
+Every fake credential value and file holds one marker, so the marker anywhere
+in a child's output means a credential reached it. Each surface runs twice:
+with the owner's cloud env set (KUBECONFIG list, in-cluster host, AWS keys /
+profile / role / web identity / container endpoint, Bedrock token, Google ADC
+/ credentials / OAuth / API key, `CLOUDSDK_*`, Azure / ARM / managed identity,
+DigitalOcean, Hetzner, Cloudflare, Vault, `TF_TOKEN_*`) and with only the
+default files.
+- `defaultVerifyRunner` (a child bun process with the owner's env and a fake
+  `fledge`): no marker, no dropped key, `KUBECONFIG` / `AWS_SHARED_CREDENTIALS_FILE`
+  / `AWS_CONFIG_FILE` / `GOOGLE_APPLICATION_CREDENTIALS` = `/dev/null`,
+  `AWS_EC2_METADATA_DISABLED=true`, `CLOUDSDK_CONFIG` / `AZURE_CONFIG_DIR`
+  outside HOME and gone after the lane; `AWS_REGION`, `GOOGLE_CLOUD_PROJECT`
+  and other keys kept (REQ-agent-621, REQ-agent-002).
+- `shell-exec`, `node-exec` / `python-exec` / `cargo-exec` (`runRunner`) and
+  `fledge-lanes-run` / `fledge-run`: the same (REQ-plugins-621).
+- A first runner child that writes a "login" into its gcloud and az dirs does
+  not reach the next child (fresh dirs per child).
+- `isCloudCredentialEnvKey` names every documented key and pattern and keeps
+  ordinary settings (`AWS_REGION`, `AWS_ENDPOINT_URL`, `GOOGLE_CLOUD_PROJECT`,
+  `AZURE_LOCATION`, `KUBE_EDITOR`, `TF_LOG`, …); `withoutCloudCredentials`
+  makes fresh, empty 0700 dirs per call; `releaseCloudStandIns` removes only
+  its own (twice is a no-op; the owner's `~/.config/gcloud` / `~/.azure` named
+  in an env it did not build stay).
+
+Fail-on-base: with the base's (`e1a24ed2`) `src/agent/verify.ts`,
+`plugins/runners/commands.ts`, `plugins/shell/commands.ts` and
+`plugins/fledge/core.ts` swapped in, the file gave 0 pass, 7 fail (the
+markers from the env and from the default files reached every child; the new
+exports were missing); restored, 7 of 7 pass.
 ## hi drafts: the run drafts and asks; the guard lets through only approved captures (REQ-agent-521, REQ-agent-522, REQ-agent-520 modified; AGENT-18 hi clause, drafting half)
 
 `tests/agent.hi-draft.test.ts` (17 tests; temp git repos with a bare

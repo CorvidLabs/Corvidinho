@@ -5,6 +5,9 @@
  * (AGENT-4.a).
  */
 
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { isWorkerEnvDropped } from "../autonomous/delegate.ts";
 import {
   collectProcessTree,
@@ -95,6 +98,191 @@ export function buildVerifyEnv(
 }
 
 /**
+ * Env keys that carry the owner's cloud credentials, or point a cloud CLI or
+ * SDK at them (SAFE-21.b). The verify lane, `shell-exec`, the language
+ * runners and the Fledge core runs start without them
+ * ({@link withoutCloudCredentials}), so they can't reach prod by accident.
+ */
+const CLOUD_CREDENTIAL_ENV_KEYS = new Set([
+  // Kubernetes: the kubeconfig list, and the in-cluster service account
+  // (client-go falls back to it when these two are set).
+  "KUBECONFIG",
+  "KUBERNETES_SERVICE_HOST",
+  "KUBERNETES_SERVICE_PORT",
+  // AWS: keys, profiles, the files that hold them, assumed and web-identity roles.
+  "AWS_ACCESS_KEY_ID",
+  "AWS_SECRET_ACCESS_KEY",
+  "AWS_SESSION_TOKEN",
+  "AWS_SECURITY_TOKEN",
+  "AWS_PROFILE",
+  "AWS_DEFAULT_PROFILE",
+  "AWS_SHARED_CREDENTIALS_FILE",
+  "AWS_CONFIG_FILE",
+  "AWS_ROLE_ARN",
+  "AWS_ROLE_SESSION_NAME",
+  "AWS_WEB_IDENTITY_TOKEN_FILE",
+  // Google Cloud: Application Default Credentials and the key files and
+  // tokens Terraform and CI auth actions read.
+  "GOOGLE_APPLICATION_CREDENTIALS",
+  "GOOGLE_CREDENTIALS",
+  "GOOGLE_CLOUD_KEYFILE_JSON",
+  "GCLOUD_KEYFILE_JSON",
+  "GOOGLE_OAUTH_ACCESS_TOKEN",
+  "GOOGLE_IMPERSONATE_SERVICE_ACCOUNT",
+  "GOOGLE_GHA_CREDS_PATH",
+  // Azure: service principal, user, workload and managed identity, the CLI's
+  // config dir, storage keys; ARM_* is the same set for Terraform.
+  "AZURE_CLIENT_ID",
+  "AZURE_CLIENT_SECRET",
+  "AZURE_TENANT_ID",
+  "AZURE_SUBSCRIPTION_ID",
+  "AZURE_USERNAME",
+  "AZURE_PASSWORD",
+  "AZURE_CLIENT_CERTIFICATE_PATH",
+  "AZURE_CLIENT_CERTIFICATE_PASSWORD",
+  "AZURE_FEDERATED_TOKEN_FILE",
+  "AZURE_CONFIG_DIR",
+  "AZURE_STORAGE_KEY",
+  "AZURE_STORAGE_CONNECTION_STRING",
+  "AZURE_STORAGE_SAS_TOKEN",
+  "AZURE_DEVOPS_EXT_PAT",
+  "IDENTITY_ENDPOINT",
+  "IDENTITY_HEADER",
+  "MSI_ENDPOINT",
+  "MSI_SECRET",
+  "ARM_CLIENT_ID",
+  "ARM_CLIENT_SECRET",
+  "ARM_TENANT_ID",
+  "ARM_SUBSCRIPTION_ID",
+  "ARM_ACCESS_KEY",
+  "ARM_SAS_TOKEN",
+  "ARM_CLIENT_CERTIFICATE_PATH",
+  "ARM_CLIENT_CERTIFICATE_PASSWORD",
+  "ARM_OIDC_TOKEN",
+  "ARM_OIDC_TOKEN_FILE_PATH",
+  "ARM_OIDC_REQUEST_TOKEN",
+  "ARM_OIDC_REQUEST_URL",
+  "ARM_USE_MSI",
+  "ARM_MSI_ENDPOINT",
+  // Other clouds and infrastructure APIs that reach prod.
+  "DIGITALOCEAN_TOKEN",
+  "DIGITALOCEAN_ACCESS_TOKEN",
+  "HCLOUD_TOKEN",
+  "CLOUDFLARE_API_TOKEN",
+  "CLOUDFLARE_API_KEY",
+  "LINODE_TOKEN",
+  "LINODE_CLI_TOKEN",
+  "VULTR_API_KEY",
+  "SCW_ACCESS_KEY",
+  "SCW_SECRET_KEY",
+  "OCI_CLI_CONFIG_FILE",
+  "OCI_CLI_KEY_FILE",
+  "OCI_CLI_PROFILE",
+  "OCI_CLI_AUTH",
+  "IBMCLOUD_API_KEY",
+  "IC_API_KEY",
+  "ALIBABA_CLOUD_ACCESS_KEY_ID",
+  "ALIBABA_CLOUD_ACCESS_KEY_SECRET",
+  "ALICLOUD_ACCESS_KEY",
+  "ALICLOUD_SECRET_KEY",
+  "OS_PASSWORD",
+  "OS_TOKEN",
+  "OS_APPLICATION_CREDENTIAL_SECRET",
+  "HEROKU_API_KEY",
+  "FLY_API_TOKEN",
+  "FLY_ACCESS_TOKEN",
+  "VERCEL_TOKEN",
+  "NETLIFY_AUTH_TOKEN",
+  "RAILWAY_TOKEN",
+  "TFE_TOKEN",
+  "PULUMI_ACCESS_TOKEN",
+  "VAULT_TOKEN",
+  "NOMAD_TOKEN",
+  "CONSUL_HTTP_TOKEN",
+]);
+const CLOUD_CREDENTIAL_ENV_PATTERNS: readonly RegExp[] = [
+  // ECS task roles and EKS Pod Identity: the credential endpoint and its token.
+  /^AWS_CONTAINER_\w+$/,
+  // gcloud: every property override (account, token files, impersonation, config dir).
+  /^CLOUDSDK_\w+$/,
+  // Any other AWS / Google Cloud / Azure key that names a key, token, secret,
+  // password or credential (AWS_BEARER_TOKEN_BEDROCK, GOOGLE_API_KEY, …).
+  /^(AWS|GOOGLE|GCLOUD|GCP|AZURE|ARM)_\w*(ACCESS_KEY|API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|KEYFILE|CONNECTION_STRING)\w*$/,
+  // Terraform / HCP Terraform per-host tokens.
+  /^TF_TOKEN_\w+$/,
+];
+
+/** True when env key `key` carries or points at the owner's cloud credentials (SAFE-21.b). */
+export function isCloudCredentialEnvKey(key: string): boolean {
+  return CLOUD_CREDENTIAL_ENV_KEYS.has(key) || CLOUD_CREDENTIAL_ENV_PATTERNS.some((p) => p.test(key));
+}
+
+/**
+ * Empty stand-ins for the files each cloud tool reads when its env names
+ * none (SAFE-21.b): dropping the env alone would leave `~/.kube/config`,
+ * `~/.aws/credentials` / `~/.aws/config` and the ADC well-known file
+ * `~/.config/gcloud/application_default_credentials.json` in reach. A tool
+ * reads `/dev/null` as an empty file and finds no credentials, and nothing
+ * it writes there persists. `AWS_EC2_METADATA_DISABLED` also stops the AWS
+ * CLI and SDKs fetching instance-role credentials from EC2's metadata service.
+ */
+export const CLOUD_CREDENTIAL_STAND_INS: Readonly<Record<string, string>> = Object.freeze({
+  KUBECONFIG: "/dev/null",
+  AWS_SHARED_CREDENTIALS_FILE: "/dev/null",
+  AWS_CONFIG_FILE: "/dev/null",
+  AWS_EC2_METADATA_DISABLED: "true",
+  GOOGLE_APPLICATION_CREDENTIALS: "/dev/null",
+});
+
+/** Stand-in config dirs made by {@link withoutCloudCredentials} and not released yet. */
+const liveCloudDirs = new Set<string>();
+let cloudDirsExitHook = false;
+
+/**
+ * SAFE-21.b: `env` minus the owner's cloud credentials, in place. The keys
+ * {@link isCloudCredentialEnvKey} names are dropped; each tool's default
+ * credential files are replaced by the empty {@link CLOUD_CREDENTIAL_STAND_INS};
+ * and gcloud (`CLOUDSDK_CONFIG`, not `~/.config/gcloud`) and az
+ * (`AZURE_CONFIG_DIR`, not `~/.azure`) get fresh, empty dirs inside one
+ * private temp dir made for this one child, so a login or token one child
+ * writes there never reaches the next. {@link releaseCloudStandIns} removes
+ * that dir once the child has exited; any still there when this process
+ * exits are removed then.
+ */
+export function withoutCloudCredentials(env: Record<string, string>): Record<string, string> {
+  for (const key of Object.keys(env)) {
+    if (isCloudCredentialEnvKey(key)) delete env[key];
+  }
+  Object.assign(env, CLOUD_CREDENTIAL_STAND_INS);
+  const dir = mkdtempSync(join(tmpdir(), "corvidinho-no-cloud-"));
+  liveCloudDirs.add(dir);
+  if (!cloudDirsExitHook) {
+    cloudDirsExitHook = true;
+    process.once("exit", () => {
+      for (const d of liveCloudDirs) rmSync(d, { recursive: true, force: true });
+    });
+  }
+  env.CLOUDSDK_CONFIG = join(dir, "gcloud");
+  env.AZURE_CONFIG_DIR = join(dir, "azure");
+  mkdirSync(env.CLOUDSDK_CONFIG, { mode: 0o700 });
+  mkdirSync(env.AZURE_CONFIG_DIR, { mode: 0o700 });
+  return env;
+}
+
+/**
+ * Remove the stand-in config dirs {@link withoutCloudCredentials} made for
+ * `env`, once its child has exited. A no-op for an env it did not build or
+ * one already released.
+ */
+export function releaseCloudStandIns(env: Record<string, string>): void {
+  const gcloud = env.CLOUDSDK_CONFIG;
+  if (!gcloud) return;
+  const dir = dirname(gcloud);
+  if (!liveCloudDirs.delete(dir)) return;
+  rmSync(dir, { recursive: true, force: true });
+}
+
+/**
  * After an abort, how long the runner still waits for the lane's output
  * pipes. The caller drops that output (a cancel), and a lane process that
  * escaped the tree kill (its own session, already reparented) may hold a pipe
@@ -140,7 +328,8 @@ type FledgeRun = { code: number; output: string } | null;
  * Spawn `fledge <args>` in `cwd` with the verify env (SAFE-6) in its own
  * process group, reading its pipes as it writes them (AGENT-12); an abort
  * kills its process tree (AGENT-3) and gives null. A signal already aborted
- * (between two steps) spawns nothing.
+ * (between two steps) spawns nothing. SAFE-21.b: the lane starts without
+ * the owner's cloud credentials; stand-in config dirs are removed on exit.
  */
 async function runFledgeStep(
   fledge: string,
@@ -149,15 +338,24 @@ async function runFledgeStep(
   signal?: AbortSignal,
 ): Promise<FledgeRun> {
   if (signal?.aborted) return null;
-  const proc = Bun.spawn([fledge, ...args], {
-    cwd,
-    env: buildVerifyEnv(),
-    stdout: "pipe",
-    stderr: "pipe",
-    // Own process group: an abort stops the lane's tasks (tests, typecheck),
-    // not only fledge, which leaves them running (AGENT-3, REQ-agent-244).
-    detached: true,
-  });
+  // SAFE-21.b: the lane starts without the owner's cloud credentials; its
+  // stand-in config dirs are removed once it has exited.
+  const env = withoutCloudCredentials(buildVerifyEnv());
+  let proc: ReturnType<typeof Bun.spawn>;
+  try {
+    proc = Bun.spawn([fledge, ...args], {
+      cwd,
+      env,
+      stdout: "pipe",
+      stderr: "pipe",
+      // Own process group: an abort stops the lane's tasks (tests, typecheck),
+      // not only fledge, which leaves them running (AGENT-3, REQ-agent-244).
+      detached: true,
+    });
+  } catch (e) {
+    releaseCloudStandIns(env);
+    throw e;
+  }
   // What the lane left in its group as fledge exited: an abort or this
   // process exiting still reaches it (as in spawnCapped).
   let atExit: ProcEntry[] = [];
@@ -197,6 +395,7 @@ async function runFledgeStep(
     if (graceTimer) clearTimeout(graceTimer);
     signal?.removeEventListener("abort", onAbort);
     untrack();
+    releaseCloudStandIns(env);
   }
 }
 

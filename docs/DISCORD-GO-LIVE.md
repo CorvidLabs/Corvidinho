@@ -284,11 +284,13 @@ inside that talk's own worktree, and in a local `corvidinho task run` inside the
 | `gif-search` | true | 1 | true | secondary GIF path (native GIPHY) for owner and team at tool tier (PLUGIN-8/9); prefer allowlisted `fledge-gif` for owner code-tier Discord GIFs; needs `GIPHY_API_KEY`, see E.3.b |
 | `fledge-gif` | true | 2 | true | preferred GIF path once `fledge plugins install corvid-agent/fledge-plugin-gif` is on the box; owner code-tier only (`CORVIDINHO_LLM_TIER=code`); needs `GIPHY_API_KEY` in the bridge env (passed through to Fledge); see E.3.b |
 | `fledge-<command>` | true | 2 (native) / 1 (wasm without `exec`) | true | an operator runs `corvidinho plugins run fledge-<command>` non-interactively; one entry per Fledge command you trust, names from `plugins list` (a Fledge plugin command named `run`, `lanes-list`, `lanes-validate` or `lanes-run` is skipped: the Fledge core builtins `fledge-run`, `fledge-lanes-list`, `fledge-lanes-validate` and `fledge-lanes-run` hold those names) |
-| `fledge-lanes-run` / `fledge-run` | true | 2 | true | an operator runs `corvidinho plugins run fledge-lanes-run -- <lane>` or `fledge-run -- <task> [args…]` non-interactively; builtins that run fledge's own `lanes run` / `run` in the project dir (PLUGIN-1), so they run whatever that lane or task's commands do, starting without the owner's GitHub or git credentials like `shell-exec` and the runners (SAFE-21.a), so pushes, PRs and merges go through the checked GitHub tools; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
+| `fledge-lanes-run` / `fledge-run` | true | 2 | true | an operator runs `corvidinho plugins run fledge-lanes-run -- <lane>` or `fledge-run -- <task> [args…]` non-interactively; builtins that run fledge's own `lanes run` / `run` in the project dir (PLUGIN-1), so they run whatever that lane or task's commands do, starting without the owner's GitHub or git credentials like `shell-exec` and the runners (SAFE-21.a), so pushes, PRs and merges go through the checked GitHub tools, and without the owner's cloud credentials (SAFE-21.b, see below the table); the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
 | `git-commit` | true | 2 | true | `/work` should open draft PRs (needed when the work tree has changes) |
 | `git-push` | true | 2 | true | `/work` should open draft PRs; the remote's OWNER/REPO must also pass the GitHub allowlist (GITHUB-6) |
 | `github-pr-create` | true | 1 | true | `/work` should open draft PRs; needs `GITHUB_TOKEN`/`GH_TOKEN`. A PR opens only after a second configured model reviewed the diff (GITHUB-9 / GITHUB-9.a, see [`discord.md`](discord.md) Second-model review): configure at least two models, or every PR is refused with the reason |
 | `git-branch-create` | true | 2 | true | an operator runs `corvidinho plugins run git-branch-create` non-interactively (`/work` does not need it: the worktree makes the branch) |
+| `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, `env -C` and symlinks included, SAFE-3; refuses `sed -i` / `>` edits, downloads piped into a shell, deletes outside the worktree and secret reads, saying why, SAFE-21; starts without GitHub or git credentials, so pushes, PRs and merges go only through the typed GitHub tools, SAFE-21.a, and without cloud credentials, SAFE-21.b; 10 minute timeout, 64 KiB output cap, output scrubbed); the model gets it only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
+| `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere) without GitHub or git credentials (SAFE-21.a) or cloud credentials (SAFE-21.b), and `plugins list` names any that are not loaded; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
 | `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, `env -C` and symlinks included, SAFE-3; refuses `sed -i` / `>` edits, downloads piped into a shell, deletes outside the worktree and secret reads, saying why, SAFE-21; refuses `specsync change approve` / `review` / `finalize` / `ship` in every repo, also behind a wrapper, `bunx` / `npx`, a path, `sh -c` or an in-root script (`shell-exec refused (AGENT-18.a): …`): a human approves, reviews and finalizes, and on Corvidinho only the run's own settle step after a green lane does, never the shell, AGENT-18.a; starts without GitHub or git credentials, so pushes, PRs and merges go only through the typed GitHub tools, SAFE-21.a; 10 minute timeout, 64 KiB output cap, output scrubbed); the model gets it only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
 | `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere) without GitHub or git credentials (SAFE-21.a), and `plugins list` names any that are not loaded; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
 | `memory-forget` | true | 1 | true | the owner's chat should forget memories on request, or an operator runs `corvidinho plugins run memory-forget` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
@@ -377,11 +379,34 @@ What an entry unlocks **today**:
   the SAFE-5 audit trail
   and the tools' own SAFE-3 clamp, SAFE-21 refusals and credential-free env (the Fledge runs
   included: no GitHub tokens, no global git config or credential helper, no ssh agent, gh
-  logged out). Known limits: the runners' own code (and a Fledge lane or task) can still
+  logged out; no cloud credentials, SAFE-21.b). Known limits: the runners' own code (and a Fledge lane or task) can still
   change directory, read files or write files inside or outside the worktree as the bot's own
   user, which no lexical check sees; keep the allowlist file and other secrets outside every
   talk worktree.
   They all still run through `corvidinho plugins run`.
+- **No cloud credentials (SAFE-21.b).** The verify lane, `shell-exec`, the node / python /
+  cargo runners and `fledge-lanes-run` / `fledge-run` start without your cloud credentials, so
+  they can't reach prod by accident. Their env drops `KUBECONFIG` (and the in-cluster
+  `KUBERNETES_SERVICE_HOST` / `_PORT`), the AWS keys, session tokens, profiles, role and
+  web-identity settings and container-credential endpoints (`AWS_CONTAINER_*`),
+  `GOOGLE_APPLICATION_CREDENTIALS` and the other Google key files and tokens, every
+  `CLOUDSDK_*` override, the Azure and Terraform-azurerm (`ARM_*`) service principal, identity
+  and storage keys, any other `AWS_` / `GOOGLE_` / `GCLOUD_` / `GCP_` / `AZURE_` / `ARM_` key
+  naming a key, token, secret, password or credential, `TF_TOKEN_*`, and the tokens of
+  DigitalOcean, Hetzner, Cloudflare, Linode, Vultr, Scaleway, OCI, IBM Cloud, Alibaba,
+  OpenStack, Heroku, Fly, Vercel, Netlify, Railway, Terraform Cloud, Pulumi, Vault, Nomad and
+  Consul (the full list is `isCloudCredentialEnvKey` in `src/agent/verify.ts`). Each tool's
+  default files are covered too: `KUBECONFIG`, `AWS_SHARED_CREDENTIALS_FILE`,
+  `AWS_CONFIG_FILE` and `GOOGLE_APPLICATION_CREDENTIALS` point at `/dev/null` (not
+  `~/.kube/config`, `~/.aws` or the gcloud ADC file), `AWS_EC2_METADATA_DISABLED=true`, and
+  `CLOUDSDK_CONFIG` / `AZURE_CONFIG_DIR` point at fresh, empty dirs made for that one child
+  and removed when it exits (not `~/.config/gcloud` / `~/.azure`). Ordinary settings such as
+  `AWS_REGION` or `GOOGLE_CLOUD_PROJECT` stay. Known limits: other tools' own credential
+  files (`~/.oci`, `~/.vault-token`, `~/.terraform.d`, `~/.config/doctl`, …) and cloud
+  metadata services other than EC2's (GCE, Azure IMDS) are not blocked; a command that names a
+  credential file itself (`--kubeconfig ~/.kube/config`) still reads it, and prod commands
+  still need your Approve card (AUTONOMY-9). Fledge plugin commands (`fledge-<command>`) and
+  `delegate` workers keep the env they had.
 - Fledge commands (`fledge-<command>`) are discovered for a run only when the allowlist names
   one and the run is not a non-ADMIN session and not a scheduled run (a schedule the owner
   created gets none, like the runners, DISCORD-SCHEDULE-1.a). Naming a Fledge core builtin (`fledge-lanes-list`,

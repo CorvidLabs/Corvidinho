@@ -1,0 +1,25 @@
+---
+id: the-verify-lane-the-shell-and-the-runners-start-without-my-cloud-credentials-kubeconfig-aws-google-cloud-azure-and
+state: implementing
+type: feature
+base_commit: 178480af5e09e7f111a451b44dbd1a86f484ffea
+---
+
+# The verify lane, the shell and the runners start without my cloud credentials (KUBECONFIG, AWS, Google Cloud, Azure and similar), so they can't reach prod by accident (SAFE-21.b)
+
+## Intent
+
+The verify lane, the shell and the runners start without my cloud credentials (KUBECONFIG, AWS, Google Cloud, Azure and similar), so they can't reach prod by accident (SAFE-21.b)
+
+## Affected Canonical Specs
+
+- `agent`
+- `plugins`
+
+## Acceptance Criteria
+
+- SAFE-21.b (captured in this change's PR with hi from Leif's 2026-09-28 interview, round 16 on 2026-10-06): 'The verify lane, the shell and the runners start without my cloud credentials (KUBECONFIG, AWS, Google Cloud, Azure and similar), so they can't reach prod by accident.' Observable outcomes: (1) the default verify runner (runTask's lane), shell-exec, node-exec / python-exec / cargo-exec and fledge-lanes-run / fledge-run start their child with no key isCloudCredentialEnvKey names (KUBECONFIG, KUBERNETES_SERVICE_HOST / _PORT; AWS access keys, session / security tokens, profiles, credential and config files, role ARN / session name, web identity token file, AWS_CONTAINER_*; GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_CREDENTIALS, GOOGLE_CLOUD_KEYFILE_JSON, GCLOUD_KEYFILE_JSON, GOOGLE_OAUTH_ACCESS_TOKEN, GOOGLE_IMPERSONATE_SERVICE_ACCOUNT, GOOGLE_GHA_CREDS_PATH, every CLOUDSDK_*; Azure and ARM_* service principal, user, certificate, federated token, managed identity (IDENTITY_*, MSI_*), config dir and storage keys; any AWS_ / GOOGLE_ / GCLOUD_ / GCP_ / AZURE_ / ARM_ key naming an access key, API key, token, secret, password, credential, key file or connection string; TF_TOKEN_*; and the listed DigitalOcean, Hetzner, Cloudflare, Linode, Vultr, Scaleway, OCI, IBM Cloud, Alibaba, OpenStack, Heroku, Fly, Vercel, Netlify, Railway, Terraform Cloud, Pulumi, Vault, Nomad and Consul tokens); (2) each tool's default files are neutralised: KUBECONFIG, AWS_SHARED_CREDENTIALS_FILE, AWS_CONFIG_FILE and GOOGLE_APPLICATION_CREDENTIALS are /dev/null, AWS_EC2_METADATA_DISABLED=true, and CLOUDSDK_CONFIG / AZURE_CONFIG_DIR are fresh empty 0700 dirs in one temp dir made for that one child and removed once it exits, so stand-in kubectl / aws / gcloud / az scripts see neither the owner's cloud env nor ~/.kube/config, ~/.aws/*, ~/.config/gcloud/* (ADC file included) or ~/.azure/*, and a login one child writes never reaches the next; (3) ordinary settings (AWS_REGION, GOOGLE_CLOUD_PROJECT, PATH, HOME, other keys) are kept and the SAFE-21.a git / GitHub scrub and the verify-lane scrub are unchanged; (4) Fledge plugin commands (fledge-<command>) and delegate workers keep their env (not named by SAFE-21.b). No new env var, config key, slash command, table or schema version. Tests: tests/agent.cloud-credentials.test.ts (stand-in tools on a temp PATH called by absolute path, fake HOME; no network), 7 of 7 failing on the base (e1a24ed2) and passing on the branch.
+
+## No-spec Rationale
+
+Not applicable

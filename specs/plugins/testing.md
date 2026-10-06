@@ -89,6 +89,16 @@ in-root `env -C sub` and a link to an in-root dir still run.
 `tee`, since a `>` edit is refused first by SAFE-21.
 `tests/runners.plugins.test.ts` — the runners' child env is credential-free
 (SAFE-21.a, REQ-plugins-495).
+`tests/agent.cloud-credentials.test.ts` — `shell-exec`, the three runners and
+`fledge-lanes-run` / `fledge-run` start without cloud credentials (SAFE-21.b,
+REQ-plugins-621): stand-in `kubectl` / `aws` / `gcloud` / `az` scripts called
+by absolute path see no cloud key or value from the owner's env and none of
+the owner's default files (`~/.kube/config`, `~/.aws/*`, `~/.config/gcloud/*`,
+`~/.azure/*` under a fake HOME); `KUBECONFIG`, `AWS_SHARED_CREDENTIALS_FILE`,
+`AWS_CONFIG_FILE` and `GOOGLE_APPLICATION_CREDENTIALS` are `/dev/null`,
+`CLOUDSDK_CONFIG` / `AZURE_CONFIG_DIR` fresh dirs removed after the child, a
+"login" one child writes never reaches the next, and `AWS_REGION` /
+`GOOGLE_CLOUD_PROJECT` stay. All 7 tests fail with the base's sources.
 
 ## Language runners (REQ-plugins-313..314)
 
