@@ -165,6 +165,8 @@ files:
   - src/discord/run-control.ts
   - tests/discord.run-queue.test.ts
   - tests/discord.stop-run.test.ts
+  - src/discord/schedule-stop.ts
+  - tests/discord.schedule-stop.test.ts
   - src/discord/allowed-mentions.ts
   - tests/discord.allowed-mentions.test.ts
   - plugins/discord/send-file.ts
@@ -655,6 +657,25 @@ the ask presses use, shared with them — then the run the pressed message
 shows (`byProgressMessage`, same channel and id), the requester-or-owner
 check and the stop words' `SessionRunControl.stop`.
 
+Stopping a scheduled run (AGENT-3.c, REQ-discord-304):
+`src/scheduler/service.ts` exports `ScheduleRunStop` (`begin({ scheduleId,
+creatorId, channelId?, title })` → `ScheduleRunStopHandle | null`),
+`ScheduleRunStopHandle` (`signal`, idempotent `finish()` → who stopped the
+run, if anyone), `SCHEDULE_RUN_STOPPED_SUMMARY` (`stopped`) and
+`scheduleRunStoppedError(userId)` (`stopped on Discord by <id>`), all
+re-exported by `src/scheduler/index.ts`; `SchedulerServiceOpts` takes an
+optional `runStop`. `ScheduleStore.markRunFinished` takes an optional
+`stopped` (recorded `failed`, failure count kept, no ask).
+`src/discord/schedule-stop.ts` exports `createScheduleRunStop(deps)` →
+`ScheduleRunStopControl` (`begin` plus `inOwnerDm(runId)`),
+`ScheduleRunStopDeps` (`runControl`, `outbound`, `sendDm`, `editMessage`,
+`deleteMessage`, `owner`, optional `model`, `debounceMs`, `tickMs`) and
+`scheduleRunProgressText(title)` (`⏳ <title>: running.`). The bridge wires
+one control over its `SessionRunControl` into its scheduler; the daemon
+passes none. Its `pressPassesGates` takes an optional `{ inDm }` that skips
+only the channel gate, set for a press with no guild on a running turn whose
+button is in the owner's DM.
+
 Outbound mention safety (REQ-discord-205, DISCORD-8):
 `src/discord/allowed-mentions.ts` exports `outboundAllowedMentions({ users,
 repliedUser })` (always `parse: []`) and `defangMassMentions` (re-exported by
@@ -1013,6 +1034,13 @@ owner (by that reply) stops a run, and the stop kills its process tree
 `Stop` button while it runs that only its requester or the owner can press
 to stop it, past the channel, actor and mute / rate gates, and that is gone
 once the run is done, failed or stopped (REQ-discord-303);
+a schedule run the bridge's ticker starts takes a turn on the same control
+(session `schedule_<id>`, the creator as requester) and shows the same
+`Stop` button (in its channel, or with no channel in the owner's DM), so
+only its creator or the owner stops it, the same way; a stopped schedule run
+posts nothing but `⏹ Stopped`, is recorded `failed` / `stopped` without
+counting as a failure or storing an ask, and leaves its schedule as it is;
+a run that ends on its own removes its progress message (REQ-discord-304);
 a run summary's closing `(not allowed for your role)` note survives every cap
 between the agent and the post: schedule run rows and posts, `/work` and
 `/session start` answers (fitted under 1900), and an appended SAFE-13 line or
@@ -1257,6 +1285,12 @@ owner nothing waiting is posted. Fixed harness text never waits.
 - **When** someone else presses it, and then the user (or the owner) presses it
 - **Then** the other person gets only the private `This Stop button isn't for you.` and the run goes on; the user's press gets the private `⏹ Stopping the run.`, the run's process tree is killed, the progress message becomes `⏹ Stopped` with its footer and no button, and a message they sent meanwhile then runs with its own progress message and button
 
+### Scenario: Stop a scheduled run from Discord (AGENT-3.c)
+
+- **Given** someone's schedule with a channel whose run the bridge started, its progress message `⏳ Schedule **<name>** … running.` showing a red `Stop` button
+- **When** a third user presses it, and then the schedule's creator (or the owner) presses it — or replies `stop` to it
+- **Then** the third user gets only `This Stop button isn't for you.` and the run goes on; the creator's press gets the private `⏹ Stopping the run.`, the run's process tree is killed, the progress message becomes `⏹ Stopped` with no button and nothing else is posted; the run row is `failed` / `stopped` / `stopped on Discord by <creator>` with no question, the schedule is still active with its failure count unchanged, and its next due run goes ahead and posts its result as before (its own progress message is removed when it ends)
+
 ### Scenario: Spawn with seeded identity
 
 - **Given** a MemoryStore row `person/identity` for Discord user U
@@ -1441,6 +1475,9 @@ owner nothing waiting is posted. Fixed harness text never waits.
 | Stop button of a run that is not running on that message (finished or stopped run, another run's id, another channel, a button from before a restart) | Ephemeral `Nothing is running.`; nothing stopped (REQ-discord-303) |
 | Stop button pressed off the allowlist, by a deny-listed or unlisted user, or while muted / rate-limited | The ask press refusals (zero-width ack, the owner's allowlist tip, `MUTED` / `RATE_LIMITED`), all ephemeral; nothing stopped (REQ-discord-303) |
 | A form submit carrying a `cvstop:` id | Ignored: no reply, nothing stopped (REQ-discord-303) |
+| A schedule run's Stop button pressed by anyone but the schedule's creator or the owner | Ephemeral `This Stop button isn't for you.`; the run goes on (REQ-discord-304) |
+| A schedule with no channel and no owner configured, or the owner's DM (or its button edit) does not go out; a schedule run the daemon claimed | No Stop control: the run goes on and ends as before (a sent DM whose button could not be added is deleted) (REQ-discord-304) |
+| The Stop control's `begin` throws | Logged `[scheduler] stop control failed: <scrubbed line>`; the run goes on without one (REQ-discord-304) |
 | A waiting message's session ended, idled out or its requester was forgotten before its turn | Nothing runs or is posted; its in-flight row is cleared (REQ-discord-301) |
 | A waiting message's author (or a waiting pick's presser) was muted or deny-listed, or its channel dropped from the allowlist or deny-listed, before its turn | Nothing runs or is posted; its in-flight row is cleared; the rate limit is not counted again (REQ-discord-301) |
 | A 'stop' lands after the `/work` agent exited, before its PR step | Short ack; no PR (`PR: not opened — the run was stopped.`), task `failed` / `stopped` (REQ-discord-302) |

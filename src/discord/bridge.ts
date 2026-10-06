@@ -186,6 +186,7 @@ import {
   resolveSessionTtlMs,
 } from "../store/index.ts";
 import { formatErrorLine } from "../store/scrub.ts";
+import { createScheduleRunStop } from "./schedule-stop.ts";
 import {
   appendAudit,
   auditKeyFromEnv,
@@ -753,6 +754,22 @@ export async function startBridge(
     return outcome;
   }
 
+  // AGENT-3.c (REQ-discord-304): the scheduler's stop control — each schedule
+  // run takes a turn on this run control and shows the same Stop button (in
+  // its channel, or with no channel in the owner's DM), so the owner or the
+  // schedule's creator stops it the same way as a chat run.
+  const scheduleRunStop = createScheduleRunStop({
+    runControl,
+    outbound: () => resolveOutbound(),
+    sendDm: () => sendDmRef.fn,
+    editMessage: () => embedRef.editMessage,
+    deleteMessage: () => embedRef.deleteMessage,
+    owner: () => config.owner ?? null,
+    model: () => loadLlmEnv(process.env).model,
+    debounceMs: opts.thinkingDebounceMs,
+    tickMs: opts.thinkingTickMs,
+  });
+
   /**
    * AGENT-3.a (REQ-discord-302): stop the run `runId` and answer the stop
    * message with one short ack, tracked on the run's session.
@@ -788,8 +805,13 @@ export async function startBridge(
   async function pressPassesGates(
     interaction: ComponentInteraction,
     talk: Pick<SessionStub, "channelId" | "threadId"> | undefined,
+    // AGENT-3.c: a Stop press in a DM (a schedule with no channel) skips the channel gate.
+    where: { inDm?: boolean } = {},
   ): Promise<boolean> {
-    if (!componentChannelAllowlisted(interaction.channelId, talk, config.allowlist)) {
+    if (
+      !where.inDm &&
+      !componentChannelAllowlisted(interaction.channelId, talk, config.allowlist)
+    ) {
       const admin =
         resolvePermissionLevel({
           userId: interaction.userId,
@@ -849,6 +871,12 @@ export async function startBridge(
    * the owner ⇒ "This Stop button isn't for you."; else the stop words' stop
    * path and the same short ack, all ephemeral. Waiting messages still run
    * (AGENT-3.b); the progress message becomes `⏹ Stopped`, its button gone.
+   * AGENT-3.c (REQ-discord-304): a schedule run's button works the same way,
+   * its creator in the requester's place; a schedule with no channel shows
+   * it in the owner's DM, and a press there (no guild) on that running
+   * run's DM has no channel to allowlist — like a schedule ask's
+   * (AUTONOMY-6.a) — so only the actor and mute / rate gates apply. Every
+   * other press keeps the channel gate.
    */
   async function pressStopButton(interaction: ComponentInteraction, runId: string): Promise<void> {
     const messageId = interaction.messageId;
@@ -858,7 +886,8 @@ export async function startBridge(
     const talk =
       (shown ? store.get(shown.sessionId) : undefined) ??
       (messageId ? store.getByBotMessage(messageId) : undefined);
-    if (!(await pressPassesGates(interaction, talk))) return;
+    const inDm = run !== undefined && !interaction.guildId && scheduleRunStop.inOwnerDm(run.runId);
+    if (!(await pressPassesGates(interaction, talk, { inDm }))) return;
     if (!run) {
       await interaction.reply({ content: RUN_STOP_NOTHING_RUNNING, ephemeral: true });
       return;
@@ -2519,6 +2548,11 @@ export async function startBridge(
       spendDm,
       // DISCORD-3.b: a failed run of someone else's schedule DMs the owner why.
       failureDm,
+      // AGENT-3.c (REQ-discord-304): each run takes a turn on the chat runs'
+      // run control and shows their Stop button (in its channel, or with no
+      // channel in the owner's DM), so the owner or the schedule's creator
+      // stops it the same way as a chat run.
+      runStop: scheduleRunStop,
       outbound: {
         post: async ({ channelId, content, mentionUserIds, components, modelText }) => {
           if (!replyRef.fn) return false;
