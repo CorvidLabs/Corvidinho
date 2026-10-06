@@ -1,4 +1,66 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791247292,
+      "digest": "efde28de5c4a2923be36dd51da98140aefee76ec47e605815b5cb5b363220419",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "on-github-the-owner-and-team-i-ve-declared-get-their-role-s-tools-behind-the-must-ask-gate-strangers-stay-community",
+        "title": "On GitHub the owner and team I've declared get their role's tools behind the must-ask gate; strangers stay community (IDENTITY-12.a)",
+        "description": "On GitHub the owner and team I've declared get their role's tools behind the must-ask gate; strangers stay community (IDENTITY-12.a)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "plugins",
+          "watch"
+        ],
+        "affected_paths": [
+          "INTENT.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/WATCH.md",
+          "docs/discord.md",
+          "hi/identity.md",
+          "plugins/files/protectedPaths.ts",
+          "specs/agent/agent.spec.md",
+          "specs/agent/requirements.md",
+          "specs/agent/testing.md",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/requirements.md",
+          "specs/plugins/testing.md",
+          "specs/watch/requirements.md",
+          "specs/watch/testing.md",
+          "specs/watch/watch.spec.md",
+          "src/agent/execute.ts",
+          "src/plugins/roles.ts",
+          "src/watch/agent-client.ts",
+          "src/watch/poller.ts",
+          "src/watch/router.ts",
+          "tests/agent.allowlisted-dangerous.test.ts",
+          "tests/agent.safe3a-owner-shell.test.ts",
+          "tests/identity.recognise.test.ts",
+          "tests/watch.github-roles.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "IDENTITY-12.a (captured in this change's PR from Leif's 2026-09-28 interview, round 16): 'On GitHub, the owner and team members I've declared get their role's tools too, behind the same must-ask gate; anyone else stays community.' The WATCH poller resolves the person who triggered a run - the comment or issue-body author that @mentioned the watch user, by the GitHub numeric user id the API reported, in the owner's people list (watchTriggerRole) - to owner, team or community; an assignment or review request (triggered by someone else on the thread, known by login only) is community, never the thread author's role. The WATCH spawn stamps that role like a Discord run (owner: CORVIDINHO_ACTING_IS_ADMIN=1 and CORVIDINHO_ACTING_ROLE=owner; team: ROLE=team; else 0/community; CORVIDINHO_ACTING_WORK_TASK=0), always overwritten. The tool layer (resolveActingIsAdmin / resolveActingRole in src/plugins/roles.ts) re-resolves it on a watch-surface run from CORVIDINHO_ACTING_GITHUB_ID only (never a login or a Discord id; a Discord run never uses the GitHub keys) at every call: a role change, a GitHub deny_users login or id, or the person's Discord id muted or deny-listed applies at the next call; the stamp only lowers. An owner WATCH run's must-ask call raises the owner's Approve card (from watch:<session>) and runs only on approval; team and community runs are refused for owner-only tools before any card. WATCH limits stay: no shell, runners, Fledge runs or discovered Fledge plugin commands (SAFE-3.a; REQ-agent-1201), secret-looking paths hidden for every role on GitHub, never a /work task, workers community, thread text fenced. tests/watch.github-roles.test.ts fails on the base sources and passes on the branch."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "297159210fab9c2cf5a6ccdceac8fc97c81732e6d22c2559cda537dcdd763ff2",
+        "plugins": "8f5a31af6d261713b1faaaf0f7318579df71a8144ba15552548899e2a50374cb",
+        "watch": "eb98d3a1b423e97ec9292f21ca38323d8fac77e6f8d38fc8129287757fac6495"
+      }
+    }
+  ],
   "reopenings": []
 }
