@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "ed761c1c77937524f946ce02ca3788bf59f17893",
+  "contract_digest": "02c8282dafe7e494f4a2c9adfd63455571d274abf12470e1e48b7b7c54eda255",
+  "execution_digest": "d7fce6b4d3eaef0ac8b96339bfdafe7bedb298a1441333939fd540c066c19b75",
+  "workspace_digest": "07818943fe780a51431f70ba7fe0f8c3986950396f8268c41faf3865a2e4f70b",
+  "timestamp": 1791300702
+}
