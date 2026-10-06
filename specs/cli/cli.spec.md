@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 82
+version: 83
 status: draft
 files:
   - src/cli.ts
@@ -381,3 +381,4 @@ Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), 
 | 2026-10-06 | doctor-and-init-say-when-the-verify-lane-runs-no-test-step-corvidinho-can-read-cli-4-one-warn-test-step-line-when-no: Doctor and init say when the verify lane runs no test step Corvidinho can read (CLI-4): one [warn] test-step line when no [lanes.verify] step visibly runs bun test, jest, vitest, cargo test, pytest or go test, since such a lane can never verify a run that changes files (AGENT-15) |
 | 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
 | 2026-10-06 | work-schedule-and-the-scheduler-can-be-turned-off-in-corvidinho-plugins-and-existing-installs-stay-on-plugin-5-5-a: /work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a) |
+| 2026-10-06 | release-0-0-42-land-wave-feature-ship-trust-verify-work-review-hi-drafts-nongit-doctor-init-schedule-stop-model: Release 0.0.42: land-wave feature ship (Trust verify, /work review, hi drafts, nongit, doctor/init, schedule stop, model escalate, spend reserve, shell SpecSync refuse, SAFE-21.b, GitHub roles, bridge-live note, PLUGIN-5 toggles) |

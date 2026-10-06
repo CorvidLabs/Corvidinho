@@ -1,0 +1,43 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791307227,
+      "digest": "3e788705e99e629894d8b436e98b507cf8c962f944601207416571c87dab2ac4",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "release-0-0-42-land-wave-feature-ship-trust-verify-work-review-hi-drafts-nongit-doctor-init-schedule-stop-model",
+        "title": "Release 0.0.42: land-wave feature ship (Trust verify, /work review, hi drafts, nongit, doctor/init, schedule stop, model escalate, spend reserve, shell SpecSync refuse, SAFE-21.b, GitHub roles, bridge-live note, PLUGIN-5 toggles)",
+        "description": "Release 0.0.42: land-wave feature ship (Trust verify, /work review, hi drafts, nongit, doctor/init, schedule stop, model escalate, spend reserve, shell SpecSync refuse, SAFE-21.b, GitHub roles, bridge-live note, PLUGIN-5 toggles)",
+        "kind": "operations",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "package.json 0.0.42; version prints 0.0.42; CHANGELOG 0.0.42 extractable and covers the land-wave features (#364 Trust verify, #365 /work review, #367 hi drafts, #351 nongit, #368 doctor/init, #369 schedule stop, #370 model escalate, #371 spend reserve, #372 shell SpecSync refuse, #373 SAFE-21.b, #374 GitHub roles, #375 bridge-live note, #350 PLUGIN-5, #348 hi guard) plus tip-orphans #376-#390; STATUS rows mention the land-wave"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "1fbc15e1850bfd95f4f67458aadc3cfedb92deef13d5fb2e90ca1a8de7dd84d7"
+      }
+    }
+  ],
+  "reopenings": []
+}
