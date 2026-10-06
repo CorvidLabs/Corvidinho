@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 52
+version: 53
 status: draft
 files:
   - src/agent/types.ts
@@ -486,15 +486,6 @@ Autonomous gate + delegation core (REQ-agent-117, issue #117):
 `MAX_DELEGATES_PER_RUN` 4, `DELEGATE_MIN_TIER` 2). `buildOpenAiTools` takes
 `autonomous?: boolean`; `createTaskExecute` takes `autonomous?: boolean`
 (default: `autonomousSessionAllowed({ cwd, env })`).
-Extras switch (PLUGIN-5 / PLUGIN-5.a, REQ-agent-157): `src/autonomous/enabled.ts`
-also exports `scanTomlKeys` (the one-line dotted-key scrape `parseAutonomousConfig`
-now uses), `parseExtrasSettings` / `parseExtrasSettingsJson` (`[corvidinho.plugins]`
-`work` / `schedule` → `ExtrasSettings`), `combineExtrasReads`, `loadExtrasToggles({
-installRoot, env?, home? })` → `ExtrasToggles` (`{ work, schedule }`, each an
-`ExtraState`: `{ on: true }`, `{ on: false, reason: "off", offIn }` or `{ on: false,
-reason: "config-unreadable", error }`), `extraStateLabel`, `formatExtraStateLog`,
-`extrasSourcePhrase`, `trackExtraState` and `EXTRA_NAMES`; types `ExtraName`,
-`ExtrasSource`, `ExtraState`, `ExtrasToggles`, `ExtrasSettings`, `LoadExtrasOptions`.
 GITHUB-9 (REQ-agent-117, REQ-agent-092): `src/autonomous/delegate.ts` also
 exports `DELEGATE_AUTHORS_ENV` (`CORVIDINHO_DELEGATE_AUTHORS`, internal: set
 only on a worker spawn), `DELEGATE_AUTHORS_MAX` (32),
@@ -1089,23 +1080,6 @@ body>` (org or account names, request ids, the provider's host) that a lead
 could quote into a public reply or comment; the lead keeps no other copy of
 it. A successful worker's summary, an ask's question and the worker's
 `models` / `stopReason` / `injection` fields are unchanged.
-
-`/work` and `/schedule` (with the scheduler's runs) are extras the owner can
-turn off (PLUGIN-5 / PLUGIN-5.a, REQ-agent-157): `loadExtrasToggles` reads
-`[corvidinho.plugins]` `work` / `schedule` from the install root's
-`fledge.toml` (the bridge's / daemon's cwd) and the owner's allowlist file
-(`resolveAllowlistPath`; a `corvidinho.plugins` object in a `.json` file),
-fresh on every call and never cached. Off in either is off; a missing file,
-table or key is on, so an existing install stays on until the owner turns an
-extra off; only the literal `true` is on otherwise (dotted and inline-table
-spellings under `[corvidinho]` are the same key; a key under a later table
-does not count; a key written twice is off unless every copy is `true`; a
-`plugins` there that is not a table, like `plugins = false`, is both off). A
-file that exists but cannot be read (any error but ENOENT), or a `.json`
-allowlist file that does not parse, makes both extras off with reason
-`config-unreadable` and a source-named error (no path, no contents). Target
-projects' `fledge.toml` files are not read, and `[corvidinho.autonomous]` has
-no say: the two switches are independent.
 
 A council (AUTONOMOUS-6) deliberates in three phases in order — propose,
 critique, decide — and every voice and the chair is a delegate-core worker
@@ -1728,7 +1702,6 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |
 | 2026-10-01 | my-local-cli-task-run-may-use-the-allowlisted-shell-and-runners-inside-its-own-worktree-safe-3-a-local-cli-half: My local CLI task run may use the allowlisted shell and runners inside its own worktree (SAFE-3.a, local CLI half) |
 | 2026-10-01 | a-failed-delegate-worker-or-council-voice-hands-its-lead-one-plain-failure-line-the-worker-s-result-error-without-the: A failed delegate worker or council voice hands its lead one plain failure line (the worker's result error without the provider's host, the no-provider notice, or the exit code), never the worker's summary or stderr, which for a model failure is the provider's raw error body |
-| 2026-10-01 | work-schedule-and-the-scheduler-can-be-turned-off-in-corvidinho-plugins-and-existing-installs-stay-on-plugin-5-5-a: /work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a) |
 | 2026-10-01 | in-a-non-git-project-my-runs-work-in-the-folder-itself-its-file-tools-leave-the-root-agents-md-and-claude-md-alone: In a non-git project my runs work in the folder itself, its file tools leave the root AGENTS.md and CLAUDE.md alone, schedules keep their own folder, and others only read there (AGENT-1.a, AGENT-1.b, AGENT-1.c) |
 | 2026-10-01 | in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent: In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard) |
 | 2026-09-30 | web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered: Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap |
@@ -1741,3 +1714,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-10-05 | where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts: Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts) |
 | 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
 | 2026-10-05 | in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2: In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause) |
+| 2026-10-06 | work-schedule-and-the-scheduler-can-be-turned-off-in-corvidinho-plugins-and-existing-installs-stay-on-plugin-5-5-a: /work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a) |

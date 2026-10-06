@@ -1674,51 +1674,6 @@ stamp, one real `task run` against the fake model; no network):
 - Fail on base: 17 of 28 fail with the base's ten modified source files
   (the gate's own units and "outside a public thread" pass on both);
   `tests/must-ask.boundary.test.ts` fails on the base's `send-file.ts`.
-## Turning /work and /schedule off (REQ-discord-157, PLUGIN-5 / PLUGIN-5.a)
-
-`tests/plugins.extras-toggle.test.ts`:
-- Dispatch: with `extraState` off, `/work` gets only `/work is turned off on
-  this install.` (ephemeral), `{ ok: false, reason: "extra_disabled" }`, no
-  session, work task or agent call, and the switch is read once; the owner's
-  reply adds why (`[corvidinho.plugins]`, "the allowlist file", no path); all
-  five `/schedule` subcommands are refused and the schedule store is
-  unchanged while `/work` still runs; an off-allowlist channel, a deny-listed
-  actor and a muted user still get their own replies (the switch runs after
-  those gates); `/status` never reads the switch, and an unset `extraState`
-  is today's behaviour.
-- Bridge: `work = false` in the allowlist file refuses `/work` with the owner
-  hint and rewriting the file turns it back on without a restart; off in the
-  install root's `fledge.toml` is off too; a reply to a `/work` answer, and
-  the owner's @mention routed to that `/work` talk, get the fixed line in the
-  channel and run nothing while someone else's chat still runs, and back on
-  the reply resumes the talk; after the talk's TTL, a reply to its answer
-  gets the fixed line, no agent call and no new session, and back on it
-  resumes the conversation as a new session (SESSION-3.a; review fix, fails
-  without `refuseResume`); an open and a pick press on a `/work` talk's
-  Choose ask are refused privately (with the owner hint), the ask stays open,
-  and back on a pick resumes it; turning `/work` off does not abort a run in
-  flight and a `stop` reply still stops it; `schedule = false` keeps the
-  bridge's 20 ms ticker from claiming a due schedule until the file is
-  rewritten.
-- Scheduler: with `schedulesEnabled` false two ticks claim nothing while the
-  `onTick` hook, the backup tick and the spend-DM pass each run every tick;
-  back on hours later the overdue schedule fires once; a throwing switch is
-  off; a stuck ask another ticker left pending is still posted by a tick
-  with schedules off; a run in flight when it goes off still completes.
-
-Fail on base: with the base's (cf7f61b) bridge, scheduler service, daemon,
-work store, slash types and slash dispatch swapped in (the config module
-`src/autonomous/enabled.ts` and the two reply helpers kept so the test
-loads), 13 of the 28 tests fail — the three dispatch refusals, five of
-the six bridge cases (all but the stop case), the two scheduler gate cases
-and the three daemon cases — and the docs gate-order test fails; the 15 that pass there
-are the config units and the must-not-break guards (other gates' replies,
-`/status`, ask delivery and runs in flight while off, the stop case). With
-every modified source from the base the file does not load. Restored: 28 of
-28 pass. Review: the expired-`/work`-talk test above (29 in all) fails when
-the router ignores `refuseResume`; with the extras loader forced to on, 10 of
-the 29 fail (every loader-driven bridge and daemon case and the two loader
-units), so the bridge and daemon cases depend on the switch.
 ## Non-git project talks in the folder itself (REQ-discord-110, REQ-discord-013, AGENT-1.a, AGENT-1.c)
 
 `tests/discord.nongit-project-dir.test.ts` (8 tests): `ensureTalkWorkspace`

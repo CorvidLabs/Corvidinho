@@ -1,7 +1,6 @@
 ---
 module: discord
-version: 98
-version: 99
+version: 100
 status: draft
 files:
   - src/discord/types.ts
@@ -131,7 +130,6 @@ files:
   - tests/discord.schedule.test.ts
   - tests/scheduler.cron.test.ts
   - tests/scheduler.service.test.ts
-  - tests/plugins.extras-toggle.test.ts
   - tests/scheduler.worktree.test.ts
   - tests/scheduler.tick-errors.test.ts
   - tests/scheduler.never-stuck.test.ts
@@ -1023,51 +1021,8 @@ writes `CORVIDINHO_DISCORD_REPLY_PUBLIC_THREAD`: `1` or empty);
 exports `holdSlashReply(opts)`; `SchedulerOutbound.post` takes
 `modelText?: boolean`; `plugins/discord/send-file.ts` exports
 `sendFileMustAsk(ctx)` (the command's `mustAsk`).
-Extras switch (PLUGIN-5 / PLUGIN-5.a, REQ-discord-157): `src/discord/slash-dispatch.ts`
-exports `extraOffText(name)` (`/<name> is turned off on this install.`) and
-`extraOffReply(name, state, ownerView)` (that line, plus for the owner why and
-how to turn it back on, never a path); its command map tags `work` and
-`schedule` with `extra`. `SlashContext` gains optional `extraState?: (name:
-ExtraName) => ExtraState` (unset ⇒ on). `WorkStore.isWorkSession(sessionId)`
-says whether a session is a `/work` talk. `RouterDeps` gains optional
-`refuseResume?: (priorSessionId: string) => string | null`, asked before an
-expired session's retained conversation is resumed (SESSION-3.a); a
-non-null reply routes as `{ kind: "refuse", reason: "extra_disabled",
-reply }` and no session is made. `SchedulerServiceOpts` gains optional
-`schedulesEnabled?: () => boolean` (unset ⇒ on; a throw is off, logged
-`[scheduler] tick hook failed: …`). The bridge wires both from
-`loadExtrasToggles({ installRoot: config.projectRoot, env })` (REQ-agent-157),
-read fresh on every call.
 
 ## Invariants
-
-`/work` and `/schedule` are extras the owner can turn off (PLUGIN-5 /
-PLUGIN-5.a, REQ-discord-157). `handleSlashInteraction` checks the command's
-extra after the channel, actor and mute/rate gates and before the
-minPermission floor and the handler: while it is off, `/work` and every
-`/schedule` subcommand get only the ephemeral turned-off line (the owner also
-gets why and how to turn it back on) and `{ ok: false, reason:
-"extra_disabled" }`; no session, worktree, work task, run, PR or schedule
-change happens. While `work` is off, a chat message that would continue a
-`/work` talk (a reply to its answer, or an @mention routed to it as the
-author's active session in that channel) gets the fixed line in the channel
-(never the owner hint) and runs nothing, read when it would run (after any
-wait in the session's queue), its open asks left as they were; the
-requester's press on a `/work` talk's ask (open, pick, Answer form) gets the
-reply privately and resumes nothing; a message that would resume an expired
-`/work` talk's conversation as a new session (SESSION-3.a) gets the fixed
-line in the channel and no session is made. A run in flight is never aborted by the
-switch: `stop` / `cancel` and the Stop button reach it before the gate. While
-`schedule` is off, `SchedulerService.tick` skips only the schedules part
-(re-read, due scan, open-ask skip, claim) — no run row is claimed and nothing
-spawns — while the `onTick` hook (Approve / forget cards, stuck WATCH asks),
-the pending-ask delivery pass, the owner's spend DMs and the backup tick still
-run each tick; runs in flight finish; back on, the no-catch-up claim fires
-each overdue schedule at most once. The bridge logs one line per extra that
-is off at start, one `[discord] scheduler schedule: …` line per change (not
-one per tick), and each refusal while the settings are unreadable
-(`config-unreadable`). There
-is no `/admin` knob; `[corvidinho.autonomous]` has no say.
 
 A run a limit I set stopped (AGENT-12, REQ-discord-125) shows it only as
 `stopped=turn-cap` / `stopped=idle-timeout` at the end of the answer's footer
@@ -1750,7 +1705,6 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |
 | 2026-10-01 | its-first-20-replies-in-public-threads-each-wait-for-my-ok-on-an-approve-card-even-text-i-dictated-and-replies-to-me: Its first 20 replies in public threads each wait for my OK on an Approve card, even text I dictated and replies to me (AUTONOMY-10, AUTONOMY-10.a) |
 | 2026-10-01 | a-team-member-s-failed-session-or-work-reply-and-someone-else-s-failed-schedule-post-is-checked-for-the-reason-s-401: A team member's failed /session or /work reply, and someone else's failed schedule post, is checked for the reason's 401 with the run's own random ids masked, so an id that happens to contain 401 no longer fails the DISCORD-3.b test |
-| 2026-10-01 | work-schedule-and-the-scheduler-can-be-turned-off-in-corvidinho-plugins-and-existing-installs-stay-on-plugin-5-5-a: /work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a) |
 | 2026-10-01 | in-a-non-git-project-my-runs-work-in-the-folder-itself-its-file-tools-leave-the-root-agents-md-and-claude-md-alone: In a non-git project my runs work in the folder itself, its file tools leave the root AGENTS.md and CLAUDE.md alone, schedules keep their own folder, and others only read there (AGENT-1.a, AGENT-1.b, AGENT-1.c) |
 | 2026-10-01 | in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent: In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard) |
 | 2026-09-30 | web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered: Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap |
@@ -1759,3 +1713,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-10-06 | i-or-the-schedule-s-creator-can-stop-a-scheduled-run-in-progress-from-discord-the-same-way-as-a-chat-run-agent-3-c: I or the schedule's creator can stop a scheduled run in progress from Discord, the same way as a chat run (AGENT-3.c) |
 | 2026-10-05 | where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts: Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts) |
 | 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
+| 2026-10-06 | work-schedule-and-the-scheduler-can-be-turned-off-in-corvidinho-plugins-and-existing-installs-stay-on-plugin-5-5-a: /work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a) |

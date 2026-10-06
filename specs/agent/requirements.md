@@ -2333,48 +2333,6 @@ Acceptance Criteria
 - Run 1, whose head model fails over to the next one, which writes a file; run 2 (a new `createTaskExecute`), whose head model answers and opens the PR from the same checkout: the reviewer is the third configured model, never the one that wrote the change. `recordChangeAuthors` keeps each model once per checkout and branch, scrubbed, and records nothing below a git top level.
 - Two `github-pr-create` calls in one batch: the first gets round 1's findings, the second is not run, one review call is made and the cycle stays open (not declined).
 
-### REQ-agent-157
-
-PLUGIN-5 / PLUGIN-5.a: `loadExtrasToggles({ installRoot, env?, home? })`
-(`src/autonomous/enabled.ts`) SHALL say whether each extra — `work` (`/work`)
-and `schedule` (`/schedule` and the scheduler's runs) — is on, from a
-`[corvidinho.plugins]` table read fresh on every call (never cached) in two
-places:
-
-- the install root's `fledge.toml` (`<installRoot>/fledge.toml`, the
-  bridge's / daemon's working directory), and
-- the owner's allowlist file (`resolveAllowlistPath(env, home)`; TOML, or a
-  `corvidinho.plugins` object in a `.json` file), which the box updater
-  never resets.
-
-Rules:
-- Off in either place SHALL be off (`{ on: false, reason: "off", offIn }`,
-  naming `fledge.toml` and/or `allowlist file`).
-- A missing file, table or key SHALL be on, so an existing install stays on
-  until the owner turns an extra off; otherwise only the literal `true` is
-  on and `false` or any other value is off.
-- `plugins.work = false` and `plugins = { work = false }` under
-  `[corvidinho]` SHALL be the same key; a key under a later table SHALL
-  not count; a key written twice SHALL be off unless every copy is `true`.
-  A `plugins` under `[corvidinho]` that is not an inline table (such as
-  `plugins = false`) SHALL make both extras off, as a `.json` file's
-  non-object `corvidinho.plugins` does.
-- A file that exists but cannot be read (any error but ENOENT), or a
-  `.json` allowlist file that does not parse, SHALL make both extras off
-  with `reason: "config-unreadable"` and an `error` naming the source (no
-  path, no contents); callers log it.
-- Target projects' `fledge.toml` files SHALL NOT be read, and
-  `[corvidinho.autonomous]` SHALL have no say (`parseAutonomousConfig`
-  keeps its behaviour, now on the shared `scanTomlKeys` scrape).
-- `trackExtraState(read, onChange)` SHALL call `onChange` on the first read
-  and on each change of state or reason only.
-
-Acceptance Criteria
-- `[corvidinho.plugins]` with `work = true` / `schedule = true` or no key is on; `false`, `"false"`, `"true"`, `0`, `1`, an inline table and `no` are off; `plugins.work = false` and `plugins = { work = false, schedule = true }` under `[corvidinho]` read the same; `plugins = false`, `plugins = true` and `plugins = "off"` under `[corvidinho]` give both off; a key under a later `[tasks.test]` / `[[lanes.x]]` table, under `[merlin.plugins]` or named `council` does not count.
-- No files, this checkout's own `fledge.toml` and no default allowlist file under the home dir give both on; `work = false` in the install root's `fledge.toml` gives `{ on: false, reason: "off", offIn: ["fledge.toml"] }`; `schedule = false` in the allowlist file beats `schedule = true` in `fledge.toml`; a `.json` allowlist file's `corvidinho.plugins.work: false` and the default allowlist path under the home dir are read.
-- A `fledge.toml` that is a directory gives both `{ on: false, reason: "config-unreadable", error: "the install's fledge.toml could not be read (EISDIR)" }`; a `.json` allowlist file `{oops` gives `the allowlist file could not be parsed`.
-- `[corvidinho.autonomous] enabled = false` leaves both on.
-- Fixture: `tests/plugins.extras-toggle.test.ts`.
 ### REQ-agent-110
 
 In a project that isn't a git repo, the owner's runs work in the project
@@ -2863,4 +2821,47 @@ Acceptance Criteria
 - The failed and unavailable results carry `trustNote` (the head, or the whole reason); a failing lane's does not. With a Trust step output over the feedback cap, the retry feedback starts with the feedback head and the `Trust gate:` line, keeps the step's failure line and stays within 4000 chars, and the failure summary carries the head; an unavailable Trust's reason is the whole feedback.
 - An abort once `trust verify` has started stops it and gives `verify lane aborted`.
 - `tests/agent.trust-verify.test.ts` fails on the base sources (all but the no-Trust case) and passes after.
+
+### REQ-agent-157
+
+PLUGIN-5 / PLUGIN-5.a: `loadExtrasToggles({ installRoot, env?, home? })`
+(`src/autonomous/enabled.ts`) SHALL say whether each extra — `work` (`/work`)
+and `schedule` (`/schedule` and the scheduler's runs) — is on, from a
+`[corvidinho.plugins]` table read fresh on every call (never cached) in two
+places:
+
+- the install root's `fledge.toml` (`<installRoot>/fledge.toml`, the
+  bridge's / daemon's working directory), and
+- the owner's allowlist file (`resolveAllowlistPath(env, home)`; TOML, or a
+  `corvidinho.plugins` object in a `.json` file), which the box updater
+  never resets.
+
+Rules:
+- Off in either place SHALL be off (`{ on: false, reason: "off", offIn }`,
+  naming `fledge.toml` and/or `allowlist file`).
+- A missing file, table or key SHALL be on, so an existing install stays on
+  until the owner turns an extra off; otherwise only the literal `true` is
+  on and `false` or any other value is off.
+- `plugins.work = false` and `plugins = { work = false }` under
+  `[corvidinho]` SHALL be the same key; a key under a later table SHALL
+  not count; a key written twice SHALL be off unless every copy is `true`.
+  A `plugins` under `[corvidinho]` that is not an inline table (such as
+  `plugins = false`) SHALL make both extras off, as a `.json` file's
+  non-object `corvidinho.plugins` does.
+- A file that exists but cannot be read (any error but ENOENT), or a
+  `.json` allowlist file that does not parse, SHALL make both extras off
+  with `reason: "config-unreadable"` and an `error` naming the source (no
+  path, no contents); callers log it.
+- Target projects' `fledge.toml` files SHALL NOT be read, and
+  `[corvidinho.autonomous]` SHALL have no say (`parseAutonomousConfig`
+  keeps its behaviour, now on the shared `scanTomlKeys` scrape).
+- `trackExtraState(read, onChange)` SHALL call `onChange` on the first read
+  and on each change of state or reason only.
+
+Acceptance Criteria
+- `[corvidinho.plugins]` with `work = true` / `schedule = true` or no key is on; `false`, `"false"`, `"true"`, `0`, `1`, an inline table and `no` are off; `plugins.work = false` and `plugins = { work = false, schedule = true }` under `[corvidinho]` read the same; `plugins = false`, `plugins = true` and `plugins = "off"` under `[corvidinho]` give both off; a key under a later `[tasks.test]` / `[[lanes.x]]` table, under `[merlin.plugins]` or named `council` does not count.
+- No files, this checkout's own `fledge.toml` and no default allowlist file under the home dir give both on; `work = false` in the install root's `fledge.toml` gives `{ on: false, reason: "off", offIn: ["fledge.toml"] }`; `schedule = false` in the allowlist file beats `schedule = true` in `fledge.toml`; a `.json` allowlist file's `corvidinho.plugins.work: false` and the default allowlist path under the home dir are read.
+- A `fledge.toml` that is a directory gives both `{ on: false, reason: "config-unreadable", error: "the install's fledge.toml could not be read (EISDIR)" }`; a `.json` allowlist file `{oops` gives `the allowlist file could not be parsed`.
+- `[corvidinho.autonomous] enabled = false` leaves both on.
+- Fixture: `tests/plugins.extras-toggle.test.ts`.
 
