@@ -10,7 +10,8 @@
  */
 
 import type { Database } from "bun:sqlite";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
+import { resolve } from "node:path";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import {
   appendSummary,
@@ -32,10 +33,13 @@ import {
 } from "../store/session-ttl.ts";
 import {
   ensureTalkWorkspace,
+  isGitRepo,
   parkWorktree,
   resolveProjectDir,
   type TalkWorkspace,
+  type TalkWorkspaceKind,
 } from "../worktree/index.ts";
+import { removeSessionAttachments } from "./image-attachments.ts";
 import { askFromUnknown } from "../agent/ask.ts";
 import type { HumanAsk } from "../agent/types.ts";
 import { isAskExpired, type PendingAsk } from "./ask-buttons.ts";
@@ -214,6 +218,28 @@ export type SessionStoreOptions = {
    */
   contextWindowTokens?: number;
 };
+
+/** Same directory by realpath (lexically when either no longer resolves). */
+function sameDir(a: string, b: string): boolean {
+  try {
+    return realpathSync(a) === realpathSync(b);
+  } catch {
+    return resolve(a) === resolve(b);
+  }
+}
+
+/**
+ * The kind of workspace a session row is bound to. Only the columns are
+ * stored: a branch means a linked worktree, a path that is the project folder
+ * itself means `project_dir` (AGENT-1.a), anything else a scoped dir.
+ */
+export function sessionWorkspaceKind(session: SessionStub): TalkWorkspaceKind {
+  if (session.worktreeBranch) return "worktree";
+  if (session.worktreePath && session.project && sameDir(session.worktreePath, session.project)) {
+    return "project_dir";
+  }
+  return "scoped_dir";
+}
 
 export class SessionStore {
   /** bot reply message id → session */
@@ -636,6 +662,15 @@ export class SessionStore {
 
   /** Park/remove worktree so another talk cannot reuse it as cwd. */
   async parkSessionWorktree(session: SessionStub): Promise<void> {
+    // AGENT-1.a: in a non-git project the owner's images sit in the project
+    // folder under this session's own attachments dir; every end path
+    // (end, abandon, TTL purge, a row found expired at start) parks here.
+    if (
+      session.project &&
+      (sessionWorkspaceKind(session) === "project_dir" || !isGitRepo(session.project))
+    ) {
+      removeSessionAttachments(session.project, session.id);
+    }
     if (!session.worktreePath || !session.project) {
       session.worktreeState = "removed";
       return;
@@ -650,8 +685,10 @@ export class SessionStore {
     // still says `active` at a removed directory (SESSION-WORKTREE-3).
     session.worktreeState = "parked";
     this.persistWorktreeState(session);
+    // A `project_dir` talk (AGENT-1.a) is only let go of: park never deletes
+    // the project folder.
     const state = await parkWorktree(session.project, session.worktreePath, {
-      kind: session.worktreeBranch ? "worktree" : "scoped_dir",
+      kind: sessionWorkspaceKind(session),
       branchName: session.worktreeBranch,
     });
     session.worktreeState = state;
@@ -675,7 +712,11 @@ export class SessionStore {
    * Never silently switches project mid-conversation (SESSION-WORKTREE-4).
    * A recorded worktree whose directory is gone (crash mid-park, removed out
    * of band) is re-created for the same project and session, never handed
-   * out as cwd (SESSION-WORKTREE-3).
+   * out as cwd (SESSION-WORKTREE-3). In a project that is not a git repo the
+   * talk is bound to the project folder itself (`project_dir`, AGENT-1.a;
+   * only the owner's runs may change it, the tool layer's role gate). A row
+   * bound before that to a scoped dir of a non-git project, or in place in a
+   * project that has since become a git repo, is parked, then re-bound.
    */
   async bindWorktree(
     session: SessionStub,
@@ -698,11 +739,20 @@ export class SessionStore {
           };
         }
       }
-      if (existsSync(session.worktreePath)) {
+      const kind = sessionWorkspaceKind(session);
+      const stale =
+        session.project !== undefined &&
+        ((kind === "scoped_dir" && !isGitRepo(session.project)) ||
+          (kind === "project_dir" && isGitRepo(session.project)));
+      if (stale) {
+        // AGENT-1.a: a legacy scoped dir of a non-git project, or a project
+        // folder that is a git repo now: park it, then bind afresh below.
+        await this.parkSessionWorktree(session);
+      } else if (existsSync(session.worktreePath)) {
         return {
           ok: true,
           workspace: {
-            kind: session.worktreeBranch ? "worktree" : "scoped_dir",
+            kind,
             workDir: session.worktreePath,
             projectWorkingDir: session.project ?? session.worktreePath,
             branchName: session.worktreeBranch,
@@ -727,6 +777,8 @@ export class SessionStore {
     const ensured = await ensureTalkWorkspace({
       projectWorkingDir: resolved.dir,
       sessionId: session.id,
+      // AGENT-1.a: a non-git project's talk works in the folder itself.
+      nonGit: "project_dir",
     });
     if (!ensured.ok) {
       return { ok: false, error: ensured.error };

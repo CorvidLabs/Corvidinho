@@ -467,6 +467,18 @@ prints every 0.1 s for 1.5 s keeps a 500 ms idle watchdog from firing; a
 silent 1.2 s child lets it fire. Fail on base: the printing child lets it
 fire.
 
+## Non-git root instructions and read-only others (REQ-plugins-110, REQ-plugins-115, AGENT-1.b, AGENT-1.a)
+
+`tests/plugins.nongit-project-dir.test.ts` (6 tests): in a non-git folder
+`files-write` / `files-edit` / `files-delete` refuse the root `AGENTS.md` and
+`CLAUDE.md` (the names, the absolute path, a path under the name, a missing
+file, a symlink's target, a hard link) with `refused (AGENT-1.b)` for the CLI
+and the owner, other files and `sub/AGENTS.md` are written, SAFE-2 still
+refuses, a git project's root copy stays writable; `actingWorkTask` needs a
+git work tree; a team member's `/work` writes there get the role refusal and
+work in a git repo; the owner writes there. Fail on base: 4 of 6 fail; the
+SAFE-2 and git-project cases hold on both. `tests/roles.team.test.ts` now runs
+in a git fixture dir.
 ## File tools leave hi/ alone in hi repos (REQ-plugins-520, AGENT-18 hi guard)
 
 `tests/agent.hi-guard.test.ts` through `runPlugin`: in a temp hi repo,
@@ -680,3 +692,34 @@ the `bun -e` residual.
   read-only and settle cases pass on both. Restored: 11 of 11 pass.
 - `tests/agent.repo-ways.test.ts` (the `runTask` settle cases, REQ-agent-519)
   passes unchanged.
+## The hi/ refusal names the owner's card and hi-draft (REQ-plugins-520 modified; AGENT-18 hi drafts)
+
+`tests/agent.hi-guard.test.ts`: the `files-write` refusal under `hi/` now
+says criteria change only through a capture the owner approves on a card
+(and points at `hi-draft`); every other file-tool case is unchanged and
+passes (20 of 20).
+## The /work round driver shares the review step (REQ-plugins-092 modified; GITHUB-9, GITHUB-9.a)
+
+`tests/work.review.test.ts` ("/work: an owner or team run drives the review
+rounds", temp repos with a bare origin, scripted provider): the untracked
+new file is in the reviewed diff, the reviewer gets `Title: Corvidinho /work
+task` and never the task text, the rounds are stored (round 1 open with its
+finding, round 2 `clean` with `M  src/greet.ts` changed), `workTreeReviewed`
+is true for the tree /work ships, and the /work PR body has the section; a
+spend-cap stop gives the hook's `ask` when the run left one, else a refusal,
+and records nothing; `workReviewFeedback` stays within 3800 characters
+(under the 4000 verify feedback cap) with its fence whole and later findings
+counted. The existing `github-pr-create` cases (run model, no run model,
+declined, max-rounds, refusals) still pass on the shared `reviewStep`. Fail
+on base: the file cannot load (the `/work` exports are missing).
+## `.trust.toml` is SAFE-2 protected (REQ-plugins-525 added; AGENT-18 Trust clause)
+
+`tests/agent.trust-verify.test.ts` (".trust.toml is SAFE-2 protected like
+fledge.toml"): `isProtectedPath` for `.trust.toml` in any directory and case,
+not for `trust.toml`, `docs/trust.md` or `.trust.toml.bak`; `files-write`
+(relative, `./`, absolute, new `sub/.trust.toml`), `files-edit` and an
+allowlisted `files-delete` refuse with SAFE-2 (exit 2) and leave the file
+unchanged; `files-read .trust.toml` and `files-write trust.toml` work;
+`discord-send-file`'s `fileAttachment` refuses it with SAFE-2; `git-commit`
+refuses to stage the deletion of a tracked `.trust.toml`. Both tests fail
+with the base sources.

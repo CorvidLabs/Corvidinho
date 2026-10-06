@@ -17,12 +17,14 @@ export {
   cleanStaleWorktreeState,
   deleteBranch,
   forceRemoveWorktree,
+  guardsProjectDir,
   type WorktreeState,
   type CreateWorktreeOptions,
   type CreateWorktreeResult,
   type RemoveWorktreeOptions,
   type EnsureTalkWorkspaceOptions,
   type TalkWorkspace,
+  type TalkWorkspaceKind,
   type ResolveProjectOptions,
 } from "./manager.ts";
 export {

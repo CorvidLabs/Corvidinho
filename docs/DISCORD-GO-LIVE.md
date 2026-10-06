@@ -48,6 +48,7 @@ cp allowlist.example.toml ~/.config/corvidinho/allowlist.toml
 #   ollama: optional OLLAMA_HOST (default 127.0.0.1:11434), no key
 #   anthropic: ANTHROPIC_API_KEY
 #   CORVIDINHO_LLM_TIER=read|tool|code (default tool); CORVIDINHO_LLM_MODEL_READ/_TOOL/_CODE per tier
+#   optional AGENT-17.a: CORVIDINHO_LLM_MODEL_ORDER=<same entries, weakest first>   # move up after the nudge (E.9)
 # optional SESSION-5: CORVIDINHO_LLM_CONTEXT_TOKENS=8192   # model window; long chats condense at ~80% of it
 ```
 
@@ -191,6 +192,13 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   is waiting. A schedule with no channel sends its question and buttons to the owner by **direct
   message** (same DM rule as above). See [`discord.md`](discord.md) "Scheduled questions wait for
   an answer".
+- A scheduled run the bridge started can be stopped from Discord by the owner or the schedule's
+  creator, like a chat run (AGENT-3.c): its progress message in the schedule's channel carries
+  the **Stop** button (a `stop` / `cancel` reply to it works too). A schedule with no channel
+  sends each run's Stop button to the owner by **direct message** (same DM rule as above) and
+  removes it when the run ends on its own. A stop ends that run only; the schedule's next run
+  goes ahead. Runs `corvidinho daemon` claimed have no Stop button. See [`discord.md`](discord.md)
+  "Stopping a scheduled run".
 - Spend is the owner's (SAFE-14.a): with a spend cap set — the total
   `CORVIDINHO_DAILY_SPEND_CAP_USD`, or per provider `CORVIDINHO_PROVIDER_SPEND_CAPS_USD`
   (`provider=USD` entries keyed on the provider id, e.g. `api.openai.com=3,api.anthropic.com=2`;
@@ -209,7 +217,15 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
 - At a cap, with an owner configured, a run first asks the owner on a **spend card** (SAFE-8,
   SAFE-8.a): the bridge DMs a card showing the one model call it held (model and provider), the
   cap it would pass (`total` or `provider:<id>`) and that call's estimate, after the run's task
-  as quoted data. **Approve** plus the one-time code it then DMs (SAFE-19) lets exactly that call
+  as quoted data. The estimate counts the request plus the longest reply the model can return
+  (its listed maximum output, e.g. 16,384 tokens for `gpt-4o`, 128,000 for the Claude Fable,
+  Opus and Sonnet models; 128,000 for a priced model with no listed maximum), so the card comes
+  before a call whose long reply could pass a cap (AUTONOMY-8.a); replies are never cut short,
+  and the call then counts what the provider reports. A call that is stopped, times out or
+  loses its connection before the reply, or whose reply reports no usage, stays counted at that
+  worst-case estimate (it may have been billed). With a small cap, a model with a large maximum
+  output asks on most calls (one `claude-opus-5-5` call counts about $2.56 for its reply).
+  **Approve** plus the one-time code it then DMs (SAFE-19) lets exactly that call
   through; the next call past the cap asks again with a new card and code. Deny, no answer in
   4 minutes, a late code or a stopped run sends and spends nothing, and the run ends paused as
   above. The card needs the bridge running on the same data dir (WATCH, schedules, the daemon and
@@ -285,19 +301,25 @@ inside that talk's own worktree, and in a local `corvidinho task run` inside the
 | `danger-ping` | true | 1 | true | only to test the deny path (no-op) |
 
 Not dangerous, but mutating (no allowlist entry needed; owner-only under ROLES-CHAT, E.6, except
-that a team member's `/work` run gets `files-write` / `files-edit` and the SpecSync change tools, IDENTITY-10):
+that a team member's `/work` run gets `files-write` / `files-edit` and the SpecSync change tools, IDENTITY-10,
+only in a git worktree: in a project folder that isn't a git repo the talk runs in the folder itself, so
+other people's runs only read there, AGENT-1.a):
 `files-write` (minTier 2), `files-edit` (minTier 2), `specsync-change-new` and `specsync-change-answer`
 (minTier 2; they open and answer a SpecSync change where the project's SpecSync change workflow is on,
 and in a hi repo an `acceptance_criteria` answer must cite captured hi ids, AGENT-18), `delegate` and
 `council` (minTier 2, autonomous extras, E.5). `specsync-change-status` is read-only. The file tools
 still fill a change's `.md` artifacts, but refuse SpecSync's own records in its folder (the `*.json`
 directly in `.specsync/changes/<id>/`: state, approvals, review, verification), which only the
-`specsync change` commands write (SAFE-2, AGENT-18 / AGENT-18.a). In a repo that uses hi (a
-`hi/*.md` with `hi:` front matter), `files-write`, `files-edit` and `files-delete` refuse every
+`specsync change` commands write (SAFE-2, AGENT-18 / AGENT-18.a). In a project folder that isn't a git
+repo they also refuse its root `AGENTS.md` and `CLAUDE.md` (and the file a symlink of that name leads to),
+which are read from disk into every run's instructions there; you edit those yourself (AGENT-1.b).
+In a repo that uses hi (a `hi/*.md` with `hi:` front matter), `files-write`, `files-edit` and `files-delete` refuse every
 path under `hi/` (`refused (AGENT-18): '<path>' is under hi/, …`; reads still work): the agent
 never changes a repo's criteria itself. Criteria change only through a capture the owner
-approves, and no run can make one yet, so any `hi/` change since the session base, however it
-was made, also keeps a run from being verified, `/work` from opening a PR, and the run's own
+approves on the hi card (the owner's and the team's runs draft them with `hi-draft`; see
+[`discord.md`](discord.md) "Drafted hi criteria wait for your card"), so any other `hi/` change
+since the session base, however it was made, also keeps a run from being verified, `/work` from
+opening a PR, and the run's own
 `github-pr-create` from opening one (`refused (AGENT-18): … so this run opens no PR`). The
 session base is where the run's branch left the remote's default branch (HEAD at planning
 when there is none): a capture a person made with the `hi` CLI outside any run that is already
@@ -344,9 +366,9 @@ What an entry unlocks **today**:
     `delegate` / `council` workers never get them;
   - the run's directory is that talk's own linked git worktree (`talk-…` under the worktree
     base); for a local `task run`, the top of the new worktree it made for itself in a git repo
-    (SESSION-WORKTREE-1.a, `talk-cli_…`). A non-git project (its scoped folder, or the folder
-    itself for a local run), the main checkout (a local run with `--here`), a subdirectory and
-    another talk's worktree are refused.
+    (SESSION-WORKTREE-1.a, `talk-cli_…`). A non-git project (the folder itself, where a talk or a
+    local run works there, AGENT-1.a, or a schedule's scoped folder), the main checkout (a local
+    run with `--here`), a subdirectory and another talk's worktree are refused.
   When the allowlist names one of them and the run is refused, the
   run's event stream carries one `[operator] SAFE-3.a: … allowlisted but not offered: <why>`
   line (never part of the reply). Every call still goes through the role re-check, SAFE-1,
@@ -375,8 +397,10 @@ What an entry unlocks **today**:
   second-model review of the exact tree on GitHub (GITHUB-9): the reviewer is the first other
   configured model that did not write the change (no reviewer setting, GITHUB-9.a), in at most 3
   rounds, and the PR body lists what it raised and what changed. An agent run starts the rounds
-  itself; `/work` and `plugins run` have no run model, so they open only a tree a run already had
-  reviewed (the `/work` round driver is a later change) and otherwise say why on one line. In a
+  itself; an owner or team `/work` run does too, once its tree is verified, and the `/work` PR
+  step then commits and pushes only a tree whose review finished (else `not-reviewed`, nothing
+  pushed, and the line says why); `plugins run` has no run model, so it opens only a tree a run
+  already had reviewed and otherwise says why on one line. In a
   repo that uses hi, a `github-pr-create` from inside a run is refused before any review while
   `hi/` differs from the run's session base (AGENT-18 hi guard).
 
@@ -774,6 +798,21 @@ and your own stop is a stop. It tells you on every surface:
 A `delegate` or `council` worker that fell back is reported by its lead the same way, marked
 `delegate worker:` / `council worker:`. The fallback order is yours: there is no ranking by
 price or benchmark and no setting beyond the list itself.
+
+**Model order (AGENT-17 / AGENT-17.a).** The fallback list's order is not a strength order. To
+let a stalled run move to a stronger model, set `CORVIDINHO_LLM_MODEL_ORDER` to the same
+`kind:model` entries, weakest first, e.g.
+`CORVIDINHO_LLM_MODEL_ORDER=ollama:qwen3:30b,openai:gpt-4.1,anthropic:claude-sonnet-5`. When a
+run's reply only plans, or says "Done." with nothing changed, it gets one nudge (docs/discord.md);
+if it still stalls, the rest of that run moves to the next model after the current one in your
+order that the run's tier lists (its key set, not one that already failed in the run; later ones
+in the order are tried in turn), and the answer ends with one line such as `(stronger model:
+gpt-4.1-mini only planned after the nudge, so anthropic:claude-sonnet-5 took over)`. It moves at
+most once per run and never to a weaker or unordered model; the new model's calls go through the
+same spend caps and cards (SAFE-8 / SAFE-14 / AUTONOMY-8) at its own price. Unset (the default),
+there is no order: the one nudge still happens and the reply then stands. A model that is not in
+your order, or is already the last in it, never moves. Delegate workers inherit the setting and
+apply it in their own run; restart the bridge, `github watch` and the daemon after changing it.
 
 With no usable model for a tier (nothing set, or its first entry's key is missing) it says so:
 

@@ -82,10 +82,16 @@ export async function runPlugin(opts: RunOptions): Promise<PluginHandlerResult> 
   // (including files-write/edit marked mutating but not dangerous): the owner
   // runs them all, team only its review tools (and work tools in a /work
   // run), community none.
+  // AGENT-1.a: team work tools need a /work run in a git work tree; in a
+  // non-git project folder other people's runs only read.
   if (
     mutating &&
     roleSessionActive() &&
-    !roleAllowsPlugin(await resolveActingRole(), cmd, actingWorkTask())
+    !roleAllowsPlugin(
+      await resolveActingRole(),
+      cmd,
+      actingWorkTask(process.env, opts.cwd ?? process.cwd()),
+    )
   ) {
     return {
       ok: false,
