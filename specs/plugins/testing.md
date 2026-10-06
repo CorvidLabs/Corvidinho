@@ -630,3 +630,51 @@ test) keeps the whole tool surface (builtins plus a fake Fledge plugin)
 under the default budget of 9000: `gif-search` adds about 92 tokens, and
 shorter `web-fetch` and `web-search` descriptions (the same rules, less
 wording) make room for it.
+
+## shell-exec never approves, reviews or finalizes a SpecSync change (REQ-plugins-1818, AGENT-18.a)
+
+`tests/shell.sdd-lifecycle.test.ts` through `runPlugin` (`shell-exec`
+allowlisted): temp dirs only, a fake `specsync` on PATH that logs its argv and
+changes the change folder like the real one (approve writes `approvals.json`,
+review `review.json`, finalize / ship archive the folder), fake `bunx` / `npx`
+that log and run it; every refused command starts with `touch spawned`.
+Each refusal is exit 2, `shell-exec refused (AGENT-18.a): …` carrying
+`HUMAN_LIFECYCLE_LINE` and "never does in any repo", `data.rule`
+`AGENT-18.a` with its `step` (null when it can't be read) and `script`, and
+leaves no marker, no specsync or runner call, the `.specsync/` tree
+byte-for-byte unchanged, no `approvals.json` / `review.json` and no
+`.specsync/archive`:
+- approve / review / finalize / ship in a SpecSync repo, in a plain folder
+  (no git, no SpecSync) and on Corvidinho (test seam) with the run's ledger
+  holding `c1` right after a green lane (`selfLifecycleRefusal` would let the
+  plugin approve it);
+- through `sh -c`, `bash -c`, `eval`, `$(…)`, backticks, a function, `if`,
+  a pipeline, quote removal (`appr\ove`, `'fin'alize`) and `$'approve'` (dash
+  reads it as an expansion: step null);
+- behind `env`, `timeout`, `nohup`, `xargs`, `sudo -u`, `exec`, `command`,
+  `find -exec`, the absolute path, `./tools/specsync`, `../tools/specsync`
+  after a `cd`, a symlink `./bin/ss`, `bunx`, `npx -y specsync@6.0.0`,
+  SpecSync's options before the step, and an expanding command word;
+- a step that expands (`"$S"`, `$(echo approve)`) or that xargs supplies;
+- in-root scripts: `sh x.sh`, `bash ./x.sh`, `. ./x.sh`, `./y.sh`, naming
+  the script.
+Read-only `change status|list|show|check|ship-status`, `specsync check`
+(with `--require-coverage 100`), options before `status` and
+`xargs specsync change status` run (the fake logs each argv, the tree is
+unchanged); words that only mention a step (`echo approve …`, a `grep`
+pattern, a `change new` / `change answer` text) run. `shellProdWhy` raises
+no Approve card for `specsync change approve c1 && kubectl get pods`
+(`kubectl get pods` alone still asks). The settle path: on Corvidinho with the
+verified ledger, `specsync-change-approve` still spawns
+`change approve c1 --actor corvid-agent` directly and writes
+`approvals.json`. A unit test of `firstLifecycleStep`: option values,
+`--root change change review`, `cargo run --bin specsync -- change`,
+`pnpm dlx @corvidlabs/specsync@6`, expanding steps and command words,
+`specsync check change approve` (not a step), `echo specsync change approve`
+(fails closed), separate commands, and the `bun -e` residual.
+- Fail on base (e1a24ed2's `plugins/shell/commands.ts` and
+  `plugins/shell/must-ask.ts` swapped in, `sdd-lifecycle.ts` removed): 9 of 11
+  fail (every refusal case, the Approve-card case and the unit test); the
+  read-only and settle cases pass on both. Restored: 11 of 11 pass.
+- `tests/agent.repo-ways.test.ts` (the `runTask` settle cases, REQ-agent-519)
+  passes unchanged.
