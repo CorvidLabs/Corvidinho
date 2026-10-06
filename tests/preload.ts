@@ -103,8 +103,15 @@ delete process.env.CORVIDINHO_LLM_MODEL;
 delete process.env.CORVIDINHO_LLM_MODEL_READ;
 delete process.env.CORVIDINHO_LLM_MODEL_TOOL;
 delete process.env.CORVIDINHO_LLM_MODEL_CODE;
+// AGENT-17.a: the operator's model order would move a stalled test run.
+delete process.env.CORVIDINHO_LLM_MODEL_ORDER;
 delete process.env.CORVIDINHO_LLM_BASE_URL;
 delete process.env.CORVIDINHO_LLM_TIER;
+// The Brave Search key (PLUGIN-7): `bun test` never sends a real (paid) search.
+delete process.env.BRAVE_SEARCH_API_KEY;
+// The GIPHY key (PLUGIN-8): `bun test` never sends a real GIF search.
+delete process.env.GIPHY_API_KEY;
+delete process.env.TENOR_API_KEY;
 // A scheduled run's session id (`schedule_*`) narrows its GitHub tools and
 // web-fetch to allowlisted repos (DISCORD-SCHEDULE-3.a); its verify lane
 // inherits the key, and the suite must not run as a scheduled run.

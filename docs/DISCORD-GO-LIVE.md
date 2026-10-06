@@ -48,6 +48,7 @@ cp allowlist.example.toml ~/.config/corvidinho/allowlist.toml
 #   ollama: optional OLLAMA_HOST (default 127.0.0.1:11434), no key
 #   anthropic: ANTHROPIC_API_KEY
 #   CORVIDINHO_LLM_TIER=read|tool|code (default tool); CORVIDINHO_LLM_MODEL_READ/_TOOL/_CODE per tier
+#   optional AGENT-17.a: CORVIDINHO_LLM_MODEL_ORDER=<same entries, weakest first>   # move up after the nudge (E.9)
 # optional SESSION-5: CORVIDINHO_LLM_CONTEXT_TOKENS=8192   # model window; long chats condense at ~80% of it
 ```
 
@@ -168,6 +169,8 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   showed, and a deny or no answer posts nothing (AUTONOMY-10 / 10.a). The bot needs to see the
   thread's channel type (View Channel, as for any reply); after 20 approvals replies go out at once. Updating to a tagged release with
   `CORVIDINHO_REF=v<X.Y.Z> scripts/corvidinho-update.sh` in the installed checkout is not a deploy.
+  The fixed bridge-live note in the `/announce` channel after a restart is system text, not an
+  announcement, so it never waits for a card (AUTONOMY-10.b).
   Needs the bridge running and an owner configured; nothing else to set. See [`discord.md`](discord.md)
   "The must-ask list".
 - Private reads by DM (MEMORY-7.a): private notes, profile reads (`memory-profile`) and the owner's
@@ -191,6 +194,13 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   is waiting. A schedule with no channel sends its question and buttons to the owner by **direct
   message** (same DM rule as above). See [`discord.md`](discord.md) "Scheduled questions wait for
   an answer".
+- A scheduled run the bridge started can be stopped from Discord by the owner or the schedule's
+  creator, like a chat run (AGENT-3.c): its progress message in the schedule's channel carries
+  the **Stop** button (a `stop` / `cancel` reply to it works too). A schedule with no channel
+  sends each run's Stop button to the owner by **direct message** (same DM rule as above) and
+  removes it when the run ends on its own. A stop ends that run only; the schedule's next run
+  goes ahead. Runs `corvidinho daemon` claimed have no Stop button. See [`discord.md`](discord.md)
+  "Stopping a scheduled run".
 - Spend is the owner's (SAFE-14.a): with a spend cap set — the total
   `CORVIDINHO_DAILY_SPEND_CAP_USD`, or per provider `CORVIDINHO_PROVIDER_SPEND_CAPS_USD`
   (`provider=USD` entries keyed on the provider id, e.g. `api.openai.com=3,api.anthropic.com=2`;
@@ -209,7 +219,15 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
 - At a cap, with an owner configured, a run first asks the owner on a **spend card** (SAFE-8,
   SAFE-8.a): the bridge DMs a card showing the one model call it held (model and provider), the
   cap it would pass (`total` or `provider:<id>`) and that call's estimate, after the run's task
-  as quoted data. **Approve** plus the one-time code it then DMs (SAFE-19) lets exactly that call
+  as quoted data. The estimate counts the request plus the longest reply the model can return
+  (its listed maximum output, e.g. 16,384 tokens for `gpt-4o`, 128,000 for the Claude Fable,
+  Opus and Sonnet models; 128,000 for a priced model with no listed maximum), so the card comes
+  before a call whose long reply could pass a cap (AUTONOMY-8.a); replies are never cut short,
+  and the call then counts what the provider reports. A call that is stopped, times out or
+  loses its connection before the reply, or whose reply reports no usage, stays counted at that
+  worst-case estimate (it may have been billed). With a small cap, a model with a large maximum
+  output asks on most calls (one `claude-opus-5-5` call counts about $2.56 for its reply).
+  **Approve** plus the one-time code it then DMs (SAFE-19) lets exactly that call
   through; the next call past the cap asks again with a new card and code. Deny, no answer in
   4 minutes, a late code or a stopped run sends and spends nothing, and the run ends paused as
   above. The card needs the bridge running on the same data dir (WATCH, schedules, the daemon and
@@ -253,26 +271,34 @@ in the owner's tool catalog, see below). The allowlist file
 
 Dangerous tools on `main` (printed from the registry after loading the builtins and the
 project's Fledge plugins; re-check any time with `corvidinho plugins list`). An entry lets
-`corvidinho plugins run` run the tool and offers it to the model in the owner's runs;
-`shell-exec`, the runners and the Fledge core runs `fledge-lanes-run` / `fledge-run` only in
-the owner's own chat, `/session start`, `/work` and their ask answers, inside that talk's own
-worktree, and in a local `corvidinho task run` inside the worktree it made for itself
+`corvidinho plugins run` run the tool and offers it to the model in the owner's runs, plus
+declared team members' runs (Discord, and WATCH runs they triggered, IDENTITY-12.a) for
+`github-issue-comment`, `github-pr-review`, `web-search` and `gif-search` (IDENTITY-10,
+PLUGIN-9), never community (WATCH runs anyone else triggered included), schedules other
+people created or council voices; `shell-exec`, the runners and the Fledge core runs `fledge-lanes-run` /
+`fledge-run` only in the owner's own chat, `/session start`, `/work` and their ask answers,
+inside that talk's own worktree, and in a local `corvidinho task run` inside the worktree it made for itself
 (SAFE-3.a, see "What an entry unlocks" below):
 
 | Tool | dangerous | minTier | mutating | Allowlist it when |
 |------|-----------|---------|----------|-------------------|
 | `web-fetch` | true | 1 | true | an operator runs `corvidinho plugins run web-fetch` non-interactively (GET-only, SSRF-guarded, SAFE-7) |
+| `web-search` | true | 1 | true | the owner's and declared team members' runs should search the web through Brave (PLUGIN-7/9); also needs `BRAVE_SEARCH_API_KEY`, see E.3.a |
+| `gif-search` | true | 1 | true | secondary GIF path (native GIPHY) for owner and team at tool tier (PLUGIN-8/9); prefer allowlisted `fledge-gif` for owner code-tier Discord GIFs; needs `GIPHY_API_KEY`, see E.3.b |
+| `fledge-gif` | true | 2 | true | preferred GIF path once `fledge plugins install corvid-agent/fledge-plugin-gif` is on the box; owner code-tier only (`CORVIDINHO_LLM_TIER=code`); needs `GIPHY_API_KEY` in the bridge env (passed through to Fledge); see E.3.b |
 | `fledge-<command>` | true | 2 (native) / 1 (wasm without `exec`) | true | an operator runs `corvidinho plugins run fledge-<command>` non-interactively; one entry per Fledge command you trust, names from `plugins list` (a Fledge plugin command named `run`, `lanes-list`, `lanes-validate` or `lanes-run` is skipped: the Fledge core builtins `fledge-run`, `fledge-lanes-list`, `fledge-lanes-validate` and `fledge-lanes-run` hold those names) |
-| `fledge-lanes-run` / `fledge-run` | true | 2 | true | an operator runs `corvidinho plugins run fledge-lanes-run -- <lane>` or `fledge-run -- <task> [args…]` non-interactively; builtins that run fledge's own `lanes run` / `run` in the project dir (PLUGIN-1), so they run whatever that lane or task's commands do, starting without the owner's GitHub or git credentials like `shell-exec` and the runners (SAFE-21.a), so pushes, PRs and merges go through the checked GitHub tools; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
+| `fledge-lanes-run` / `fledge-run` | true | 2 | true | an operator runs `corvidinho plugins run fledge-lanes-run -- <lane>` or `fledge-run -- <task> [args…]` non-interactively; builtins that run fledge's own `lanes run` / `run` in the project dir (PLUGIN-1), so they run whatever that lane or task's commands do, starting without the owner's GitHub or git credentials like `shell-exec` and the runners (SAFE-21.a), so pushes, PRs and merges go through the checked GitHub tools, and without the owner's cloud credentials (SAFE-21.b, see below the table); the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
 | `git-commit` | true | 2 | true | `/work` should open draft PRs (needed when the work tree has changes) |
 | `git-push` | true | 2 | true | `/work` should open draft PRs; the remote's OWNER/REPO must also pass the GitHub allowlist (GITHUB-6) |
 | `github-pr-create` | true | 1 | true | `/work` should open draft PRs; needs `GITHUB_TOKEN`/`GH_TOKEN`. A PR opens only after a second configured model reviewed the diff (GITHUB-9 / GITHUB-9.a, see [`discord.md`](discord.md) Second-model review): configure at least two models, or every PR is refused with the reason |
 | `git-branch-create` | true | 2 | true | an operator runs `corvidinho plugins run git-branch-create` non-interactively (`/work` does not need it: the worktree makes the branch) |
-| `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, `env -C` and symlinks included, SAFE-3; refuses `sed -i` / `>` edits, downloads piped into a shell, deletes outside the worktree and secret reads, saying why, SAFE-21; starts without GitHub or git credentials, so pushes, PRs and merges go only through the typed GitHub tools, SAFE-21.a; 10 minute timeout, 64 KiB output cap, output scrubbed); the model gets it only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
+| `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, `env -C` and symlinks included, SAFE-3; refuses `sed -i` / `>` edits, downloads piped into a shell, deletes outside the worktree and secret reads, saying why, SAFE-21; starts without GitHub or git credentials, so pushes, PRs and merges go only through the typed GitHub tools, SAFE-21.a, and without cloud credentials, SAFE-21.b; 10 minute timeout, 64 KiB output cap, output scrubbed); the model gets it only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
+| `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere) without GitHub or git credentials (SAFE-21.a) or cloud credentials (SAFE-21.b), and `plugins list` names any that are not loaded; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
+| `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, `env -C` and symlinks included, SAFE-3; refuses `sed -i` / `>` edits, downloads piped into a shell, deletes outside the worktree and secret reads, saying why, SAFE-21; refuses `specsync change approve` / `review` / `finalize` / `ship` in every repo, also behind a wrapper, `bunx` / `npx`, a path, `sh -c` or an in-root script (`shell-exec refused (AGENT-18.a): …`): a human approves, reviews and finalizes, and on Corvidinho only the run's own settle step after a green lane does, never the shell, AGENT-18.a; starts without GitHub or git credentials, so pushes, PRs and merges go only through the typed GitHub tools, SAFE-21.a; 10 minute timeout, 64 KiB output cap, output scrubbed); the model gets it only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
 | `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere) without GitHub or git credentials (SAFE-21.a), and `plugins list` names any that are not loaded; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
 | `memory-forget` | true | 1 | true | the owner's chat should forget memories on request, or an operator runs `corvidinho plugins run memory-forget` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
 | `memory-override` | true | 1 | true | the owner's chat should correct memories on request, or an operator runs `corvidinho plugins run memory-override` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
-| `files-delete` | true | 2 | true | an operator runs `corvidinho plugins run files-delete` non-interactively (SAFE-2 protected paths always refused) |
+| `files-delete` | true | 2 | true | an operator runs `corvidinho plugins run files-delete` non-interactively (SAFE-2 protected paths always refused; in a repo that uses hi, everything under `hi/` too, AGENT-18) |
 | `github-issue-create` / `github-issue-comment` / `github-pr-review` | true | 1 | true | the owner's runs should open issues, comment or review PRs (GITHUB-1/3), or an operator runs `corvidinho plugins run <name>` non-interactively; team members' Discord runs get `github-issue-comment` and `github-pr-review` too, on GITHUB-6-allowlisted repos only (IDENTITY-10, E.6) |
 | `discord-post-message` | true | 1 | true | an operator runs `corvidinho plugins run discord-post-message` non-interactively to post to an allowlisted channel (DISCORD-5/8); in the owner's runs the model can post too, and only where the owner could post themselves (the DISCORD-8 check is for the acting user; needs Server Members Intent). Every post, the operator's included, first waits for the owner's OK on a DM Approve card (AUTONOMY-10.a; needs the bridge running and an owner configured) |
 | `discord-send-file` | true | 1 | true | the owner's runs should attach files and images (screenshots, logs, diffs, charts) to their replies (DISCORD-17); always in the conversation's own channel, which the bridge sets (no `--channel`), only where the owner could attach files themselves (DISCORD-8 with Attach Files; needs Server Members Intent), 8 MB and a png/jpeg/gif/webp + txt/log/md/diff/patch/json/csv allowlist, text secret-scrubbed, SAFE-2 protected and secret paths refused, see [`discord.md`](discord.md) Files and images in replies |
@@ -280,14 +306,30 @@ worktree, and in a local `corvidinho task run` inside the worktree it made for i
 | `danger-ping` | true | 1 | true | only to test the deny path (no-op) |
 
 Not dangerous, but mutating (no allowlist entry needed; owner-only under ROLES-CHAT, E.6, except
-that a team member's `/work` run gets `files-write` / `files-edit` and the SpecSync change tools, IDENTITY-10):
+that a team member's `/work` run gets `files-write` / `files-edit` and the SpecSync change tools, IDENTITY-10,
+only in a git worktree: in a project folder that isn't a git repo the talk runs in the folder itself, so
+other people's runs only read there, AGENT-1.a):
 `files-write` (minTier 2), `files-edit` (minTier 2), `specsync-change-new` and `specsync-change-answer`
 (minTier 2; they open and answer a SpecSync change where the project's SpecSync change workflow is on,
 and in a hi repo an `acceptance_criteria` answer must cite captured hi ids, AGENT-18), `delegate` and
 `council` (minTier 2, autonomous extras, E.5). `specsync-change-status` is read-only. The file tools
 still fill a change's `.md` artifacts, but refuse SpecSync's own records in its folder (the `*.json`
 directly in `.specsync/changes/<id>/`: state, approvals, review, verification), which only the
-`specsync change` commands write (SAFE-2, AGENT-18 / AGENT-18.a).
+`specsync change` commands write (SAFE-2, AGENT-18 / AGENT-18.a). In a project folder that isn't a git
+repo they also refuse its root `AGENTS.md` and `CLAUDE.md` (and the file a symlink of that name leads to),
+which are read from disk into every run's instructions there; you edit those yourself (AGENT-1.b).
+In a repo that uses hi (a `hi/*.md` with `hi:` front matter), `files-write`, `files-edit` and `files-delete` refuse every
+path under `hi/` (`refused (AGENT-18): '<path>' is under hi/, …`; reads still work): the agent
+never changes a repo's criteria itself. Criteria change only through a capture the owner
+approves on the hi card (the owner's and the team's runs draft them with `hi-draft`; see
+[`discord.md`](discord.md) "Drafted hi criteria wait for your card"), so any other `hi/` change
+since the session base, however it was made, also keeps a run from being verified, `/work` from
+opening a PR, and the run's own
+`github-pr-create` from opening one (`refused (AGENT-18): … so this run opens no PR`). The
+session base is where the run's branch left the remote's default branch (HEAD at planning
+when there is none): a capture a person made with the `hi` CLI outside any run that is already
+there never blocks, but a `hi/` commit on the run's own branch that is not yet on the default
+branch counts whoever made it, since the run can't tell.
 
 `minTier` is the capability tier the model needs to see the tool: `1` = `tool`, `2` = `code`
 (`CORVIDINHO_LLM_TIER`). `mutating` = dangerous or explicitly marked mutating (ROLES-CHAT-5).
@@ -301,16 +343,20 @@ What an entry unlocks **today**:
   and the changes stay on the work branch. The PR step also needs verify to pass (with a test
   summary showing tests ran), no test deleted or turned off since the branch left its base
   (AGENT-15), in a repo whose SpecSync workflow requires a change for meaningful files every such
-  path changed on the branch covered by a SpecSync change (AGENT-18), the requester
+  path changed on the branch covered by a SpecSync change (AGENT-18), in a repo that uses hi
+  nothing under `hi/` changed on the branch or in the tree (AGENT-18 hi guard), the requester
   to be the owner or a declared team member (only they can start `/work`, IDENTITY-10/11.a),
   and the repo to pass GITHUB-6.
 - The model's tool catalog in `task run` (CLI-3 / SAFE-1). A dangerous tool is offered to the
   model only when the run's `CORVIDINHO_ALLOWLIST` names it and its `minTier` fits the run's
   tier; an unlisted one stays out, and a call to a tool that is not offered is refused. Role
-  gates are unchanged: only ADMIN runs (the owner's Discord chat, `/session start`, `/work` and
-  the schedules the owner created, DISCORD-SCHEDULE-1.a) and a local `corvidinho task run` get
-  them; non-owner chats, WATCH, schedules other people created and council voices never do
-  (E.6). A `delegate` worker gets the lead's effective allowlist (never a wider
+  gates still apply: ADMIN runs (the owner's Discord chat, `/session start`, `/work`, the
+  schedules the owner created, DISCORD-SCHEDULE-1.a, and WATCH runs the owner triggered,
+  IDENTITY-12.a) and a local `corvidinho task run` get
+  them, plus declared team members' runs (Discord, and WATCH runs they triggered) for
+  `github-issue-comment`, `github-pr-review`, `web-search` and `gif-search` (IDENTITY-10,
+  PLUGIN-9); community chats, WATCH runs anyone else triggered, schedules other people
+  created and council voices never do (E.6). A `delegate` worker gets the lead's effective allowlist (never a wider
   one), so a worker of a local run is offered the same tools, and a worker of a role session is
   non-ADMIN and offered none.
 - The shell, the runners and the Fledge core runs (SAFE-3.a): `shell-exec`, `node-exec`,
@@ -327,9 +373,9 @@ What an entry unlocks **today**:
     `delegate` / `council` workers never get them;
   - the run's directory is that talk's own linked git worktree (`talk-…` under the worktree
     base); for a local `task run`, the top of the new worktree it made for itself in a git repo
-    (SESSION-WORKTREE-1.a, `talk-cli_…`). A non-git project (its scoped folder, or the folder
-    itself for a local run), the main checkout (a local run with `--here`), a subdirectory and
-    another talk's worktree are refused.
+    (SESSION-WORKTREE-1.a, `talk-cli_…`). A non-git project (the folder itself, where a talk or a
+    local run works there, AGENT-1.a, or a schedule's scoped folder), the main checkout (a local
+    run with `--here`), a subdirectory and another talk's worktree are refused.
   When the allowlist names one of them and the run is refused, the
   run's event stream carries one `[operator] SAFE-3.a: … allowlisted but not offered: <why>`
   line (never part of the reply). Every call still goes through the role re-check, SAFE-1,
@@ -338,11 +384,34 @@ What an entry unlocks **today**:
   the SAFE-5 audit trail
   and the tools' own SAFE-3 clamp, SAFE-21 refusals and credential-free env (the Fledge runs
   included: no GitHub tokens, no global git config or credential helper, no ssh agent, gh
-  logged out). Known limits: the runners' own code (and a Fledge lane or task) can still
+  logged out; no cloud credentials, SAFE-21.b). Known limits: the runners' own code (and a Fledge lane or task) can still
   change directory, read files or write files inside or outside the worktree as the bot's own
   user, which no lexical check sees; keep the allowlist file and other secrets outside every
   talk worktree.
   They all still run through `corvidinho plugins run`.
+- **No cloud credentials (SAFE-21.b).** The verify lane, `shell-exec`, the node / python /
+  cargo runners and `fledge-lanes-run` / `fledge-run` start without your cloud credentials, so
+  they can't reach prod by accident. Their env drops `KUBECONFIG` (and the in-cluster
+  `KUBERNETES_SERVICE_HOST` / `_PORT`), the AWS keys, session tokens, profiles, role and
+  web-identity settings and container-credential endpoints (`AWS_CONTAINER_*`),
+  `GOOGLE_APPLICATION_CREDENTIALS` and the other Google key files and tokens, every
+  `CLOUDSDK_*` override, the Azure and Terraform-azurerm (`ARM_*`) service principal, identity
+  and storage keys, any other `AWS_` / `GOOGLE_` / `GCLOUD_` / `GCP_` / `AZURE_` / `ARM_` key
+  naming a key, token, secret, password or credential, `TF_TOKEN_*`, and the tokens of
+  DigitalOcean, Hetzner, Cloudflare, Linode, Vultr, Scaleway, OCI, IBM Cloud, Alibaba,
+  OpenStack, Heroku, Fly, Vercel, Netlify, Railway, Terraform Cloud, Pulumi, Vault, Nomad and
+  Consul (the full list is `isCloudCredentialEnvKey` in `src/agent/verify.ts`). Each tool's
+  default files are covered too: `KUBECONFIG`, `AWS_SHARED_CREDENTIALS_FILE`,
+  `AWS_CONFIG_FILE` and `GOOGLE_APPLICATION_CREDENTIALS` point at `/dev/null` (not
+  `~/.kube/config`, `~/.aws` or the gcloud ADC file), `AWS_EC2_METADATA_DISABLED=true`, and
+  `CLOUDSDK_CONFIG` / `AZURE_CONFIG_DIR` point at fresh, empty dirs made for that one child
+  and removed when it exits (not `~/.config/gcloud` / `~/.azure`). Ordinary settings such as
+  `AWS_REGION` or `GOOGLE_CLOUD_PROJECT` stay. Known limits: other tools' own credential
+  files (`~/.oci`, `~/.vault-token`, `~/.terraform.d`, `~/.config/doctl`, …) and cloud
+  metadata services other than EC2's (GCE, Azure IMDS) are not blocked; a command that names a
+  credential file itself (`--kubeconfig ~/.kube/config`) still reads it, and prod commands
+  still need your Approve card (AUTONOMY-9). Fledge plugin commands (`fledge-<command>`) and
+  `delegate` workers keep the env they had.
 - Fledge commands (`fledge-<command>`) are discovered for a run only when the allowlist names
   one and the run is not a non-ADMIN session and not a scheduled run (a schedule the owner
   created gets none, like the runners, DISCORD-SCHEDULE-1.a). Naming a Fledge core builtin (`fledge-lanes-list`,
@@ -358,8 +427,141 @@ What an entry unlocks **today**:
   second-model review of the exact tree on GitHub (GITHUB-9): the reviewer is the first other
   configured model that did not write the change (no reviewer setting, GITHUB-9.a), in at most 3
   rounds, and the PR body lists what it raised and what changed. An agent run starts the rounds
-  itself; `/work` and `plugins run` have no run model, so they open only a tree a run already had
-  reviewed (the `/work` round driver is a later change) and otherwise say why on one line.
+  itself; an owner or team `/work` run does too, once its tree is verified, and the `/work` PR
+  step then commits and pushes only a tree whose review finished (else `not-reviewed`, nothing
+  pushed, and the line says why); `plugins run` has no run model, so it opens only a tree a run
+  already had reviewed and otherwise says why on one line. In a
+  repo that uses hi, a `github-pr-create` from inside a run is refused before any review while
+  `hi/` differs from the run's session base (AGENT-18 hi guard).
+
+### E.3.a Web search through Brave: `web-search` (PLUGIN-7, PLUGIN-9)
+
+`web-search` searches the web through the Brave Search API. It stays off until you turn it on in
+two places, like `web-fetch`:
+
+1. `BRAVE_SEARCH_API_KEY` in the environment Corvidinho runs with (the bridge's
+   `EnvironmentFile`; spawned runs inherit it). It is read from the environment only, with no
+   default. Without it the tool answers
+   `web-search not-configured: web search is not configured: set BRAVE_SEARCH_API_KEY …` and
+   sends nothing.
+2. `web-search` in `CORVIDINHO_ALLOWLIST` (SAFE-1, E.3). Then it is offered at the tool and code
+   tiers to the owner's runs (a schedule the owner created included, DISCORD-SCHEDULE-1.a) and
+   to declared team members' runs (Discord chat, button picks, `/session start`, `/work`, and
+   WATCH runs they triggered, IDENTITY-12.a). Community (WATCH runs anyone else triggered
+   included) and schedules anyone else created never get it, `delegate` / `council`
+   workers never get the key, and `web-fetch` stays the owner's.
+
+What one search does:
+
+- It sends one request to `https://api.search.brave.com/res/v1/web/search` with the key in the
+  `X-Subscription-Token` header and `safesearch=moderate` every time. `--count` is a whole
+  number from 1 to 20 (default 5), and `--freshness` is `pd`, `pw`, `pm` or `py`. There is no
+  deep research.
+- Requests go out over https to `api.search.brave.com` only. Every redirect is refused, and the
+  host's addresses must be public (SAFE-7), as for `web-fetch`.
+- Titles, URLs and descriptions reach the model only inside the untrusted web fence. A result
+  that looks like a prompt-injection attempt turns off every mutating tool for the rest of the
+  run, `web-search` and `web-fetch` included, and the owner is told (SAFE-13, E.6.a).
+- A query carrying a secret-looking value is refused and sent nowhere. The key never appears in
+  a reply, an error, an audit row or a log line. Delegate workers, the verify lane, the shell,
+  the language runners and Fledge plugins never get it.
+- Spend (SAFE-8, SAFE-14): with `CORVIDINHO_DAILY_SPEND_CAP_USD` set, each search reserves
+  $0.005 against the same total cap as the model calls before it is sent. With only
+  `CORVIDINHO_PROVIDER_SPEND_CAPS_USD` set, each search is still recorded, but no provider cap
+  covers it (a provider cap names a configured model provider, so `api.search.brave.com=…` makes
+  the whole setting invalid and stops every call). A search that would pass the total cap, or
+  that runs while a spend-cap setting is not valid, is not sent, and the run stops with the
+  spend-cap ask, as a model call does. Prepay the Brave account with a usage limit as a hard
+  backstop too.
+- Each call is on the audit trail like any dangerous tool (SAFE-5).
+- Attribution (your go on #318, to meet Brave's terms): a reply whose run got an answer from
+  Brave ends with the line `Search by Brave`, once, after a blank line. It shows on every reply
+  people see, yours and team members' (Discord chat, button picks, `/session start`, `/work`, a
+  schedule post, `corvidinho task run`), and stays at the end when a long reply is split or cut.
+  A run whose search failed, was refused or was stopped at the spend cap, or that made no
+  search, has no such line. The line is added to the reply, never to what the model reads (the
+  tool result keeps Brave's own "Powered by Brave Search" for the model), and it never carries
+  an amount; the owner's spend DMs never include it.
+- Still open for you: whether a reply that quotes search results is fine to keep in chat history
+  and condensed summaries, given Brave's terms against storing results beyond transient use.
+
+### E.3.b GIF search: prefer `fledge-gif`, secondary `gif-search` (PLUGIN-8, PLUGIN-9)
+
+Preferred for Discord "show me a gif": **`fledge-gif`** (Fledge plugin `corvid-agent/fledge-plugin-gif`,
+GIPHY Tenor-compat). Secondary / team / tool-tier: **`gif-search`** (native GIPHY). Powered By GIPHY
+for both. Each stays off until you turn it on:
+
+For **`gif-search`** (secondary), two places like `web-search`:
+
+1. `GIPHY_API_KEY` in the environment Corvidinho runs with (the bridge's `EnvironmentFile`;
+   spawned runs inherit it). It is read from the environment only, with no default. Without it
+   the tool answers
+   `gif-search not-configured: GIF search is not configured: set GIPHY_API_KEY …` and sends
+   nothing. Get a key from the GIPHY developer dashboard; a new key starts as a beta key limited
+   to 100 calls an hour.
+2. `gif-search` in `CORVIDINHO_ALLOWLIST` (SAFE-1, E.3). Then it is offered at the tool and code
+   tiers to the owner's runs and to declared team members' runs (Discord chat, button picks,
+   `/session start`, `/work`, and WATCH runs they triggered, IDENTITY-12.a). Community (WATCH
+   runs anyone else triggered included) and schedules never get it, and `delegate` /
+   `council` workers never get the key.
+
+What one search does:
+
+- It sends one request to GIPHY's Tenor-compatible search, `https://api.giphy.com/v2/search`,
+  with `contentfilter=medium` every time. GIPHY documents `medium` as GIFs rated G and PG. The
+  filter is fixed: no flag changes it (`--rating` and `--contentfilter` are refused), and query
+  text is only ever the search words. `--limit` is a whole number from 1 to 10 (default 5), and
+  the query is at most 50 characters (GIPHY's limit). A flag given twice is refused rather than
+  half used.
+- GIPHY takes the key in the request URL. That URL is never shown in a reply, an error, an audit
+  row or a log line, and the key is scrubbed from everything the tool returns. Delegate workers,
+  the verify lane, the shell, the language runners and Fledge plugins never get the key.
+- Requests go out over https to `api.giphy.com` only. Every redirect is refused, and the host's
+  addresses must be public (SAFE-7), as for `web-fetch`.
+- It returns each GIF's title and its GIPHY media links (`GIF:` and `Small GIF:`), in GIPHY's
+  order. A link is kept only when it is https on a GIPHY media host (`media.giphy.com`,
+  `media0.giphy.com` to `media4.giphy.com`, `i.giphy.com`) and its path and query are plain URL
+  characters, so a pasted link cannot turn into Discord markdown pointing somewhere else; a
+  fragment is cut off. A result without such a link is left out, and the tool result says how
+  many were, so a search where every result was left out never looks like an empty one. Nothing
+  else is filtered or reordered. These media hosts come from GIPHY's usual CDN names; the live
+  smoke below confirms them.
+- Titles and links reach the model only inside the untrusted web fence. A title that looks like
+  a prompt-injection attempt turns off every mutating tool for the rest of the run,
+  `gif-search`, `web-search` and `web-fetch` included, and the owner is told (SAFE-13, E.6.a).
+- Posting: only when someone asks for a GIF, the run puts its link in the reply, and Discord
+  shows it from GIPHY. The link stays in the message text: a long reply that holds a GIPHY link is
+  split into messages rather than sent as one embed, because Discord never unfurls a link inside
+  an embed. The GIF is never downloaded, re-hosted or attached with `discord-send-file` (GIPHY's
+  terms forbid caching or re-hosting its media). `gif-search` itself never posts, so it has no must-ask entry
+  (AUTONOMY-11); a `discord-post-message` a GIF run makes still waits for your OK like any post
+  (AUTONOMY-10.a).
+- Spend (SAFE-8): GIPHY's API is free-tier, so with `CORVIDINHO_DAILY_SPEND_CAP_USD` set each
+  search is recorded at $0 in the same ledger as the model calls. It adds nothing to the
+  24-hour spend; when earlier spend has already gone past the cap it is not sent, and the run
+  stops with the spend-cap ask, as a model call does.
+- Each call is on the audit trail like any dangerous tool (SAFE-5).
+- Attribution: GIPHY's standard terms require "Powered By GIPHY". It is in this guide, in
+  `.env.example` and in the tool result the model reads (its summary line and
+  `data.attribution`). Nothing adds it to the reply people see yet; whether replies should show
+  it is still open for you.
+- Live smoke (not done yet): with a real key on the VPS, ask for a GIF in an allowlisted channel,
+  and check that the link unfurls beside the reply footer, that its host is one of the media
+  hosts above, and that a $0 `spend_ledger` row appears when a spend cap is set.
+
+**Preferred path (owner decision 2026-10-01): `fledge-gif`.** Install
+`corvid-agent/fledge-plugin-gif` on the box (`fledge plugins install corvid-agent/fledge-plugin-gif`),
+allowlist `fledge-gif` in `CORVIDINHO_ALLOWLIST`, and keep `GIPHY_API_KEY` in the bridge env.
+Tenor's own API shut down 2026-06-30; the plugin (v0.2+) calls GIPHY's Tenor-compatible
+`https://api.giphy.com/v2/search` with `contentfilter=medium` and reads `GIPHY_API_KEY`
+(optional alias `TENOR_API_KEY`). Corvidinho discovers it as `fledge-gif` (PLUGIN-3):
+dangerous, minTier 2 (needs `CORVIDINHO_LLM_TIER=code`), owner code-tier runs when allowlisted.
+CLI check: `fledge gif search "thumbs up"`. Post one result as a link in the reply, like
+`gif-search`.
+
+`gif-search` stays loaded as the **secondary** / team / tool-tier path (minTier 1, PLUGIN-9).
+Do not remove it from the allowlist without a SpecSync change that covers #331. Prefer
+`fledge-gif` in owner Discord "show me a gif" runs when both are allowlisted.
 
 ### E.4 `corvidinho daemon` under systemd (CLI-8, AUTONOMOUS-4)
 
@@ -417,9 +619,10 @@ counts; a missing file, section or key, or any other value, means off.
   Discord/GitHub tokens or the audit key. `council` is for a top-level lead only (a delegated
   worker is refused): 2–5 voices (default 3) at `read` tier by default and never above `tool`,
   at most 2 councils per run, 15 min cap per council.
-- WATCH runs and schedules other people create are never ADMIN, so they never get `delegate`
-  or `council`. A schedule the owner created is ADMIN, so with the gate on and the tier `code`
-  it may get them; its workers are community like any worker.
+- Schedules other people create, and WATCH runs anyone but the owner triggered, are never
+  ADMIN, so they never get `delegate` or `council`. A schedule the owner created, and a WATCH
+  run the owner's own comment triggered (IDENTITY-12.a), are ADMIN, so with the gate on and the
+  tier `code` they may get them; their workers are community like any worker.
 - `ask-human` (AUTONOMY-1) is not behind this gate.
 
 ### E.6 Roles: owner, team, community (IDENTITY-8..12, ROLES-CHAT)
@@ -436,13 +639,22 @@ Who is who in an allowlisted channel:
   run's own worktree (never on a secret-looking path); their `/work` can open the draft PR
   like the owner's. Memory stays their
   own (`memory-store` / `-recall` / `-profile`; forget/override stay owner-only), plus the
-  project's memory (`--project`, MEMORY-6). No shell, runners, git
-  writes, other GitHub writes, Discord posts, `web-fetch`, `delegate` or `council`. Briefings
+  project's memory (`--project`, MEMORY-6), and `web-search` and `gif-search` when they are
+  allowlisted (PLUGIN-9, E.3.a / E.3.b). No shell, runners, git
+  writes, other GitHub writes, Discord posts or file attachments, `web-fetch`, `delegate` or
+  `council`. Briefings
   (#102) do not exist yet.
 - Everyone else ⇒ **community**: declared `community`, declared without a role, undeclared,
   muted or deny-listed (IDENTITY-11/12). Muted users are refused (the mute and rate gate runs on
   chat and on every slash command). Community can't start `/work` (IDENTITY-11.a).
-- WATCH runs, schedules anyone but the owner created and `delegate` / `council` workers are
+- On GitHub (IDENTITY-12.a) a WATCH run gets the role of the person who triggered it, matched
+  by their GitHub numeric user id in the people list (never a login): the owner's tools for the
+  owner, the team's for a team member (not `/work` file edits), behind the same must-ask gate;
+  community for anyone else and for every assignment or review request. It never gets the
+  shell, runners, Fledge runs or a discovered Fledge plugin command, and secret-looking
+  paths stay hidden there for every role
+  ([`WATCH.md`](WATCH.md) "Roles on GitHub").
+- Schedules anyone but the owner created and `delegate` / `council` workers are
   community whoever triggered them. A schedule the owner created runs as the owner
   (DISCORD-SCHEDULE-1.a): their allowlisted tools and must-ask cards, never the shell,
   runners or Fledge commands. A scheduled run is never team, even a team member's.
@@ -456,12 +668,14 @@ Who is who in an allowlisted channel:
   chat. A refused chat message gets no reply, session or run; a refused slash command gets only
   an ephemeral zero-width ack.
 
-Community sessions (every non-owner who is not team, plus all WATCH runs and every schedule
-the owner did not create):
+Community sessions (every non-owner who is not team, plus every WATCH run no declared owner
+or team member triggered — every assignment and review request included, IDENTITY-12.a —
+and every schedule the owner did not create):
 
 - **Catalog:** only read/chat tools. No dangerous or mutating tool is offered, so no file
   write/edit/delete, no shell, no git/GitHub writes, no Discord posts, no memory
-  forget/override, no `delegate`/`council`, no `web-fetch` (dangerous counts as mutating).
+  forget/override, no `delegate`/`council`, no `web-fetch`, `web-search` or `gif-search`
+  (dangerous counts as mutating).
   Read tools stay, including `files-read`/`-list`/`-glob`, `search-grep`,
   `git-status`/`-diff`/`-log`/`-branch-list`, GitHub reads, `specsync-*` reads,
   `fledge-lanes-list`/`-validate`,
@@ -486,7 +700,8 @@ the owner did not create):
   paths (`.env*`, `.ssh`, keystores, `credentials`, `id_rsa`, `id_ed25519`, `*.pem`) are
   refused when named to `files-read`, `files-list`, `search-grep` or `git-diff`, and left out
   of `files-glob` / `files-list` results, recursive `search-grep` output and `git-diff`.
-  Team sessions get the same secret-path refusals.
+  Team sessions get the same secret-path refusals, and so does every WATCH run, the owner's
+  included (its answer goes to a public GitHub thread, IDENTITY-12.a).
 - **Site and roadmap (ROLES-CHAT-8.a):** only the public repo docs (README, `docs/`, STATUS,
   CHANGELOG — `github-docs-read`, or the project files) and the public issues and milestones
   of allowed public repos (`github-issue-list`, `github-milestone-list`). No site URL is a
@@ -625,6 +840,21 @@ and your own stop is a stop. It tells you on every surface:
 A `delegate` or `council` worker that fell back is reported by its lead the same way, marked
 `delegate worker:` / `council worker:`. The fallback order is yours: there is no ranking by
 price or benchmark and no setting beyond the list itself.
+
+**Model order (AGENT-17 / AGENT-17.a).** The fallback list's order is not a strength order. To
+let a stalled run move to a stronger model, set `CORVIDINHO_LLM_MODEL_ORDER` to the same
+`kind:model` entries, weakest first, e.g.
+`CORVIDINHO_LLM_MODEL_ORDER=ollama:qwen3:30b,openai:gpt-4.1,anthropic:claude-sonnet-5`. When a
+run's reply only plans, or says "Done." with nothing changed, it gets one nudge (docs/discord.md);
+if it still stalls, the rest of that run moves to the next model after the current one in your
+order that the run's tier lists (its key set, not one that already failed in the run; later ones
+in the order are tried in turn), and the answer ends with one line such as `(stronger model:
+gpt-4.1-mini only planned after the nudge, so anthropic:claude-sonnet-5 took over)`. It moves at
+most once per run and never to a weaker or unordered model; the new model's calls go through the
+same spend caps and cards (SAFE-8 / SAFE-14 / AUTONOMY-8) at its own price. Unset (the default),
+there is no order: the one nudge still happens and the reply then stands. A model that is not in
+your order, or is already the last in it, never moves. Delegate workers inherit the setting and
+apply it in their own run; restart the bridge, `github watch` and the daemon after changing it.
 
 With no usable model for a tier (nothing set, or its first entry's key is missing) it says so:
 

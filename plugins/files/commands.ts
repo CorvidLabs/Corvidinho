@@ -12,7 +12,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, isAbsolute, join, normalize, relative } from "node:path";
 import { Glob } from "bun";
 import type {
   PluginCommand,
@@ -20,11 +20,16 @@ import type {
   PluginImage,
 } from "../../src/plugins/types.ts";
 import { MAX_IMAGE_SIZE_BYTES, sniffImageFile } from "./image.ts";
+import { repoWaysNow } from "../../src/agent/repo-ways.ts";
 import {
+  hiRefuseMessage,
+  isHiPath,
+  isNonGitRootInstructionPath,
   isProtectedPath,
   isSddRecordPath,
   isSecretPath,
   protectedRefuseMessage,
+  rootInstructionRefuseMessage,
   sddRecordRefuseMessage,
   secretPathsRefused,
   secretRefuseMessage,
@@ -63,7 +68,30 @@ function refuseProtected(
   if (isSddRecordPath(userPath) || isSddRecordPath(relative(root, absPath))) {
     return { ok: false, error: sddRecordRefuseMessage(userPath), exitCode: 2 };
   }
+  // AGENT-1.b: a non-git project's root AGENTS.md / CLAUDE.md.
+  if (isNonGitRootInstructionPath(absPath, cwd)) {
+    return { ok: false, error: rootInstructionRefuseMessage(userPath), exitCode: 2 };
+  }
   return null;
+}
+
+/**
+ * AGENT-18 hi guard (REQ-plugins-520): in a repo that uses hi (read from the
+ * run's session base, HEAD and the working tree, `repoWaysNow`), the file
+ * tools never write, edit or delete under hi/ — criteria change only through
+ * a capture the owner approves. The path is judged where the write would
+ * land (`absPath`, symlinks resolved) and as given. Reads are unaffected.
+ */
+async function refuseHi(
+  userPath: string,
+  absPath: string,
+  cwd: string,
+): Promise<PluginHandlerResult | null> {
+  const underHi =
+    isHiPath(relative(realRoot(cwd), absPath)) || (!isAbsolute(userPath) && isHiPath(normalize(userPath)));
+  if (!underHi) return null;
+  if (!(await repoWaysNow(cwd)).ways.hi) return null;
+  return { ok: false, error: hiRefuseMessage(userPath), exitCode: 2 };
 }
 
 /**
@@ -207,6 +235,8 @@ export const filesCommands: PluginCommand[] = [
         const abs = resolveProjectPath(ctx.cwd, pathArg);
         const blocked = refuseProtected(pathArg, abs, ctx.cwd);
         if (blocked) return blocked;
+        const hi = await refuseHi(pathArg, abs, ctx.cwd);
+        if (hi) return hi;
         const secret = await refuseSecretForRole(pathArg, abs, ctx.cwd);
         if (secret) return secret;
 
@@ -274,6 +304,8 @@ export const filesCommands: PluginCommand[] = [
         const abs = resolveProjectPath(ctx.cwd, pathArg);
         const blocked = refuseProtected(pathArg, abs, ctx.cwd);
         if (blocked) return blocked;
+        const hi = await refuseHi(pathArg, abs, ctx.cwd);
+        if (hi) return hi;
         const secret = await refuseSecretForRole(pathArg, abs, ctx.cwd);
         if (secret) return secret;
         assertExistingFile(abs);
@@ -452,6 +484,8 @@ export const filesCommands: PluginCommand[] = [
         const abs = resolveProjectPath(ctx.cwd, pathArg);
         const blocked = refuseProtected(pathArg, abs, ctx.cwd);
         if (blocked) return blocked;
+        const hi = await refuseHi(pathArg, abs, ctx.cwd);
+        if (hi) return hi;
         assertExistingFile(abs);
         rmSync(abs);
         return {

@@ -4,6 +4,7 @@ import type { PluginCommand, PluginHandlerArgs, PluginHandlerResult } from "../.
 import { extractRepoFromArgs } from "../../src/plugins/githubDeny.ts";
 import { checkRepoGateForActingRole } from "../../src/plugins/githubPublic.ts";
 import { ROLE_REFUSED_MESSAGE, resolveActingRole } from "../../src/plugins/roles.ts";
+import { hiPrRefusal } from "../../src/agent/repo-ways.ts";
 import { gatePrCreate, markReviewOpened, pushRemoteTree, withReviewSection } from "../../src/work/review.ts";
 import { createOctokit, splitOwnerRepo, type ApiResult } from "./api.ts";
 import { Octokit } from "@octokit/rest";
@@ -483,6 +484,12 @@ export const githubCommands: PluginCommand[] = [
         };
       }
       const base = baseFlag?.trim() || "main";
+      // AGENT-18 hi guard (REQ-plugins-521): inside a Corvidinho run, a repo
+      // that uses hi opens no PR while hi/ differs from the run's session
+      // base — the verify gate holds done to the same check. No run in this
+      // cwd (an operator's own call, the /work PR step) is not checked here.
+      const hiRefusal = await hiPrRefusal(ctx.cwd);
+      if (hiRefusal) return { ok: false, error: hiRefusal, exitCode: 2 };
       // A live run needs its client before any review is spent.
       let octokit: Octokit | undefined;
       if (!githubDryRun()) {

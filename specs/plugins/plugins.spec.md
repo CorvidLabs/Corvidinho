@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 63
+version: 65
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -56,6 +56,7 @@ files:
   - plugins/files/resolvePath.ts
   - plugins/files/argv.ts
   - plugins/files/image.ts
+  - tests/plugins.nongit-project-dir.test.ts
   - plugins/search/index.ts
   - plugins/search/commands.ts
   - src/memory/confirm.ts
@@ -81,14 +82,24 @@ files:
   - plugins/shell/footguns.ts
   - plugins/shell/must-ask.ts
   - tests/shell.footguns.test.ts
+  - plugins/shell/sdd-lifecycle.ts
+  - tests/shell.sdd-lifecycle.test.ts
   - plugins/web/index.ts
   - plugins/web/commands.ts
   - plugins/web/fetch.ts
   - plugins/web/address.ts
   - plugins/web/transport.ts
   - plugins/web/text.ts
+  - plugins/web/api.ts
+  - plugins/web/search.ts
   - tests/web.fetch.test.ts
   - tests/web.transport.test.ts
+  - tests/web.search.test.ts
+  - plugins/gif/giphy.ts
+  - plugins/gif/hosts.ts
+  - plugins/gif/commands.ts
+  - plugins/gif/index.ts
+  - tests/gif.search.test.ts
   - plugins/git/index.ts
   - plugins/git/commands.ts
   - plugins/git/exec.ts
@@ -136,10 +147,16 @@ Plugin host includes Discord outbound post, GitHub write plugins as dangerous
 file/search plugins with SAFE-2 guards (PLUGIN-1/2 / REQ-plugins-081..084),
 `shell-exec` with SAFE-3 project-root cwd clamp (REQ-plugins-086..088) and
 SAFE-21 foot-gun refusals, starting without GitHub or git credentials
-(SAFE-21 / SAFE-21.a / REQ-plugins-494..495),
+(SAFE-21 / SAFE-21.a / REQ-plugins-494..495) and never approving, reviewing
+or finalizing a SpecSync change (AGENT-18.a / REQ-plugins-1818),
 language runners `node-exec` / `python-exec` / `cargo-exec` that register only
 when their toolchain is on PATH (PLUGIN-4 / REQ-plugins-313..314), the
-SSRF-guarded `web-fetch` GET plugin (PLUGIN-1/2 / SAFE-7 / REQ-plugins-111), and
+SSRF-guarded `web-fetch` GET plugin (PLUGIN-1/2 / SAFE-7 / REQ-plugins-111),
+`web-search` through Brave for the owner and team (PLUGIN-7 / PLUGIN-9 /
+REQ-plugins-318) on a shared https-only, host-allowlisted keyed JSON GET
+(REQ-plugins-3181), `gif-search` through GIPHY with the safety filter at
+medium, posted as a link, for the owner and team (PLUGIN-8 / PLUGIN-9 /
+REQ-plugins-3182) on that same GET, and
 typed git plugins (`git-status|diff|log|branch-list` reads;
 `git-branch-create|commit|push` dangerous code-tier mutators) clamped to the
 task worktree (PLUGIN-1/2, SAFE-1/2/3, GITHUB-2/6 / REQ-plugins-182), and
@@ -167,9 +184,18 @@ REQ-plugins-097).
 bounded rounds, and the PR body lists what it raised and what changed
 (GITHUB-9 / GITHUB-9.a, REQ-plugins-092, `src/work/review.ts`): the reviewer
 is the first other configured model that did not write the change (no
-reviewer setting); an agent run starts the rounds, a caller with no run model
-opens only a tree whose review already finished, and no second model means no
-PR, with one line saying why.
+reviewer setting); an agent run starts the rounds, an owner or team `/work`
+run drives them itself once its tree is verified (the tree `/work` will
+commit, untracked files included; `workReviewHook`, REQ-agent-092), a caller
+with no run model opens only a tree whose review already finished, and no
+second model means no PR, with one line saying why. Before any of that, a `github-pr-create` called
+while a Corvidinho run is in progress in its cwd, in a repo that uses hi,
+refuses with exit 2 and `refused (AGENT-18): this repo's hi/ changed since the
+session base (…) …, so this run opens no PR; …` while anything under `hi/`
+differs from that run's session base (`hiPrRefusal`, the verify gate's own
+comparison; unreadable refuses too); with no run there (an operator's
+`plugins run`, the `/work` PR step) it does not apply (AGENT-18 hi guard,
+REQ-plugins-521).
 
 ## Public API
 
@@ -185,7 +211,10 @@ gate can make a deny on the thread or its parent win (REQ-plugins-005). File/sea
 Shell plugins register via `loadShellPlugins` (`shell-exec`);
 `plugins/shell/index.ts` also exports the clamp (`firstDisallowedCd`,
 `isCdEscape`, `forEachSimpleCommand`, `clampRefuseMessage`) and the SAFE-21
-check (`firstFootgun`, `footgunRefuseMessage`). Language
+check (`firstFootgun`, `footgunRefuseMessage`);
+`plugins/shell/sdd-lifecycle.ts` exports the AGENT-18.a lifecycle check
+(`firstLifecycleStep`, `lifecycleRefuseMessage`, `lifecycleRefusal`,
+`HUMAN_LIFECYCLE_STEPS`). Language
 runners register via `loadRunnerPlugins(env?)` (`plugins/runners/index.ts`),
 which returns a `RunnerLoadReport` (`loaded` with each bound binary, `missing`
 with a reason) that `runnerStatusLines` renders for `plugins list`;
@@ -193,9 +222,36 @@ with a reason) that `runnerStatusLines` renders for `plugins list`;
 `runnerChildEnv`, `withoutGitCredentials` and `isCredentialEnvKey` are
 exported for tests. Git plugins
 register via `loadGitPlugins` (`plugins/git/index.ts`).
-`plugins/web` registers `web-fetch` via `loadWebPlugins`; `createWebCommands`
-takes the resolver/transport seams (and optional `env` / `allowlist`, the
-schedule-run GitHub gate's seams), `webFetch` is the guarded GET core,
+`plugins/web` registers `web-fetch` and `web-search` via `loadWebPlugins`;
+`createWebCommands` takes the resolver/transport seams (and optional `env` /
+`allowlist`, the schedule-run GitHub gate's seams, plus `spendDb` / `now` for
+`web-search`'s SAFE-8 ledger), `webFetch` is the guarded GET core (its
+`pinTargets`, `dialPinned`, `readCapped` and `mediaType` are exported for
+the keyed JSON GET), `plugins/web/api.ts` exports `apiGetJson`,
+`checkApiUrl`, `ApiRequestError`, `API_NOT_SENT_CODES`, `API_MAX_BYTES`,
+`API_TIMEOUT_MS` and `API_REQUEST_HEADERS` (REQ-plugins-3181),
+`plugins/web/search.ts` exports `braveWebSearch`, `parseWebSearchArgs`,
+`braveSearchUrl`, `braveHits`, `formatHits`, `fenceSearchResults`,
+`scrubOut`, `WebSearchError` and the Brave constants
+(`BRAVE_SEARCH_API_KEY_ENV`, `BRAVE_SEARCH_HOST`, `BRAVE_SAFESEARCH`,
+`BRAVE_SEARCH_COST_MICRO_USD`, `BRAVE_ATTRIBUTION`, the count / query
+limits; REQ-plugins-318), `plugins/gif` registers `gif-search` via
+`loadGifPlugins` (`createGifCommands` takes the resolver / transport / `env`
+/ `spendDb` / `now` seams) and `plugins/gif/giphy.ts` exports
+`giphyGifSearch`, `parseGifSearchArgs`, `giphySearchUrl`, `giphyMediaUrl`,
+`giphyHits`, `formatGifHits`, `fenceGifResults`, `GifSearchError` and the
+GIPHY constants (`GIPHY_API_KEY_ENV`, `GIPHY_API_HOST`, `GIPHY_SEARCH_PATH`,
+`GIPHY_CONTENT_FILTER`, `GIPHY_ALLOWED_RATINGS`, `GIPHY_MEDIA_FILTER`,
+`GIPHY_CLIENT_KEY`, `GIPHY_MEDIA_HOSTS`, `GIPHY_ATTRIBUTION`,
+`GIF_POST_GUIDANCE`, `GIPHY_SEARCH_COST_MICRO_USD`, `GIPHY_SEARCH_SPEND_MODEL`,
+the limit / query caps; REQ-plugins-3182), `plugins/gif/hosts.ts` (no
+imports) exports `GIPHY_MEDIA_HOSTS` and `hasGiphyMediaLink`, which
+`giphy.ts` re-exports and the Discord reply path uses so a GIF link is never
+put in an embed (REQ-discord-075), `src/plugins/roles.ts` exports
+`TEAM_SEARCH_TOOLS` (PLUGIN-9: `web-search` and `gif-search`) and
+`isWatchRunEnv(env)` (IDENTITY-12.a: the surface stamp is `watch`;
+REQ-plugins-1201), and `PluginHandlerResult.spendAsk` carries a
+flat-priced call's SAFE-8 ask (REQ-agent-098),
 `githubRepoOfUrl(url)` says whether a URL is on a GitHub host and which
 `OWNER/REPO` it names (DISCORD-SCHEDULE-3.a),
 `checkAddress` classifies one IP, and `createSocketTransport` is the pinned
@@ -224,14 +280,19 @@ models as `data.models` (REQ-plugins-117). `runGit` takes `indexFile`
 (200 KiB), `REVIEW_FINDINGS_MAX` (10), `REVIEW_FINDING_MAX_CHARS`,
 `REVIEW_PATHS_MAX`, `REVIEW_TITLE_MAX`, `REVIEW_SECTION_HEADING`,
 `REVIEW_REFUSED_PREFIX`, `REVIEW_REFUSAL`, `REVIEW_SYSTEM_PROMPT`,
-`configuredModels(env)`, `resolveReviewer(env, authors)`, `reviewTree(root)`,
+`configuredModels(env)`, `resolveReviewer(env, authors)`, `reviewTree(root,
+{untracked?})` (`/work`: `git add --all`, untracked non-ignored files count),
 `reviewMergeBase`, `reviewDiffText`, `changedPaths`, `pushRemoteTree(cwd,
 branch)`, `reviewMessages(title, diff)`, `parseReviewFindings(text)`,
 `reviewDiff(o)`, `ReviewSpendStop`, `PR_REVIEW_ROUNDS_SQL`,
 `ensurePrReviewRounds`, `reviewRepoKey`, `latestReviewCycle`,
 `branchReviewAuthors`, `recordReviewRound`, `endReviewCycle`, `ReviewRound`,
-`ReviewEnd`, `reviewSection(rounds)`, `withReviewSection(body, section)` and
-`reviewRefusalReason(error)`; `plugins/github/commands.ts` exports
+`ReviewEnd`, `reviewSection(rounds)`, `withReviewSection(body, section)`,
+`reviewRefusalReason(error)`, `ReviewStep`, and for `/work` `reviewWorkRound`,
+`workReviewHook`, `workReviewTarget`, `workReviewFeedback`,
+`workTreeReviewed`, `WorkReviewOutcome`, `WorkReviewTarget`,
+`WORK_REVIEW_TITLE`, `WORK_REVIEW_FEEDBACK_MAX` (3800) and
+`WORK_REVIEW_REFUSAL`; `plugins/github/commands.ts` exports
 `githubBranchTree(octokit, owner, repo, head)`.
 `src/plugins/proc-group.ts` (REQ-plugins-154) exports `killProcessTree`,
 `signalProcessTree`, `collectProcessTree`, `readProcTable`, `parseProcStat`,
@@ -283,6 +344,16 @@ check`).
 
 ## Invariants
 
+In a project folder that isn't a git repo (`isGitRepo(cwd)` false) the file
+tools never change its root `AGENTS.md` or `CLAUDE.md` (AGENT-1.b,
+REQ-plugins-110): `refuseProtected` refuses, for every caller,
+`isNonGitRootInstructionPath` — the root names, paths under them, the file a
+symlink of that name leads to, a hard link to one — with `refused (AGENT-1.b)`.
+Team work tools need a git work tree: `actingWorkTask(env, cwd)` reads the
+`/work` stamp and `isGitRepo(cwd)`, and `runPlugin` passes the call's cwd, so
+other people's runs only read in a non-git folder (AGENT-1.a,
+REQ-plugins-115).
+
 `spawnCapped` counts each output chunk of its child as the calling run's
 activity for the idle timeout (AGENT-12, REQ-plugins-125, `noteIdleActivity`;
 a no-op outside a run), so a printing tool is never stopped as idle.
@@ -304,7 +375,9 @@ CORVIDINHO_GITHUB_DRY_RUN=1. File write/edit/delete require minTier 2 (code);
 `files-delete` is dangerous. Paths clamp to plugin cwd; symlink escapes refuse;
 a dangling symlink is followed by hand and its target clamped (loops refuse).
 Protected infra (`.env*`, `.git`, `fledge.toml`, `.fledge/**` (lane imports
-the verify gate runs, SAFE-2.a), `bunfig.toml`,
+the verify gate runs, SAFE-2.a), `.trust.toml` (the Trust config a Trust
+repo's verify gate runs `fledge trust verify` for, AGENT-18,
+REQ-plugins-525), `bunfig.toml`,
 `specs/**` / `*.spec.md`, `.specsync/` state outside the files of an active
 `.specsync/changes/<id>/` folder, and any keystore file or directory inside
 the project; a change folder's slug name is not a keystore) cannot be
@@ -312,7 +385,17 @@ overwritten or deleted via file tools (SAFE-2); no in-band override. Inside
 an active change folder the file tools fill the `.md` artifacts but refuse
 SpecSync's own `*.json` records there (state, approvals, review,
 verification; `isSddRecordPath`), which only `specsync change` writes
-(AGENT-18 / AGENT-18.a, REQ-plugins-083). Memory plugins take the acting user and ADMIN
+(AGENT-18 / AGENT-18.a, REQ-plugins-083). In a repo that uses hi (a
+`hi/*.md` with `hi:` front matter in the run's session base, HEAD or the
+working tree, `repoWaysNow`), `files-write`, `files-edit` and `files-delete`
+also refuse every path under `hi/` (`isHiPath`, judged where the write lands
+with symlinks resolved and as given), exit 2 with one line
+(`hiRefuseMessage`: `refused (AGENT-18): '<path>' is under hi/, …`): the
+agent never changes a repo's criteria itself, since they change only through
+a capture the owner approves on a card (drafted with `hi-draft`, AGENT-18 hi
+drafts, REQ-agent-521). Reads, and hi/ in a
+repo that does not use hi, are unaffected (AGENT-18 hi guard,
+REQ-plugins-520). Memory plugins take the acting user and ADMIN
 only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID` /
 `CORVIDINHO_ACTING_IS_ADMIN`), never argv — `--user` / `--admin` / `--db` are
 refused; ADMIN is re-checked in the handler (empty admin lists ⇒ nobody);
@@ -391,7 +474,69 @@ role resolved in the tool layer (`resolveActingRole`, REQ-plugins-065): text
 in a task, a body or a tool result that claims the owner's identity widens
 nothing (SAFE-12, REQ-plugins-071). Errors never echo the reason phrase
 or other server-chosen header values and are one line, control-free and at
-most 300 chars. `web-search` is not built (provider not captured).
+most 300 chars.
+`web-search` (REQ-plugins-318) is dangerous + minTier 1 like `web-fetch`:
+SAFE-1 allowlist, SAFE-5 audit, never at the read tier, and for the owner and
+team only (`TEAM_SEARCH_TOOLS`, PLUGIN-9; community — WATCH runs no declared
+owner or team member triggered included, IDENTITY-12.a — and schedules other
+people created never; a schedule the owner created runs as the owner,
+DISCORD-SCHEDULE-1.a; `web-fetch` stays the owner's). The key is `BRAVE_SEARCH_API_KEY` from the run's env only (no
+default; missing is a `not configured` error, never an empty success) and
+goes out only as the `X-Subscription-Token` header, through the keyed JSON
+GET (REQ-plugins-3181: https only, `api.search.brave.com` only, default port,
+checked before DNS; then the web-fetch pinned public-address check; every
+redirect refused; JSON-only bodies up to 1 MiB; 15 s). `safesearch=moderate`
+is always sent; `--count` is a whole number 1–20 (default 5) and
+`--freshness` `pd|pw|pm|py`. A query carrying a secret-looking value or a set
+secret env value is refused before anything is sent (SAFE-6). Each search
+reserves $0.005 against the SAFE-8 total cap before the request
+(`reserveFlatSpend`; recorded while any cap is set, SAFE-14's provider caps
+included, and counted against the total cap only); a search stopped at the
+cap, or while a spend-cap setting is not valid, is not sent and ends the
+tool-loop attempt with the spend-cap ask. Titles, URLs and descriptions
+reach the model only inside the untrusted web fence, and SAFE-13 scans the
+result: one suspicious snippet switches off every mutating tool, `web-search`
+and `web-fetch` included, for the rest of the run. No output, error, data
+field or audit row carries the key, the request URL, a request header or the
+pinned address (every string passes `scrubSecrets` and
+`redactSecretEnvValues` as its last step, after the fence and any control or
+invisible-character strip, so a key split by such a character is never
+rebuilt). Query words together with `--query` are a usage error, and a term
+that starts with `--` goes in `--query`. A run already stopped reserves and
+sends nothing; an unexpected failure is one fixed line. The tool result
+carries Brave's "Powered by Brave Search" for the model, and the run's reply
+ends with the visible line "Search by Brave" once whenever a search in that
+run was answered (REQ-agent-318, Leif's go on #318); the line is added by the
+reply path, never inside the fence or any tool result. It never posts, so it has no
+must-ask entry (AUTONOMY-11). Deep research is not built.
+`gif-search` (REQ-plugins-3182, a new `plugins/gif`) is dangerous + minTier 1
+like `web-search`, for the owner and team only (`TEAM_SEARCH_TOOLS`,
+PLUGIN-9; community never; `web-fetch` and `discord-send-file` stay the
+owner's). The key is `GIPHY_API_KEY` from the run's env only (no default;
+missing is a `not configured` error). It sends one `GET
+https://api.giphy.com/v2/search` (GIPHY's Tenor-compatible search) through
+the keyed JSON GET with `api.giphy.com` as the only host and
+`contentfilter=medium` (G and PG) always: the URL is built from scratch, so
+query text is only ever `q`, and `--rating` / `--contentfilter` (and a flag
+given twice) are usage errors. GIPHY takes the key in the URL, so the request URL is never returned,
+shown or audited, and every returned string is scrubbed last (GIPHY echoing
+the URL comes back as `key=[redacted:env-secret]`). Titles and the `gif` /
+`tinygif` links reach the model only inside the untrusted web fence, in
+GIPHY's order; a link is kept only when it is https on an exact GIPHY media
+host (`media.giphy.com`, `media0`–`media4.giphy.com`, `i.giphy.com`) whose
+path and query hold only plain URL characters (so a pasted link cannot turn
+into Discord markdown pointing elsewhere), its fragment dropped, and a result
+with no such link is dropped and counted (`data.dropped` and a summary line),
+so a search whose every result was left out never reads like a real empty
+one; nothing else is filtered or reordered. Only when someone asks for a GIF
+does the run post one, as a link in its reply (the description and the
+summary say so); `gif-search` never downloads or attaches one and never
+posts (no must-ask entry, AUTONOMY-11). Each search
+is recorded at $0 against the SAFE-8 total cap (GIPHY is free-tier), and is
+stopped with the spend-cap ask only when the window is already past the cap.
+The summary carries that guidance and "Powered By GIPHY", and
+SAFE-13 scans the result (one hostile title switches off `gif-search`,
+`web-search` and `web-fetch` with every other mutating tool).
 Git plugins (REQ-plugins-182) spawn `git` with argv arrays only (no shell),
 stdin closed, `GIT_TERMINAL_PROMPT=0`, hooks disabled, repo-locating env
 stripped and `GIT_CEILING_DIRECTORIES` at the cwd's parent; the plugin cwd
@@ -457,7 +602,8 @@ variables, inline interpreter code and an in-root or `#!` script an
 interpreter or a path runs; an unreadable script or recipe, a make / just
 file or dir option, a package-manager option that picks another package.json,
 workspace, preload or shell, and a command named by an expansion ask; the
-box updater by any other path or form asks. A command SAFE-21 or the clamp refuses is not
+box updater by any other path or form asks. A command SAFE-21, the clamp or
+the AGENT-18.a lifecycle check (REQ-plugins-1818) refuses is not
 classified. `isSelfUpdateToTag`: exactly `CORVIDINHO_REF=v<X.Y.Z>` and the
 installed checkout's `scripts/corvidinho-update.sh` (or `bash` it), nothing
 else typed, and a tag that checkout has, is not a deploy (AUTONOMY-9). The
@@ -612,6 +758,40 @@ or a recursive reader inside the worktree (`grep -r` reads an in-root
 swapped in); and `[[ a > b ]]` / `(( a > b ))`, read as redirections and
 refused.
 
+AGENT-18.a (REQ-plugins-1818): before the SAFE-21 check, `shell-exec` asks
+`lifecycleRefusal` (`plugins/shell/sdd-lifecycle.ts`) and refuses
+`specsync change approve|review|finalize|ship` in every repo, with no repo
+check and synchronously: exit 2, nothing spawned,
+`shell-exec refused (AGENT-18.a): <invocation> would <step> a SpecSync change
+from the shell[ (in SCRIPT)], which the shell never does in any repo; <HUMAN_LIFECYCLE_LINE
+without "refused: ">, through its own settle step and never the shell`,
+`data.rule` `AGENT-18.a`, `data.step` (null when it can't be read) and
+`data.script`. On Corvidinho the run's own change is approved and archived
+only by `runTask`'s settle step after a green lane, through the SpecSync
+plugin, which spawns `specsync` itself (REQ-plugins-519, REQ-agent-519);
+elsewhere a human does it. The check reads every simple command over the
+SAFE-21 ground with the same walker (`forEachSimpleCommand`: dash and bash
+readings, `eval` / `trap` / `-c` strings, command substitutions, and the
+in-root scripts the command runs in a shell). An invocation starts at any
+word named `specsync` (basename, so an absolute or relative path; an
+npm-style `specsync@<version>` or an option's value such as
+`--bin=specsync` too), so every wrapper (`env`, `timeout`,
+`nohup`, `xargs`, `sudo`, `exec`, `find -exec`) and package runner (`bunx`,
+`npx`, `bun x`, `pnpm dlx`, `watch`) in front of it is covered; at a command word that
+is a link to the binary; and at a command word that expands, where only a
+literal step refuses. The step is the first word past SpecSync's options
+after `change`; a word right after an option may be its value or the step,
+so a lifecycle step there counts. A step that expands, or one `xargs`
+supplies from its input (no step word, or one that is not another
+`specsync change` subcommand), refuses. Read-only `specsync change
+status|list|show|check|ship-status|…` and `specsync check` still run.
+AGENT-18.a residuals: code an interpreter runs (`bun -e`, `node -e`,
+`python -c`, a script handed to `node` / `python`, the `node-exec` /
+`python-exec` / `cargo-exec` runners) that spawns specsync itself is not
+parsed; neither are package-manager scripts, `make` / `just` recipes and git
+aliases (which AUTONOMY-9 does read), nor a copy of the binary under another
+name or a link made by the same command.
+
 SAFE-21.a (REQ-plugins-495): the child env is the runners' env
 (`runnerChildEnv`): the verify lane's scrub, no `CDPATH` / `OLDPWD`, and no
 GitHub or git credentials — credential keys dropped, git reading no global
@@ -630,6 +810,19 @@ reads without git or gh (an interpreter opening `~/.ssh/id_*`, `ssh` started
 by a program), and tools with their own credential stores (`cargo publish`
 with `~/.cargo/credentials.toml`, npm tokens); a sandbox (G13) is deferred.
 
+SAFE-21.b (REQ-plugins-621, REQ-agent-621): `runnerChildEnv` and
+`fledgeCoreChildEnv` also apply `withoutCloudCredentials`
+(`src/agent/verify.ts`, the verify lane's own cloud scrub), so `shell-exec`,
+the runners and the Fledge core runs start without the owner's cloud
+credentials: every `isCloudCredentialEnvKey` key is dropped (KUBECONFIG and the
+in-cluster switch, AWS keys / profiles / roles / container endpoints, Google
+ADC and key files, `CLOUDSDK_*`, Azure / `ARM_*` principals and identities,
+other clouds' tokens), `KUBECONFIG`, `AWS_SHARED_CREDENTIALS_FILE`,
+`AWS_CONFIG_FILE` and `GOOGLE_APPLICATION_CREDENTIALS` are `/dev/null`,
+`AWS_EC2_METADATA_DISABLED=true`, and `CLOUDSDK_CONFIG` / `AZURE_CONFIG_DIR`
+are fresh empty dirs for that one child, removed (`releaseCloudStandIns`)
+once it exits. Fledge plugin commands (`fledgeChildEnv`) are unchanged.
+
 
 File write/edit are `mutating: true` even when `dangerous: false` (ROLES-CHAT-5).
 When `CORVIDINHO_ACTING_IS_ADMIN` is set (Discord/WATCH/schedule acting session),
@@ -638,19 +831,35 @@ the acting role (IDENTITY-8..12, REQ-plugins-065) is resolved at every call by
 bridge bit + configured owner, not muted or deny-listed) runs every mutating
 plugin, still behind SAFE-1 for dangerous tools (ROLES-CHAT-4 / IDENTITY-9);
 `team` — only when the spawning surface stamped `CORVIDINHO_ACTING_ROLE=team`
-(Discord chat, slash, buttons) and the owner's people list, re-read now,
-declares the acting Discord id team — runs only `TEAM_REVIEW_TOOLS`
+(Discord chat, slash, buttons, or a WATCH run a team member triggered) and the
+owner's people list, re-read now, declares the acting Discord id (on GitHub:
+the trigger's GitHub numeric id) team — runs only `TEAM_REVIEW_TOOLS`
 (`github-issue-comment`, `github-pr-review`) plus, in a `/work` run
 (`CORVIDINHO_ACTING_WORK_TASK=1`), `TEAM_WORK_TOOLS` (`files-write`,
 `files-edit`); `community` (everyone else: undeclared, declared community,
-WATCH, schedules other people create, workers, muted / deny-listed, any read
-failure) runs none (IDENTITY-10/11). A scheduled run (`isScheduleRunEnv`) is
+WATCH runs no declared owner or team member triggered, schedules other people
+create, workers, muted / deny-listed, any read failure) runs none
+(IDENTITY-10/11). A scheduled run (`isScheduleRunEnv`) is
 the owner (the owner's own schedule, which the scheduler stamps with the
 ADMIN bit, re-checked here) or community, never team, whatever its stamp
-(DISCORD-SCHEDULE-1.a, REQ-plugins-065). Refusals are "not allowed for your role" (ROLES-CHAT-3/6).
+(DISCORD-SCHEDULE-1.a, REQ-plugins-065). On GitHub (IDENTITY-12.a,
+REQ-plugins-1201) a WATCH run (`isWatchRunEnv`: the surface stamp
+`CORVIDINHO_ACTING_SURFACE=watch`, which both spawning clients always
+overwrite) is resolved from the GitHub numeric id the WATCH spawn stamps for
+the person who triggered it (`CORVIDINHO_ACTING_GITHUB_ID`, with
+`CORVIDINHO_WATCH_SESSION_ID` set) in the owner's people list re-read now —
+never a login, never a Discord id; a Discord run never uses the GitHub keys:
+`owner` needs the owner stamp, the ADMIN bit and that id resolving to the
+owner's person; `team` the team (or owner) stamp and a team person; a GitHub
+`deny_users` login or id, or the person's Discord id muted or Discord
+deny-listed, is community. A WATCH run is never a `/work` task
+(`actingWorkTask` false whatever its stamp), and every must-ask call the owner's
+WATCH run makes raises the owner's Approve card like any other run
+(REQ-plugins-097). Refusals are "not allowed for your role" (ROLES-CHAT-3/6).
 `files-edit`, `specsync-change-new`, `specsync-change-answer`,
 `specsync-change-approve`, `specsync-change-finalize`); `community` (everyone else: undeclared, declared community,
-WATCH, schedules, workers, muted / deny-listed, any read failure) runs none
+WATCH runs no declared owner or team member triggered, schedules, workers,
+muted / deny-listed, any read failure) runs none
 (IDENTITY-10/11). Refusals are "not allowed for your role" (ROLES-CHAT-3/6).
 A team `github-pr-review` posts as `COMMENT` only: `--event APPROVE` /
 `REQUEST_CHANGES` get the role refusal (exit 2) unless the role, re-resolved
@@ -712,7 +921,10 @@ files) for non-ADMIN role sessions via `isSecretPath`. `search-grep`,
 through a symlink), and `search-grep`, `git-diff`, `files-glob` and
 `files-list` leave secret paths out of their results, whatever `--include`,
 glob or `--staged` is passed (REQ-plugins-267). ADMIN and the local CLI keep
-the access `files-read` gives.
+the access `files-read` gives — except in a WATCH run, where
+`secretPathsRefused` hides and refuses them for every role, the owner's
+included, because the answer goes to a public GitHub thread (IDENTITY-12.a,
+REQ-plugins-1201).
 
 `files-read` image mode (DISCORD-9 / REQ-plugins-427): after the path clamp,
 the ROLES-CHAT-8 secret gate and the existing-file check, a file whose leading
@@ -835,7 +1047,8 @@ registers nothing (never offered, never a tool that cannot start). Each runner
 is `dangerous: true`, `minTier: 2`, and spawns `[bin, ...argv]` (no shell) with
 cwd = the plugin cwd, the verify lane's scrubbed env (`buildVerifyEnv`) minus
 `CDPATH` / `OLDPWD` and without GitHub or git credentials (SAFE-21.a,
-REQ-plugins-495) plus `CORVIDINHO_PROJECT_ROOT`, stdin closed, a 10 minute
+REQ-plugins-495) or cloud credentials (SAFE-21.b, REQ-plugins-621) plus
+`CORVIDINHO_PROJECT_ROOT`, stdin closed, a 10 minute
 timeout (exit 124), 64 KiB per-stream caps, and its process group killed on
 timeout or the calling run's abort (exit 130); output is secret-scrubbed. Empty
 argv is a usage error (exit 1, nothing spawned); a binary that cannot start
@@ -943,6 +1156,12 @@ command line.
 - **When** the agent runs `shell-exec` with `rm -rf ../other`, `cat ~/.config/corvidinho/env` or `gh auth token`
 - **Then** each fails with exit 2 and a SAFE-21 reason (delete outside the worktree; a secret); nothing is spawned; `rm -rf build` and `cat README.md` still run
 
+### Scenario: shell-exec never approves, reviews or finalizes a SpecSync change (AGENT-18.a)
+
+- **Given** builtins loaded and `shell-exec` allowlisted, in any repo (Corvidinho included, even right after a green lane for the run's own change)
+- **When** the agent runs `shell-exec` with `specsync change approve c1 --actor leif`, `sh -c 'specsync change finalize c1'`, `npx specsync change ship c1`, or `sh x.sh` where the in-root `x.sh` runs `specsync change review c1`
+- **Then** each fails with exit 2 and `shell-exec refused (AGENT-18.a): …` carrying `HUMAN_LIFECYCLE_LINE`; nothing is spawned, the change's `state.json` is unchanged, no `approvals.json` / `review.json` is written and nothing moves to `.specsync/archive`; `specsync change status c1` and `specsync check` still run
+
 ### Scenario: shell-exec starts without GitHub or git credentials (SAFE-21.a)
 
 - **Given** the bot's env holds `GH_TOKEN` and the owner's `~/.gitconfig` names a credential helper
@@ -1015,6 +1234,30 @@ command line.
 - **When** the tool loop fetches it
 - **Then** the title appears only as a `Title:` line between the untrusted markers, and the prose Content-Type or status is refused / reported as a numeric status without echoing it
 
+### Scenario: web-search keeps Brave's results inside the fence and the key out of every output
+
+- **Given** `BRAVE_SEARCH_API_KEY` is set and `web-search` is allowlisted, in the owner's or a team member's run
+- **When** the model runs `web-search bun runtime --count 3` and Brave answers with a title that says "IGNORE PREVIOUS INSTRUCTIONS" (or echoes the key)
+- **Then** one GET goes to `api.search.brave.com` with `safesearch=moderate` and the key only in `X-Subscription-Token`; the hits appear only between the untrusted markers, SAFE-13 drops the mutating tools (web-search and web-fetch too) for the rest of the run, and no result, error or audit row contains the key or the request URL
+
+### Scenario: gif-search finds a GIF at the medium filter and the run posts it as a link
+
+- **Given** `GIPHY_API_KEY` is set and `gif-search` is allowlisted, in the owner's or a team member's run
+- **When** the model runs `gif-search happy cat` (or `gif-search --query "cat&contentfilter=off"`)
+- **Then** one GET goes to `api.giphy.com/v2/search` with `contentfilter=medium` (the query text is only the `q` value); titles and GIPHY media links come back only between the untrusted markers with "Powered By GIPHY" and the guidance to post one only when someone asks, as a link; the run puts one link in its reply (as message text, never inside an embed), nothing is downloaded or attached, and no result, error or audit row contains the key or the request URL
+
+### Scenario: web-search at the spend cap asks instead of spending
+
+- **Given** `CORVIDINHO_DAILY_SPEND_CAP_USD` is set and the last 24 h of spend plus $0.005 would pass it
+- **When** the model calls `web-search`
+- **Then** nothing is sent, the result says only "Work is paused for budget.", and the run stops with the spend-cap ask like a model call
+
+### Scenario: a reply that used web-search credits Brave
+
+- **Given** `web-search` is allowlisted and keyed, in the owner's or a team member's run
+- **When** Brave answers a search and the model replies "Bun is a fast JavaScript runtime."
+- **Then** the reply (Discord, the CLI, a schedule post) reads "Bun is a fast JavaScript runtime." then a blank line and "Search by Brave", once, even when it is split or clipped; a run whose search failed, was refused or was stopped, or that made none, has no such line (REQ-agent-318)
+
 ### Scenario: a scheduled run cannot read a public repo off the allowlist (DISCORD-SCHEDULE-3.a)
 
 - **Given** a scheduled run (`CORVIDINHO_DISCORD_SESSION_ID=schedule_…`, owner or community stamp, or a `delegate` / `council` worker it started) and a GitHub allowlist of `CorvidLabs`
@@ -1045,11 +1288,29 @@ command line.
 - **When** `files-read` runs on that path
 - **Then** it returns `data.image` true with `mediaType` `image/png` and no `content`, and the file's bytes only on `result.image` (base64) for the tool loop
 
+### Scenario: file tools leave hi/ alone in a hi repo (AGENT-18)
+
+- **Given** a repo whose `hi/agent.md` has `hi:` front matter
+- **When** `files-write`, `files-edit` or `files-delete` targets `hi/agent.md`, a new file under `hi/`, or a symlink that lands there
+- **Then** each refuses with `refused (AGENT-18): '<path>' is under hi/, …` and the file is unchanged; `files-read hi/agent.md` still works, and in a repo whose `hi/` has no hi front matter the write goes through
+
+### Scenario: a run's own PR in a hi repo after a criterion changed (AGENT-18)
+
+- **Given** a run in progress in a repo whose `hi/agent.md` has `hi:` front matter, and a criterion committed there through the shell
+- **When** the model calls `github-pr-create`
+- **Then** it refuses with `refused (AGENT-18): this repo's hi/ changed since the session base (criteria …) …, so this run opens no PR` before any review; with no run in progress the hi guard does not apply
+
 ### Scenario: non-ADMIN refused files-write (ROLES-CHAT-3)
 
 - **Given** builtins loaded and `CORVIDINHO_ACTING_IS_ADMIN=0` with an acting Discord user
 - **When** the agent runs `files-write`
 - **Then** the run fails with exit 2 and a "not allowed for your role" message; no file is written
+
+### Scenario: the owner's and a team member's GitHub runs get their role's tools (IDENTITY-12.a)
+
+- **Given** a WATCH run stamped by the WATCH spawn for the GitHub numeric id that triggered it (`CORVIDINHO_ACTING_SURFACE=watch`, `CORVIDINHO_WATCH_SESSION_ID`, `CORVIDINHO_ACTING_GITHUB_ID`, the owner or team stamp)
+- **When** a mutating must-ask plugin is run for the owner's id, and owner-only, review and `/work` tools are checked for a team member's id
+- **Then** the owner's call raises the owner's Approve card (`… · from watch:<session>`) and runs only on approval; the team member gets `github-issue-comment` / `github-pr-review` but not `files-edit` (never a `/work` task there) or owner-only tools, which are refused for the role before any card; the owner's stamp on a stranger's or a re-registered login's id, a login alone, a Discord id, a GitHub `deny_users` entry or a muted Discord id resolves community; secret-looking paths stay hidden for every role there
 
 ### Scenario: ADMIN files-write still allowed (ROLES-CHAT-4)
 
@@ -1089,6 +1350,9 @@ command line.
 | specsync-check, fledge on PATH but the project defines no `spec-check` task | Run local `specsync check` (no `Unknown task` failure) |
 | specsync-check, project `fledge.toml` unparsable | Keep `fledge run spec-check` (fail closed; Fledge reports the error) |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
+| WATCH run (surface `watch`) whose GitHub id is not the owner's or a team member's, has no id or no WATCH session id, is on GitHub `deny_users`, or whose person's Discord id is muted or deny-listed — or a stamp claiming more | Resolves community: mutating plugins refused `not allowed for your role` (exit 2) before SAFE-1, the must-ask card or the handler (IDENTITY-12.a, REQ-plugins-1201) |
+| Write/edit/delete under `hi/` in a repo that uses hi (as given, absolute, or through a symlink that lands there) | Refuse (exit 2, `refused (AGENT-18): '<path>' is under hi/, …`); file unchanged; reads unaffected (REQ-plugins-520) |
+| github-pr-create inside a run in a repo that uses hi, with anything under `hi/` changed since the run's session base (or unreadable) | Refuse (exit 2, `refused (AGENT-18): this repo's hi/ changed since the session base (…) … so this run opens no PR; …`) before the GitHub client and the GITHUB-9 review; no PR (REQ-plugins-521) |
 | shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, redirections, quoting incl. bash `$'…'`, `\`-newline, comments, here-docs, expanded command words, command substitutions, `eval` and shell `-c` strings, DIRSTACK) | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec cd/pushd left open by an unterminated quote or trailing `\`, or a command nested too deeply to check | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec runs a script (sourced, `BASH_ENV` / `--rcfile`, shell operand or input, here-doc / here-string, run by path) whose cd/pushd escapes, or a `trap` action that does, or defines an alias | Refuse (exit 2, SAFE-3) naming the script; no spawn |
@@ -1099,6 +1363,7 @@ command line.
 | shell-exec downloads and runs the download as code (piped into a shell / interpreter, `$(curl …)`, `<(curl …)`, a downloaded script run), in the command or an in-root script it runs | Refuse (exit 2, SAFE-21 download); no spawn (REQ-plugins-494) |
 | shell-exec deletes or moves outside the worktree (`rm`, `rmdir`, `unlink`, `shred`, `mv`, `find -delete` / `-exec rm`, `ln -f`, `git worktree remove` / `prune`), deletes the worktree itself, or names an expanded / input-fed / dot-matching target, in the command or an in-root script | Refuse (exit 2, SAFE-21 delete); no spawn (REQ-plugins-494) |
 | shell-exec reads a secret (secret path, host credential store, Corvidinho env / allowlist file or config dir, `/proc/<pid>/environ`, credential env var, `gh auth token`, `git credential`, ssh family) or re-points git / gh at credentials, in the command or an in-root script | Refuse (exit 2, SAFE-21 secret); no spawn (REQ-plugins-494) |
+| shell-exec runs `specsync change approve` / `review` / `finalize` / `ship` (any repo; behind a wrapper, package runner, path or link, in `-c` / `eval` / `$(…)`, or in an in-root script it runs), or a `change` step that expands or that `xargs` supplies | Refuse (exit 2, AGENT-18.a with `HUMAN_LIFECYCLE_LINE`); no spawn, no Approve card (REQ-plugins-1818) |
 | shell-exec or a runner child looks for GitHub / git credentials | None: tokens, askpass, ssh agent dropped; git reads no global / system config, repo helper reset, no prompt, key-less ssh; gh config dir empty (SAFE-21.a, REQ-plugins-495) |
 | shell-exec runs past its timeout / the calling run aborts / prints past the cap | exit 124 / 130 with its process group killed; output truncated at 64 KiB per stream with a note; output secret-scrubbed (REQ-plugins-495) |
 | Dangerous run with no audit key while the audit chain is keyed | Refuse (exit 2, SAFE-5 audit log unavailable); handler not run |
@@ -1110,6 +1375,22 @@ command line.
 | Scheduled run (or its worker): GitHub tool on a repo off the GITHUB-6 allowlist, public or not (DISCORD-SCHEDULE-3.a) | Refuse (exit 3) before any GitHub call, no visibility lookup |
 | Scheduled run: web-fetch hop (first or redirect) to a GitHub host not naming an allowlisted OWNER/REPO, or with the allowlist unreadable (DISCORD-SCHEDULE-3.a) | Refuse before DNS (exit 2) |
 | web-fetch non-text or malformed content-type / compressed body / non-2xx / timeout / every checked address unreachable | Error (exit 1); nothing returned |
+| web-search with no, blank or malformed `BRAVE_SEARCH_API_KEY` | `not-configured` (exit 1) naming the env var, never its value; no DNS, request or spend (REQ-plugins-318) |
+| web-search usage error (count not a whole number 1–20, unknown freshness or flag, query words together with `--query`, `--query` / `--count` / `--freshness` given twice, missing / oversized query) | `usage` (exit 1); nothing sent |
+| web-search query carrying a secret-looking value or a set secret env value | Refuse (exit 2, SAFE-6) before spend or request |
+| web-search at the SAFE-8 cap, invalid cap value or unavailable ledger | Refuse (exit 2, "Work is paused for budget."); nothing sent; the tool loop ends the attempt with the spend-cap ask (REQ-agent-098) |
+| web-search / keyed JSON GET: http, another host or port, URL credentials; a non-public answer; any redirect | Refuse (exit 2) before DNS / before connecting / without following (REQ-plugins-3181) |
+| web-search Brave 401 / 403 / 422 `SUBSCRIPTION_TOKEN_INVALID`, other 422, 429, other status; non-JSON, compressed, oversized or malformed body; timeout; network error or a body that fails mid-read | `auth` / `bad-request` / `rate-limited` / `http-status` / `content-type` / `too-large` / `invalid-json` / `timeout` / `network` (exit 1); no server text, key or URL in the error |
+| web-search in a run already stopped, or stopped mid-request | `aborted` (exit 1); a stopped run reserves and sends nothing |
+| web-search unexpected failure | `unexpected` (exit 1), the fixed line `web-search unexpected: the search failed unexpectedly` |
+| gif-search with no, blank or malformed `GIPHY_API_KEY` | `not-configured` (exit 1) naming the env var, never its value; no DNS, request or spend (REQ-plugins-3182) |
+| gif-search usage error (`--rating`, `--contentfilter` or any other unknown flag, limit not a whole number 1–10, query words together with `--query`, `--query` / `--limit` given twice, missing / over-50-character query) | `usage` (exit 1); nothing sent |
+| gif-search query carrying a secret-looking value or a set secret env value | Refuse (exit 2, SAFE-6) before spend or request |
+| gif-search with the SAFE-8 window already past the cap, an invalid cap value or an unavailable ledger | Refuse (exit 2, "Work is paused for budget."); nothing sent; the tool loop ends the attempt with the spend-cap ask |
+| gif-search: a non-public answer for `api.giphy.com`, or any redirect | Refuse (exit 2) before connecting / without following |
+| gif-search GIPHY 401 / 403, 400 / 422, 429, other status; a 2xx `error` body or a 2xx body without `results`; non-JSON, oversized or malformed body; timeout; network error | `auth` / `bad-request` / `rate-limited` / `http-status` / `api-error` / `bad-response` / `content-type` / `too-large` / `invalid-json` / `timeout` / `network` (exit 1); no GIPHY text, key or URL in the error |
+| gif-search result link over http, off the GIPHY media hosts, with credentials or another port, or with a path or query outside plain URL characters (Discord markdown, a mention) | Link dropped (a fragment is only cut off); a result with no valid link is dropped and counted in `data.dropped` and the summary (no other filtering or reordering) |
+| gif-search in a run already stopped, or stopped mid-request; unexpected failure | `aborted` (exit 1), nothing reserved or sent for a stopped run; `unexpected` (exit 1), the fixed line `gif-search unexpected: the GIF search failed unexpectedly` |
 | git plugin cwd not a repo top level | Refuse (exit 2, SAFE-3) |
 | git-commit stages protected delete / `.env*` / keystore / `.git` | Refuse (exit 2) |
 | git force / amend / `--all` / refspec / other-branch push | Refuse (exit 2) |
@@ -1161,7 +1442,10 @@ command line.
 | src/agent/verify.ts | `buildVerifyEnv` scrub for the language runners' and Fledge core builtins' child env |
 | fledge (optional system binary) | Fledge core builtins (`lanes list` / `lanes validate` / `lanes run`, `run`) and the Fledge plugin bridge, via `Bun.spawn` argv arrays |
 | node:dns / net / tls | web-fetch resolve once, dial pinned IP, SNI + cert check |
-| src/store/scrub.ts | `scrubSecrets` on web-fetch output and errors; secret-bearing URLs refused |
+| src/store/scrub.ts | `scrubSecrets` on web-fetch output and errors; secret-bearing URLs refused; `scrubSecrets` + `redactSecretEnvValues` on every web-search and gif-search string and secret-bearing queries refused |
+| src/agent/spend.ts | `reserveFlatSpend` for web-search's SAFE-8 reservation and gif-search's $0 row (REQ-agent-098) |
+| Brave Search API (external, optional) | `GET https://api.search.brave.com/res/v1/web/search` with `X-Subscription-Token` for web-search (PLUGIN-7) |
+| GIPHY API (external, optional) | `GET https://api.giphy.com/v2/search` (Tenor-compatible) with `key` and `contentfilter=medium` for gif-search (PLUGIN-8); media links on `media.giphy.com`, `media0`–`media4.giphy.com`, `i.giphy.com`, never fetched |
 | src/discord/image-attachments.ts | `MAX_IMAGE_SIZE_BYTES` / `ImageMediaType` for files-read image mode (DISCORD-9) |
 | git (system binary) | git plugins via `Bun.spawn` argv arrays; the GITHUB-9 review tree (temporary index), diff and `ls-remote` |
 | src/agent/providers.ts / untrusted.ts, src/store/db.ts | GITHUB-9 reviewer choice (configured models), the fence for the diff and findings, the lazily created `pr_review_rounds` table |
@@ -1251,3 +1535,13 @@ and current rows for plugins host evolution.
 | 2026-10-01 | before-a-pr-opens-a-second-model-reviews-the-diff-in-bounded-rounds-and-the-pr-lists-what-it-raised-and-what-changed: Before a PR opens, a second model reviews the diff in bounded rounds, and the PR lists what it raised and what changed (GITHUB-9, GITHUB-9.a) |
 | 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |
 | 2026-10-01 | the-second-model-review-sees-an-edit-made-in-the-same-second-as-the-last-index-write-its-index-copy-keeps-the-real: The second-model review sees an edit made in the same second as the last index write: its index copy keeps the real index's time (GITHUB-9) |
+| 2026-10-01 | in-a-non-git-project-my-runs-work-in-the-folder-itself-its-file-tools-leave-the-root-agents-md-and-claude-md-alone: In a non-git project my runs work in the folder itself, its file tools leave the root AGENTS.md and CLAUDE.md alone, schedules keep their own folder, and others only read there (AGENT-1.a, AGENT-1.b, AGENT-1.c) |
+| 2026-10-01 | in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent: In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard) |
+| 2026-09-30 | web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered: Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap |
+| 2026-10-01 | gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins: GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap |
+| 2026-10-06 | on-github-the-owner-and-team-i-ve-declared-get-their-role-s-tools-behind-the-must-ask-gate-strangers-stay-community: On GitHub the owner and team I've declared get their role's tools behind the must-ask gate; strangers stay community (IDENTITY-12.a) |
+| 2026-10-06 | the-verify-lane-the-shell-and-the-runners-start-without-my-cloud-credentials-kubeconfig-aws-google-cloud-azure-and: The verify lane, the shell and the runners start without my cloud credentials (KUBECONFIG, AWS, Google Cloud, Azure and similar), so they can't reach prod by accident (SAFE-21.b) |
+| 2026-10-06 | shell-exec-refuses-specsync-change-approve-review-finalize-and-ship-in-every-repo-only-a-human-or-corvidinho-s-own: Shell-exec refuses specsync change approve, review, finalize and ship in every repo: only a human, or Corvidinho's own green-lane settle, does them (AGENT-18.a) |
+| 2026-10-05 | where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts: Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts) |
+| 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
+| 2026-10-05 | in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2: In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause) |

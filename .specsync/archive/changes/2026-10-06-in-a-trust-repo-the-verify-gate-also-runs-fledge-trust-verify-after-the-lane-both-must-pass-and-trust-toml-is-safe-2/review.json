@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "13abe4d0da8b30a01e96e785d25d5de70d8078a7",
+  "contract_digest": "bbda6839cea5ee29669494581fd28f1c1068fbc65e40a2b63253632c453a1195",
+  "execution_digest": "110d8c27a6625e4c2b7e4d806db76676f8a6907344b743cd6833c9d2f5d43b40",
+  "workspace_digest": "a8d3ab746914da411238573ccd6015d6f5dbe55b0656ed56eba3a0dd06882c69",
+  "timestamp": 1791299657
+}

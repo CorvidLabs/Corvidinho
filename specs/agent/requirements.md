@@ -12,21 +12,14 @@ Acceptance Criteria
 
 ### REQ-agent-002
 
-When the run changed files (in the run's real git working-tree diff per REQ-agent-085, or, with no git snapshot, reported by a tool) or a tool claimed a change git does not show, completion SHALL run `fledge lanes run verify --non-interactive`; there is no switch that skips it (AGENT-14, REQ-agent-003). Pass → `verified=true` only when the lane's output also shows that tests ran and no test was deleted or turned off since the baseline (AGENT-15, REQ-agent-185); a passing lane without that evidence is a failed verify like any other, whose note leads the retry's feedback. Fail with retries remaining → re-enter executing with verifier output. Exhausted retries → terminal failure with `verified=false` (AGENT-4 / AGENT-4.a / FLEDGE-2). The default runner SHALL spawn fledge with the parent's env minus the delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY` and every `CORVIDINHO_ACTING_*` key) and the LLM API keys (`CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`), keeping every other inherited key, so tests the agent wrote never see operator secrets (SAFE-6). The verifier output a retry gets SHALL be the failing step's, not the start of the lane log (AGENT-4.a): output within `VERIFY_FEEDBACK_MAX_CHARS` (4000) is passed whole; over it, `verifyFeedbackExcerpt` SHALL drop colour escapes, name the failing step (from fledge's `Lane '<lane>' failed at step N (<name>)` line; a parallel step is `parallel(<tasks>)`) and keep that step's output from its `Running task: <name>` marker (a parallel step's from its `Running parallel:` line) when it fits, else its error / fail lines (lines that report a failure, such as `error:`, `Expected:`, `(fail)` or `file(1,2): error TS…`, before lines that only mention one; first ones first; passing-test lines left out; printed in log order) and the end of the log, in at most 4000 chars and never cut inside a surrogate pair. `runTask` SHALL keep the feedback it passes as `ExecuteContext.verifyFeedback` (its "Verification failed" head included) within that cap, and the LLM execute (tool loop and read-tier chat) SHALL cap verify feedback with the same excerpt, never by keeping its first 4000 chars. No flag, environment variable or config key is added.
-
-In a repo whose SpecSync workflow requires a change for meaningful files,
-the REQ-agent-518 coverage check SHALL come first: an uncovered path makes the
-attempt a failed verify with no lane run; and on Corvidinho, after approving
-and archiving the run's own change (REQ-agent-519), the lane SHALL run once
-more over what that wrote, with the same evidence verdict, before the run is
-done.
+When the run changed files (in the run's real git working-tree diff per REQ-agent-085, or, with no git snapshot, reported by a tool) or a tool claimed a change git does not show, completion SHALL run `fledge lanes run verify --non-interactive`; there is no switch that skips it (AGENT-14, REQ-agent-003). Pass → `verified=true` only when the lane's output also shows that tests ran and no test was deleted or turned off since the baseline (AGENT-15, REQ-agent-185); a passing lane without that evidence is a failed verify like any other, whose note leads the retry's feedback. Fail with retries remaining → re-enter executing with verifier output. Exhausted retries → terminal failure with `verified=false` (AGENT-4 / AGENT-4.a / FLEDGE-2). The default runner SHALL spawn fledge with the parent's env minus the delegate worker drop list (`DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY`, `BRAVE_SEARCH_API_KEY`, `GIPHY_API_KEY` and every `CORVIDINHO_ACTING_*` key) and the LLM API keys (`CORVIDINHO_LLM_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`), and without the owner's cloud credentials (SAFE-21.b, REQ-agent-621: `withoutCloudCredentials` drops every `isCloudCredentialEnvKey` key and sets the empty stand-ins, its config dirs removed once the lane exits), keeping every other inherited key, so tests the agent wrote never see operator secrets (SAFE-6) or reach prod by accident. The verifier output a retry gets SHALL be the failing step's, not the start of the lane log (AGENT-4.a): output within `VERIFY_FEEDBACK_MAX_CHARS` (4000) is passed whole; over it, `verifyFeedbackExcerpt` SHALL drop colour escapes, name the failing step (from fledge's `Lane '<lane>' failed at step N (<name>)` line; a parallel step is `parallel(<tasks>)`) and keep that step's output from its `Running task: <name>` marker (a parallel step's from its `Running parallel:` line) when it fits, else its error / fail lines (lines that report a failure, such as `error:`, `Expected:`, `(fail)` or `file(1,2): error TS…`, before lines that only mention one; first ones first; passing-test lines left out; printed in log order) and the end of the log, in at most 4000 chars and never cut inside a surrogate pair. `runTask` SHALL keep the feedback it passes as `ExecuteContext.verifyFeedback` (its "Verification failed" head included) within that cap, and the LLM execute (tool loop and read-tier chat) SHALL cap verify feedback with the same excerpt, never by keeping its first 4000 chars. No flag, environment variable or config key is added.
 
 Acceptance Criteria
 - Mock verify fail then pass within max_retries yields `verified=true` and a second execute call that receives feedback.
 - Exhausted retries yield `verified=false` and failed state.
 - Default runner invokes fledge with `lanes run verify --non-interactive`.
 - An attempt whose execute result reports no files but that changed the git working tree (REQ-agent-085) runs verify: done with `verified=true` only on a pass, otherwise retried and then failed.
-- A process with `DISCORD_TOKEN`, `DISCORD_BOT_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `CORVIDINHO_LLM_API_KEY`, `CORVIDINHO_AUDIT_HMAC_KEY` and `CORVIDINHO_ACTING_*` set runs the default runner: the fledge child's env has none of those keys or values and keeps the rest (PATH, HOME, `CORVIDINHO_DATA_DIR`, other keys).
+- A process with `DISCORD_TOKEN`, `DISCORD_BOT_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `CORVIDINHO_LLM_API_KEY`, `CORVIDINHO_AUDIT_HMAC_KEY` and `CORVIDINHO_ACTING_*` set runs the default runner (and `BRAVE_SEARCH_API_KEY` and `GIPHY_API_KEY` are dropped by `isVerifyEnvDropped` / `buildVerifyEnv`, `tests/web.search.test.ts`, `tests/gif.search.test.ts`): the fledge child's env has none of those keys or values and keeps the rest (PATH, HOME, `CORVIDINHO_DATA_DIR`, other keys).
 - A failing lane log whose passing steps (lint, a `--help` smoke over 4000 chars) come before a failing `test` step gives the retry's `verifyFeedback` and the tool loop's next request at most 4000 chars that name `Failing step: test (step 3 of lane 'verify')` and carry the failing test's error lines and fledge's failure line, not the `--help` text (AGENT-4.a).
 - A failing step whose own output is over the cap keeps its first error lines and the end of the log (the last failure, the test summary, fledge's failure line); passing-test lines are not kept as error lines.
 - A raw verify feedback over the cap passed to the read-tier chat is cut to the failing step and the end of the log, not its first 4000 chars.
@@ -38,7 +31,7 @@ Acceptance Criteria
 - A run that changed files is verified with no option set; `RunTaskOptions` has no field that skips the gate.
 - A passing lane whose output has no recognised test summary, or whose tests were all skipped, is not verified: the attempt is retried with the `Verify gate: not verified: …` note first in its feedback, then ends `failed` (REQ-agent-185).
 - A stub lane that passes and prints a `bun test` summary (`tests/fixtures/lane-output.ts`) ends `done` verified as before.
-- In a repo whose `sdd.json` requires a change, an attempt whose real diff has a meaningful path no open change covers ends as a failed verify with no lane call, and the lane runs once a change covers it (REQ-agent-518); on Corvidinho the lane runs a second time after the own-change approve and archive, and a failure there fails the run (REQ-agent-519).
+- With the owner's cloud env set (KUBECONFIG, AWS keys / profile / role, Google ADC and `CLOUDSDK_*`, Azure / ARM, other clouds' tokens), or only their default files under HOME, the default runner's fledge child has none of those keys or files' contents: `KUBECONFIG`, `AWS_SHARED_CREDENTIALS_FILE`, `AWS_CONFIG_FILE` and `GOOGLE_APPLICATION_CREDENTIALS` are `/dev/null`, `AWS_EC2_METADATA_DISABLED=true`, `CLOUDSDK_CONFIG` / `AZURE_CONFIG_DIR` are outside HOME and gone after the lane, and `AWS_REGION` / `GOOGLE_CLOUD_PROJECT` stay (`tests/agent.cloud-credentials.test.ts`, SAFE-21.b).
 
 ### REQ-agent-003
 
@@ -219,13 +212,13 @@ The agent SHALL enforce an optional operator-set daily spend cap on provider
 (LLM) calls (SAFE-8, as amended on #98: warn at 80%, ask at 100%) in
 `src/agent/spend.ts`. The cap SHALL be read from
 `CORVIDINHO_DAILY_SPEND_CAP_USD` as a plain USD amount over a rolling
-24-hour window. When it and `CORVIDINHO_PROVIDER_SPEND_CAPS_USD`
-(REQ-agent-114) are unset or blank, the capped fetch SHALL be the
+24-hour window. When it is unset or blank, the capped fetch SHALL be the
 provider fetch unchanged and the database SHALL NOT be opened, so behavior
 is unchanged. When it is set, `createTaskExecute` SHALL send every
 OpenAI-compatible call through the capped fetch, which SHALL price the call
 from a per-model table (standard USD per 1M input/output tokens, exact model
-id match), estimate it from the request size plus a fixed reply reserve,
+id match), estimate it from the request size plus the model's worst-case
+reply (REQ-agent-298, AUTONOMY-8.a; no `max_tokens` is sent),
 and, in one IMMEDIATE transaction on the shared SQLite `spend_ledger` table,
 reserve the estimate unless spend in the last 24 hours plus the estimate
 would exceed the cap. After the reply, the reservation SHALL be settled to
@@ -233,33 +226,40 @@ the provider-reported token usage cost; it SHALL stay at the estimate when
 usage is missing or the request failed at the network, and SHALL count zero
 when the provider returned an HTTP error.
 
-At 100%, a call whose estimate would exceed the cap SHALL NOT be sent as
-is. With an owner configured and the guard given `approval` (as
-`createTaskExecute` does), the call SHALL first wait for the owner's spend
-Approve card (REQ-agent-198) and SHALL be sent only on an approval used
-once. Otherwise — no owner configured (nobody can approve), no `approval`
-given, or that card came to no — the attempt SHALL end with
-`ask: {reason: "spend-cap", question}` whose question states the 24-hour
-spend, the call estimate and the cap, names the operator action that
-continues (raise or unset the cap where Corvidinho runs and restart, or wait
-for earlier spend to leave the window, then ask again) and, with no card,
-says a reply cannot lift the cap, without a yes/no question (after a card it
-names the card and what it came to and adds asking again for a new card and
-code, REQ-agent-198); the attempt's summary SHALL be the generic `SPEND_CAP_SUMMARY`,
+Tool calls with a flat price per call SHALL count toward the same total
+cap (Leif, #318: a Brave `web-search` is about $0.005; a GIPHY `gif-search`
+is free-tier and SHALL be recorded at a price of 0, a $0 row, stopped only
+when the window is already past the cap): `reserveFlatSpend({
+env, provider, model, costMicroUsd, db?, now? })` SHALL be `off` (DB never
+opened) without a cap, and otherwise reserve the price in the same IMMEDIATE
+ledger transaction before the call — `stopped` with the same `spend-cap`
+ask as below when spend plus the price would exceed the cap, the cap value
+is invalid or the ledger is unavailable (the call SHALL NOT be sent), else
+`held`, whose `settle` records `billed` as the call's actual cost,
+`not-billed` (refused before connecting, or an HTTP error reply) as 0, and
+`unknown` (network error, timeout, abort, unreadable reply) at the estimate.
+A plugin stopped this way SHALL return the ask in
+`PluginHandlerResult.spendAsk` (never in `data` or `message`), and the tool
+loop SHALL end the attempt on an offered tool's `spend-cap` ask exactly as
+for a model call stopped at the cap: a `ToolResult` with success false and
+`SPEND_CAP_SUMMARY`, then the summary `SPEND_CAP_SUMMARY` and the ask, with
+no further model call. The 80% warning for such a row is noted by the next
+model call's settle.
+
+At 100%, a call whose estimate would exceed the cap SHALL NOT be sent.
+Instead the attempt SHALL end with `ask: {reason: "spend-cap", question}`
+whose question states the 24-hour spend, the call estimate and the cap,
+names the operator action that continues (raise or unset the cap where
+Corvidinho runs and restart, or wait for earlier spend to leave the window,
+then ask again) and says a reply cannot lift the cap, without a yes/no
+question; the attempt's summary SHALL be the generic `SPEND_CAP_SUMMARY`,
 which is `SPEND_PAUSED_TEXT` "Work is paused for budget." (SAFE-14.a), with no
 amounts, no cap and no env names (safe for a public reply such as a WATCH
 comment), and `runTask` SHALL return state `blocked` (never `done`, verify
-not run, no retry) through the AUTONOMY-1/2 ask path. A cap value that is not
-a plain USD amount (never echoed) or an unavailable ledger SHALL end the
-attempt the same way (fail closed; no card is raised for them). A model with
-no known price SHALL never be counted as free: under a cap that covers its
-call it SHALL, with an owner configured and `approval` given, ask on the
-owner's spend card with the amount shown as unknown (SAFE-16.a,
-REQ-agent-199), and otherwise end the attempt the same way; with no cap
-covering it, it runs unrecorded. The runner SHALL NOT send a provider call
-past the cap, except the one call an owner's spend card approved
-(REQ-agent-198, SAFE-8.a), nor a covered call at an unknown price except the
-one call an owner's unknown-price card approved (REQ-agent-199).
+not run, no retry) through the AUTONOMY-1/2 ask path. A model with no known
+price, a cap value that is not a plain USD amount (never echoed), or an
+unavailable ledger SHALL end the attempt the same way (never counted as
+free, fail closed). The runner SHALL NOT send a provider call past the cap.
 
 At 80%, after a call settles, when 24-hour spend is at or above 80% of the
 cap and the warning for that cap value is armed, the module SHALL record one
@@ -289,28 +289,25 @@ model, an invalid cap value, an unreadable ledger), and
 `formatSpendPublicStatusLine(snapshot)` is "Spend: Work is paused for budget."
 then and undefined otherwise, naming no amount, cap, model, path or setting.
 The bridge delivers the claimed warning to the owner by DM only
-(REQ-discord-098). This cap is the total cap (scope `total`) of SAFE-14:
-the per-provider caps next to it, and SAFE-15's 80% warning and 100% stop
-for each cap, are REQ-agent-114, and a call is checked against this cap and
-its provider's cap in the same reservation. The Approve card that
-continues past a cap (#96, SAFE-18..20) is REQ-agent-198.
+(REQ-discord-098). The Approve card (#96, SAFE-18..20) and
+per-provider caps (SAFE-14, and SAFE-15 for each cap) are not part of this
+requirement; of SAFE-14 it covers only SAFE-14.a's public text.
 
 Acceptance Criteria
 - No cap: the capped fetch is the same fetch and no database file is created.
 - Under the cap: the call is sent, the caller can still read the reply, and the ledger row settles to the usage cost in integer micro-USD.
 - Spend plus estimate over the cap (including a zero cap): no fetch; the attempt returns a `spend-cap` ask naming spend, estimate, cap and `CORVIDINHO_DAILY_SPEND_CAP_USD`, ending with the operator action and no question mark; the summary is `SPEND_CAP_SUMMARY` (no `$`, no `CORVIDINHO_`); `runTask` returns `blocked` with verify skipped; `task run --json` exits 0 with `result.ask.reason` `spend-cap`.
 - Spend older than 24 hours no longer counts.
+- A flat-priced `web-search` (`tests/web.search.test.ts`): no cap opens no database; under the cap a `reserved` row of 5000 micro-USD exists when the request goes out and settles `actual` at 5000; an HTTP error or a refusal before connecting settles `failed` at 0, and a network failure, a body that fails mid-read, a timeout, a non-JSON or malformed 2xx body and an abort after the request went out stay `estimated` at 5000; a run already stopped reserves nothing and sends nothing; at the cap (or with an invalid cap value, or an unavailable ledger such as a closed database, whose ask says the spend ledger is unavailable) nothing is sent, the error names no amount and the result carries the `spend-cap` ask; in the tool loop that search ends the attempt with `SPEND_CAP_SUMMARY` and the ask after one model call.
+- A free `gif-search` (`tests/gif.search.test.ts`): no cap opens no database; under the cap a `reserved` row at 0 for `api.giphy.com` / `giphy-gif-search` exists when the request goes out and settles `actual` at 0, leaving 24-hour spend unchanged; a 2xx reply settles `actual` at 0 also when its body is an `error` or has no `results`; a 429 or a refusal before connecting settles `failed` at 0 and a network failure `estimated` at 0; a run already stopped writes no row; with the window already past the cap, an invalid cap value, or an unavailable ledger, nothing is sent (and an invalid cap writes no row) and the result carries the `spend-cap` ask; in the tool loop that search ends the attempt with `SPEND_CAP_SUMMARY` and the ask after one model call.
 - Unpriced model, invalid cap value or unavailable ledger: no fetch and a `spend-cap` ask; the invalid value and secret-shaped model ids are not echoed.
 - HTTP error reply counts 0; missing usage and network errors keep the estimate.
 - Two connections on one DB file see each other's reservations and record the 80% warning once between them.
 - The call that brings spend to 80% yields exactly one `Text` warning and one `onSpendWarning`; later calls stay quiet while spend stays at or above 70%; after spend is seen under 70% (by a settle or a reservation) the next crossing warns again, including within 24 hours; 24 hours after the last warning, or with a new cap value, it warns again; `task run --json` carries `result.spendWarning` on the crossing run.
 - A warning recorded by one process is taken once by the outbox with current spend, can be released and taken again, and stays pending (not delivered, not dropped) while spend is back under 80%: 80% at T0, then 72%, then 96% delivers exactly one warning at 96% and records no second warning; without a database the outbox returns the run's own warning.
 - `claimCapPing` returns a claim once per cap episode and again after spend is seen under 70% or 24 hours pass; a released claim lets the next claim in the same episode succeed.
-- An invalid total cap reads as the snapshot `{ kind: "invalid", keys: ["CORVIDINHO_DAILY_SPEND_CAP_USD"] }`; a reservation refused at the total cap names it (`trips: [{ scope: "total", spentMicroUsd, capMicroUsd }]`), and its ask question says `Stopped at cap: total.` (REQ-agent-114).
 - `SPEND_PAUSED_TEXT` is "Work is paused for budget." and `SPEND_CAP_SUMMARY` equals it; `formatSpendPublicStatusLine` is undefined with no cap and under the cap, and "Spend: Work is paused for budget." at the cap, for an unpriced model, an invalid value and an unreadable ledger; `spendPaused` flips exactly at the cap; the owner's `formatSpendStatusLine` keeps the amounts.
-- With an owner configured and `approval` given, a call over the cap is held for the owner's spend card (REQ-agent-198); with no owner, or through `withSpendCap` (no `approval`), the ask above comes at once with no card and still ends with "Replying can't lift the cap — this needs the operator."
-- After a spend card came to no, the ask keeps the amounts and the `Stopped at cap: …` marker, names the card and what it came to, adds "ask again — the next call past the cap raises a new card and code", and has no reply note and no question mark.
-- An unpriced model under a cap with an owner configured and `approval` given asks on the owner's card with the amount shown as unknown (REQ-agent-199); with no owner, or through `withSpendCap`, it stops at once with the unpriced operator ask as above.
+- The call estimate counts the model's worst-case reply (its listed maximum output, else 128000 tokens; REQ-agent-298), never a fixed 4096-token reserve, and the sent request carries no `max_tokens`.
 
 ### REQ-agent-117
 
@@ -331,9 +328,8 @@ cap) is below 2. Otherwise they SHALL be absent from the catalog at every tier
 loop SHALL pass its capability tier and abort signal to `runPlugin`.
 
 The delegation core (`src/autonomous/delegate.ts`) SHALL run a worker as
-`task run --here --non-interactive --tier <t> --output ndjson --task <text>`
-through `buildCorvidinhoArgv` (`--here`: the worker works in its lead's cwd
-and never makes a worktree of its own, REQ-cli-122) (so a `.ts` bin runs as `bun --no-env-file`), with
+`task run --non-interactive --tier <t> --output ndjson --task <text>`
+through `buildCorvidinhoArgv` (so a `.ts` bin runs as `bun --no-env-file`), with
 the `--task` value last and never `--no-verify` (REQ-cli-085): a worker keeps
 the project's prove-before-done gate (AGENT-4) and reports its `verified` /
 `verifySkipped` outcome. The worker bin SHALL be `CORVIDINHO_BIN` when set,
@@ -341,16 +337,12 @@ else this checkout's `src/cli.ts`, never the cwd's. The worker tier SHALL be
 the requested tier clamped to the lead's; an omitted tier SHALL mean the
 lead's tier and an unknown tier SHALL be refused. The worker env SHALL be
 the lead's env without `DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`,
-`CORVIDINHO_AUDIT_HMAC_KEY` and every `CORVIDINHO_ACTING_*` key (SAFE-6; LLM
+`CORVIDINHO_AUDIT_HMAC_KEY`, `BRAVE_SEARCH_API_KEY` and `GIPHY_API_KEY` (only
+the lead searches, PLUGIN-7 / PLUGIN-8) and every `CORVIDINHO_ACTING_*` key (SAFE-6; LLM
 provider keys stay), and SHALL force the depth to the lead's depth + 1,
 `CORVIDINHO_LLM_TIER` to the worker tier, `CORVIDINHO_NON_INTERACTIVE=1` and
 `CORVIDINHO_ALLOWLIST` to the lead's effective allowlist, overriding inherited
-values, so a worker never inherits ADMIN or human SAFE-4 confirm tokens. It
-SHALL set `CORVIDINHO_DELEGATE_AUTHORS` to the lead's change authors (GITHUB-9:
-validated entry labels, comma-joined, at most 32) when the lead gives any,
-and drop an inherited value otherwise; a worker (depth above 0) SHALL count
-them as authors of its own change (`delegateAuthorsFromEnv`), so a PR it
-opens is never reviewed by a model that wrote part of it. When
+values, so a worker never inherits ADMIN or human SAFE-4 confirm tokens. When
 the lead runs in a ROLES-CHAT role session (`CORVIDINHO_ACTING_IS_ADMIN` set)
 the worker env SHALL set `CORVIDINHO_ACTING_IS_ADMIN=0`, making the worker a
 non-ADMIN session with read/chat tools only (ROLES-CHAT-2/3); a lead outside a
@@ -367,37 +359,7 @@ group as it exited SHALL still be stopped by an abort or timeout during the
 pipe drain, or by the lead exiting. The
 lead SHALL NOT wait on a worker pipe held open by a grandchild beyond a short
 drain after the worker exits. The worker summary returned to the lead SHALL be
-SAFE-6 scrubbed and capped. A worker that failed — not `done` with exit 0,
-and not stopped on an ask of its own (a valid result `ask`) — SHALL come back
-to its lead as one plain line of harness text, `workerFailureLine` (both the
-tool's `data.summary` and the end of its `error`): the timeout line (`worker
-timed out and was stopped`) or the interrupt line (`worker stopped: lead run
-was interrupted`); else, for a worker that could not start, `worker failed
-to start: <why>`, the spawn error made one plain line like the result
-`error` below (host paths cut, the whole line at most 200 characters), never
-the spawn message as is; else the worker's result `error` (which model call
-failed and how, which verify failed, the idle-timeout line) as one plain line
-(`plainFailureLine`: SAFE-6 scrubbed, stack frames and host paths dropped, at
-most 200 characters) without the provider's host (`withoutProviderHost`,
-`src/agent/providers.ts`, the helper WATCH's public comment uses,
-REQ-watch-009: `The model call failed (429 Too Many Requests)`); else, for a
-worker that streamed another protocol, the protocol-mismatch notice
-(`protocol mismatch: binary X, bridge Y — restart the bridge`, DISCORD-10);
-else the no-provider notice for the worker's tier in its env (AGENT-10); else
-`the worker failed (exit N)`. It SHALL NOT hand over the worker's summary, its
-result's summary (`resultText` is set only for a worker that did not fail)
-or its stdout / stderr, which for a model failure is `LLM HTTP <status>:
-<provider body>` — org or account names, request ids, the provider's host —
-that a lead could quote into a public reply or GitHub comment. The lead
-SHALL keep no other copy of that detail (nothing is written to its stderr,
-whose end a bridge reads as a failed lead's fallback reason). A successful
-worker's summary, an ask's question and the worker's `models`,
-`stopReason`, `modelFallback` and `injection` fields (and so the SAFE-12/13
-fence of a worker that reported a hit) are unchanged. The models the worker's result frame names (its
-answering `model`, each `usageByModel` row and both ends of each
-`modelFallback` hop; validated, scrubbed, bounded) SHALL come back as
-`DelegateChildOutcome.models` (`workerModelsFromResult`), which the lead
-counts as authors of its change (REQ-agent-092). The depth, tier and fan-out limits are safety
+SAFE-6 scrubbed and capped. The depth, tier and fan-out limits are safety
 defaults; draft AUTONOMOUS-10 is not an acceptance criterion and stays left
 for HI capture.
 
@@ -407,16 +369,11 @@ Acceptance Criteria
 - `createTaskExecute` in a temp project with autonomous enabled at code tier offers `delegate`; a disabled project, tool tier, or depth 2 does not; a model call to a hidden `delegate` is refused, not run.
 - A lead tool loop that calls `delegate` against a fake bin receives the worker summary in the tool message, and the worker's filesChanged join the lead's result.
 - Depth parse fails closed; tier clamp never exceeds the lead; spawn argv uses `bun --no-env-file` with `--task` last and no `--no-verify` flag; forced worker env overrides inherited env; the limiter refuses past 2 concurrent / 4 per run.
-- The worker env (and the spawned worker process) has no `DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY` or inherited `CORVIDINHO_ACTING_*` key and keeps LLM provider keys; a role-session lead gets `CORVIDINHO_ACTING_IS_ADMIN=0`, a CLI lead none.
+- The worker env (and the spawned worker process) has no `DISCORD_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY`, `BRAVE_SEARCH_API_KEY` (`tests/web.search.test.ts`), `GIPHY_API_KEY` (`tests/gif.search.test.ts`) or inherited `CORVIDINHO_ACTING_*` key and keeps LLM provider keys; a role-session lead gets `CORVIDINHO_ACTING_IS_ADMIN=0`, a CLI lead none.
 - A non-ADMIN role session's catalog leaves out `delegate` even when autonomous mode is allowed; the ADMIN owner's catalog offers it (ROLES-CHAT-2/4).
 - Worker timeout, lead abort, and a grandchild holding the pipe do not hang the lead; a `.env` in the cwd is not loaded by a `.ts` worker.
 - Worker timeout and lead abort kill the worker's same-group and `setsid` grandchildren, not just the worker.
 - A lead abort after the worker exited, while its background grandchild still holds the pipe, kills that grandchild.
-- Spawn argv has `--here` right after `task run` (REQ-cli-122): a worker never makes a worktree of its own.
-- GITHUB-9: `buildDelegateSpawn` sets `CORVIDINHO_DELEGATE_AUTHORS` from `authors` and drops an inherited value when none is given; `delegateAuthorsFromEnv` trims, dedupes and bounds; `workerModelsFromResult` lists the answering model, usage models and failover ends, scrubbed, and nothing for an empty frame.
-- A worker whose result `error` is a 429 from `acme-prod.openai.azure.com:8443` and whose summary and stderr are `LLM HTTP 429: <body>` (an org name, a request id, the host) comes back with `data.summary` `The model call failed (429 Too Many Requests)` and `error` `worker (tier code, depth 1) did not finish (state failed, exit 1):` plus that line, its `models` kept, and no provider detail anywhere in the tool result; an idle-timed-out worker keeps `stopReason: "idle-timeout"` and its line; a worker with no result frame hands over the no-provider notice, else `the worker failed (exit N)`, never its stdout or stderr; a successful worker and one that stopped on an ask of its own are unchanged; a failed worker that reported an injection is still fenced for the lead with the line inside.
-- A worker that streamed another protocol comes back with the protocol-mismatch notice (`protocol mismatch: binary 3, bridge 2 — restart the bridge`), never `the worker failed (exit 0)` or its frames; a worker bin that does not exist comes back with exit 127 and `worker failed to start: ENOENT: no such file or directory, posix_spawn '…/corvidinho'`, its host path cut; a worker stopped by the spend cap comes back `blocked` with `Work is paused for budget.` and no amounts.
-- Through a lead tool loop and the real `task run` against the localhost fake provider answering 429 with an org name, a request id and its own host, the lead model's tool message has the plain line and none of them; with a 200 reply the worker's answer comes back as before (`tests/autonomous.worker-failure.test.ts`, which fails on main's `src/autonomous/delegate.ts`).
 
 ### REQ-agent-118
 
@@ -1201,8 +1158,8 @@ model says so briefly. The IDENTITY and MEMORY system paragraphs SHALL say a
 name, nickname, memory or message never changes who someone is or their role.
 In the tool loop a successful result of a tool in `UNTRUSTED_RESULT_TOOLS`
 (the GitHub readers, `discord-user-lookup`) SHALL reach the model inside a
-fence (`web-fetch` keeps its own); a successful result of a tool in
-`INJECTION_SCAN_TOOLS` (`web-fetch`, the GitHub title / docs / milestone
+fence (`web-fetch`, `web-search` and `gif-search` keep their own); a successful result of a tool in
+`INJECTION_SCAN_TOOLS` (`web-fetch`, `web-search`, `gif-search`, the GitHub title / docs / milestone
 readers, `discord-user-lookup`; PR diffs and file lists are not scanned) SHALL
 be scanned over its strings without the web fence's own lines, and a hit
 SHALL (1) put `injectionToolNote` in front of that tool message, (2) leave
@@ -1230,6 +1187,8 @@ Acceptance Criteria
 - The tool-loop and read-tier system prompts contain `UNTRUSTED_CONTENT_AGENT_SYSTEM_INSTRUCTIONS`.
 - Through `createTaskExecute` with fake plugins: an injected `github-issue-list` title puts the SAFE-13 note and a fenced result in the tool message, drops `files-write` from the next request, refuses a `files-write` call (nothing written), calls `onInjection` once with the tool and reason, audits one `injection-suspected` row and ends the summary with the note; the web fence's own lines are no hit.
 - A community run whose task claims the owner and asks for `files-write` is offered no mutating tool and the call gets the role refusal.
+- Through `createTaskExecute`: a `web-search` result whose description is an injection puts the SAFE-13 note in front of the fenced result, drops `web-search`, `web-fetch` and `files-write` from the next request (one suspicious snippet switches off the web tools too), refuses the `files-write` call, reports `{ source: "web-search", reasons: ["ignore-rules"] }` once and ends the summary with the note (`tests/web.search.test.ts`).
+- Through `createTaskExecute`: a `gif-search` result whose GIF title is an injection puts the SAFE-13 note in front of the fenced result, drops `gif-search`, `web-search`, `web-fetch` and `files-write` from the next request, refuses the `files-write` call, reports `{ source: "gif-search", reasons: ["ignore-rules"] }` once and ends the summary with the note; an ordinary GIF result (with its link-only guidance and "Powered By GIPHY") trips nothing and keeps the mutating tools (`tests/gif.search.test.ts`).
 - Through `createTaskExecute`: a `delegate` result, and a failed `council` result, carrying `data.injection` put `injectionWorkerNote` and the fence in the tool message, drop `files-write`, `memory-store` and the worker tool from the next request, refuse `memory-store` and `files-write` (nothing stored or written), report the worker's notice once, end the summary with the note and record one audit row; at delegation depth 1 a hit is reported but records no row.
 - Regression tests in `tests/safe.injection.test.ts` fail on the base sources and pass after.
 - WATCH (REQ-watch-367, IDENTITY-7.a): `watchInjectionVerdict` exempts the owner only by the owner's GitHub numeric id; an injected body from the owner's login with no or another numeric id is flagged (`tests/safe.injection.test.ts`).
@@ -1395,12 +1354,10 @@ unanswered approval, an `ask-human` with no question, a thrown handler).
 `changedState(name, result)` SHALL be the single "something changed"
 predicate: true when the result's data reports `filesChanged` (ok or not), or
 when a tool in `STATE_CHANGING_TOOLS` (file writes, git writes, GitHub
-writes, Discord posts and files, memory forget / override, a SpecSync
-change opened, answered, approved or archived (`specsync-change-new`,
-`-answer`, `-approve`, `-finalize`, AGENT-18), `delegate`, the shell, the
-language runners and `fledge-run`) or a Fledge plugin command
+writes, Discord posts and files, memory forget / override, `delegate`, the
+shell, the language runners and `fledge-run`) or a Fledge plugin command
 (`origin` `fledge:`) succeeds; never for `NO_STATE_CHANGE_TOOLS`
-(`web-fetch`, `danger-ping`, `fledge-lanes-run`, `council`) or a read.
+(`web-fetch`, `web-search`, `gif-search`, `danger-ping`, `fledge-lanes-run`, `council`) or a read.
 Every dangerous or mutating builtin SHALL be in exactly one of the two sets.
 A change SHALL reset every count; a call's own success SHALL reset its own.
 
@@ -1434,7 +1391,7 @@ unknown tool names, and a prefer-plugin steer.
 
 Acceptance Criteria
 - `callSignature` is equal for argv spellings of one call and differs for other args or tools.
-- Every registered dangerous or mutating builtin is in exactly one of `STATE_CHANGING_TOOLS` / `NO_STATE_CHANGE_TOOLS`; a successful write, a failed `delegate` that reports `filesChanged` and a Fledge plugin command's success are changes; a failed write, reads, `web-fetch`, `council`, `danger-ping` and `fledge-lanes-run` are not.
+- Every registered dangerous or mutating builtin is in exactly one of `STATE_CHANGING_TOOLS` / `NO_STATE_CHANGE_TOOLS`; a successful write, a failed `delegate` that reports `filesChanged` and a Fledge plugin command's success are changes; a failed write, reads, `web-fetch`, `web-search`, `gif-search`, `council`, `danger-ping` and `fledge-lanes-run` are not.
 - A tool that always fails, called three rounds in a row with the same argv: the 1st tool message has no steer, the 2nd ends with the steer (scrubbed error, after the whole result), the 3rd call never runs and the attempt ends with `repeatedFailureAsk("flaky-read")`, a `ToolResult` with `REPEAT_FAILURE_BLOCK_DETAIL` and an `[operator] AGENT-16` line whose error excerpt is scrubbed.
 - Three identical failing calls in one batch all run (2nd and 3rd steered); the next round's identical call asks.
 - After the steer, a call with different arguments runs and the model's final reply stands (no ask).
@@ -2073,8 +2030,8 @@ Acceptance Criteria
 If it only plans, or says 'Done.' without changing anything, it gets one
 nudge (AGENT-17, captured on main from Leif's 2026-09-28 interview, round 2:
 "If it only plans, or says 'Done.' without changing anything, it gets one
-nudge, then moves to a stronger model I've configured."; this builds the
-nudge half; moving to a stronger model is not built). When the task-run tool
+nudge, then moves to a stronger model I've configured."; this is the
+nudge; the move to a stronger model is REQ-agent-088, AGENT-17.a). When the task-run tool
 loop (`runToolLoop`, every surface's `task run`: CLI, Discord chat,
 `/session`, `/work`, button and Answer resumes, schedules, WATCH, delegate
 and council workers) gets a final reply (no tool calls, after the MEMORY-9
@@ -2111,10 +2068,12 @@ round, and one Text event `[operator] AGENT-17: the reply was <only a plan |
 a 'Done.'-style or empty claim> with nothing changed; nudged once (same
 model)` is emitted. A run SHALL get at most one nudge
 (`createStallNudgeGuard`, one per `createTaskExecute`, across verify
-retries). A stall after that SHALL stand as the reply, with one Text event
-`[operator] AGENT-17: the reply was … with nothing changed, after the nudge;
-the reply stands (moving to a stronger model is not built yet)`: no ask, no
-error, no other change to the result.
+retries). A stall after that SHALL move the rest of the run to a stronger
+model when REQ-agent-088 finds one; otherwise it SHALL stand as the reply,
+with one Text event `[operator] AGENT-17: the reply was … with nothing
+changed, after the nudge; the reply stands (<why>)` (`stallStandsNote(kind,
+why)`; with no model order set, `(no model order is set, so it does not move
+to another model)`): no ask, no error, no other change to the result.
 
 `stallKind(text, task?)` SHALL be a narrow English heuristic: `done-claim` for an
 empty reply, or a whole reply of at most `STALL_DONE_MAX_CHARS` (60)
@@ -2138,8 +2097,8 @@ AUTONOMY-7), "toy", "demo" or "joke" (AUTONOMY-7), a deferral ("later",
 "soon", "tomorrow", "next time", "from now on", "going forward"), and for
 answers and social replies ("Yes, it's done.",
 "Let me check… yes: …", "Thanks!", "I'll be here."). Constants, no knob: no
-env var, config key, flag, HumanAsk reason, NDJSON field or schema change is
-added.
+config key, flag, HumanAsk reason, NDJSON field or schema change is added;
+the only setting is REQ-agent-088's optional model order.
 
 Acceptance Criteria
 - `stallKind` is `done-claim` for "", "Done.", "All done!", "Done! ✅", "Task complete.", "It's done now.", "I've done it." and "Changes made."; `plan` for "I'll update src/cli.ts to add the flag, then run the tests.", "Let me look at the failing test first.", a "Plan:" list of work steps and "First, I'll read the file. Then I'll fix it."; null for a Q&A answer, "Let me check the file. It has 3 functions.", "Yes, it's done.", social replies, a deferral (a promise for "next time" too), clarifying questions, "let me know" and offers, AUTONOMY-7 declines (witty ones included) and toy demos, code, and replies over the length caps; null for a plan when the task asks for a plan or for nothing to change yet ("What's your plan …?", "How would you fix …", "… don't change anything yet"), while "Done." on such a task is still `done-claim`.
@@ -2148,6 +2107,8 @@ Acceptance Criteria
 - A plan-only reply is nudged; a model that then makes a real change ends with that change's files and its reply.
 - An empty reply is nudged.
 - A second stall after the nudge stands (summary "Done.", no ask, no error) with the `the reply stands` operator line; exactly two requests.
+- With no model order set (AGENT-17.a), that stand line ends `the reply stands (no model order is set, so it does not move to another model)`.
+- The stall guard gives `nudge` once, then `escalate` until `moved()`, then `stand`.
 - A later attempt of the same run that stalls stands without a second nudge.
 - Q&A, social replies, clarifying questions, "let me know", AUTONOMY-7 declines and toy demos make one request and are never nudged.
 - A tool-reported file change, a Fledge plugin command's success, or a stored memory ("remember …" → `memory-store` → "Done!") before "Done." means no nudge (the memory is stored once).
@@ -2332,7 +2293,39 @@ review refusal (`reviewHold: "refused"`), every summary after it SHALL end
 with that one line (`withReviewRefusalNote`, added once, scrubbed, before
 the role note); a later call that opened a PR or got findings clears it.
 
+An owner or team `/work` run (REQ-cli-092) SHALL also drive the review
+rounds itself before the `/work` PR step (REQ-discord-088), through
+`RunTaskOptions.review` (a `ReviewHook`: `maxRounds` and `run({signal})`).
+`createTaskExecute` SHALL return its execute fn with `review` (the run's
+`PrReviewRun` above) and `takeSpendAsk()` (the spend-cap ask a stopped
+review call left, then cleared; null when there is none). After a passing
+verify lane — and, when the run opened SpecSync changes, after they are
+settled and verified again (REQ-agent-519) — `runTask` SHALL call the hook
+before the run is done:
+
+- `finished` (a round raised nothing, the tree was left unchanged after
+  findings, or the last round): done and verified, with
+  `TaskResult.review` `{state: "finished"}`;
+- `findings`: the hook's feedback SHALL be the next attempt's
+  `verifyFeedback`, and that attempt SHALL pass the verify gate again before
+  the next review step;
+- `refused` (GITHUB-9.a: no second model; or any other reason no review can
+  finish): done and verified, with `TaskResult.review` `{state: "refused",
+  reason}` (one plain line of harness text), so no PR follows;
+- `ask` (a SAFE-8 spend-cap stop of the review call): the run SHALL end
+  `blocked` on that ask (AUTONOMY-8).
+
+The review rounds SHALL have their own counter, apart from the AGENT-4.a
+verify retries: at most `maxRounds - 1` steps hand findings back, and one
+more, or a hook that throws, SHALL fail closed as `refused`. A run that
+changed nothing or whose verify failed never calls the hook. Each step is
+one `Text` event. `TaskResult.review` is additive (no protocol change) and
+absent on every run without the hook.
+
 Acceptance Criteria
+- With a scripted hook: findings then finished end the run done and verified after 2 attempts with the verify lane run twice, attempt 2's feedback is the findings text, `review` is `{state: "finished"}`, and this holds with `maxRetries: 0`.
+- A refusal ends the run done and verified with `review: {state: "refused", reason}` and a `Second-model review: no PR — <reason>` Text event; a hook that keeps raising findings is called 3 times and ends refused (`did not end within 3 rounds`); a throwing hook ends refused (`could not run`); a spend-cap ask ends the run `blocked` with that ask and no `review`; a run that changed nothing, or whose verify failed, never calls the hook.
+- Through `createTaskExecute` (code tier, `files-write`), `runTask` and `workReviewHook` in a temp repo with a scripted provider: round 1's findings reach attempt 2 fenced as untrusted data, the model's change gets round 2, which raises nothing, and `review` is `{state: "finished"}`; with one configured model the run is done with `review` refused for the GITHUB-9.a reason and no reviewer call.
 - Through `createTaskExecute` and a scripted provider in a temp repo: the reviewer is the first other configured model (`CORVIDINHO_LLM_MODEL_READ` here), called once with no `tools` and a system plus a fenced user message holding the diff; the findings come back fenced as round 1 of 3; the same call again opens the PR listing them as not changed; no tool message carries the AGENT-16 steer; the run's `usageByModel` has the reviewer's row (an unpriced reviewer makes `answerSpendFor`'s cost unknown) and `onModel` names only the run's model.
 - With no second model three identical `github-pr-create` calls all run and refuse, none gets the AGENT-16 steer or the stuck ask, no reviewer is called, and the summary ends with `PR not opened: there is no second model …` (GITHUB-9.a).
 - A reviewer on its own provider whose cap covers it (no owner configured) ends the run with the `spend-cap` ask, no review request is sent, nothing is recorded and the summary has no `PR not opened` line.
@@ -2382,4 +2375,492 @@ Acceptance Criteria
 - A `fledge.toml` that is a directory gives both `{ on: false, reason: "config-unreadable", error: "the install's fledge.toml could not be read (EISDIR)" }`; a `.json` allowlist file `{oops` gives `the allowlist file could not be parsed`.
 - `[corvidinho.autonomous] enabled = false` leaves both on.
 - Fixture: `tests/plugins.extras-toggle.test.ts`.
+### REQ-agent-110
+
+In a project that isn't a git repo, the owner's runs work in the project
+folder itself, protected files and the verify gate still apply, and other
+people's runs only read there (AGENT-1.a, captured in `hi/agent.md` from
+Leif's 2026-09-28 interview). A run whose cwd is such a folder (a Discord
+talk bound in place, REQ-discord-110, or a local `task run` there) SHALL:
+
+- for the owner (and the local CLI): run its file tools in that folder, with
+  SAFE-2 protected paths and (AGENT-1.b, REQ-plugins-110) the root AGENTS.md
+  / CLAUDE.md refused; keep the allowlisted shell, language runners and Fledge
+  runs out of the catalog with the one SAFE-3.a operator line (the cwd is not
+  the session's own talk worktree, REQ-agent-503); and go through the verify
+  gate for what it changed (REQ-agent-002 / REQ-agent-185), a failing lane
+  failing the run;
+- for anyone else: `createTaskExecute` SHALL pass the run's cwd to
+  `actingWorkTask` (REQ-plugins-115) for the catalog (`buildOpenAiTools`
+  `workTask`), for `refusedForRole` (a call to a mutating tool not offered)
+  and for the missing-capability facts (REQ-agent-742, so a gap there reads
+  as the role's), so a team member's `/work` run there is not
+  offered `files-write` / `files-edit` and a call to one gets the role
+  refusal; in a git worktree it is offered them as before.
+
+No new option, env var or config key.
+
+Acceptance Criteria
+- `tests/agent.nongit-project-dir.test.ts`: the owner's run in a non-git folder writes `src/app.ts` there, `fledge.toml` is refused (SAFE-2) and `AGENTS.md` (AGENT-1.b) and stays unchanged, `shell-exec` (allowlisted) is not offered and the SAFE-3.a line names "not in this talk's own worktree", the stub verify lane runs once on the folder and its failure ends the run `failed` and not verified, and no `.corvid-worktrees` is made.
+- Same file: a team member's `/work` run there is offered `files-read` but not `files-write` / `files-edit`, its `files-write` call is refused with `not allowed for your role`, the file is unchanged and no verify runs; in a linked worktree of a git project it is offered both.
+- With the base sources both fail.
+### REQ-agent-520
+
+hi guard (AGENT-18, captured on main from Leif's 2026-09-28 interview: "It
+works each repo's own way: …; where it uses hi, it drafts criteria and asks
+before capturing, never inventing them; …"; this builds the guard half of the
+hi clause). In a repo that uses hi (the start scan merged with a scan now,
+`mergeScans`: a `hi/*.md` with `hi:` front matter in the session base, HEAD
+or the working tree), when an attempt has something to verify, `runTask`
+SHALL, beside the SpecSync coverage check (REQ-agent-518) and before the
+lane, compare everything under `hi/` with the session base
+(`hiRunChanges(cwd, run)` → `hiChangesSince(cwd, base)` in
+`src/agent/repo-ways.ts`: `git diff --name-only base -- hi`, so committed and
+uncommitted changes both count, plus `git ls-files --others -- hi`, ignored
+files included; git never consults a configured fsmonitor there, and an
+assume-unchanged or skip-worktree `hi/` index entry whose file on disk is not
+its index blob SHALL count too, while a skip-worktree entry missing from disk
+(a sparse checkout) SHALL not; for a run with no git session base,
+`hiChangesFromSnapshot` against `hiSnapshot` taken at planning into the run
+ledger's `hiStart`). Each changed `hi/*.md` SHALL be
+parsed on both sides (`parseHiEntries`: `- **ID**  text` bullets and their
+deeper-indented continuation lines, `## Retired` marking retired entries)
+so the note names criteria added, removed or reworded and retired entries
+changed (retiring a criterion included); every other changed `hi/` path, or
+a changed file whose entries did not change, SHALL count as an other-file
+change. A path whose change approved captures alone explain (REQ-agent-522)
+SHALL be left out first; any change left in any of the three lists,
+made by this run or left by an earlier one, SHALL make the attempt a failed
+verify with no lane run: one Text note `hi guard: this repo's hi/ changed
+since the session base (criteria …; retired entries …; other hi/ files …)
+and no approved capture made the change, …; … only what approved captures
+made passes …` (five ids or paths per kind,
+then "…"; `hiGuardNote`), which SHALL tell the model to undo a hi/ change
+this run made and to leave one that was already there for the owner and say
+so (the run cannot tell who made it), a `VerifyResult` with `success: false`, the note
+as the retry's whole feedback after its "Verification failed" head (joined
+with a SpecSync gate note when both apply), and after the retries the failed
+result with the stuck ask. A hi/ diff or snapshot that cannot be read SHALL
+fail closed (`HI_GUARD_UNREADABLE_NOTE`). The tool loop's hi block
+(`renderRepoWaysBlock`) SHALL also say that the file tools refuse every
+write, edit and delete under `hi/`, that any hi/ change since the session
+base that approved captures did not make keeps the run from being verified
+and `/work` from opening a PR, and that criteria change only through a
+capture the owner approves on a card — with, when the run is offered
+`hi-draft`, how to draft one (REQ-agent-521), else that this run can't. A
+run that changed nothing is
+not checked. The guard runs only inside Corvidinho runs (this gate,
+`github-pr-create` inside a run, REQ-plugins-521) and `/work`'s PR step
+(REQ-discord-520): a capture made with the `hi` CLI outside any run that is
+already in the session base (on the remote's default branch, or in HEAD at
+planning when the repo has none) never blocks, but a `hi/` commit on the
+run's own branch that is not yet on the remote's default branch counts as a
+change whoever made it, since the run cannot tell.
+No env var, config key, flag, NDJSON field or schema.
+
+Acceptance Criteria
+- `parseHiEntries` reads criteria, sub-criteria and retired entries (with their continuation lines) and no entries from front matter or prose.
+- `hiChangesSince` sorts a reworded criterion (criteria), a retired one (retired), an intent-prose edit (files), a committed new criterion plus an untracked note and an ignored swap file, and a deleted hi file correctly; `hiChangesFromSnapshot` does the same for a non-git project.
+- An attempt that edits `hi/agent.md` outside the file tools gets the `hi guard:` note, no lane call and a failed `VerifyResult`; the retry's feedback carries the note; once hi/ is put back the lane runs once and the run is verified.
+- An assume-unchanged and a skip-worktree `hi/agent.md` edited on disk (which `git diff` no longer shows) still count; a skip-worktree hi file missing from disk does not.
+- The `hi guard:` note says to undo a hi/ change this run made and leave one that was already there for the owner.
+- A leftover dirty hi/ edit blocks a run that only touched `src/`; a criterion committed mid-run is still seen; a hi/ change that stays ends failed with the stuck ask; a non-git hi project is blocked the same way.
+- No false block: hi/ untouched, a `hi/` without front matter, and a capture committed on main outside any run before the talk branched all end verified.
+- `tests/agent.hi-guard.test.ts` fails on the base sources and passes after.
+- The `hi guard:` note says only what approved captures made passes; the hi block names `hi-draft` only for a run that is offered it (`renderRepoWaysBlock(ways, { hiDraft })`).
+- A `hi/` change that approved captures alone explain is left out of the comparison and the run is verified (REQ-agent-522); anything else under `hi/` still blocks.
+
+### REQ-agent-521
+
+hi drafts (AGENT-18, captured on main from Leif's 2026-09-28 interview:
+"… where it uses hi, it drafts criteria and asks before capturing, never
+inventing them; …"; this builds the drafting half of the hi clause). In a
+repo that uses hi (the run's ways, `repoWays.hi`), `createTaskExecute`
+SHALL offer the agent-level tool `hi-draft` (`src/agent/hi-drafts.ts`,
+intercepted by the tool loop like `ask-human`) only when `hiDraftGate`
+allows it, re-read for every attempt and again at the call: the run is not
+a delegate or council worker, not WATCH (`CORVIDINHO_WATCH_SESSION_ID` or the
+`watch` surface) and not a schedule (`schedule_*` session or the `schedule`
+surface); then either (a) a role session on the `chat`, `ask`, `session` or
+`work` surface whose acting role, re-resolved now (`resolveActingRole`), is
+owner or team, in a cwd that is this talk's own linked worktree
+(`isOwnTalkWorktree` with the run's Discord session id: never a main checkout
+or another talk's worktree) — mode `card`; or (b) no
+role session, no Discord session id or surface stamp, and not started from
+inside a tool (`CORVIDINHO_PROJECT_ROOT` unset) — the local CLI, mode `cli`.
+Community runs SHALL never be offered it; a call to it there is refused as
+not in the catalog. Once a tool result looked like an injection (SAFE-13) a
+call SHALL be refused. A call (`{"drafts":[{"id","text"}]}`) SHALL carry
+1–5 drafts, each text one line (whitespace collapsed; any other control
+character refused) of at most 400 characters, not starting with `-` (it
+would read as a flag); each draft SHALL be
+validated against `hi export` in the cwd (`validateHiDrafts`): a hi-shaped
+id whose family a hi file declares, not captured, not retired, not drafted
+twice, a dotted id's parent captured (not retired) or drafted before it;
+and a draft that SAFE-6 scrubbing would change SHALL be refused. Any
+refusal SHALL go back to the model as a failed tool result
+(`refused (AGENT-18): …`) and record nothing. In mode `card` a draft whose id
+already waits in an open (pending, not expired) request of the same
+repository SHALL be refused (`<ID> already waits on the owner's card
+(request <id>); nothing new was drafted`), so the owner never gets a second
+card that could only fail. In mode `card`, with an owner
+configured and the cwd on a branch, it SHALL record a pending hi capture
+request (`HiCaptureStore.request`, the module-owned `hi_capture_requests`
+table in the shared data dir DB, created with `CREATE TABLE IF NOT EXISTS`,
+no schema version bump): the drafts as validated, the session worktree's
+real path, branch and HEAD, the repository's git common dir, a member-safe
+project label, who asked (`CORVIDINHO_ACTING_DISCORD_USER_ID`), their role,
+the surface, the session id and the conversation it came from, expiring in
+24 h. In mode `cli` it SHALL record nothing. Either way the run SHALL end
+blocked (`TaskResult.state` `blocked`, verify skipped, never done) with a
+`clarify` ask that is never cut (an ask that would not fit is refused back
+to the model instead): in `card` mode naming each draft (`• ID — text`), the
+request id and that only the owner's Approve captures them and a reply does
+not; in `cli` mode listing the exact `hi <ID> '<text>'` commands (the text as
+one single-quoted shell word) for the person at the CLI. The run itself
+SHALL never capture anything. No env var, config key or flag.
+
+Acceptance Criteria
+- The owner's and a team member's chat, ask, `/session start` and `/work` runs in a talk worktree get mode `card`; a local CLI run gets `cli`; community (also a declared team member the surface stamped community), WATCH, schedules, delegate workers, no surface, a repo without hi, a non-git cwd, the main checkout, another talk's worktree, a CLI run with a Discord session id and a run started from inside a tool get nothing.
+- A second owner run drafting an id that already waits on the owner's card gets `refused (AGENT-18): AGENT-20 already waits on the owner's card (request …)` and no second request is recorded.
+- Through `createTaskExecute` and a scripted model, the owner's chat offers `hi-draft` (its prompt says to draft with it), the call records one pending request with the drafts, branch, worktree, repository, requester, role, surface, session and channel, and the run ends with the clarify ask naming the drafts and the request; `hi/` is unchanged.
+- Through `runTask` a team member's run ends `blocked`, not verified, and the lane is never called.
+- A community run is not offered it (its prompt says this run can't draft) and a call is refused as not in the catalog; nothing is recorded. A delegate worker is not offered it.
+- A secret-looking text, a captured id and an unknown family each come back to the model as `refused (AGENT-18)` with the reason (the secret never echoed); nothing is recorded.
+- A local CLI run ends with the exact `hi AGENT-20 '…'` command (a single quote escaped) and records nothing.
+- `tests/agent.hi-draft.test.ts` fails on the base (main) sources and passes after.
+
+### REQ-agent-522
+
+hi drafts, the guard's allowance (AGENT-18): the only `hi/` change the hi
+guard (REQ-agent-520, REQ-discord-520, REQ-plugins-521) SHALL let through is
+one approved captures made. When the owner's Approve captures a request
+(REQ-discord-521), every `hi/` path the capture changed SHALL be recorded in
+the module-owned `hi_capture_files` ledger (`src/agent/hi-capture-store.ts`)
+with the repository (its git common dir) and a content key before and after
+(`hiContentKey`: the UTF-8 text and the executable bit, hashed; a text with
+a replacement character gets no key; a missing path is `absent`).
+`hiChangesSince` and `hiChangesFromSnapshot` SHALL leave out a changed path
+only when, among the ledger steps of requests whose status is `approved` in
+that repository, a chain of one or more steps leads from the path's content
+at the base (the blob and mode at the base commit; or the planning
+snapshot) to its content now; a key that can't be read, a symlink, a path
+that ends absent, a cwd with no git common dir, or a ledger that can't be
+read SHALL leave it in (fail closed). So a run in the session worktree after
+the capture (which the owner's Approve commits on the session's branch,
+REQ-discord-521), with more commits on top or not, is verified and `/work`
+opens its PR, while an
+edit on top of a captured file, any other `hi/` file, and ledger steps of a
+request that was not approved still block. No env var, config key or flag.
+
+Acceptance Criteria
+- After an approved capture of two drafts in a talk worktree (one commit on its branch changing only `hi/agent.md`; the main checkout untouched), `hiChangesSince` from the talk's base lists nothing (also with the run's own edit committed on top), and a run there that edits `src/` is verified with the lane run once and no `hi guard` note.
+- An extra criterion added on top of the captured file is still listed; a new `hi/notes.md` beside an approved capture is still listed; a ledger step recorded for a request that is still pending allows nothing.
+- `openWorkPr` for a tree whose only `hi/` change is an approved capture is not refused with `hi-changed`.
+- `tests/agent.hi-draft.test.ts` fails on the base (main) sources and passes after.
+
+### REQ-agent-318
+
+A task run's reply SHALL end with the short visible attribution line a
+tool's provider asks for when that run used the tool (PLUGIN-7; Leif's go on
+#318, to meet Brave's terms): `src/agent/task-summary.ts`
+`REPLY_ATTRIBUTION_BY_TOOL` maps `web-search` to "Search by Brave" and no
+other tool. Once an offered tool in that map returns `ok` in the tool loop
+(a `web-search` that Brave answered, "(no results)" included), every summary
+`createTaskExecute` returns for the rest of that run SHALL end with its
+line once, as a closing paragraph after a blank line
+(`withReplyAttribution`: after the AGENT-11 model fallback note, before the
+ROLES-CHAT-3 role note; a summary that already ends with it is left as is).
+A call that failed, was refused or was stopped (no or a malformed key, a
+usage error, a secret-carrying query, an HTTP error, a SAFE-13 refusal, the
+spend cap) SHALL add no line, and a run without such a call SHALL get none.
+The line SHALL NOT be part of any tool message, the untrusted web fence or
+any other request the model gets, and it SHALL carry nothing else (no
+amount, cap or setting, SAFE-14.a): a `spend-cap` ask's question, and so the
+owner's spend DM built from it, never carries it. `closingNotesTail`
+SHALL recognise the line (the known lines only, as the whole last
+paragraph), so `clipKeepingRoleNote`, `resultFrame` (NDJSON, 4000),
+`chatBodyFromTaskResult` (schedule posts, WATCH, 1800), the post clips and
+Discord's split (`splitDiscordMessage` / `planAnswerParts`) keep it whole at
+the end of every reply: the owner's and team members' Discord replies,
+`/session start`, `/work`, the owner's schedule posts and the CLI's `task
+run` output. No tool schema, env var, table or setting is added.
+
+Acceptance Criteria
+- `REPLY_ATTRIBUTION_BY_TOOL` maps exactly `web-search` to "Search by Brave".
+- Two answered searches then the answer "Bun is a fast JavaScript runtime." give "Bun is a fast JavaScript runtime.", a blank line and "Search by Brave", once; no model request (fenced results, tool messages, prompts) contains the line; a later attempt of the same run still ends with it once; an answer that already ends with it is not doubled.
+- No line with no search, a search with no key, a 429 from Brave, or a query refused for carrying the key.
+- A declared team member's run (role session) that searched ends with the line too.
+- A run whose second search is stopped at the spend cap ends `SPEND_CAP_SUMMARY`, a blank line and the line; the `spend-cap` ask's question and `formatSpendStopDm` never carry it.
+- `closingNotesTail` returns the fallback note, the line and the role note in that order and ignores a mere mention; `chatBodyFromTaskResult` (1800) and `resultFrame` (4000, `truncated`) keep the line at the end; `planAnswerParts` of a long answer ends its last part with it, once; `withReplyAttribution` adds it once and ignores unknown lines.
+- The new tests in `tests/web.search.test.ts` fail on the base sources and pass after.
+
+### REQ-agent-742
+
+When a task names a plugin or tool, or asks for a GIF, and that capability is not in the run's offered catalog, execute SHALL reply with the concrete gap and SHALL NOT call the model: not installed (not registered, or not in the Fledge plugin list when discovery ran), not allowlisted (SAFE-1), not configured (the tool's real key, `GIPHY_API_KEY` or `BRAVE_SEARCH_API_KEY`), not available for the acting role (ROLES-CHAT-2 / PLUGIN-9; community stays read/chat), or below the run's capability tier. The reply SHALL cite an HI id or an open PR number only when that id or PR was returned by the lookup, and SHALL NOT invent a plugin or a third-party API. A vague install question ("what do you mean by install?") when the task already named the plugin SHALL be that same reply, or a steer back to an offered tool, never a clarify ask. When a candidate tool is already offered, the run SHALL NOT be replaced by this reply.
+
+Acceptance Criteria
+- "Install the gif plugin" with no allowlist and no discovered `gif` command does not call the model; the summary names `gif-search` not allowlisted and `fledge-gif` not installed, cites only lookup HI ids and PR numbers, and has no clarify `ask`.
+- "dog GIFs" with `gif-search` offered still calls the model.
+- A community role gap does not tell that session to edit the allowlist.
+- An unknown name is not installed; the reply does not invent Tenor or a `fledge-` command the user did not say.
+- A model `ask-human` of "what do you mean by install?" when the named tool is offered does not end as a clarify ask.
+- Fixture: `tests/agent.missing-capability.test.ts`.
+
+### REQ-agent-1201
+
+The owner's own GitHub run (IDENTITY-12.a, #65; REQ-watch-1201,
+REQ-plugins-1201). A WATCH run whose trigger is the owner now carries the
+owner stamp and gets the owner's tools per the run's allowlist, but SAFE-3.a
+still keeps runs of project code off WATCH: `createTaskExecute` SHALL NOT call
+`loadFledgePlugins` in a WATCH run — `isWatchRunEnv(env)` (the surface stamp
+is `watch`) or `CORVIDINHO_WATCH_SESSION_ID` set — whatever its role, as it
+already does not in a scheduled run (REQ-agent-741; the `includeDangerous`
+test seam aside). The shell, runners and Fledge core runs stay refused there by
+the SAFE-3.a gate (REQ-agent-503), and the owner's other allowlisted
+dangerous tools stay offered. No env var, config key, flag or schema change.
+
+Acceptance Criteria
+- An env stamped as the WATCH spawn stamps a run the owner's own comment triggered (surface `watch`, a WATCH session id, the owner stamp, the owner's `[owner] github_id` as `CORVIDINHO_ACTING_GITHUB_ID`) with `fledge-hello`, `github-pr-review`, `files-delete` and `shell-exec` allowlisted: `github-pr-review` and `files-delete` are offered, `shell-exec` is not, only the Fledge core reads are, `fledge-hello` is never registered or spawned, and a call to it is refused as not offered (`tests/agent.allowlisted-dangerous.test.ts`).
+- With the base `src/agent/execute.ts` that test fails (fledge-hello is discovered); it passes on the branch.
+### REQ-agent-621
+
+The verify lane, the shell and the runners start without the owner's cloud
+credentials (KUBECONFIG, AWS, Google Cloud, Azure and similar), so they can't
+reach prod by accident (SAFE-21.b, captured in this change's PR from Leif's
+2026-09-28 interview, round 16 on 2026-10-06). `src/agent/verify.ts` holds the
+one cloud scrub every such child uses:
+
+- `isCloudCredentialEnvKey(key)` SHALL be true for the documented family:
+  `KUBECONFIG`, `KUBERNETES_SERVICE_HOST`, `KUBERNETES_SERVICE_PORT`;
+  `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`,
+  `AWS_SECURITY_TOKEN`, `AWS_PROFILE`, `AWS_DEFAULT_PROFILE`,
+  `AWS_SHARED_CREDENTIALS_FILE`, `AWS_CONFIG_FILE`, `AWS_ROLE_ARN`,
+  `AWS_ROLE_SESSION_NAME`, `AWS_WEB_IDENTITY_TOKEN_FILE`, every
+  `AWS_CONTAINER_*`; `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CREDENTIALS`,
+  `GOOGLE_CLOUD_KEYFILE_JSON`, `GCLOUD_KEYFILE_JSON`,
+  `GOOGLE_OAUTH_ACCESS_TOKEN`, `GOOGLE_IMPERSONATE_SERVICE_ACCOUNT`,
+  `GOOGLE_GHA_CREDS_PATH`, every `CLOUDSDK_*`; `AZURE_CLIENT_ID`,
+  `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`,
+  `AZURE_USERNAME`, `AZURE_PASSWORD`, `AZURE_CLIENT_CERTIFICATE_PATH`,
+  `AZURE_CLIENT_CERTIFICATE_PASSWORD`, `AZURE_FEDERATED_TOKEN_FILE`,
+  `AZURE_CONFIG_DIR`, `AZURE_STORAGE_KEY`, `AZURE_STORAGE_CONNECTION_STRING`,
+  `AZURE_STORAGE_SAS_TOKEN`, `AZURE_DEVOPS_EXT_PAT`, `IDENTITY_ENDPOINT`,
+  `IDENTITY_HEADER`, `MSI_ENDPOINT`, `MSI_SECRET`, and the `ARM_*` client,
+  tenant, subscription, access key, SAS token, certificate, OIDC and MSI keys;
+  any `AWS_` / `GOOGLE_` / `GCLOUD_` / `GCP_` / `AZURE_` / `ARM_` key whose
+  name holds `ACCESS_KEY`, `API_KEY`, `TOKEN`, `SECRET`, `PASSWORD`,
+  `CREDENTIAL`, `KEYFILE` or `CONNECTION_STRING`; every `TF_TOKEN_*`; and
+  `DIGITALOCEAN_TOKEN`, `DIGITALOCEAN_ACCESS_TOKEN`, `HCLOUD_TOKEN`,
+  `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_API_KEY`, `LINODE_TOKEN`,
+  `LINODE_CLI_TOKEN`, `VULTR_API_KEY`, `SCW_ACCESS_KEY`, `SCW_SECRET_KEY`,
+  `OCI_CLI_CONFIG_FILE`, `OCI_CLI_KEY_FILE`, `OCI_CLI_PROFILE`,
+  `OCI_CLI_AUTH`, `IBMCLOUD_API_KEY`, `IC_API_KEY`,
+  `ALIBABA_CLOUD_ACCESS_KEY_ID`, `ALIBABA_CLOUD_ACCESS_KEY_SECRET`,
+  `ALICLOUD_ACCESS_KEY`, `ALICLOUD_SECRET_KEY`, `OS_PASSWORD`, `OS_TOKEN`,
+  `OS_APPLICATION_CREDENTIAL_SECRET`, `HEROKU_API_KEY`, `FLY_API_TOKEN`,
+  `FLY_ACCESS_TOKEN`, `VERCEL_TOKEN`, `NETLIFY_AUTH_TOKEN`, `RAILWAY_TOKEN`,
+  `TFE_TOKEN`, `PULUMI_ACCESS_TOKEN`, `VAULT_TOKEN`, `NOMAD_TOKEN`,
+  `CONSUL_HTTP_TOKEN`. Ordinary settings (`AWS_REGION`, `AWS_DEFAULT_REGION`,
+  `AWS_ENDPOINT_URL`, `GOOGLE_CLOUD_PROJECT`, `GCLOUD_PROJECT`,
+  `AZURE_LOCATION`, …) SHALL NOT be in it.
+- `withoutCloudCredentials(env)` SHALL drop those keys in place, then set the
+  empty stand-ins `CLOUD_CREDENTIAL_STAND_INS` — `KUBECONFIG`,
+  `AWS_SHARED_CREDENTIALS_FILE`, `AWS_CONFIG_FILE` and
+  `GOOGLE_APPLICATION_CREDENTIALS` = `/dev/null` (not `~/.kube/config`,
+  `~/.aws/credentials` / `~/.aws/config` or the ADC well-known file under
+  `~/.config/gcloud`) and `AWS_EC2_METADATA_DISABLED=true` — and point
+  `CLOUDSDK_CONFIG` (not `~/.config/gcloud`) and `AZURE_CONFIG_DIR` (not
+  `~/.azure`) at fresh, empty 0700 dirs inside one private
+  `corvidinho-no-cloud-*` temp dir made for that one child, so a login or token
+  one child writes there never reaches the next.
+- `releaseCloudStandIns(env)` SHALL remove that temp dir once the child has
+  exited, and SHALL be a no-op for an env `withoutCloudCredentials` did not
+  build or one already released (it never removes a dir the env merely names);
+  dirs still there when the process exits are removed then.
+- `defaultVerifyRunner` (runTask's lane) SHALL spawn fledge with
+  `withoutCloudCredentials(buildVerifyEnv())` and release it after the lane
+  exits (REQ-agent-002); `shell-exec`, the language runners and the Fledge
+  core runs use the same scrub (REQ-plugins-621).
+- Fledge plugin commands (`fledge-<command>`, `fledgeChildEnv`) and
+  `delegate` / `council` workers (`isWorkerEnvDropped`) are unchanged; the
+  workers' own verify lane, shell and runners scrub as above. No new env var,
+  config key, slash command, table or schema version.
+
+Acceptance Criteria
+- With the owner's cloud env set (a two-entry KUBECONFIG, the in-cluster host,
+  AWS keys / session token / profile / role / web identity / container
+  endpoint / Bedrock token, Google ADC / credentials / OAuth / API key,
+  `CLOUDSDK_CONFIG` / account / token file, `AZURE_CONFIG_DIR`, Azure / ARM
+  secrets, managed identity, DigitalOcean, Hetzner, Cloudflare, Vault,
+  `TF_TOKEN_*`) and, separately, with only the owner's default files under
+  HOME, stand-in `kubectl` / `aws` / `gcloud` / `az` run by the default verify
+  runner's fledge see no cloud key or value and none of those files: the
+  stand-ins read `/dev/null` and empty dirs outside HOME, gone once the lane
+  exits; `AWS_REGION`, `GOOGLE_CLOUD_PROJECT` and other keys are kept.
+- `isCloudCredentialEnvKey` is true for every documented key and pattern and
+  false for `PATH`, `HOME`, `TMPDIR`, `AWS_REGION`, `AWS_DEFAULT_REGION`,
+  `AWS_ENDPOINT_URL`, `GOOGLE_CLOUD_PROJECT`, `GCLOUD_PROJECT`,
+  `AZURE_LOCATION`, `KUBE_EDITOR`, `OSTYPE`, `TF_LOG`.
+- Two `withoutCloudCredentials` calls give different, empty, 0700 dirs;
+  `releaseCloudStandIns` removes only its own (twice is a no-op), and an env
+  naming the owner's `~/.config/gcloud` / `~/.azure` leaves them in place.
+### REQ-agent-298
+
+Worst-case reply reserve (AUTONOMY-8.a, captured in this change from Leif's
+2026-09-28 interview, round 16: "Before each call it counts a worst-case
+reply toward the cap, so it asks before a long reply could take spend past
+it; replies are never cut short."). While any spend cap is set
+(REQ-agent-098, REQ-agent-114), the pre-call estimate of a priced provider
+call (`estimateCallMicroUsd` in `src/agent/spend.ts`) SHALL be the
+request's UTF-8 bytes / 3 as prompt tokens at the input price plus the
+model's worst-case reply at the output price: `replyReserveTokens(price)`,
+which SHALL be the model's listed maximum output
+(`ModelPrice.maxOutputTokens` in `MODEL_PRICES_USD_PER_MTOK`, reasoning
+tokens included) when that is a positive whole number, and otherwise
+`REPLY_RESERVE_DEFAULT_TOKENS` (128000, the largest listed maximum). Every
+priced model in the table SHALL list its maximum output. That estimate SHALL
+be what the IMMEDIATE ledger transaction checks against every cap that
+covers the call and reserves while the call is in flight, so a call whose
+worst case would cross any cap SHALL ask first exactly as REQ-agent-098,
+REQ-agent-114 and REQ-agent-198 describe (the owner's spend card at that
+amount when an owner is configured and the run passes `approval`, otherwise
+the `spend-cap` ask), and a call whose worst case fits SHALL be sent with no
+ask. The guard SHALL NOT add `max_tokens` (or `max_completion_tokens`) to
+the request and the runner SHALL NOT send one, so a reply is never cut
+short. After the reply the reservation SHALL be settled as before
+(REQ-agent-098: the provider-reported usage, else kept at the estimate, 0 on
+an HTTP error). Unpriced models are unchanged (REQ-agent-199: no estimate,
+the unknown-price card under a covering cap, unrecorded when no cap covers
+them), and so are flat-priced tool calls (`reserveFlatSpend`). No env var,
+config key, schema, NDJSON field or card text change.
+
+Acceptance Criteria
+- Every entry of `MODEL_PRICES_USD_PER_MTOK` lists `maxOutputTokens` above 4096 (gpt-4o 16384, claude-opus-5-5 128000, claude-haiku-4-5 64000) and `replyReserveTokens` returns it; a priced model with none (or with 0, a negative number, a fraction or NaN) counts `REPLY_RESERVE_DEFAULT_TOKENS` (128000).
+- `estimateCallMicroUsd` for gpt-4o and 3000 request bytes is 1000 × 2.5 + 16384 × 10 micro-USD.
+- A $0.10 total cap with nothing spent and a gpt-4o call: with no owner there is no fetch, no ledger row and a `spend-cap` ask naming the worst-case estimate; with an owner the call raises one `spend` / `money` card whose amount is that estimate, Approve sends exactly the built body once and the row settles `actual` at the reported usage, and Deny sends and records nothing.
+- A $0.10 provider cap on the call's provider stops the same call with the SAFE-15 ask naming `provider:<id>`.
+- A $1 cap with an owner configured: the gpt-4o call raises no card; while it is in flight its `reserved` row holds the worst case; afterwards the row is `actual` at the usage cost.
+- The sent body equals the built body and has no `max_tokens` or `max_completion_tokens`, also in a capped `createTaskExecute` run.
+- Unpriced models under a cap still ask on the unknown-amount card (recorded `unknown`) or stop with the unpriced ask; with no cap covering them they run unrecorded.
+- Fixture: `tests/agent.spend-reserve.test.ts` (fails on main's `src/agent/spend.ts` and `src/agent/index.ts`).
+### REQ-agent-088
+
+After the one nudge it moves to the next stronger model in the order I set
+(AGENT-17, on main: "If it only plans, or says 'Done.' without changing
+anything, it gets one nudge, then moves to a stronger model I've
+configured."; AGENT-17.a, captured from Leif's 2026-09-28 interview, round
+16: "A stronger model is the next one in an order I set in the model list;
+with no order set it doesn't move, and the one nudge still happens.").
+
+The order SHALL be the optional `CORVIDINHO_LLM_MODEL_ORDER`
+(`MODEL_ORDER_ENV`, `src/agent/providers.ts`): a comma list of the same
+`kind:model` entries as the model list (`parseModelChain`), weakest first.
+Unset or empty is no order. The model list's own (fallback) order is not a
+strength order, and nothing SHALL be ranked by price or benchmark.
+
+When the REQ-agent-087 stall guard gives a stall after the run's nudge
+(`next()` → `"escalate"`), `runToolLoop` SHALL call the run's
+`ModelCalls.escalate(kind)`, which `createTaskExecute` backs with
+`moveToStronger(chain, order)` on the run's own model chain. `strongerModel`
+SHALL pick the first entry after the chain's current model in the order
+(entries compared by `entryLabel`, so `openai:x` and `x` are one entry) that
+is one of the chain's own entries (the run's tier's model list, AGENT-5),
+whose kind has its key, and that has not failed in this run (not a
+`from` of the chain's failovers), trying later entries in the order in turn.
+It SHALL NOT move with no order (`no-order`), when the current model is not in
+the order (`unordered`), when it is the last in it (`top`), or when no entry
+after it is available (`unavailable`); it SHALL never move to a weaker or an
+unordered model.
+
+On a move the chain keeps the stronger model for every later call of the run
+(later rounds and verify retries; a failure of it falls back the AGENT-11
+way). The stalled reply SHALL be dropped from the conversation and the same
+request sent to the stronger model (no second nudge, no tool round used),
+the text that stood before it standing again; the guard records `moved()`, so
+a run moves at most once. One Text event `[operator] AGENT-17: the reply was
+<only a plan | a 'Done.'-style or empty claim> with nothing changed, after the
+nudge; moving from <a> to the stronger model <b> (next in the model order)`
+(`stallMovedNote`) SHALL be emitted, and every later summary of the run SHALL
+end, after any AGENT-11 fallback note and before every other closing note,
+with one plain line `(stronger model: <a> only planned | said it was done
+with nothing changed after the nudge, so <b> took over)`
+(`withStrongerModelNote`), which `closingNotesTail` keeps through clips and
+Discord's split. Without a move the stall stands with
+`stallStandsNote(kind, why)` (`moved` once the run already moved). The
+stronger model's calls SHALL go through the same chat transport and SAFE-8 /
+SAFE-14 spend guard as every call, counted and priced under its own model
+(`onUsage` per model), so a cap stop or an unpriced-model ask applies to it
+(AUTONOMY-8) and is never routed around. Delegate workers inherit the order
+(it is not a dropped worker key) and apply the same rule in their own run.
+No config key, flag, slash command, HumanAsk reason, NDJSON field, table or
+schema version is added.
+
+Acceptance Criteria
+- `modelOrderFromEnv` is [] unset or blank and parses `kind:model` entries in order; `MODEL_ORDER_ENV` is `CORVIDINHO_LLM_MODEL_ORDER`.
+- `strongerModel`: no order ⇒ `no-order`; the next entry the tier's chain holds ⇒ that entry (bare and `openai:` match); the order, not the fallback list, decides; the last in the order ⇒ `top`; a model not in the order ⇒ `unordered`; an order entry the tier's list lacks, one without its key, or another tier's model is skipped (none left ⇒ `unavailable`); a model that failed in the run is never moved back to; `moveToStronger` changes `chain.index` only on a move.
+- `strongerModelNote` reads `(stronger model: <a> only planned after the nudge, so <b> took over)` / `… said it was done with nothing changed after the nudge …`; `withStrongerModelNote` adds it once; `closingNotesTail` and a clip keep it after the fallback note and before the role note.
+- With an order set, a code-tier run whose weak model says "Done." twice makes requests weak, weak (with the one nudge), then the second request's exact messages to the stronger model; the stronger model's work stands, the summary ends with the note, both operator lines are emitted, usage is counted per model and the answering model is the stronger one; a plan moves the same way and a later attempt stays on the stronger model.
+- With no order set: the nudge, then the reply stands (two requests, both to the first model).
+- Already at the top of the order, an unordered current model, or a stronger model only another tier lists: no move, the reply stands with the line naming why.
+- A model that failed earlier in the run is not moved back to; the stronger model stalling too stands (`it already moved to a stronger model once in this run`); an answer after the nudge is no stall.
+- Under a spend cap the stronger model's call is in the spend ledger under its own model; an unpriced stronger model under a cap stops and asks (`spend-cap`) before it is sent.
+- A delegate worker's env keeps `CORVIDINHO_LLM_MODEL_ORDER`.
+- The real CLI (`task run --output ndjson`, two localhost `ollama:` models, the order set) makes three requests (weak, weak, strong), emits both operator lines, and ends `done` with the note and `model` naming the stronger model.
+### REQ-agent-525
+
+Trust where the repo uses Trust (AGENT-18, captured on main from Leif's
+2026-09-28 interview: "It works each repo's own way: a SpecSync change where
+the repo uses SpecSync; where it uses hi, it drafts criteria and asks before
+capturing, never inventing them; and Trust where the repo uses Trust."; this
+builds its Trust clause). `defaultVerifyRunner` (`src/agent/verify.ts`) SHALL
+ask `usesTrust(cwd)` (`src/agent/repo-ways.ts`): true when the start scan of
+the run in progress in `cwd` found `.trust.toml`, or when `detectRepoWays`
+finds it now in the working tree, HEAD or the session base (that run's base,
+else `repoWaysBase`), so a `.trust.toml` deleted or committed away during a
+run or on a `/work` branch still counts. In such a repo it SHALL first ask
+fledge whether it has a `trust` command (`fledge --non-interactive trust
+--help`); a non-zero exit SHALL fail the verify closed, before the lane
+runs, with the exact reason (`trustUnavailableReason`: `Trust gate: this repo
+uses Trust (.trust.toml), but \`fledge trust\` is not available here
+(\`fledge trust --help\` exited <code>: <its first output line>), so
+\`fledge trust verify\` cannot run and the run is not verified (AGENT-18).
+Nothing in the repo can fix this: the owner installs Trust for fledge on
+this machine.`). Otherwise it SHALL run `fledge lanes run verify
+--non-interactive` and, only when the lane passes, `fledge --non-interactive
+trust verify` (`TRUST_VERIFY_ARGS`); the verify SHALL pass only when both
+exit 0. A failing Trust step SHALL give `Trust gate: fledge lanes run verify
+passed, but fledge trust verify failed (exit <code>), so the run is not
+verified (.trust.toml, AGENT-18).` (`trustFailedHead`) followed by that
+step's output; a passing one SHALL add only `TRUST_PASSED_LINE` after the
+lane's output, so the AGENT-15 test evidence is judged on the lane's own
+output once. A failed or unavailable Trust step's result SHALL also carry
+that one line as `trustNote` (`VerifyResult.trustNote`,
+`src/agent/types.ts`; set by nothing else): `runTask` SHALL lead the failure
+summary and the retry feedback with it, the Trust step's output after it
+(in the feedback, cut to what is left of the 4000-char cap, never the head;
+an unavailable Trust's reason is the whole feedback). Every fledge
+step SHALL run with the same verify env (SAFE-6, `buildVerifyEnv`), its own
+process group, pipe reading that feeds the idle watchdog (AGENT-12) and
+abort handling (an abort is `verify lane aborted`) as the lane. A repo with
+no `.trust.toml` in any of those trees SHALL run the lane alone with today's
+argv and output. The ways line SHALL read `Trust (.trust.toml: verify also
+runs fledge trust verify)` and, when the run's start scan found Trust, the
+verifying line `Running fledge lanes run verify --non-interactive (includes
+spec-check), then fledge trust verify (.trust.toml)…`. This applies wherever
+`defaultVerifyRunner` runs (the `runTask` gate, its re-run after settling
+its own SpecSync change, and `/work`'s pre-push re-verify). Corvidinho's own
+repo has no `.trust.toml` and gets nothing Trust-related. No env var, config
+key, flag, NDJSON field or schema.
+
+Acceptance Criteria
+- With a stand-in fledge on PATH (never the host's), a repo with `.trust.toml` runs the probe, the lane, then `trust verify` in that order, passes with the lane's output plus the passed line (one test summary), and the Trust step's env has no `GITHUB_TOKEN`.
+- A failing `trust verify` after a passing lane fails with the `Trust gate:` head and the step's output; a failing lane runs no `trust verify`.
+- A fledge with no `trust` command fails with exactly the unavailable reason and runs no lane.
+- `.trust.toml` deleted from the working tree (HEAD has it), committed away on a branch (only the merge-base with `main` has it), or seen only in the run's start scan still runs the Trust probe.
+- A repo without `.trust.toml` (a `trust.toml` or `docs/trust.md` do not count) runs only `lanes run verify --non-interactive` and returns the lane's output unchanged.
+- `runTask` in a Trust repo emits the Trust ways line and the verifying line naming `fledge trust verify`.
+- The failed and unavailable results carry `trustNote` (the head, or the whole reason); a failing lane's does not. With a Trust step output over the feedback cap, the retry feedback starts with the feedback head and the `Trust gate:` line, keeps the step's failure line and stays within 4000 chars, and the failure summary carries the head; an unavailable Trust's reason is the whole feedback.
+- An abort once `trust verify` has started stops it and gives `verify lane aborted`.
+- `tests/agent.trust-verify.test.ts` fails on the base sources (all but the no-Trust case) and passes after.
 

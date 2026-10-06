@@ -276,3 +276,36 @@ with an org name and a request id in its body; no network, no real key):
   Too Many Requests from 127.0.0.1:<port>)`, the `buildSummaryBody` line names
   `acme-prod.openai.azure.com`, the shapes keep the host). Restored: 8 pass.
 
+
+## Roles on GitHub (REQ-watch-1201 added, REQ-watch-008 modified; IDENTITY-12.a)
+
+- `tests/watch.github-roles.test.ts` — temp allowlist file (owner with a
+  `github_id`, a team and a community person with `github_ids`), temp data
+  dir, a real `startWatchPoller` with a capturing agent, the real WATCH spawn
+  client over a fake bin that dumps its env, a registered mutating must-ask
+  test command; no token, no network.
+  - "the poller stamps the role of whoever triggered the run": comments by
+    the owner's id → `actingRole: owner` and the prompt's role line says the
+    run has the owner's tools behind the must-ask gate; the team member's →
+    `team`; declared community, a stranger, the owner's login with another id
+    and with no id → `community`; the thread text stays fenced. An issue-body
+    mention is its author's; an assignment or review request on the owner's
+    own thread (a team member assigned) → `community`, and the role line says
+    it has community tools. `watchTriggerRole` by numeric id only.
+  - "the WATCH spawn stamps that role exactly like a Discord run": owner →
+    `CORVIDINHO_ACTING_IS_ADMIN=1`, `CORVIDINHO_ACTING_ROLE=owner`, team →
+    `0` / `team`, omitted or community → `0` / `community`; always
+    `CORVIDINHO_ACTING_WORK_TASK=0`, surface `watch`, no Discord actor,
+    whatever the watcher's env holds.
+  - The tool-layer, must-ask and WATCH-limit cases are listed under the
+    plugins module (REQ-plugins-1201).
+- `tests/identity.recognise.test.ts` (updated): the owner's WATCH role line
+  is now `- role: owner (this run has the owner's tools, behind the same
+  must-ask gate as on Discord)`.
+- Fail on base (`origin/main` e1a24ed): with its `src/plugins/roles.ts`,
+  `src/watch/{agent-client,router,poller}.ts` and
+  `plugins/files/protectedPaths.ts` swapped in, 9 of 12 fail (every poller,
+  spawn, tool-layer, must-ask and secret-path case); the 3 that pass are
+  regression guards (a Discord run ignores the GitHub keys; team and
+  community never reach a card; no shell and community workers on WATCH).
+  Restored: 12 of 12 pass.

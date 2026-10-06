@@ -14,10 +14,13 @@ Corvidinho is the agent I actually run on a Linux box: it reads the project’s 
 
 - **AGENT-1**  I can give Corvidinho a task in a project folder and it works from that project’s own config and tools, not from some global sandbox of its own.
   - **AGENT-1.a**  In a project that isn't a git repo, my own runs work in the project folder itself (protected files and the verify gate still apply); other people's runs only read there.
+  - **AGENT-1.b**  In a project folder that isn't a git repo, its file tools can't change the root AGENTS.md or CLAUDE.md; I edit those myself.
+  - **AGENT-1.c**  My schedules for a project that isn't a git repo work in their own separate folder, never in the live project folder.
 - **AGENT-2**  Before it writes code, it loads the relevant specs so the work is constrained by what we already agreed, not by vibes.
 - **AGENT-3**  It runs a tool loop I can interrupt, and when I interrupt it, it actually stops instead of finishing in the background.
   - **AGENT-3.a**  In Discord I can stop a run with a Stop button or by saying stop or cancel, and so can the person who asked; a message sent while a run is going waits for it instead of starting a second run.
   - **AGENT-3.b**  After I stop a run, messages that were waiting still run, in order.
+  - **AGENT-3.c**  I or the schedule's creator can stop a scheduled run in progress from Discord, the same way as a chat run.
 - **AGENT-4**  It does not tell me the job is done until the project’s verify lane has passed, or it tells me plainly that verification failed.
   - **AGENT-4.a**  If verification fails and retries remain, it keeps working with the failure output instead of shrugging.
 - **AGENT-5**  I can pick a provider and a capability tier so cheap models stay on read-shaped work and expensive ones are used when tools and code are required.
@@ -36,6 +39,7 @@ Corvidinho is the agent I actually run on a Linux box: it reads the project’s 
 - **AGENT-16**  When it repeats a failing call, it changes approach or asks me.
   - **AGENT-16.a**  When a GitHub run is stuck and needs me, it pings me on Discord like other stuck asks.
 - **AGENT-17**  If it only plans, or says 'Done.' without changing anything, it gets one nudge, then moves to a stronger model I've configured.
+  - **AGENT-17.a**  A stronger model is the next one in an order I set in the model list; with no order set it doesn't move, and the one nudge still happens.
 - **AGENT-18**  It works each repo's own way: a SpecSync change where the repo uses SpecSync; where it uses hi, it drafts criteria and asks before capturing, never inventing them; and Trust where the repo uses Trust.
   - **AGENT-18.a**  On Corvidinho it may approve and archive its own SpecSync change once verify is green; in other repos a human approves, reviews and finalizes.
 

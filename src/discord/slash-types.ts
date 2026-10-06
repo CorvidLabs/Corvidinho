@@ -133,6 +133,11 @@ export type SlashContext = {
   }) => { request: ForgetRequest; created: boolean };
   /** MEMORY-ACL-6.a — one forget-card delivery pass now (DMs the owner the card). */
   deliverForgetCards?: () => Promise<unknown>;
+  /**
+   * SAFE-18..20 / AGENT-18 hi drafts — one delivery pass of every card kind,
+   * run when a `/work` run ends (a `hi` card it raised goes out at once).
+   */
+  deliverApprovalCards?: () => Promise<unknown>;
   allowlist: AllowlistConfig;
   agent: AgentClient;
   version: string;

@@ -13,6 +13,7 @@
  */
 
 import type { PluginHandlerResult } from "../plugins/types.ts";
+import type { HiDraftToolDef } from "./hi-drafts.ts";
 import type { OpenAiToolDef } from "./tools.ts";
 import type {
   AskOption,
@@ -53,7 +54,8 @@ export const ASK_AGENT_SYSTEM_INSTRUCTIONS =
   "Must-ask (AUTONOMY-9..11): anything inside your guardrails you just do and then say what you did, " +
   "because only prod or deploy contact and channel posts need the owner's OK and the tool itself waits for " +
   "it on their Approve card — so never call ask-human for permission first, and never repeat a call the " +
-  "owner denied. ";
+  "owner denied. " +
+  "If the user already named a plugin or tool, do not ask what they want installed and do not name a provider that is not an offered tool. ";
 
 export type AskToolDef = {
   type: "function";
@@ -75,8 +77,11 @@ export type AskToolDef = {
   };
 };
 
-/** Tool definitions sent to the provider: plugin tools plus ask-human. */
-export type ChatToolDef = OpenAiToolDef | AskToolDef;
+/**
+ * Tool definitions sent to the provider: plugin tools plus ask-human, and
+ * `hi-draft` where a run is offered it (AGENT-18, src/agent/hi-drafts.ts).
+ */
+export type ChatToolDef = OpenAiToolDef | AskToolDef | HiDraftToolDef;
 
 export function buildAskToolDef(): AskToolDef {
   return {

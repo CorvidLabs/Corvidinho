@@ -1,8 +1,13 @@
 /**
  * Default verify runner: fledge lanes run verify --non-interactive (FLEDGE-2/3),
- * and the excerpt of its output a retry sends the model (AGENT-4.a).
+ * then, in a repo that uses Trust (`.trust.toml`), `fledge trust verify`
+ * (AGENT-18); and the excerpt of its output a retry sends the model
+ * (AGENT-4.a).
  */
 
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { isWorkerEnvDropped } from "../autonomous/delegate.ts";
 import {
   collectProcessTree,
@@ -11,6 +16,7 @@ import {
   type ProcEntry,
 } from "../plugins/proc-group.ts";
 import { noteIdleActivity } from "./limits.ts";
+import { usesTrust } from "./repo-ways.ts";
 import type { VerifyResult, VerifyRunner } from "./types.ts";
 
 export const VERIFY_ARGS = [
@@ -19,6 +25,46 @@ export const VERIFY_ARGS = [
   "verify",
   "--non-interactive",
 ] as const;
+
+/**
+ * AGENT-18 (Trust clause): `fledge trust verify`, run after the verify lane
+ * passes in a repo that uses Trust; fledge's own `--non-interactive` comes
+ * first, so no prompt can wait on a run.
+ */
+export const TRUST_VERIFY_ARGS = ["--non-interactive", "trust", "verify"] as const;
+
+/** Whether `fledge trust` is there at all (exit 0), asked before the lane runs. */
+export const TRUST_PROBE_ARGS = ["--non-interactive", "trust", "--help"] as const;
+
+/** Characters of the probe's first output line kept in the unavailable reason. */
+const TRUST_PROBE_LINE_MAX = 200;
+
+/**
+ * AGENT-18: the exact reason a Trust repo's verify fails closed when this
+ * fledge has no `trust` command (fledge 1.8.0 has none built in; Trust ships
+ * as a fledge plugin). `detail` is the probe's exit and first output line.
+ */
+export function trustUnavailableReason(detail: string): string {
+  return (
+    "Trust gate: this repo uses Trust (.trust.toml), but `fledge trust` is not available here " +
+    `(${detail}), so \`fledge trust verify\` cannot run and the run is not verified (AGENT-18). ` +
+    "Nothing in the repo can fix this: the owner installs Trust for fledge on this machine."
+  );
+}
+
+/** The line a passing Trust step adds after the lane's output (AGENT-18). */
+export const TRUST_PASSED_LINE = "Trust gate: fledge trust verify passed (.trust.toml, AGENT-18).";
+
+/**
+ * AGENT-18: the one-line head of a failed Trust step after a passing lane;
+ * the step's own output follows it.
+ */
+export function trustFailedHead(code: number): string {
+  return (
+    `Trust gate: fledge lanes run verify passed, but fledge trust verify failed (exit ${code}), ` +
+    "so the run is not verified (.trust.toml, AGENT-18)."
+  );
+}
 
 /**
  * LLM provider keys: a worker needs them, the verify lane does not. Also the
@@ -49,6 +95,191 @@ export function buildVerifyEnv(
     if (typeof v === "string" && !isVerifyEnvDropped(k)) env[k] = v;
   }
   return env;
+}
+
+/**
+ * Env keys that carry the owner's cloud credentials, or point a cloud CLI or
+ * SDK at them (SAFE-21.b). The verify lane, `shell-exec`, the language
+ * runners and the Fledge core runs start without them
+ * ({@link withoutCloudCredentials}), so they can't reach prod by accident.
+ */
+const CLOUD_CREDENTIAL_ENV_KEYS = new Set([
+  // Kubernetes: the kubeconfig list, and the in-cluster service account
+  // (client-go falls back to it when these two are set).
+  "KUBECONFIG",
+  "KUBERNETES_SERVICE_HOST",
+  "KUBERNETES_SERVICE_PORT",
+  // AWS: keys, profiles, the files that hold them, assumed and web-identity roles.
+  "AWS_ACCESS_KEY_ID",
+  "AWS_SECRET_ACCESS_KEY",
+  "AWS_SESSION_TOKEN",
+  "AWS_SECURITY_TOKEN",
+  "AWS_PROFILE",
+  "AWS_DEFAULT_PROFILE",
+  "AWS_SHARED_CREDENTIALS_FILE",
+  "AWS_CONFIG_FILE",
+  "AWS_ROLE_ARN",
+  "AWS_ROLE_SESSION_NAME",
+  "AWS_WEB_IDENTITY_TOKEN_FILE",
+  // Google Cloud: Application Default Credentials and the key files and
+  // tokens Terraform and CI auth actions read.
+  "GOOGLE_APPLICATION_CREDENTIALS",
+  "GOOGLE_CREDENTIALS",
+  "GOOGLE_CLOUD_KEYFILE_JSON",
+  "GCLOUD_KEYFILE_JSON",
+  "GOOGLE_OAUTH_ACCESS_TOKEN",
+  "GOOGLE_IMPERSONATE_SERVICE_ACCOUNT",
+  "GOOGLE_GHA_CREDS_PATH",
+  // Azure: service principal, user, workload and managed identity, the CLI's
+  // config dir, storage keys; ARM_* is the same set for Terraform.
+  "AZURE_CLIENT_ID",
+  "AZURE_CLIENT_SECRET",
+  "AZURE_TENANT_ID",
+  "AZURE_SUBSCRIPTION_ID",
+  "AZURE_USERNAME",
+  "AZURE_PASSWORD",
+  "AZURE_CLIENT_CERTIFICATE_PATH",
+  "AZURE_CLIENT_CERTIFICATE_PASSWORD",
+  "AZURE_FEDERATED_TOKEN_FILE",
+  "AZURE_CONFIG_DIR",
+  "AZURE_STORAGE_KEY",
+  "AZURE_STORAGE_CONNECTION_STRING",
+  "AZURE_STORAGE_SAS_TOKEN",
+  "AZURE_DEVOPS_EXT_PAT",
+  "IDENTITY_ENDPOINT",
+  "IDENTITY_HEADER",
+  "MSI_ENDPOINT",
+  "MSI_SECRET",
+  "ARM_CLIENT_ID",
+  "ARM_CLIENT_SECRET",
+  "ARM_TENANT_ID",
+  "ARM_SUBSCRIPTION_ID",
+  "ARM_ACCESS_KEY",
+  "ARM_SAS_TOKEN",
+  "ARM_CLIENT_CERTIFICATE_PATH",
+  "ARM_CLIENT_CERTIFICATE_PASSWORD",
+  "ARM_OIDC_TOKEN",
+  "ARM_OIDC_TOKEN_FILE_PATH",
+  "ARM_OIDC_REQUEST_TOKEN",
+  "ARM_OIDC_REQUEST_URL",
+  "ARM_USE_MSI",
+  "ARM_MSI_ENDPOINT",
+  // Other clouds and infrastructure APIs that reach prod.
+  "DIGITALOCEAN_TOKEN",
+  "DIGITALOCEAN_ACCESS_TOKEN",
+  "HCLOUD_TOKEN",
+  "CLOUDFLARE_API_TOKEN",
+  "CLOUDFLARE_API_KEY",
+  "LINODE_TOKEN",
+  "LINODE_CLI_TOKEN",
+  "VULTR_API_KEY",
+  "SCW_ACCESS_KEY",
+  "SCW_SECRET_KEY",
+  "OCI_CLI_CONFIG_FILE",
+  "OCI_CLI_KEY_FILE",
+  "OCI_CLI_PROFILE",
+  "OCI_CLI_AUTH",
+  "IBMCLOUD_API_KEY",
+  "IC_API_KEY",
+  "ALIBABA_CLOUD_ACCESS_KEY_ID",
+  "ALIBABA_CLOUD_ACCESS_KEY_SECRET",
+  "ALICLOUD_ACCESS_KEY",
+  "ALICLOUD_SECRET_KEY",
+  "OS_PASSWORD",
+  "OS_TOKEN",
+  "OS_APPLICATION_CREDENTIAL_SECRET",
+  "HEROKU_API_KEY",
+  "FLY_API_TOKEN",
+  "FLY_ACCESS_TOKEN",
+  "VERCEL_TOKEN",
+  "NETLIFY_AUTH_TOKEN",
+  "RAILWAY_TOKEN",
+  "TFE_TOKEN",
+  "PULUMI_ACCESS_TOKEN",
+  "VAULT_TOKEN",
+  "NOMAD_TOKEN",
+  "CONSUL_HTTP_TOKEN",
+]);
+const CLOUD_CREDENTIAL_ENV_PATTERNS: readonly RegExp[] = [
+  // ECS task roles and EKS Pod Identity: the credential endpoint and its token.
+  /^AWS_CONTAINER_\w+$/,
+  // gcloud: every property override (account, token files, impersonation, config dir).
+  /^CLOUDSDK_\w+$/,
+  // Any other AWS / Google Cloud / Azure key that names a key, token, secret,
+  // password or credential (AWS_BEARER_TOKEN_BEDROCK, GOOGLE_API_KEY, …).
+  /^(AWS|GOOGLE|GCLOUD|GCP|AZURE|ARM)_\w*(ACCESS_KEY|API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|KEYFILE|CONNECTION_STRING)\w*$/,
+  // Terraform / HCP Terraform per-host tokens.
+  /^TF_TOKEN_\w+$/,
+];
+
+/** True when env key `key` carries or points at the owner's cloud credentials (SAFE-21.b). */
+export function isCloudCredentialEnvKey(key: string): boolean {
+  return CLOUD_CREDENTIAL_ENV_KEYS.has(key) || CLOUD_CREDENTIAL_ENV_PATTERNS.some((p) => p.test(key));
+}
+
+/**
+ * Empty stand-ins for the files each cloud tool reads when its env names
+ * none (SAFE-21.b): dropping the env alone would leave `~/.kube/config`,
+ * `~/.aws/credentials` / `~/.aws/config` and the ADC well-known file
+ * `~/.config/gcloud/application_default_credentials.json` in reach. A tool
+ * reads `/dev/null` as an empty file and finds no credentials, and nothing
+ * it writes there persists. `AWS_EC2_METADATA_DISABLED` also stops the AWS
+ * CLI and SDKs fetching instance-role credentials from EC2's metadata service.
+ */
+export const CLOUD_CREDENTIAL_STAND_INS: Readonly<Record<string, string>> = Object.freeze({
+  KUBECONFIG: "/dev/null",
+  AWS_SHARED_CREDENTIALS_FILE: "/dev/null",
+  AWS_CONFIG_FILE: "/dev/null",
+  AWS_EC2_METADATA_DISABLED: "true",
+  GOOGLE_APPLICATION_CREDENTIALS: "/dev/null",
+});
+
+/** Stand-in config dirs made by {@link withoutCloudCredentials} and not released yet. */
+const liveCloudDirs = new Set<string>();
+let cloudDirsExitHook = false;
+
+/**
+ * SAFE-21.b: `env` minus the owner's cloud credentials, in place. The keys
+ * {@link isCloudCredentialEnvKey} names are dropped; each tool's default
+ * credential files are replaced by the empty {@link CLOUD_CREDENTIAL_STAND_INS};
+ * and gcloud (`CLOUDSDK_CONFIG`, not `~/.config/gcloud`) and az
+ * (`AZURE_CONFIG_DIR`, not `~/.azure`) get fresh, empty dirs inside one
+ * private temp dir made for this one child, so a login or token one child
+ * writes there never reaches the next. {@link releaseCloudStandIns} removes
+ * that dir once the child has exited; any still there when this process
+ * exits are removed then.
+ */
+export function withoutCloudCredentials(env: Record<string, string>): Record<string, string> {
+  for (const key of Object.keys(env)) {
+    if (isCloudCredentialEnvKey(key)) delete env[key];
+  }
+  Object.assign(env, CLOUD_CREDENTIAL_STAND_INS);
+  const dir = mkdtempSync(join(tmpdir(), "corvidinho-no-cloud-"));
+  liveCloudDirs.add(dir);
+  if (!cloudDirsExitHook) {
+    cloudDirsExitHook = true;
+    process.once("exit", () => {
+      for (const d of liveCloudDirs) rmSync(d, { recursive: true, force: true });
+    });
+  }
+  env.CLOUDSDK_CONFIG = join(dir, "gcloud");
+  env.AZURE_CONFIG_DIR = join(dir, "azure");
+  mkdirSync(env.CLOUDSDK_CONFIG, { mode: 0o700 });
+  mkdirSync(env.AZURE_CONFIG_DIR, { mode: 0o700 });
+  return env;
+}
+
+/**
+ * Remove the stand-in config dirs {@link withoutCloudCredentials} made for
+ * `env`, once its child has exited. A no-op for an env it did not build or
+ * one already released.
+ */
+export function releaseCloudStandIns(env: Record<string, string>): void {
+  const gcloud = env.CLOUDSDK_CONFIG;
+  if (!gcloud) return;
+  const dir = dirname(gcloud);
+  if (!liveCloudDirs.delete(dir)) return;
+  rmSync(dir, { recursive: true, force: true });
 }
 
 /**
@@ -90,26 +321,41 @@ async function readLanePipe(
   return text + decoder.decode();
 }
 
-export const defaultVerifyRunner: VerifyRunner = async (cwd, signal) => {
-  const fledge = Bun.which("fledge");
-  if (!fledge) {
-    return {
-      success: false,
-      output: "fledge not on PATH — cannot run verify lane",
-    };
+/** One fledge run's exit code and output; null when it was aborted. */
+type FledgeRun = { code: number; output: string } | null;
+
+/**
+ * Spawn `fledge <args>` in `cwd` with the verify env (SAFE-6) in its own
+ * process group, reading its pipes as it writes them (AGENT-12); an abort
+ * kills its process tree (AGENT-3) and gives null. A signal already aborted
+ * (between two steps) spawns nothing. SAFE-21.b: the lane starts without
+ * the owner's cloud credentials; stand-in config dirs are removed on exit.
+ */
+async function runFledgeStep(
+  fledge: string,
+  args: readonly string[],
+  cwd: string,
+  signal?: AbortSignal,
+): Promise<FledgeRun> {
+  if (signal?.aborted) return null;
+  // SAFE-21.b: the lane starts without the owner's cloud credentials; its
+  // stand-in config dirs are removed once it has exited.
+  const env = withoutCloudCredentials(buildVerifyEnv());
+  let proc: ReturnType<typeof Bun.spawn>;
+  try {
+    proc = Bun.spawn([fledge, ...args], {
+      cwd,
+      env,
+      stdout: "pipe",
+      stderr: "pipe",
+      // Own process group: an abort stops the lane's tasks (tests, typecheck),
+      // not only fledge, which leaves them running (AGENT-3, REQ-agent-244).
+      detached: true,
+    });
+  } catch (e) {
+    releaseCloudStandIns(env);
+    throw e;
   }
-  if (signal?.aborted) {
-    return { success: false, output: "verify lane aborted before start" };
-  }
-  const proc = Bun.spawn([fledge, ...VERIFY_ARGS], {
-    cwd,
-    env: buildVerifyEnv(),
-    stdout: "pipe",
-    stderr: "pipe",
-    // Own process group: an abort stops the lane's tasks (tests, typecheck),
-    // not only fledge, which leaves them running (AGENT-3, REQ-agent-244).
-    detached: true,
-  });
   // What the lane left in its group as fledge exited: an abort or this
   // process exiting still reaches it (as in spawnCapped).
   let atExit: ProcEntry[] = [];
@@ -142,16 +388,81 @@ export const defaultVerifyRunner: VerifyRunner = async (cwd, signal) => {
   try {
     const code = await exited;
     const out = await Promise.race([read, gaveUp]);
-    if (out === null) {
-      return { success: false, output: "verify lane aborted" };
-    }
+    if (out === null) return null;
     const [stdout, stderr] = out;
-    return { success: code === 0, output: `${stdout}${stderr}` };
+    return { code, output: `${stdout}${stderr}` };
   } finally {
     if (graceTimer) clearTimeout(graceTimer);
     signal?.removeEventListener("abort", onAbort);
     untrack();
+    releaseCloudStandIns(env);
   }
+}
+
+/** The probe's exit code and first output line, for the unavailable reason. */
+function probeDetail(run: { code: number; output: string }): string {
+  const first = run.output
+    .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, "")
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => l.length > 0);
+  const line = first
+    ? first.length > TRUST_PROBE_LINE_MAX
+      ? `${first.slice(0, TRUST_PROBE_LINE_MAX - 1)}…`
+      : first
+    : "";
+  return `\`fledge trust --help\` exited ${run.code}${line ? `: ${line}` : ""}`;
+}
+
+export const defaultVerifyRunner: VerifyRunner = async (cwd, signal) => {
+  const fledge = Bun.which("fledge");
+  if (!fledge) {
+    return {
+      success: false,
+      output: "fledge not on PATH — cannot run verify lane",
+    };
+  }
+  if (signal?.aborted) {
+    return { success: false, output: "verify lane aborted before start" };
+  }
+  // AGENT-18 (Trust clause): a repo that uses Trust (`.trust.toml` in the
+  // run's session base, HEAD or the working tree) is verified only when the
+  // lane and then `fledge trust verify` both pass. A fledge with no `trust`
+  // command fails closed with the exact reason before the lane runs. A repo
+  // without `.trust.toml` runs the lane alone, as before.
+  const trust = await usesTrust(cwd);
+  if (trust) {
+    const probe = await runFledgeStep(fledge, TRUST_PROBE_ARGS, cwd, signal);
+    if (probe === null || signal?.aborted) return { success: false, output: "verify lane aborted" };
+    if (probe.code !== 0) {
+      const reason = trustUnavailableReason(probeDetail(probe));
+      return { success: false, output: reason, trustNote: reason };
+    }
+  }
+  const lane = await runFledgeStep(fledge, VERIFY_ARGS, cwd, signal);
+  if (lane === null) {
+    return { success: false, output: "verify lane aborted" };
+  }
+  if (lane.code !== 0 || !trust) {
+    return { success: lane.code === 0, output: lane.output };
+  }
+  const trustRun = await runFledgeStep(fledge, TRUST_VERIFY_ARGS, cwd, signal);
+  // A Trust step killed by an abort is a cancel, not a failed Trust step.
+  if (trustRun === null || signal?.aborted) {
+    return { success: false, output: "verify lane aborted" };
+  }
+  if (trustRun.code !== 0) {
+    // The lane passed; the Trust step's own output is the failure the model
+    // and the summary need, so it alone follows the one-line head, which is
+    // also the result's `trustNote` (it leads the summary and the retry
+    // feedback however long that output is).
+    const head = trustFailedHead(trustRun.code);
+    return { success: false, output: `${head}\n${trustRun.output}`, trustNote: head };
+  }
+  // Only the lane's own output is judged for test evidence (AGENT-15): the
+  // Trust step adds one line, not a second copy of the lane's test summary.
+  const sep = lane.output.length === 0 || lane.output.endsWith("\n") ? "" : "\n";
+  return { success: true, output: `${lane.output}${sep}${TRUST_PASSED_LINE}\n` };
 };
 
 /**

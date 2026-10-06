@@ -14,15 +14,17 @@
 import { autonomousSessionAllowed } from "../autonomous/enabled.ts";
 import { DELEGATE_COMMAND_NAME } from "../../plugins/autonomous/commands.ts";
 import { FLEDGE_COMMAND_PREFIX } from "../../plugins/fledge/commands.ts";
+import { discoverFledgePlugins } from "../../plugins/fledge/discover.ts";
 import { FLEDGE_CORE_COMMAND_NAMES, loadFledgePlugins } from "../../plugins/fledge/index.ts";
 import { loadBuiltins } from "../plugins/builtins.ts";
 import { allowlistFromEnv } from "../plugins/env.ts";
 import { isMutatingPlugin } from "../plugins/mutating.ts";
-import { get as getPlugin } from "../plugins/registry.ts";
+import { get as getPlugin, list as listPlugins } from "../plugins/registry.ts";
 import {
   ROLE_REFUSED_MESSAGE,
   actingWorkTask,
   isScheduleRunEnv,
+  isWatchRunEnv,
   resolveActingRole,
   roleAllowsPlugin,
   roleSessionActive,
@@ -33,8 +35,13 @@ import { scrubSecrets } from "../store/scrub.ts";
 import { projectLabel } from "../discord/list-scope.ts";
 import { projectKeyFor } from "../memory/scope.ts";
 import { createSpendGuard, SpendCapRefusal } from "./spend.ts";
-import { formatSpendWarningLine } from "./spend-notice.ts";
-import { ROLE_REFUSED_SUMMARY_NOTE } from "./task-summary.ts";
+import { formatSpendWarningLine, SPEND_CAP_SUMMARY } from "./spend-notice.ts";
+import {
+  REPLY_ATTRIBUTION_BY_TOOL,
+  ROLE_REFUSED_SUMMARY_NOTE,
+  withoutReplyAttribution,
+  withReplyAttribution,
+} from "./task-summary.ts";
 import { verifyFeedbackExcerpt } from "./verify.ts";
 import {
   INJECTION_AUDIT_ACTION,
@@ -67,9 +74,11 @@ import {
   repeatFailureSteer,
   stallKind,
   stallNudge,
+  stallMovedNote,
   stallNudgedNote,
   stallStandsNote,
   type RepeatFailureGuard,
+  type StallKind,
   type StallNudgeGuard,
 } from "./loop-guards.ts";
 import {
@@ -93,11 +102,27 @@ import {
   withAskTool,
   type ChatToolDef,
 } from "./ask.ts";
+import {
+  MISSING_CAPABILITY_INSTRUCTIONS,
+  capabilityPromptNote,
+  corvidinhoHiRoot,
+  defaultCoverageLookup,
+  detectCapabilityAsk,
+  assessCapability,
+  missingCapabilityReply,
+  unseenToolDetail,
+  vagueInstallOutcome,
+  type CapabilityFacts,
+  type CoverageLookup,
+  type FledgeProbe,
+  type ToolFact,
+} from "./missing-capability.ts";
 import type {
   AgentEvent,
   AgentTokenUsage,
   ExecuteFn,
   ExecuteResult,
+  HumanAsk,
   ModelFallback,
   ModelUsage,
   SpendWarning,
@@ -130,17 +155,23 @@ import {
   modelCallFailedLine,
   modelFallbackFromUnknown,
   modelLabelFromUnknown,
+  modelOrderFromEnv,
+  moveToStronger,
   providerForTier,
   providerNotice,
   withModelFallbackNote,
+  withStrongerModelNote,
   type ChainCall,
   type ModelChain,
   type ModelFailure,
   type ProviderKind,
   type ResolvedProvider,
+  type StrongerModel,
+  type StrongerMove,
 } from "./providers.ts";
 import { maxTurnsFromEnv, whileIdlePaused } from "./limits.ts";
 import { renderRepoWaysBlock, type RepoWays } from "./repo-ways.ts";
+import { HI_DRAFT_TOOL, HI_DRAFT_TOOL_RESULT_DETAIL, handleHiDraftCall, hiDraftGate, withHiDraftTool, type HiDraftMode } from "./hi-drafts.ts";
 import { shellToolsGate, shellToolsRefusedLine } from "./shell-gate.ts";
 import {
   allowlistOffers,
@@ -382,6 +413,15 @@ export type CreateTaskExecuteOpts = {
   autonomous?: boolean;
   /** Test seam: skip loadBuiltins when false. */
   loadPlugins?: boolean;
+  /**
+   * Missing-capability soft-land. Tests inject a lookup that does not call
+   * `gh`. Default: local hi/ plus open PRs on CorvidLabs/Corvidinho.
+   */
+  coverageLookup?: CoverageLookup;
+  /** When false, the default lookup skips `gh` (it still scans hi/). Default true. */
+  citeOpenPrs?: boolean;
+  /** Test seam: Fledge plugin list without spawning fledge. */
+  discoverFledge?: (cwd: string, env: NodeJS.ProcessEnv) => Promise<FledgeProbe>;
   /** Read AGENTS.md / CLAUDE.md from the project root into the prompt (AGENT-1). Default true. */
   projectInstructions?: boolean;
   /** SAFE-8 80% spend warning (once per crossing); also emitted as a Text event. */
@@ -596,15 +636,17 @@ function isRoleRefusal(name: string, result: PluginHandlerResult): boolean {
 /**
  * ROLES-CHAT-3/6 + IDENTITY-12: a role session whose caller's role, resolved
  * at this call against the live owner config and people list the way
- * `runPlugin` does, may not run `cmd`.
+ * `runPlugin` does, may not run `cmd`. Team work tools need a `/work` run in
+ * a git work tree (`cwd`; AGENT-1.a: others only read in a non-git folder).
  */
 async function refusedForRole(
   env: NodeJS.ProcessEnv,
   cmd: { name: string; dangerous?: boolean; mutating?: boolean },
+  cwd: string,
 ): Promise<boolean> {
   return (
     roleSessionActive(env) &&
-    !roleAllowsPlugin(await resolveActingRole(env), cmd, actingWorkTask(env))
+    !roleAllowsPlugin(await resolveActingRole(env), cmd, actingWorkTask(env, cwd))
   );
 }
 
@@ -644,12 +686,70 @@ function allowsFledge(allowlist: ReadonlySet<string>): boolean {
 }
 
 /**
+ * `createTaskExecute`'s execute fn, plus what a /work run's second-model
+ * review hook needs from the same run (GITHUB-9, REQ-agent-092).
+ */
+export type TaskExecuteFn = ExecuteFn & {
+  /** The run's models (its authors), provider call path and spend guard. */
+  review: PrReviewRun;
+  /** SAFE-8: the spend-cap ask a stopped review call left (then cleared), else null. */
+  takeSpendAsk: () => { summary: string; ask: HumanAsk } | null;
+};
+
+/**
  * Build the execute fn used by `corvidinho task run`.
  * No usable provider → a failed attempt whose summary is the no-provider
  * notice (AGENT-10), with no provider call. Read tier → single chat (no
  * tools). Tool/code → interruptible plugin tool loop.
  */
-export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
+async function defaultFledgeProbe(cwd: string, env: NodeJS.ProcessEnv): Promise<FledgeProbe> {
+  try {
+    const found = await discoverFledgePlugins({ cwd, env, timeoutMs: 4_000 });
+    if (!found.ok) {
+      return { commands: [], detail: (found.error ?? "Fledge plugins could not be listed").slice(0, 160) };
+    }
+    const commands: string[] = [];
+    for (const plugin of found.plugins) {
+      for (const command of plugin.commands) commands.push(command);
+    }
+    return { commands };
+  } catch {
+    return { commands: [], detail: "Fledge plugins could not be listed" };
+  }
+}
+
+function capabilityFacts(input: {
+  offered: ReadonlySet<string>;
+  allowlist: ReadonlySet<string>;
+  env: NodeJS.ProcessEnv;
+  role: CapabilityFacts["role"];
+  tier: CapabilityTier;
+  cwd: string;
+  fledge?: FledgeProbe;
+}): CapabilityFacts {
+  const registered = new Map<string, ToolFact>();
+  for (const entry of listPlugins()) {
+    registered.set(entry.name, {
+      name: entry.name,
+      dangerous: entry.dangerous,
+      mutating: entry.mutating,
+      minTier: entry.minTier,
+    });
+  }
+  return {
+    offered: input.offered,
+    registered,
+    allowlist: input.allowlist,
+    env: input.env,
+    role: input.role,
+    tier: input.tier,
+    // AGENT-1.a: a team /work run only gets work tools in a git work tree.
+    workTask: actingWorkTask(input.env, input.cwd),
+    ...(input.fledge ? { fledge: input.fledge } : {}),
+  };
+}
+
+export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecuteFn {
   const env = opts.env ?? process.env;
   // SAFE-8: warn at 80% of the daily spend cap; a call that would pass it is
   // not sent as is (no cap = untouched fetch): with an owner configured it
@@ -718,9 +818,18 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
     emit(opts.onEvent, { type: "Text", text: modelFallbackEventText(hop) });
     opts.onModelFallback?.(hop);
   };
+  // AGENT-17 / AGENT-17.a: the model order I set (weakest first; none = the
+  // run never moves) and the one move to a stronger model this run made.
+  const order = modelOrderFromEnv(env);
+  let movedTo: StrongerMove | null = null;
   const models: ModelCalls = {
     chain,
     onFallback: noteFallback,
+    escalate: (kind) => {
+      const next = moveToStronger(chain, order);
+      if (next.ok) movedTo = { from: next.from, to: next.to, kind };
+      return next;
+    },
     onModel: (model) => {
       authors.add(model);
       opts.onModel?.(model);
@@ -795,6 +904,8 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   // this run already said once why the gate held them back.
   const safe3aNamed = [...SAFE3A_TOOLS].filter((name) => allowlist.has(name));
   let safe3aNoted = false;
+  // REQ-agent-318: the attribution lines this run's successful tool calls need.
+  const attributions = new Set<string>();
 
   const run: ExecuteFn = async ({
     attempt,
@@ -822,7 +933,40 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       return { summary: llm.notice, filesChanged: [], error: true, failureReason: llm.notice };
     }
 
+    // IDENTITY-9..12: the role this run acts with, re-resolved for every
+    // attempt (null = no role session, the local CLI). Resolved before the
+    // read-tier return so a missing-capability reply can name a role gap.
+    const actingRole = await resolveActingRole(env);
+    const actingIsAdmin = actingRole === null || actingRole === "owner";
+    const citePrs = opts.citeOpenPrs !== false;
+    const lookup: CoverageLookup =
+      opts.coverageLookup ??
+      ((needles) => defaultCoverageLookup(needles, { citePrs, roots: [corvidinhoHiRoot()] }));
+    let fledgeProbe: FledgeProbe | undefined;
+    const probe = async (): Promise<FledgeProbe> => {
+      if (fledgeProbe) return fledgeProbe;
+      fledgeProbe = await (opts.discoverFledge ?? defaultFledgeProbe)(cwd, env);
+      return fledgeProbe;
+    };
+    const factsFor = (offered: ReadonlySet<string>) =>
+      capabilityFacts({
+        offered,
+        allowlist,
+        env,
+        role: actingRole,
+        tier,
+        cwd,
+        ...(fledgeProbe ? { fledge: fledgeProbe } : {}),
+      });
+
     if (tier === "read" || maxToolRounds <= 0) {
+      const landed = await missingCapabilityReply({
+        taskText,
+        facts: factsFor(new Set()),
+        lookup,
+        probe,
+      });
+      if (landed) return { summary: landed, filesChanged: [] };
       return singleChatCompletion({
         models,
         fetchImpl,
@@ -839,18 +983,19 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       });
     }
 
-    // IDENTITY-9..12: the role this run acts with, re-resolved for every
-    // attempt (null = no role session, the local CLI). Only the owner (or no
-    // role session) is ADMIN for Fledge discovery.
-    const actingRole = await resolveActingRole(env);
-    const actingIsAdmin = actingRole === null || actingRole === "owner";
+    // Only the owner (or no role session) is ADMIN for Fledge discovery.
     if (
       opts.loadPlugins !== false &&
       (includeDangerous ||
         // DISCORD-SCHEDULE-1.a: a scheduled run, even the owner's own, never
         // gets a discovered Fledge plugin command (it runs arbitrary project
-        // code, like the runners SAFE-3.a keeps from schedules).
-        (actingIsAdmin && !isScheduleRunEnv(env) && allowsFledge(allowlist)))
+        // code, like the runners SAFE-3.a keeps from schedules). Nor does a
+        // WATCH run, even one the owner triggered (IDENTITY-12.a, SAFE-3.a).
+        (actingIsAdmin &&
+          !isScheduleRunEnv(env) &&
+          !isWatchRunEnv(env) &&
+          !(env.CORVIDINHO_WATCH_SESSION_ID ?? "").trim() &&
+          allowsFledge(allowlist)))
     ) {
       // FLEDGE-4: Fledge commands are all dangerous (so mutating), so only
       // discover them when this run's catalog may offer one: the allowlist
@@ -873,8 +1018,14 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
     }
     const autonomous =
       opts.autonomous ?? autonomousSessionAllowed({ cwd, env });
+    // AGENT-18 hi drafts (REQ-agent-521): in a repo that uses hi, the owner's
+    // and the team's own interactive runs and a local CLI run get hi-draft;
+    // the gate re-reads the role and markers for every attempt (and the
+    // call re-checks them). Community, WATCH, schedules and workers never.
+    const hiGate = repoWays?.hi ? await hiDraftGate({ env, cwd, ways: repoWays }) : null;
+    const hiDraft: HiDraftMode | undefined = hiGate?.offered ? hiGate.mode : undefined;
     // AUTONOMY-1: ask-human rides along with the plugin catalog.
-    const tools = withAskTool(
+    const tools = withHiDraftTool(withAskTool(
       buildOpenAiTools({
         tier,
         includeDangerous,
@@ -884,12 +1035,31 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
         allowlist,
         safe3a,
         actingRole,
-        workTask: actingWorkTask(env),
+        // AGENT-1.a: team work tools only in a git work tree.
+        workTask: actingWorkTask(env, cwd),
         autonomous,
       }),
-    );
+    ), hiDraft);
+    const offered = new Set(tools.map((t) => t.function.name));
+    const landed = await missingCapabilityReply({
+      taskText,
+      facts: factsFor(offered),
+      lookup,
+      probe,
+    });
+    if (landed) return { summary: landed, filesChanged: [] };
+    const askDetected = detectCapabilityAsk(taskText);
+    const capabilityNote =
+      askDetected === null
+        ? ""
+        : capabilityPromptNote(
+            assessCapability(askDetected, factsFor(offered)) ?? { ask: askDetected, offered: [], gaps: [] },
+            tier,
+          );
     return runToolLoop({
       llm,
+      capabilityFacts: factsFor(offered),
+      capabilityNote,
       models,
       fetchImpl,
       taskText,
@@ -908,6 +1078,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       personaBlock,
       specBriefing,
       repoWays,
+      ...(hiDraft ? { hiDraft } : {}),
       roleEnv: env,
       onRoleRefusal: () => {
         roleRefused = true;
@@ -926,6 +1097,9 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
           result.reviewHold === "refused" ? oneLineNote(result.error ?? "") || null : null;
       },
       onStateChange: recordAuthors,
+      onReplyAttribution: (line) => {
+        attributions.add(line);
+      },
       repeatGuard,
       stallGuard,
       workspaceChanged,
@@ -943,20 +1117,42 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   // keeps it).
   // AGENT-11: once a model failed over in this run, every summary after it
   // carries the failover note (before the role note, which stays last).
+  // AGENT-17: once the run moved to a stronger model, every summary after it
+  // carries that note, right after the failover note.
   // GITHUB-9.a: when the run's last github-pr-create was refused at the
   // second-model review gate, the summary ends with that line (before the
   // role note), so the reply says why there is no PR.
-  return async (ctx) => {
+  // REQ-agent-318: once a tool whose provider asks for attribution succeeded
+  // in this run (a Brave `web-search`), every summary after it ends with that
+  // line, once, after the failover note and before the role note. Any such
+  // line the model's own answer ends with is dropped first, on every run
+  // (searched or not), so a reply only ever shows the line its run earned.
+  const execute: ExecuteFn = async (ctx) => {
     let result = spend.finish(await run(ctx));
+    result = { ...result, summary: withoutReplyAttribution(result.summary) };
     if (injection) result = { ...result, summary: withInjectionNote(result.summary, injection) };
     if (fallbacks.length > 0) {
       result = { ...result, summary: withModelFallbackNote(result.summary, fallbacks) };
     }
+    if (movedTo) result = { ...result, summary: withStrongerModelNote(result.summary, movedTo) };
     if (reviewRefusal) result = { ...result, summary: withReviewRefusalNote(result.summary, reviewRefusal) };
+    if (attributions.size > 0) {
+      result = { ...result, summary: withReplyAttribution(result.summary, attributions) };
+    }
     return roleRefused
       ? { ...result, summary: withRoleRefusalNote(result.summary) }
       : result;
   };
+  // GITHUB-9 (REQ-agent-092): a /work run's review hook (src/work/review.ts)
+  // reviews through this run's models, call path and spend guard; a review
+  // call stopped at a spend cap leaves its ask here (SAFE-8).
+  return Object.assign(execute, {
+    review,
+    takeSpendAsk: () => {
+      const stopped = spend.finish({ summary: "", filesChanged: [] });
+      return stopped.ask ? { summary: stopped.summary, ask: stopped.ask } : null;
+    },
+  });
 }
 
 /**
@@ -967,6 +1163,11 @@ type ModelCalls = {
   chain: ModelChain;
   /** This run's own chain moved to its next configured model. */
   onFallback: (hop: ModelFallback) => void;
+  /**
+   * AGENT-17 / AGENT-17.a: after the nudge, move the chain to the next
+   * stronger model in the order I set (`moveToStronger`), or say why it stays.
+   */
+  escalate: (kind: StallKind) => StrongerModel;
   /** The configured model a reply came from. */
   onModel?: (model: string) => void;
   /** Failovers a delegate or council worker reported in its tool data. */
@@ -997,6 +1198,8 @@ type LoopArgs = {
   specBriefing?: string;
   /** AGENT-18: the repo's ways (fixed prompt block, REQ-agent-518). */
   repoWays?: RepoWays;
+  /** AGENT-18 hi drafts: this run is offered `hi-draft`, and how it ends (REQ-agent-521). */
+  hiDraft?: HiDraftMode;
   /** Env the role session and ADMIN bit are read from (ROLES-CHAT-3/6). */
   roleEnv: NodeJS.ProcessEnv;
   /** Called for each tool call refused for the caller's role (ROLES-CHAT-3). */
@@ -1013,6 +1216,11 @@ type LoopArgs = {
   onPrCreate?: (result: PluginHandlerResult) => void;
   /** GITHUB-9.a: a tool call may have changed the checkout (record the run's authors for it). */
   onStateChange?: () => Promise<void>;
+  /**
+   * REQ-agent-318: an offered tool whose provider's terms ask for a visible
+   * attribution line (`REPLY_ATTRIBUTION_BY_TOOL`) succeeded; `line` is that line.
+   */
+  onReplyAttribution?: (line: string) => void;
   /** A worker `delegate` starts may change files no result reports (REQ-agent-502). */
   workerEditsUnreported?: boolean;
   /** AGENT-16: the run's repeat-failure guard (src/agent/loop-guards.ts). */
@@ -1021,6 +1229,10 @@ type LoopArgs = {
   stallGuard?: StallNudgeGuard;
   /** AGENT-17: the verify gate's real git diff since the baseline; absent with no git tree. */
   workspaceChanged?: () => Promise<string[] | null>;
+  /** Missing-capability facts for this attempt (REQ-agent-742). */
+  capabilityFacts?: CapabilityFacts;
+  /** Extra system sentence when a named capability is only partly available. */
+  capabilityNote?: string;
 };
 
 async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
@@ -1044,6 +1256,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     personaBlock,
     specBriefing,
     repoWays,
+    hiDraft,
     roleEnv,
     onRoleRefusal,
     injectionTripped,
@@ -1052,10 +1265,12 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     review,
     onPrCreate,
     onStateChange,
+    onReplyAttribution,
     workerEditsUnreported = false,
     repeatGuard = createRepeatFailureGuard(),
     stallGuard = createStallNudgeGuard(),
     workspaceChanged,
+    capabilityFacts: capFacts,
   } = args;
   // AGENT-16: a new conversation — no steer has reached the model in it yet.
   repeatGuard.newConversation();
@@ -1087,8 +1302,10 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         ? DISCORD_ATTACH_AGENT_SYSTEM_INSTRUCTIONS
         : "") +
       ASK_AGENT_SYSTEM_INSTRUCTIONS +
+      MISSING_CAPABILITY_INSTRUCTIONS +
+      (args.capabilityNote ?? "") +
       // AGENT-18: the fixed block for this repo's own ways ("" when none).
-      renderRepoWaysBlock(repoWays) +
+      renderRepoWaysBlock(repoWays, { hiDraft: Boolean(hiDraft) }) +
       "When finished, reply with one concise plain-text message (no tool call) saying what you did, in the persona's voice — never a flat changelog (PERSONA-1). " +
       "Do not claim files were edited unless a tool result reported filesChanged.",
       personaBlock,
@@ -1189,6 +1406,9 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     const msg = completion.message;
     messages.push(msg);
 
+    // AGENT-17: the text that stood before this reply (it stands again when
+    // this reply stalls and a stronger model takes the run over).
+    const textBefore = lastText;
     const content = (msg.content ?? "").trim();
     if (content) {
       lastText = content;
@@ -1251,8 +1471,12 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       // claim, when this round offered a state-changing tool, SAFE-13 has not
       // tripped and nothing changed (the real git diff, or tool-reported
       // changes with no git tree): the run's first such reply gets one nudge
-      // to the same model (it never uses up a tool round); after that the
-      // reply stands, with an operator note.
+      // to the same model (it never uses up a tool round). AGENT-17.a: a
+      // stall after the nudge moves the rest of the run to the next stronger
+      // model in the order I set — this stalled reply is dropped and the
+      // same request goes to that model (no second nudge, no tool round
+      // used) — once per run; with no order, at the top of it, or with no
+      // stronger model available, the reply stands with an operator note.
       const stalled = stallKind(lastText, taskText);
       if (
         stalled &&
@@ -1266,13 +1490,33 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         })) &&
         !signal.aborted
       ) {
-        if (stallGuard.next() === "nudge") {
+        const step = stallGuard.next();
+        if (step === "nudge") {
           emit(onEvent, { type: "Text", text: stallNudgedNote(stalled) });
           messages.push({ role: "user", content: stallNudge(stalled, offered.has(ASK_TOOL_NAME)) });
           roundLimit += 1;
           continue;
         }
-        emit(onEvent, { type: "Text", text: stallStandsNote(stalled) });
+        const move = step === "escalate" ? models.escalate(stalled) : null;
+        if (move?.ok) {
+          stallGuard.moved();
+          emit(onEvent, { type: "Text", text: stallMovedNote(stalled, move.from, move.to) });
+          if (messages.at(-1) === msg) messages.pop();
+          lastText = textBefore;
+          roundLimit += 1;
+          continue;
+        }
+        emit(onEvent, { type: "Text", text: stallStandsNote(stalled, move ? move.why : "moved") });
+      }
+      if (capFacts && lastText) {
+        const vague = vagueInstallOutcome(lastText, taskText, capFacts);
+        if (vague) {
+          return {
+            summary: vague.text,
+            filesChanged: [...filesChanged],
+            ...unreportedEdits(unreportedEditTools),
+          };
+        }
       }
       return {
         summary:
@@ -1313,6 +1557,25 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
           ? askFromToolArguments(rawArgs)
           : null;
       if (asked?.ok) {
+        const vague = capFacts ? vagueInstallOutcome(asked.ask.question, taskText, capFacts) : null;
+        if (vague?.kind === "replace") {
+          emit(onEvent, {
+            type: "ToolResult",
+            name,
+            success: false,
+            detail: "vague install question replaced with the concrete gap",
+          });
+          return { summary: vague.text, filesChanged: [...filesChanged] };
+        }
+        if (vague?.kind === "steer") {
+          emit(onEvent, { type: "ToolResult", name, success: false, detail: vague.text });
+          messages.push({
+            role: "tool",
+            tool_call_id: tc.id || name,
+            content: vague.text,
+          });
+          continue;
+        }
         emit(onEvent, {
           type: "ToolResult",
           name,
@@ -1320,6 +1583,27 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
           detail: ASK_TOOL_RESULT_DETAIL,
         });
         return askExecuteResult(asked.ask, filesChanged);
+      }
+
+      // AGENT-18 hi drafts (REQ-agent-521): hi-draft validates the drafts and
+      // (in a Discord run) records the capture request for the owner's card,
+      // then ends the run blocked with its ask; nothing is captured here. A
+      // refusal goes back to the model. SAFE-13: never after a tool result
+      // looked like an injection.
+      const drafted =
+        name === HI_DRAFT_TOOL && offered.has(name)
+          ? injectionTripped()
+            ? { ok: false as const, refusal: { ok: false, error: injectionToolRefusal(name), exitCode: 2 } }
+            : await handleHiDraftCall({ rawArgs, cwd, env: roleEnv, ...(repoWays ? { ways: repoWays } : {}) })
+          : null;
+      if (drafted?.ok) {
+        emit(onEvent, {
+          type: "ToolResult",
+          name,
+          success: true,
+          detail: HI_DRAFT_TOOL_RESULT_DETAIL,
+        });
+        return askExecuteResult(drafted.ask, filesChanged);
       }
 
       // AGENT-16: this exact call kept failing with nothing changed and the
@@ -1348,6 +1632,8 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       try {
         result = asked
           ? asked.refusal
+          : drafted
+          ? drafted.refusal
           : offered.has(name) && name === PR_CREATE_TOOL && prHeldThisBatch
           ? PR_HELD_SAME_BATCH
           : offered.has(name) && injectionTripped() && blockedAfterInjection(name)
@@ -1365,11 +1651,13 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
               signal,
               ...(review ? { review } : {}),
             })
-          : invented && isMutatingPlugin(invented) && (await refusedForRole(roleEnv, invented))
+          : invented && isMutatingPlugin(invented) && (await refusedForRole(roleEnv, invented, cwd))
           ? roleRefusal(name)
           : {
               ok: false,
-              error: `refused: tool "${name}" is not offered in this run's catalog (SAFE-1 / capability tier)`,
+              error: capFacts
+                ? unseenToolDetail(name, capFacts)
+                : `refused: tool "${name}" is not offered in this run's catalog (SAFE-1 / capability tier)`,
               exitCode: 2,
             };
       } catch (err) {
@@ -1423,6 +1711,22 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       ) {
         await onStateChange();
       }
+      // SAFE-8 (REQ-agent-098): a flat-priced tool call (`web-search`, or
+      // `gif-search` recorded at $0)
+      // stopped at the daily spend cap before it was sent ends the attempt
+      // with the same `spend-cap` ask a model call stopped at the cap gets:
+      // the run is blocked and the owner is asked. The ask (amounts, cap
+      // settings) never reaches the model, a tool message or the summary
+      // (SAFE-14.a).
+      if (offered.has(name) && result.spendAsk?.reason === "spend-cap") {
+        emit(onEvent, { type: "ToolResult", name: eventName, success: false, detail: SPEND_CAP_SUMMARY });
+        return {
+          summary: SPEND_CAP_SUMMARY,
+          filesChanged: [...filesChanged],
+          ask: { reason: "spend-cap", question: result.spendAsk.question },
+          ...unreportedEdits(unreportedEditTools),
+        };
+      }
       // MEMORY-7.a (REQ-agent-710): private text goes to the run result for
       // the bridge to send privately — never into the tool message, the
       // ToolResult event or the model's context (stringifyToolPayload
@@ -1430,6 +1734,12 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       if (offered.has(name) && result.ok && typeof result.privateText === "string" && result.privateText.trim()) {
         onPrivateReply(result.privateText);
       }
+      // REQ-agent-318: a successful call of a tool whose provider asks for a
+      // visible attribution (a Brave `web-search` that answered) puts that
+      // line on the run's reply. The line never enters the tool message or
+      // anything else the model reads.
+      const attribution = offered.has(name) && result.ok ? REPLY_ATTRIBUTION_BY_TOOL.get(name) : undefined;
+      if (attribution) onReplyAttribution?.(attribution);
 
       toolNamesUsed.push(name);
       for (const f of filesChangedFromToolData(result.data)) {
@@ -1549,7 +1859,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
  * The tool message for `result` (SAFE-12 / SAFE-13). A result of a tool that
  * carries third-party text (issue / PR bodies and titles, repo docs, guild
  * member names) is fenced as untrusted data; `web-fetch` fences its page
- * already. A result the detector scans that looks like an injection is
+ * and `web-search` / `gif-search` their results already. A result the detector scans that looks like an injection is
  * reported once (`onInjection`) and gets the SAFE-13 note in front. A
  * `delegate` / `council` result whose worker reported a hit of its own
  * (`data.injection`, finished or not) counts as this run's hit: the note,
@@ -1629,6 +1939,7 @@ async function singleChatCompletion(opts: {
         withPersona(
           "You are Corvidinho on the read tier (no tools). " +
           "Reply with one short plain-text message only, in the persona's voice — never a flat changelog (PERSONA-1). " +
+          MISSING_CAPABILITY_INSTRUCTIONS +
           PERSONA_RULES_SYSTEM_INSTRUCTIONS +
             UNTRUSTED_CONTENT_AGENT_SYSTEM_INSTRUCTIONS.trimEnd(),
           opts.personaBlock,

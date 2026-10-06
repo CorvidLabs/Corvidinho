@@ -663,7 +663,9 @@ loopback, private (RFC 1918), CGNAT (100.64.0.0/10), link-local
 (169.254.0.0/16 including 169.254.169.254, fe80::/10), unique-local
 (fc00::/7), multicast, unspecified, 0.0.0.0/8, reserved/documentation space
 and IPv4-mapped, IPv4-compatible and NAT64 forms of those; one non-public
-answer SHALL refuse the name. The connection SHALL dial only checked IPs, in
+answer SHALL refuse the name. The connection SHALL dial only checked IPs (the pin and dial
+helpers `pinTargets` / `dialPinned` are shared with the keyed JSON GET,
+REQ-plugins-3181, without changing `web-fetch`), in
 answer order, moving to the next checked address only after a socket-level
 connect failure and within the same deadline, while the Host header and TLS
 SNI keep the original name and the certificate is verified against it, so DNS
@@ -685,7 +687,7 @@ handler SHALL pass the run's env (`deps.env`, default `process.env`) to
 `webFetch`.
 
 Acceptance Criteria
-- `plugins list` shows `web-fetch` with dangerous=true, minTier=1; the default tool catalog leaves it out, it is offered at tool/code tier only when dangerous tools are included and never at read tier; a non-interactive run that has not allowlisted it is denied (SAFE-1); no `web-search` command exists.
+- `plugins list` shows `web-fetch` with dangerous=true, minTier=1; the default tool catalog leaves it out, it is offered at tool/code tier only when dangerous tools are included and never at read tier; a non-interactive run that has not allowlisted it is denied (SAFE-1); `web-search` is a separate command (REQ-plugins-318) and web-fetch's own behaviour is unchanged.
 - Each blocked range, as an IP literal, a DNS answer or a redirect target, is refused with exit 2 before the transport is called.
 - A URL or redirect Location carrying a vendor-key-shaped value is refused with exit 2 before DNS and before the transport is called.
 - A name that resolves public then private (rebinding) is dialed only at the checked public IP; the private answer on a later hop is refused.
@@ -824,7 +826,8 @@ Running `fledge-<command>` SHALL execute
 `fledge --non-interactive plugins run <command> -- <argv...>` as an argv array
 (no shell interpolation) with cwd pinned to the bound project root, stdin
 closed, and a child env that drops `CORVIDINHO_*`,
-`DISCORD_*`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` and `OPENROUTER_API_KEY`,
+`DISCORD_*`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`,
+`BRAVE_SEARCH_API_KEY` (PLUGIN-7) and `GIPHY_API_KEY` (PLUGIN-8),
 keeps the rest (including GitHub tokens for GitHub-backed Fledge plugins), and
 sets `FLEDGE_NON_INTERACTIVE=1` and `CORVIDINHO_PROJECT_ROOT`. The `--` SHALL
 end fledge's own options so model-supplied argv such as `--help`, `--json`
@@ -845,7 +848,7 @@ audit rows SHALL be recorded as for any dangerous plugin.
 Acceptance Criteria
 - Non-interactive without allowlist → exit 2 with SAFE-1; allowlisted → argv is `plugins run hello -- <argv...>` and the fake plugin sees each argv item verbatim (spaces, `$(…)`, `;` not interpreted), cwd = project root.
 - `--help`, `--json`, `--ni` and a literal `--` as argv reach the plugin in order, and fledge's own help is never printed.
-- The child env lacks Discord / Corvidinho LLM / audit keys, keeps `GITHUB_TOKEN`, and has `FLEDGE_NON_INTERACTIVE=1`.
+- The child env lacks Discord / Corvidinho LLM / audit keys, `BRAVE_SEARCH_API_KEY` and `GIPHY_API_KEY` (`tests/gif.search.test.ts`), keeps `GITHUB_TOKEN`, and has `FLEDGE_NON_INTERACTIVE=1`.
 - Exit 7 → ok=false exitCode 7; sleep past a 200 ms timeout → exitCode 124; missing binary → 127.
 - A timeout kills a same-group and a `setsid` grandchild, and a background grandchild left after the plugin exited; an abort returns exit 130 with `aborted` and kills the tree.
 - A `ghp_…` token in plugin output is redacted and output past the cap is truncated with a marker.
@@ -1232,17 +1235,15 @@ the acting Discord user id, matched in the owner's people list re-read now
 (`loadDeclaredPeople` + `resolvePerson`, stable ids only), is a person whose
 role is team, not muted (`DISCORD_MUTED_USER_IDS`) and not on
 `[discord].deny_users`; else `community` — undeclared, declared community or
-without a role, WATCH / schedules other people create / workers (community
-stamp or no actor), and any read failure. A stamp never raises the role. In a
-scheduled run (`isScheduleRunEnv`: `CORVIDINHO_DISCORD_SESSION_ID` starts
-with `schedule_`) `resolveActingRole` SHALL return `owner` only through the
-ADMIN re-check above (the scheduler stamps the ADMIN bit only for the live
-owner's own schedule, DISCORD-SCHEDULE-1.a) and otherwise `community`, never
-`team`, whatever `CORVIDINHO_ACTING_ROLE` says, so schedules other people
-create stay read-only. `roleAllowsPlugin(role, cmd,
+without a role, schedules / workers (community stamp or no actor), WATCH runs
+no declared owner or team member triggered, and any read failure. A stamp never raises the role. `roleAllowsPlugin(role, cmd,
 workTask)` SHALL be the one rule: read plugins for every role; mutating
 plugins (`isMutatingPlugin`) for the owner and `null`; for team only
-`TEAM_REVIEW_TOOLS` (`github-issue-comment`, `github-pr-review`) plus, when
+`TEAM_REVIEW_TOOLS` (`github-issue-comment`, `github-pr-review`) and
+`TEAM_SEARCH_TOOLS` (`web-search` and `gif-search`, PLUGIN-9: "Web search and
+GIF search are for me and the team only, and stay off until I allow them,
+like web-fetch"; on every team session, still SAFE-1 allowlisted and SAFE-5
+audited; `web-fetch` and `discord-send-file` stay the owner's) plus, when
 `CORVIDINHO_ACTING_WORK_TASK` is truthy (a `/work` run), `TEAM_WORK_TOOLS`
 (`files-write`, `files-edit`); for community none (IDENTITY-10/11).
 `runPlugin` SHALL refuse a mutating plugin the role does not allow with the
@@ -1266,23 +1267,32 @@ allowlisted repo; community reads keep the confirmed-public path
 (ROLES-CHAT-8) and community writes are refused; owner and `null` keep the
 GITHUB-6 allowlist. Secret-path hiding (REQ-plugins-267) keeps treating team
 like community. No new table, column or schema version; the two env keys are
-internal, set only by the Discord spawn client.
+internal, set only by the Discord and WATCH spawn clients.
 In a scheduled run (`isScheduleRunEnv`, REQ-plugins-496)
 `checkRepoGateForActingRole` SHALL first refuse, after the deny lists, a repo
 off the GITHUB-6 allowlist for every role with no visibility lookup
 (DISCORD-SCHEDULE-3.a); the role rules above then apply unchanged to what
 passes.
 
+
+- On GitHub (IDENTITY-12.a, REQ-plugins-1201) a WATCH run (surface stamp
+  `watch`) SHALL resolve owner and team from the GitHub numeric id the WATCH
+  spawn stamps for the person who triggered it, never from a Discord id, with
+  the same rules otherwise: the stamp only lowers the role, and anyone else
+  is community.
+- A WATCH run SHALL never be a `/work` task: `actingWorkTask` is false there
+  whatever `CORVIDINHO_ACTING_WORK_TASK` says, so team never gets the work
+  tools on GitHub.
 Acceptance Criteria
 - A `role = "team"` person with a team stamp resolves team; the same person with a community stamp, no stamp, muted, deny-listed or demoted in the file resolves community at the next call; an owner stamp for a team person resolves team; undeclared, declared-community and no-role people resolve community even with a team stamp; the owner with the bridge bit resolves owner; no role session resolves null; an unreadable allowlist file resolves community.
-- `roleAllowsPlugin` allows every read plugin for every role, every plugin for owner and null, only the review tools (plus the work tools with the work flag) of the mutating plugins for team, none for community.
+- `roleAllowsPlugin` allows every read plugin for every role, every plugin for owner and null, only the review and search tools (plus the work tools with the work flag) of the mutating plugins for team, none for community; `TEAM_SEARCH_TOOLS` is exactly `web-search` and `gif-search`, and the team catalog offers both (allowlisted) while the community catalog offers neither; team still gets neither `web-fetch` nor `discord-send-file`; a community role session's `runPlugin gif-search` gets the role refusal while a team one reaches the handler (`tests/gif.search.test.ts`).
 - As team, `github-issue-comment` and `github-pr-review` run (dry-run) on an allowlisted repo and a non-allowlisted repo gets GITHUB-6; every other mutating plugin gets the role refusal; `files-write` runs only with the work flag and SAFE-2 still refuses `.env`; memory store/recall stay in the actor's scope, forget/override are refused.
 - As team, `github-pr-review --event COMMENT` runs and `APPROVE` / `REQUEST_CHANGES` (any case) get the role refusal naming IDENTITY-10; the owner runs all three events.
 - In a team `/work` run `files-write` refuses `credentials.json`, `id_rsa`, `*.pem` and `.ssh/…`, and `files-edit` on a secret file refuses without saying whether the old string matched, leaving the file unchanged; the owner edits it.
 - Team reads pass on an allowlisted or confirmed-public repo and are refused on a private non-allowlisted one; team writes on a public non-allowlisted repo are refused; community writes are refused; deny lists win.
 - Every existing ROLES-CHAT test passes unchanged; regression tests in `tests/roles.team.test.ts` fail on the base sources and pass after.
 - In a scheduled run a public repo off the allowlist is refused for every role before any visibility lookup, and the role rules still apply to an allowlisted one (`tests/github.schedule-repo-gate.test.ts`).
-- In a scheduled run the owner stamp for the owner resolves `owner`, runs `github-issue-comment` (dry run) and `files-write`, and is offered its allowlisted owner tools but not `shell-exec`; a team member's scheduled run with a community, team or owner stamp resolves `community`, gets the role refusal for `github-issue-comment` and is offered no mutating tool; the same team stamp outside a schedule still resolves `team` (`tests/roles.team.test.ts`, failing on the base sources).
+- In a WATCH env the owner's GitHub id with the owner stamp resolves owner, a team member's with the team stamp team, and a team member's run gets the review tools but not `files-edit` even with a stale work stamp (`tests/watch.github-roles.test.ts`).
 
 ### REQ-plugins-066
 
@@ -1992,6 +2002,26 @@ first. It SHALL open a PR only for a tree with a finished review cycle:
   /work PR step, REQ-discord-088): no round SHALL start; the PR opens only
   when the latest cycle for (repo, head) ended on the exact tree of the
   branch on GitHub.
+- **`/work`** (REQ-agent-092, REQ-cli-092, REQ-discord-088): the run's
+  review hook (`workReviewHook`, `maxRounds` 3) SHALL run the same review
+  step as the gate with a run model (`reviewStep`: the same reviewer,
+  rounds, declined and max-rounds ends and `pr_review_rounds` records) on
+  the tree `/work` will commit — `reviewTree(root, {untracked: true})`
+  stages with `git add --all` into the index copy, so untracked,
+  non-ignored files count (a secret-looking one's content is still never
+  sent) — keyed by the (repo, branch) its PR opens on (`workReviewTarget`:
+  the OWNER/REPO of `origin`'s push URL, the branch checked out, the base
+  from `resolveBase`; no branch, repo or base refuses in one line), with the
+  fixed title `Corvidinho /work task` (the run's task text, which carries
+  identity and memory blocks, is not sent). A round with findings SHALL come
+  back as the next attempt's feedback (`workReviewFeedback`: what to do —
+  change the tree, or leave it to decline — then the findings numbered in an
+  untrusted-data fence, scrubbed, at most `WORK_REVIEW_FEEDBACK_MAX` (3800,
+  under the verify feedback cap) characters, later findings counted). A
+  `ReviewSpendStop` SHALL become the run's spend-cap ask
+  (`takeSpendAsk`), else a refusal; any other error is a refusal.
+  `workTreeReviewed(cwd, repo, branch)` SHALL be true only when the latest
+  cycle for (repo, branch) ended on exactly that tree (fail closed).
 
 Either way the branch on GitHub SHALL be the reviewed tree — read with
 `repos.getBranch` (an `owner:branch` head on that owner's same-named repo;
@@ -2037,6 +2067,8 @@ Acceptance Criteria
 - A review completion with no model failure (a spend-cap stop) makes `runPlugin` reject with `ReviewSpendStop` and records nothing.
 - Without a run model: no finished cycle, a finished cycle for another tree, or an open cycle refuse in one line; a finished cycle for the pushed tree opens with its findings listed. Live mode without a token fails before any review call.
 - `githubBranchTree` returns the head commit's tree, reads an `owner:branch` head on that owner's repo, and is null on a 404. `SCRUB_TARGETS` lists `pr_review_rounds` (`reviewer`; JSON `authors`, `findings`, `changed`) and `pr_change_authors` (`model`).
+- `/work` (temp repo, scripted provider, the real tool loop and verify gate): the untracked new file is in the reviewed diff, the reviewer gets `Title: Corvidinho /work task` and not the task text, the rounds are stored (round 1 open with its finding, round 2 `clean` with `M  src/greet.ts` changed), `workTreeReviewed` is true, and the /work PR opens with the section; a finished review of an earlier tree is not this tree's.
+- `workReviewFeedback` stays within 3800 characters (under the 4000 verify feedback cap) with its fence whole and later findings counted; a spend-cap stop gives the hook's `ask` when the run left one, else a refusal, and records nothing.
 
 ### REQ-plugins-125
 
@@ -2051,4 +2083,534 @@ timeout, abort and process-tree kill are unchanged (REQ-plugins-154).
 Acceptance Criteria
 - Inside a run with a 500 ms idle timeout, a `spawnCapped` child that prints every 0.1 s for 1.5 s exits 0 without the watchdog firing; a child that sleeps 1.2 s silently lets it fire.
 - Fixture: `tests/agent.limits.test.ts`.
+### REQ-plugins-318
+
+The plugin host SHALL provide a typed `web-search` builtin (PLUGIN-7, #318)
+registered from `plugins/web` next to `web-fetch` (`loadWebPlugins`,
+`createWebCommands`) and declared `dangerous: true` and `minTier: 1`
+(PLUGIN-2): being dangerous it SHALL need SAFE-1 consent (left out of the
+default tool catalog, offered and run non-interactively only when
+`CORVIDINHO_ALLOWLIST` names it, never at the read tier) and every run SHALL
+be audited (SAFE-5, through `runPlugin`). It SHALL be for the owner and the
+team only (PLUGIN-9, REQ-plugins-065 `TEAM_SEARCH_TOOLS`), never community,
+WATCH or schedules; `delegate` / `council` workers never get the key
+(REQ-agent-117), so a search there answers not configured. It never posts, so it carries no must-ask entry
+(AUTONOMY-11); a post a search run makes still goes through its own tool's
+gate. Deep research is not built.
+Its handler SHALL, in order: read the key from `BRAVE_SEARCH_API_KEY` in the
+run's env only, trimmed, with no default — unset or blank, or not 8–256
+printable non-space ASCII characters, SHALL be `ok: false`, exit 1,
+`data.code` `not-configured` and an error that starts `web-search
+not-configured: web search is not configured` and names
+`BRAVE_SEARCH_API_KEY` (never a silent empty result, never the value), with
+no DNS, request or spend; parse
+`<query words…> | --query <text> [--count N] [--freshness f] [--json]`,
+where the query (words joined by one space, control and invisible
+characters removed, trimmed) is 1–400 characters and at most 50 words,
+`--count` is a whole number (digits only) from 1 to 20 (default 5) and
+`--freshness` is `pd`, `pw`, `pm` or `py`, and any other `--flag` is
+refused, so a term that starts with `--` goes in `--query` (the usage line
+says so); query words and `--query` together, or `--query`, `--count` or
+`--freshness` given twice, are refused (never a silently dropped part of the
+request) — a usage error is exit 1, `data.code` `usage`, nothing sent; refuse (exit 2, `data.code` `secret`, SAFE-6) a query that
+carries a value `scrubSecrets` would redact or the value of a set secret env
+var (`redactSecretEnvValues`, the key included), also once every format
+character (a joiner) is taken out, before any spend or request; end a run
+that is already stopped (its abort signal set) as `aborted` (exit 1) with no
+reservation and nothing sent; reserve its price against the SAFE-8
+cap (REQ-agent-098 `reserveFlatSpend`, `BRAVE_SEARCH_COST_MICRO_USD` 5000 =
+$0.005, provider `api.search.brave.com`, model `brave-web-search`) — a
+stopped reservation SHALL be `ok: false`, exit 2, `data.code` `spend-cap`,
+the error `web-search spend-cap: refused: Work is paused for budget.
+(SAFE-8)` (no amount, cap or setting name, SAFE-14.a) and the spend-cap ask
+in `PluginHandlerResult.spendAsk`, with nothing sent; then send one
+`GET https://api.search.brave.com/res/v1/web/search` with `q`, `count`,
+`safesearch=moderate` (always, explicitly) and `freshness` when given, and
+the key only as the `X-Subscription-Token` header, through the keyed JSON GET
+(REQ-plugins-3181) with `api.search.brave.com` as the only allowed host and
+the run's abort signal. The reservation SHALL settle as the call's cost on a
+2xx, to 0 on an HTTP error reply or a refusal before connecting, and stay at
+the estimate on any other failure.
+A 401 / 403, or a 422 whose `error.code` is `SUBSCRIPTION_TOKEN_INVALID`,
+SHALL be `auth` (naming `BRAVE_SEARCH_API_KEY`); another 422 `bad-request`;
+429 `rate-limited`; any other status `http-status` with the numeric status
+only — the server's text is never shown. Any other failure SHALL be the
+fixed line `web-search unexpected: the search failed unexpectedly` (exit 1),
+never the error's own text. Refusals (`secret`, `spend-cap`,
+`scheme`, `host`, `blocked`, `redirect`) SHALL exit 2 and other failures
+exit 1, each with `data.code` and one line of at most 300 characters: controls and
+invisible characters normalised first, then scrubbed, then capped.
+On success the hits SHALL be Brave's `web.results[]` entries, at most
+`count`: title and description (and `age` when given) reduced from HTML to
+one line of plain text (entities decoded, tags, control and invisible
+characters (zero-width, bidi, soft hyphen, tag characters) removed; capped at 200 / 500 / 64 characters) and the URL kept only when it
+parses as an http(s) URL without credentials of at most 2048 characters
+(else the hit is dropped). Every title, URL, description and age SHALL reach
+the model only inside the untrusted web fence (`fenceUntrusted`, source
+`brave-search`, a per-call random marker id): the fenced body lists the hits
+numbered (title, `URL:` line, description, `Age:` line) or `(no results)`.
+`data` SHALL be `{ provider: "brave", attribution: "Powered by Brave
+Search", safesearch: "moderate", count, freshness?, results, untrusted:
+true, content }`, and the summary `web-search: <n> result(s) from Brave
+Search (safesearch moderate[, freshness f]). Powered by Brave Search.`
+(`--json` / json mode: the summary alone; otherwise followed by the fenced
+content). The SAFE-13 detector SHALL scan the result (REQ-agent-071). No
+output, error, data field or audit row SHALL carry the key, the request URL,
+a request header or the pinned address: every returned string SHALL pass
+`scrubSecrets` and `redactSecretEnvValues` (the key is a SAFE-6 secret env
+name, REQ-discord-417) as its last step, after the fence and any control or
+invisible-character strip, so a key split by such a character is never
+rebuilt. The Brave attribution is in the tool result only (`data` and the
+summary the model reads); no reply footer adds it. No table, column or schema version; one new env var,
+`BRAVE_SEARCH_API_KEY` (documented in `.env.example` and
+`docs/DISCORD-GO-LIVE.md` E.3.a).
+
+Acceptance Criteria
+- `plugins list` shows `web-search` with dangerous=true, minTier=1 next to `web-fetch`; the catalog offers it at tool/code tier only when the allowlist names it, never at read tier; a non-interactive run without the allowlist entry is denied (SAFE-1) with a `denied` audit row, and an allowlisted run records `started` then its outcome (SAFE-5).
+- The owner, no role session and team (chat and `/work`) are offered it when allowlisted; community never is; a community role session's `runPlugin web-search` gets the role refusal while a team one reaches the handler.
+- With a fake key, one request goes to the pinned address of `api.search.brave.com` at `/res/v1/web/search` with `q`, `count=5`, `safesearch=moderate` and the key only in `X-Subscription-Token`; `--count 20 --freshness pw` and `--query` are passed.
+- A count of 0, 21, 5.5, `abc`, `-3` or `1e1`, a missing count value, an unknown freshness or flag, query words together with `--query` (either order), `--query`, `--count` or `--freshness` given twice (`--query "cute cat" --query dog` is `--query given twice`, never `dog` alone), a `--verbose` term outside `--query`, a missing, blank, 401-character or 51-word query are usage errors (exit 1) with no DNS or request; the usage line says a term that starts with `--` needs `--query`, and `--query "what does --verbose do"` is taken whole.
+- No key, a blank key and a malformed key give the `not-configured` error, starting `web-search not-configured: web search is not configured` and naming `BRAVE_SEARCH_API_KEY`, no DNS and no request, never an empty success; the malformed value is not echoed.
+- A query carrying a `ghp_…` token, a set secret env value or the key is refused with exit 2 before DNS, request or spend, and the value is not echoed.
+- Hostile titles and descriptions (an injection line, a guessed end marker, control characters, HTML) appear only inside the fence, whose end marker is unique and last; HTML, entities and controls are reduced; nothing of a hit appears outside the fence; the summary carries the Brave attribution; at most `count` hits; `javascript:` and credentialed URLs are dropped; no results is an ok `(no results)`.
+- A server echoing the key in results, a 422 body, a 500 body, a non-JSON body, a transport error or a DNS error: nothing returned (json or text mode) contains the key; through `runPlugin` neither the result nor the audit rows contain the key, the request path, the header name or the pinned address.
+- The key split by a zero-width space, a soft hyphen, a bidi isolate, a tag character or BEL in a title, URL, description and age (json and text mode), or in a resolver answer a SAFE-7 refusal names, never comes back whole: the fenced content shows `[redacted:env-secret]`, and `fenceSearchResults` scrubs after the fence; a query carrying the key split by a joiner is refused (`secret`).
+- 401, 403, 422 `SUBSCRIPTION_TOKEN_INVALID`, 422 `VALIDATION`, 429 and 503 map to `auth`, `auth`, `auth`, `bad-request`, `rate-limited` and `http-status` without the server's text; a redirect is exit 2 `redirect` without the Location.
+- The run's abort reaches a pending search: it ends `aborted` and the transport's own signal is aborted; a run already stopped sends nothing (no DNS, no request).
+- An unexpected failure (a resolver answer that throws) is the fixed `web-search unexpected: the search failed unexpectedly` line, with neither the key nor the request path.
+- Regression tests in `tests/web.search.test.ts` fail on the base sources and pass after; the repeated-flag rows (#318 slice B review) fail on slice A's head and pass after.
+
+### REQ-plugins-3181
+
+`plugins/web/api.ts` SHALL provide the one request path for commands that
+call a fixed third-party JSON API with a secret key: `web-search`
+(REQ-plugins-318, its key in a request header) and `gif-search`
+(REQ-plugins-3182, its key in the URL's query, which is why no error or
+result carries the request URL): `apiGetJson({ url, allowedHosts,
+headers?, signal? }, deps?)` with `resolver`, `transport`, `timeoutMs` and
+`maxBytes` seams. Before DNS it SHALL refuse a URL that is not `https`
+(`scheme`), carries credentials (`blocked`), or whose host (lower-cased,
+trailing dot dropped) is not in the calling command's `allowedHosts` or whose
+port is not the default (`host`) — SAFE-7. It SHALL then apply the
+`web-fetch` address guard (REQ-plugins-111), shared from `fetch.ts`
+(`pinTargets`, `dialPinned`, `readCapped`, `mediaType`): resolve once,
+refuse if any answer is not a public address (`blocked`, SAFE-7), and dial
+only the checked IPs, pinned, in answer order, with Host and TLS SNI keeping
+the name. The request SHALL carry `User-Agent`, `Accept: application/json`
+and `Accept-Encoding: identity` plus the caller's headers. Every 3xx reply
+SHALL be refused (`redirect`) and never followed, its `Location` never read
+or echoed. A non-2xx reply SHALL be an `http-status` error carrying the
+numeric status and, best effort, the parsed JSON body for the caller to map a
+provider's fixed error code, never shown. A 2xx body SHALL be JSON
+(`application/json` or a `+json` media type, a valid RFC 6838 token,
+otherwise `content-type`), identity-encoded (otherwise `content-type`), at
+most 1 MiB (`API_MAX_BYTES`; more is `too-large`, never parsed) and valid
+UTF-8 JSON (otherwise `invalid-json`). DNS, connect and body SHALL share one
+15 s deadline (`API_TIMEOUT_MS`, `timeout`) and the caller's signal SHALL
+abort the call (`aborted`). The result SHALL be `{ status, json, bytes }`
+only: no error or result SHALL carry the request URL (its query may hold a
+key), a request header, server text or a transport's or resolver's free
+text — an error names at most the host, a SAFE-7 refused address and a fixed
+reason (an `E…` code, `TLS error` or `connection failed`).
+`API_NOT_SENT_CODES` (`invalid-url`, `scheme`, `host`, `blocked`, `dns`)
+SHALL name the codes raised before anything was sent. `web-fetch` keeps its
+own path and behaviour for any public host (http or https, its fixed
+headers, manual redirects).
+
+Acceptance Criteria
+- `http://`, another host, a look-alike host, port 8443 and URL credentials are refused before DNS or any dial; the allowlisted host in upper case with a trailing dot and port 443 passes.
+- The allowlisted host resolving to loopback, private, link-local / metadata, `::1` or unique-local (alone or next to a public answer) is refused before connecting; a public answer is the only address dialed.
+- 301, 302, 303, 307 and 308 are refused after one dial and one DNS lookup, and the error does not carry the Location.
+- `text/html`, `gzip` encoding, a missing content type, malformed JSON and a body over the byte cap are refused; `application/vnd.api+json` is read; `API_MAX_BYTES` is 1 MiB and `API_TIMEOUT_MS` 15 s; a stalled transport times out and the caller's abort stops the call, and in both cases the transport's own request signal is aborted.
+- A body that fails mid-read is `network`, naming the host and a fixed reason (`ECONNRESET`) only.
+- A connect, TLS or DNS failure names only the host and a fixed reason (`ECONNREFUSED`, `TLS error`, `ENOTFOUND`), never an address, the path or query, or the transport's or resolver's text.
+- `web-fetch` still fetches http and https URLs on any public host with its own fixed headers and no key header.
+- `gif-search` calls it with `api.giphy.com` as its only allowed host and its key in the URL query: a non-public answer and every redirect are refused, its fixed error codes (`too-large` and `network` included) carry no server or transport text, and no result, error or audit row carries the request URL or the key (`tests/gif.search.test.ts`).
+- Tests in `tests/web.search.test.ts` and `tests/gif.search.test.ts`.
+
+### REQ-plugins-3182
+
+The plugin host SHALL provide a typed `gif-search` builtin (PLUGIN-8, #318
+slice B) registered from a new `plugins/gif` (`loadGifPlugins`,
+`createGifCommands`, loaded by `loadBuiltins` after the web plugins) and
+declared `dangerous: true` and `minTier: 1` (PLUGIN-2): being dangerous it
+SHALL need SAFE-1 consent (left out of the default tool catalog, offered and
+run non-interactively only when `CORVIDINHO_ALLOWLIST` names it, never at the
+read tier) and every run SHALL be audited (SAFE-5, through `runPlugin`). It
+SHALL be for the owner and the team only (PLUGIN-9, REQ-plugins-065
+`TEAM_SEARCH_TOOLS`), never community, WATCH or schedules; `delegate` /
+`council` workers never get the key (REQ-agent-117). It never posts, so it
+carries no `mustAsk` entry (AUTONOMY-11); it SHALL NOT download a GIF or hand
+one to `discord-send-file`: a run shares a GIF as a link in its own reply
+(PLUGIN-8, GIPHY's terms against caching or re-hosting), and a
+`discord-post-message` a GIF run makes still goes through that tool's gate.
+Its handler SHALL, in order: read the key from `GIPHY_API_KEY` in the run's
+env only, trimmed, with no default — unset or blank, or not 8–128 letters,
+digits, `_` or `-`, SHALL be `ok: false`, exit 1, `data.code`
+`not-configured` and an error that starts `gif-search not-configured: GIF
+search is not configured` and names `GIPHY_API_KEY` (never a silent empty
+result, never the value), with no DNS, request or spend; parse
+`<query words…> | --query <text> [--limit N] [--json]`, where the query
+(words joined by one space, control and invisible characters removed,
+trimmed) is 1–50 characters (GIPHY's limit), `--limit` is a whole number
+(digits only) from 1 to 10 (default 5), and any other `--flag` — `--rating`
+and `--contentfilter` among them — is refused, so the filter can never be
+changed and a term that starts with `--` goes in `--query`; query words and
+`--query` together, or `--query` / `--limit` given twice, are refused (never
+a silently dropped part of the request) — a usage error is exit 1,
+`data.code` `usage`, nothing sent; refuse (exit 2, `data.code` `secret`, SAFE-6) a query
+that carries a value `scrubSecrets` would redact or the value of a set secret
+env var (`redactSecretEnvValues`, this key included), also once every format
+character is taken out, before any spend or request; end a run that is
+already stopped as `aborted` (exit 1) with no reservation and nothing sent;
+reserve its price against the SAFE-8 cap (REQ-agent-098 `reserveFlatSpend`,
+`GIPHY_SEARCH_COST_MICRO_USD` 0 — GIPHY's API is free-tier, so the row is
+recorded at $0 —, provider `api.giphy.com`, model `giphy-gif-search`) — a
+stopped reservation SHALL be `ok: false`, exit 2, `data.code` `spend-cap`,
+the error `gif-search spend-cap: refused: Work is paused for budget.
+(SAFE-8)` and the spend-cap ask in `PluginHandlerResult.spendAsk`, with
+nothing sent; then send one `GET https://api.giphy.com/v2/search` (GIPHY's
+Tenor-compatible search, whose `contentfilter=medium` GIPHY documents as G
+and PG) whose query string is built from scratch with `q`, `key` (the key),
+`client_key=corvidinho`, `limit`, `media_filter=gif,tinygif` and
+`contentfilter=medium` (always; query text is only ever the `q` value and can
+add or change no parameter), through the keyed JSON GET (REQ-plugins-3181)
+with `api.giphy.com` as the only allowed host, no header beyond the fixed API
+headers, and the run's abort signal. The reservation SHALL settle as `billed`
+on a 2xx, `not-billed` on an HTTP error reply or a refusal before
+connecting, and `unknown` on any other failure (every outcome is $0).
+A 401 / 403 SHALL be `auth` (naming `GIPHY_API_KEY`); 400 / 422
+`bad-request`; 429 `rate-limited`; any other status `http-status` with the
+numeric status only. A 2xx body without a `results` array SHALL be
+`api-error` when it has an `error` field (GIPHY's Tenor-compatible layer
+answers some errors with HTTP 200) and `bad-response` otherwise — GIPHY's
+text is never shown. Any other failure SHALL be the fixed line `gif-search
+unexpected: the GIF search failed unexpectedly` (exit 1), never the error's
+own text. Refusals (`secret`, `spend-cap`, `scheme`, `host`, `blocked`,
+`redirect`) SHALL exit 2 and other failures exit 1, each with `data.code`
+and one line of at most 300 characters: controls and invisible characters
+normalised first, then scrubbed, then capped.
+On success the hits SHALL be GIPHY's `results[]` entries in GIPHY's order, at
+most `limit`: the title reduced from HTML to one line of plain text
+(entities decoded; tags, control and invisible characters removed; capped at
+200 characters; `(untitled)` when empty) and the `media_formats.gif.url` and
+`media_formats.tinygif.url` links, each kept only when it parses as an https
+URL without credentials, on the default port, whose host is exactly one of
+`GIPHY_MEDIA_HOSTS` (`plugins/gif/hosts.ts`: `media.giphy.com`,
+`media0.giphy.com` to `media4.giphy.com`, `i.giphy.com`; no suffix match, no
+trailing dot), whose path holds only letters, digits, `.`, `_`, `~`, `%`, `/`
+and `-` and whose query only letters, digits, `.`, `_`, `~`, `%`, `-`, `=`
+and `&` (so a link the run pastes cannot become Discord markdown such as a
+masked link to another host or a mention), of at most 2048 characters, with
+any fragment dropped. A result with neither link (or that is not an object)
+SHALL be dropped and counted; nothing else is filtered or reordered, and
+GIPHY's page URLs (`url`, `itemurl`) are not returned. Every title and link SHALL reach the model only inside the
+untrusted web fence (`fenceUntrusted`, source `giphy-search`, a per-call
+random marker id): the fenced body lists the results numbered (title, `GIF:`
+and `Small GIF:` lines) or `(no results)`. `data` SHALL be `{ provider:
+"giphy", attribution: "Powered By GIPHY", contentfilter: "medium", limit,
+results, dropped, postAs: "link", untrusted: true, content }` (`dropped`: the
+results left out for their links), and the summary `gif-search: <n> GIF(s)
+from GIPHY (contentfilter medium: rated G and PG).[ <k> result(s) left out:
+no link on a GIPHY media host.] Only when someone asks for a GIF, post one
+as a link in your reply (Discord shows it from GIPHY); never download or
+attach it. Powered By GIPHY.` (the bracketed part only when `dropped` is
+above 0, so a search whose every result was left out never reads like a
+real empty one; `--json` / json mode: the summary alone; otherwise followed
+by the fenced content). The command's description SHALL say to use it only
+when someone asks and to post one as a link (PLUGIN-8, "post it as a link
+when asked"). The SAFE-13 detector SHALL
+scan the result (REQ-agent-071). No output, error, data field or audit row
+SHALL carry the key, the request URL (its query holds the key), the pinned
+address or GIPHY's text outside the fence: every returned string SHALL pass
+`scrubSecrets` and `redactSecretEnvValues` (`GIPHY_API_KEY` is a SAFE-6
+secret env name, REQ-discord-417) as its last step, after the fence and any
+control or invisible-character strip. No table, column or schema version;
+one new env var, `GIPHY_API_KEY` (documented in `.env.example` and
+`docs/DISCORD-GO-LIVE.md` E.3.b, which also carry "Powered By GIPHY").
+
+Acceptance Criteria
+- `plugins list` shows `gif-search` with dangerous=true, minTier=1, no must-ask entry and a description that says `only when someone asks` and `post one as a link`; it is in `NO_STATE_CHANGE_TOOLS`; the catalog offers it at tool/code tier only when the allowlist names it, never at read tier; a non-interactive run without the allowlist entry is denied (SAFE-1) with a `denied` audit row, and an allowlisted run records `started` then its outcome (SAFE-5).
+- The owner, no role session and team (chat and `/work`) are offered it when allowlisted; community never is; team still gets neither `web-fetch` nor `discord-send-file`; a community role session's `runPlugin gif-search` gets the role refusal while a team one reaches the handler.
+- With a fake key, exactly one request goes out, to the pinned address of `api.giphy.com` at `/v2/search`, with exactly `q`, `key`, `client_key=corvidinho`, `limit=5`, `media_filter=gif,tinygif` and `contentfilter=medium`, and only the fixed API headers (no key header); no GIF is downloaded.
+- A query of `cats&contentfilter=off&rating=r` (and similar) is sent as the `q` value only, with one `contentfilter=medium`, one `key` and no `rating` parameter.
+- `--contentfilter off`, `--rating r`, `--media-filter mp4`, `--download`, a limit of 0, 11, 2.5, -1 or a missing one, query words together with `--query`, `--query` or `--limit` given twice (`--query "cute cat" --query dog` is `--query given twice`, never `dog` alone), and a missing, blank or 51-character query are usage errors (exit 1) with no DNS or request; the usage line says the safety filter is fixed at medium.
+- No key, a blank key, a key with a space and a 5-character key give the `not-configured` error, starting `gif-search not-configured: GIF search is not configured` and naming `GIPHY_API_KEY`, with no DNS and no request, never an empty success.
+- A query carrying a `ghp_…` token, a set secret env value (Discord, Brave) or the GIPHY key (also split by a joiner) is refused with exit 2 before DNS, request or spend, and the value is not echoed.
+- Titles and links appear only inside the fence in GIPHY's order (a hostile title, a guessed end marker and control characters included); the end marker is unique and last; HTML and entities are reduced; nothing of a result appears outside the fence; `data` and the summary carry `Powered By GIPHY`, `postAs: "link"`, `dropped: 0` and the guidance to post one only when someone asks, as a link.
+- Links over http, off the GIPHY media hosts (look-alike and suffix hosts, `giphy.com` page URLs, `media5`), with credentials, on port 8443, with a trailing-dot host, over 2048 characters, or with Discord markdown or a mention after the host (`)[click](https://evil.example)` in the path or query, `<@…>`, `<@&…>`, `**`, `|`, `@everyone`) are dropped; a fragment is cut off (`#@everyone` never passes); GIPHY's own `/media/v1.…/giphy.gif?cid=…&rid=giphy.gif&ct=g` links pass whole; a result with only a valid `tinygif` keeps only its `Small GIF:` line; a result with no valid link is dropped and counted in `data.dropped` and the summary; the rest keep GIPHY's order up to `--limit`.
+- Results that all fail the link check are an ok `(no results)` with `results: 0`, `dropped: k` and the summary line `k result(s) left out: no link on a GIPHY media host.`; a real empty search has `dropped: 0` and no such line.
+- No results is an ok `(no results)`; a 2xx `{ error: … }` body is `api-error` and a 2xx body without `results` is `bad-response`, neither showing GIPHY's text.
+- A server echoing the key or the request URL in titles, links, a 401 body, a 500 body, a 2xx error body, a non-JSON body, a redirect Location, a transport error or a DNS error: nothing returned (json or text mode) contains the key or the request's query string, and no error carries the path, `key=` or the Location; GIPHY's own echo inside the fence shows `key=[redacted:env-secret]`.
+- The key split by a zero-width space, a soft hyphen, a bidi isolate, a tag character or BEL in a title or link (json and text mode), in a resolver answer a SAFE-7 refusal names, or straight into `fenceGifResults`, never comes back whole.
+- Through `runPlugin` neither the result nor the audit rows contain the key, the request path, `key=`, the API host or the pinned address.
+- A non-public answer for `api.giphy.com` is refused (exit 2 `blocked`) before connecting; a redirect is refused (exit 2 `redirect`) after one dial without following it or echoing its Location.
+- 401, 403, 400, 422, 429 and 503, a `text/html` body, malformed JSON, a body over the byte cap and a failed connection map to `auth`, `auth`, `bad-request`, `bad-request`, `rate-limited`, `http-status`, `content-type`, `invalid-json`, `too-large` and `network` without the server's or the transport's text (a failed connection is `gif-search network: api.giphy.com: request failed (connection failed)`).
+- With `CORVIDINHO_DAILY_SPEND_CAP_USD` set to something that is not a number, the search is stopped with the `spend-cap` ask (exit 2, "Work is paused for budget."), with no DNS, request or ledger row and without echoing the value.
+- The run's abort reaches a pending search (`aborted`, the transport's signal aborted), a stalled one times out, and a run already stopped sends nothing; an unexpected failure is the fixed `gif-search unexpected: the GIF search failed unexpectedly` line.
+- Tests in `tests/gif.search.test.ts` (a new module on the base sources) fail on the base sources and pass after.
+
+### REQ-plugins-110
+
+In a project folder that isn't a git repo, its file tools can't change the
+root AGENTS.md or CLAUDE.md; the owner edits those (AGENT-1.b, captured in
+this change's PR from Leif's 2026-09-30 decision, round 13 of the 2026-09-28
+record). There the AGENT-1 loader reads those files from disk into every
+run's prompt (REQ-agent-084), so a file tool that could change them could
+plant instructions for later runs.
+
+- When `isGitRepo(cwd)` is false, `files-write`, `files-edit` and
+  `files-delete` SHALL refuse (exit 2, `refused (AGENT-1.b): …`, nothing
+  written) a path that, where the write would land (`resolveProjectPath`),
+  is equal to or under `<realRoot(cwd)>/AGENTS.md` or `/CLAUDE.md`
+  (`PROJECT_INSTRUCTION_FILES`), or equal to or under the file a symlink of
+  that name leads to, or a regular file that shares the inode of one of them
+  (a hard link); `isNonGitRootInstructionPath` in
+  `plugins/files/protectedPaths.ts`, checked in `refuseProtected` after the
+  SAFE-2 and SpecSync-record rules.
+- It SHALL apply to every caller (the owner's runs, the local CLI, `plugins
+  run`), with no override. Creating a missing root file is a change too.
+- A nested `AGENTS.md` (not at the root), other files, reads, and a git
+  project's root copy (where only the committed copy is loaded) SHALL be
+  unchanged.
+
+Acceptance Criteria
+- `tests/plugins.nongit-project-dir.test.ts`: in a non-git folder, `files-write` of `AGENTS.md`, `./CLAUDE.md`, the absolute root path and `AGENTS.md/inner.md`, and `files-edit` / `files-delete` of both, are refused with `refused (AGENT-1.b)` for the local CLI and the owner, and the files stay as they were.
+- Same file: a missing `CLAUDE.md` is not created; with `CLAUDE.md` a symlink to `docs/rules.md`, writing `docs/rules.md` is refused; writing a hard link to `AGENTS.md` is refused; `notes.txt`, `src/app.ts`, `sub/AGENTS.md` and `docs/other.md` are written.
+- Same file: in a git project `files-write AGENTS.md` still works.
+- With the base sources the refusals fail; the git-project case passes on both.
+
+### REQ-plugins-115
+
+Other people's runs only read in a project folder that isn't a git repo
+(AGENT-1.a, captured in `hi/agent.md` from Leif's 2026-09-28 interview).
+`actingWorkTask(env, cwd)` SHALL be true only when the run carries the
+`/work` stamp (`CORVIDINHO_ACTING_WORK_TASK`) and `isGitRepo(cwd)`; `cwd`
+is required. `runPlugin` SHALL pass the call's cwd (`opts.cwd`, else the
+process cwd), and the agent's catalog and invented-call refusal SHALL pass the
+run's cwd (REQ-agent-110), so in a non-git folder a team member's `/work`
+run gets the role refusal (`not allowed for your role`, exit 2) for
+`files-write`, `files-edit` and the SpecSync change tools, while reads and
+review tools are unchanged and in a git worktree the work tools are kept
+(IDENTITY-10). The owner and community are unchanged.
+
+Acceptance Criteria
+- `tests/plugins.nongit-project-dir.test.ts`: `actingWorkTask` is true for a git repo with the stamp and false for a non-git folder or without the stamp.
+- Same file: a team member's `/work` `files-write` / `files-edit` in a non-git folder get the role refusal and the file is unchanged, `files-read` works; in a git repo the write works; the owner's write in the folder works.
+- `tests/roles.team.test.ts` (fixture dir now a git repo) keeps team `/work` edits working in a git work tree.
+### REQ-plugins-520
+
+AGENT-18 hi guard: in a repo that uses hi (`repoWaysNow(cwd)`: a `hi/*.md`
+with `hi:` front matter in the run's session base, HEAD or the working
+tree), `files-write`, `files-edit` and `files-delete` SHALL refuse every
+path under `hi/` (`isHiPath` on where the write would land, symlinks
+resolved by `resolveProjectPath`, and on the path as given), after the
+SAFE-2 check and before anything is read or written, with exit 2 and one
+line (`hiRefuseMessage`): `refused (AGENT-18): '<path>' is under hi/, where
+this repo keeps its acceptance criteria. The agent never changes them itself:
+criteria change only through a capture the owner approves on a card, and any
+other hi/ change keeps the run from being verified and /work from opening a
+PR. Reading hi/ is fine; draft a missing criterion with hi-draft where this
+run has it, …`. There SHALL be no in-band override. Reads
+(`files-read`, `files-list`, `files-glob`) and `hi/` in a repo that does
+not use hi SHALL be unaffected.
+
+Acceptance Criteria
+- In a temp hi repo, `files-write` (relative, `./`, absolute, a new file), `files-edit` and an allowlisted `files-delete` under `hi/` refuse with `refused (AGENT-18)` and leave the file unchanged; `files-read hi/agent.md` and a write to `src/app.ts` work.
+- A write through a symlink that lands in `hi/` is refused.
+- In a repo whose `hi/` has no hi front matter the write goes through; a non-git hi project refuses.
+- `tests/agent.hi-guard.test.ts` fails on the base sources and passes after.
+- The refusal says criteria change only through a capture the owner approves on a card, and points at `hi-draft` (AGENT-18 hi drafts).
+
+### REQ-plugins-521
+
+AGENT-18 hi guard, the PR a run opens itself: `github-pr-create` SHALL,
+after its usage and repo checks and before the GitHub client, the GITHUB-9
+review and anything sent to GitHub, ask `hiPrRefusal(cwd)`
+(`src/agent/repo-ways.ts`). While a Corvidinho run is in progress in `cwd`
+(the run ledger, `currentSddRun`) in a repo that uses hi (`repoWaysNow`),
+and anything under `hi/` differs from that run's session base
+(`hiRunChanges`: the same comparison as the verify gate, REQ-agent-520), it
+SHALL refuse with exit 2 and one line `refused (AGENT-18): this repo's hi/
+changed since the session base (criteria …; retired entries …; other hi/
+files …) and no approved capture made the change, so this run opens no PR;
+…`, and a hi/ diff that cannot be read SHALL refuse the same way ("could not
+read what changed under hi/ …"). With no run in progress there (an
+operator's own `corvidinho plugins run github-pr-create`, or the `/work` PR
+step, which holds hi/ to the merge-base itself, REQ-discord-520) the hi
+guard SHALL not apply here. No env var, config key or flag.
+
+Acceptance Criteria
+- Inside a run in a temp hi repo, a criterion committed through the shell makes a dry-run `github-pr-create` refuse with `refused (AGENT-18)`, exit 2, naming `criteria AGENT-23` and "this run opens no PR"; with hi/ untouched in a run, it is not refused by the hi guard (the next gate, GITHUB-9, answers).
+- With no run in progress, a dirty hi/ edit does not make `github-pr-create` refuse with AGENT-18.
+- `tests/agent.hi-guard.test.ts` fails on the base sources and passes after.
+
+### REQ-plugins-1201
+
+IDENTITY-12.a (#65, captured from Leif's 2026-09-28 interview, round 16):
+"On GitHub, the owner and team members I've declared get their role's tools
+too, behind the same must-ask gate; anyone else stays community." The tool
+layer SHALL resolve a WATCH run's role from the person who triggered it, at
+every call, the way it resolves a Discord run's (IDENTITY-12):
+
+- `isWatchRunEnv(env)` (`src/plugins/roles.ts`) SHALL be true when the
+  surface stamp `CORVIDINHO_ACTING_SURFACE` is `watch` (both spawning clients
+  always overwrite it). In such a run the role SHALL come only from the GitHub
+  numeric id the WATCH spawn stamps (`CORVIDINHO_ACTING_GITHUB_ID`, REQ-watch-1201),
+  matched in the owner's people list re-read now (`loadDeclaredPeople` +
+  `resolvePerson`, the owner's `[owner] github_id` included, IDENTITY-7.a) —
+  never a login and never a Discord id. A run whose surface is not `watch`
+  SHALL never use the GitHub keys.
+- `resolveActingIsAdmin` SHALL be true in a WATCH run only with the ADMIN bit,
+  an owner stamp (`actingRoleCap` owner), `CORVIDINHO_WATCH_SESSION_ID` set and
+  that id resolving to the owner's person. `resolveActingRole` SHALL give
+  `team` only with a team (or owner) stamp and a person whose declared role is
+  team; anything else is `community`. Either way the id SHALL count as
+  community when it, or `CORVIDINHO_ACTING_GITHUB_LOGIN`, is on the GitHub
+  `deny_users` list, when the person's Discord id is muted
+  (`DISCORD_MUTED_USER_IDS`) or on `[discord].deny_users`, when there is no
+  id or no WATCH session id, and on any read failure (never throws).
+- `actingWorkTask` SHALL be false in a WATCH run whatever its stamp (a WATCH
+  run works in the watcher's checkout, never a `/work` worktree), so team
+  gets its review and search tools there but never the work tools.
+- `runPlugin` is unchanged: the owner's WATCH run reaches the must-ask gate
+  (REQ-plugins-097) for every must-ask call — a `git-push` to the default
+  branch, a `discord-post-message` — which raises the owner's Approve card
+  (`… · from watch:<session>`) on the shared approvals store that the running
+  bridge DMs, and runs only on an approval it uses once; a deny or no answer
+  runs nothing (SAFE-20). Team and community WATCH runs are refused an
+  owner-only tool for their role before any card.
+- `secretPathsRefused` (`plugins/files/protectedPaths.ts`) SHALL be true in
+  every WATCH run, the owner's included — the answer goes to a public GitHub
+  thread — so the file, search and git tools refuse and hide secret-looking
+  paths there (ROLES-CHAT-8, REQ-plugins-267); the refusal line says "not
+  available in community chat or on GitHub".
+- Unchanged on GitHub: the shell, runners and Fledge runs are never offered
+  (SAFE-3.a, `shellToolsGate`), `delegate` / `council` workers are community
+  (the worker env drops every `CORVIDINHO_ACTING_*` key), WATCH runs never
+  approve or archive a SpecSync change (AGENT-18.a), the memory plugins' GitHub
+  rules (REQ-plugins-067, REQ-plugins-710). No env var, config key, flag,
+  table or schema change.
+
+Acceptance Criteria
+- With the env a real WATCH spawn hands its child: the owner's id with the owner stamp → owner (ADMIN re-check true); the team member's with the team stamp → team.
+- The owner stamp on a stranger's, a re-registered login's or a declared community person's id, a team stamp on the owner's id, a community stamp, a login with no id, the owner's Discord id in a WATCH env, and no WATCH session id → community.
+- Surface `chat` with the owner's GitHub id and no Discord actor → community; with the owner's Discord id → owner.
+- A team member demoted in the file, on GitHub `deny_users` by login or by id, on `[discord].deny_users` or muted → community at the next call; the owner with no `[owner] github_id` or an unreadable file → community.
+- The owner's WATCH run: a mutating `prod` must-ask command raises one `mustask` card titled `… · from watch:watch_w1`, runs once on approval and is refused with nothing run on a deny; team, community and a re-registered login's runs get `not allowed for your role` and no card.
+- `secretPathsRefused` is true for the owner's WATCH run and false for the owner's Discord run; `shellToolsGate` refuses the owner's WATCH run; a `delegate` worker built from it resolves community.
+- `tests/watch.github-roles.test.ts` fails on the base sources and passes on the branch.
+### REQ-plugins-621
+
+The `shell-exec` child, the language runners' children (`node-exec`,
+`python-exec`, `cargo-exec`, REQ-plugins-313) and the Fledge core runs
+(`fledge-lanes-run`, `fledge-run`, and the two lane reads, REQ-plugins-461)
+SHALL start without the owner's cloud credentials (SAFE-21.b, captured in
+this change's PR from Leif's 2026-09-28 interview, round 16): `runnerChildEnv`
+(`plugins/runners/commands.ts`) and `fledgeCoreChildEnv`
+(`plugins/fledge/core.ts`) SHALL apply `withoutCloudCredentials`
+(`src/agent/verify.ts`, REQ-agent-621) after the verify-lane scrub and the
+SAFE-21.a git / GitHub scrub (REQ-plugins-495, unchanged): every
+`isCloudCredentialEnvKey` key dropped, `KUBECONFIG`,
+`AWS_SHARED_CREDENTIALS_FILE`, `AWS_CONFIG_FILE` and
+`GOOGLE_APPLICATION_CREDENTIALS` = `/dev/null`,
+`AWS_EC2_METADATA_DISABLED=true`, and `CLOUDSDK_CONFIG` / `AZURE_CONFIG_DIR`
+fresh empty dirs made for that one child. `runRunner`, the `shell-exec`
+handler and the Fledge core spawn SHALL call `releaseCloudStandIns` on that
+env once the child has exited (also after a timeout, an abort or a spawn
+error), so those dirs are removed. Every other key the child got before is
+kept. Fledge plugin commands (`fledge-<command>`, `fledgeChildEnv`) are
+unchanged. No new slash command, env var or config key.
+
+Acceptance Criteria
+- With the owner's cloud env set, and separately with only the owner's default
+  files under a fake HOME (`~/.kube/config`, `~/.aws/credentials` /
+  `config`, `~/.config/gcloud/*` with the ADC file, `~/.azure/*`),
+  `shell-exec` running stand-in `kubectl` / `aws` / `gcloud` / `az` by
+  absolute path, each of `node-exec` / `python-exec` / `cargo-exec`
+  (`runRunner` with a stand-in binary) and `fledge-lanes-run verify` /
+  `fledge-run deploy` (a stand-in fledge) show no cloud key, value or file
+  content; `KUBECONFIG`, `AWS_SHARED_CREDENTIALS_FILE`, `AWS_CONFIG_FILE` and
+  `GOOGLE_APPLICATION_CREDENTIALS` are `/dev/null`,
+  `AWS_EC2_METADATA_DISABLED=true`, `CLOUDSDK_CONFIG` / `AZURE_CONFIG_DIR`
+  lie outside HOME and are gone after the call; `AWS_REGION`,
+  `GOOGLE_CLOUD_PROJECT` and other keys stay (`tests/agent.cloud-credentials.test.ts`).
+- A runner child that writes a login into its gcloud and az config dirs does
+  not reach the next runner child.
+- The SAFE-21.a git / GitHub scrub and its tests (`tests/runners.plugins.test.ts`,
+  `tests/shell.footguns.test.ts`, `tests/fledge.core.test.ts`) are unchanged.
+### REQ-plugins-1818
+
+AGENT-18.a in the shell (captured on main, `hi/agent.md`, from Leif's
+2026-09-28 interview, round 13: "On Corvidinho it may approve and archive
+its own SpecSync change once verify is green; in other repos a human
+approves, reviews and finalizes."). `shell-exec` SHALL refuse
+`specsync change approve|review|finalize|ship` in every repo, with no repo
+check and synchronously, before the SAFE-21 check (REQ-plugins-494), the
+SAFE-3 clamp and any spawn: ok=false, exit 2, `data.refused` true with
+`rule: "AGENT-18.a"`, `step` (`approve`, `review`, `finalize` or
+`ship`; null when it can't be read) and the in-root `script` it was found
+in (null for the typed command), and the message
+`shell-exec refused (AGENT-18.a): <invocation> would <step> a SpecSync change
+from the shell[ (in SCRIPT)], which the shell never does in any repo;
+<HUMAN_LIFECYCLE_LINE without "refused: ">, through its own settle step and
+never the shell`. The check (`lifecycleRefusal` / `firstLifecycleStep`,
+`plugins/shell/sdd-lifecycle.ts`) SHALL read every simple command over the
+SAFE-21 ground through the same walker (`forEachSimpleCommand`: the dash
+and bash readings, `eval` / `trap` / shell `-c` strings, command
+substitutions, and the in-root scripts the command runs in a shell). An
+invocation SHALL start at any word named `specsync` (by basename; an
+npm-style `specsync@<version>` or `@scope/specsync` too), so every exec
+wrapper (`env`, `timeout`, `nohup`, `xargs`, `sudo`, `exec`,
+`find -exec`) and package runner (`bunx`, `npx`) in front of it is
+covered; at a command word (`commandChain` link) that is a path to an
+existing link whose target is named `specsync`; and at a command word that
+expands, where only a literal step refuses. Its step SHALL be the first word
+past SpecSync's options after `change` (every `change` the subcommand scan
+reaches past options and what may be their values is read); a word right
+after an option (no `=`) may be that option's value or the step, so a
+lifecycle step there SHALL count. A step that expands SHALL refuse, and
+under `xargs` a missing step, or one that is not another `specsync change`
+subcommand, SHALL refuse (xargs supplies it). `shellProdWhy` (AUTONOMY-9)
+SHALL classify no command this check refuses, so no Approve card is raised
+for it. Read-only `specsync change status|list|show|check|ship-status` and
+`specsync check` SHALL still run. `runTask`'s settle after a green lane
+(REQ-agent-519) is unchanged: on Corvidinho the SpecSync plugin's approve and
+finalize tools (REQ-plugins-519) spawn `specsync` themselves, never through
+the shell. Residual (stated, not checked): code an interpreter runs
+(`bun -e`, `node -e`, `python -c`, a script handed to `node` /
+`python`, the `node-exec` / `python-exec` / `cargo-exec` runners) that
+spawns specsync itself is not parsed; neither are package-manager scripts,
+`make` / `just` recipes and git aliases, nor a copy of the binary under
+another name or a link the same command makes. No new command, env var,
+flag, config key or schema.
+
+Acceptance Criteria
+- In a SpecSync repo, a plain folder and on Corvidinho with the run's own change right after a green lane, `specsync change approve|review|finalize|ship c1` through `shell-exec` returns exit 2 with `shell-exec refused (AGENT-18.a): …` and `HUMAN_LIFECYCLE_LINE`; nothing is spawned, `state.json` is unchanged, no `approvals.json` / `review.json` is written and nothing moves to `.specsync/archive`.
+- The same through `sh -c` / `bash -c`, `eval`, `$(…)`, backticks, a function, `env` / `timeout` / `nohup` / `xargs` / `sudo` / `exec` / `find -exec`, an absolute or relative path or a link to the binary, `bunx` / `npx`, options before the step, an expanding step or command word, and an in-root script run with `sh x.sh`, `. ./x.sh` or `./y.sh` (naming it).
+- `specsync change status|list|show|check|ship-status` and `specsync check` still run; `shellProdWhy` returns null for a refused lifecycle command.
+- On Corvidinho the `specsync-change-approve` tool still spawns `change approve c1 --actor corvid-agent`; `tests/agent.repo-ways.test.ts` passes unchanged.
+- `tests/shell.sdd-lifecycle.test.ts` fails on the base sources and passes after.
+### REQ-plugins-525
+
+`.trust.toml` is SAFE-2 protected like `fledge.toml` (AGENT-18 Trust clause,
+REQ-agent-525): in a repo that has it the verify gate also runs `fledge trust
+verify`, so a run must not rewrite or delete the Trust config it is verified
+by. `isProtectedPath` SHALL be true for any path whose basename is
+`.trust.toml` (any directory, any letter case), so `files-write`,
+`files-edit` and `files-delete` refuse it with the SAFE-2 refusal (exit 2,
+no override; its list now reads `(.env* / .git / fledge.toml / .fledge /
+.trust.toml / bunfig.toml / specs / *.spec.md / .specsync / keystores)`),
+checked on the path as given and where it resolves; `git-commit` SHALL
+refuse to stage its deletion, and `discord-send-file` (which checks
+`isProtectedPath`) SHALL never attach it. Reads stay allowed, and
+`trust.toml`, `.trust.toml.bak` or `docs/trust.md` are not protected.
+Corvidinho's own repo has no `.trust.toml`.
+
+Acceptance Criteria
+- `isProtectedPath` is true for `.trust.toml`, `./.trust.toml`, `pkg/.Trust.TOML` and an absolute path under the root, and false for `trust.toml`, `docs/trust.md` and `.trust.toml.bak`.
+- `files-write` (relative, `./`, absolute, a new `sub/.trust.toml`), `files-edit` and an allowlisted `files-delete` of `.trust.toml` are refused with `refused (SAFE-2)` naming `.trust.toml` (exit 2); the file is unchanged and nothing is created; `files-read .trust.toml` and `files-write trust.toml` work.
+- `git-commit` of a deleted tracked `.trust.toml` is refused (exit 2, SAFE-2); it stays in `ls-files` and nothing is staged.
+- `discord-send-file`'s `fileAttachment` of `.trust.toml` is refused with `refused (SAFE-2)`.
+- `tests/agent.trust-verify.test.ts` fails on the base sources and passes after.
 

@@ -35,6 +35,13 @@
  * any request, which is not a model failure: no model fallback (AGENT-11) may
  * route around a cap.
  *
+ * Tool calls with a flat price per call (a Brave `web-search`, #318; a
+ * free-tier GIPHY `gif-search`, recorded at $0) count toward the same total
+ * cap and are recorded while any cap is set:
+ * `reserveFlatSpend` reserves the price in the same ledger before the call,
+ * and a stopped call hands the tool loop the same `spend-cap` ask
+ * (`PluginHandlerResult.spendAsk`, src/agent/execute.ts).
+ *
  * Assumptions (see specs/agent REQ-agent-098):
  *  - "Daily" is the last 24 hours (rolling), not a calendar day.
  *  - Prices are standard USD per 1M tokens; cached-input discounts are ignored,
@@ -53,9 +60,15 @@
  *    `providerId`); a malformed entry, or a key that names no configured
  *    provider, makes the whole setting invalid: every call stops and asks, and
  *    the value is never echoed.
- *  - Pre-call estimate: request bytes / 3 prompt tokens + a 4096-token reply
- *    reserve. A reply longer than the reserve can overshoot the cap by that one
- *    call; the next call then stops and asks.
+ *  - Pre-call estimate (AUTONOMY-8.a): request bytes / 3 prompt tokens + the
+ *    model's worst-case reply — its listed maximum output
+ *    (`ModelPrice.maxOutputTokens`), or {@link REPLY_RESERVE_DEFAULT_TOKENS}
+ *    for a priced model with no listed maximum. No `max_tokens` is ever sent,
+ *    so replies are never cut short; because the reserve is the longest reply
+ *    the model can return, a long reply cannot take spend past a cap unasked:
+ *    a call whose worst case would cross a cap asks first (the spend card or
+ *    the spend-cap ask). The reservation is still replaced by the
+ *    provider-reported cost once the reply arrives.
  *  - Provider omitted `usage` (or the reply was unreadable) ⇒ the estimate stays
  *    counted. HTTP error reply ⇒ counted as 0 (not billed). Network error or
  *    abort ⇒ the estimate stays counted (it may have been billed).
@@ -130,8 +143,14 @@ export type {
 } from "./spend-notice.ts";
 
 export const SPEND_WINDOW_MS = 24 * 60 * 60 * 1000;
-/** Reply tokens reserved per call before the provider reports actual usage. */
-export const REPLY_RESERVE_TOKENS = 4096;
+/**
+ * AUTONOMY-8.a: reply tokens counted before the call for a priced model whose
+ * maximum output is not listed (`ModelPrice.maxOutputTokens`) — the largest
+ * maximum output in {@link MODEL_PRICES_USD_PER_MTOK} (128K), far above the
+ * old fixed 4096-token reserve. No `max_tokens` is sent, so this is a
+ * worst-case count, never a cut.
+ */
+export const REPLY_RESERVE_DEFAULT_TOKENS = 128_000;
 /** Request bytes per estimated prompt token (low on purpose: errs high). */
 export const REQUEST_BYTES_PER_TOKEN = 3;
 
@@ -140,37 +159,44 @@ export type ModelPrice = {
   inputPerMTok: number;
   /** USD per 1M completion (output) tokens, reasoning tokens included. */
   outputPerMTok: number;
+  /**
+   * AUTONOMY-8.a: the model's listed maximum output in tokens (reasoning
+   * tokens included) — the longest reply one call can bill, since no
+   * `max_tokens` is sent. Unset ⇒ {@link REPLY_RESERVE_DEFAULT_TOKENS}.
+   */
+  maxOutputTokens?: number;
 };
 
 /**
- * Standard list prices, USD per 1M tokens (no batch / cache discounts).
+ * Standard list prices, USD per 1M tokens (no batch / cache discounts), and
+ * each model's listed maximum output tokens (AUTONOMY-8.a worst-case reply).
  * Matched on the exact model id (trimmed, lower-cased): a dated snapshot or a
  * gateway-prefixed id is a different model and counts as unpriced.
  */
 export const MODEL_PRICES_USD_PER_MTOK: Readonly<Record<string, ModelPrice>> =
   Object.freeze({
     // OpenAI
-    "gpt-4o-mini": { inputPerMTok: 0.15, outputPerMTok: 0.6 },
-    "gpt-4o": { inputPerMTok: 2.5, outputPerMTok: 10 },
-    "gpt-4.1": { inputPerMTok: 2, outputPerMTok: 8 },
-    "gpt-4.1-mini": { inputPerMTok: 0.4, outputPerMTok: 1.6 },
-    "gpt-4.1-nano": { inputPerMTok: 0.1, outputPerMTok: 0.4 },
-    "gpt-5": { inputPerMTok: 1.25, outputPerMTok: 10 },
-    "gpt-5-mini": { inputPerMTok: 0.25, outputPerMTok: 2 },
-    "gpt-5-nano": { inputPerMTok: 0.05, outputPerMTok: 0.4 },
-    o3: { inputPerMTok: 2, outputPerMTok: 8 },
-    "o4-mini": { inputPerMTok: 1.1, outputPerMTok: 4.4 },
+    "gpt-4o-mini": { inputPerMTok: 0.15, outputPerMTok: 0.6, maxOutputTokens: 16_384 },
+    "gpt-4o": { inputPerMTok: 2.5, outputPerMTok: 10, maxOutputTokens: 16_384 },
+    "gpt-4.1": { inputPerMTok: 2, outputPerMTok: 8, maxOutputTokens: 32_768 },
+    "gpt-4.1-mini": { inputPerMTok: 0.4, outputPerMTok: 1.6, maxOutputTokens: 32_768 },
+    "gpt-4.1-nano": { inputPerMTok: 0.1, outputPerMTok: 0.4, maxOutputTokens: 32_768 },
+    "gpt-5": { inputPerMTok: 1.25, outputPerMTok: 10, maxOutputTokens: 128_000 },
+    "gpt-5-mini": { inputPerMTok: 0.25, outputPerMTok: 2, maxOutputTokens: 128_000 },
+    "gpt-5-nano": { inputPerMTok: 0.05, outputPerMTok: 0.4, maxOutputTokens: 128_000 },
+    o3: { inputPerMTok: 2, outputPerMTok: 8, maxOutputTokens: 100_000 },
+    "o4-mini": { inputPerMTok: 1.1, outputPerMTok: 4.4, maxOutputTokens: 100_000 },
     // Anthropic (OpenAI-compatible endpoint)
-    "claude-fable-5-1": { inputPerMTok: 10, outputPerMTok: 50 },
-    "claude-fable-5": { inputPerMTok: 10, outputPerMTok: 50 },
-    "claude-opus-5-5": { inputPerMTok: 4, outputPerMTok: 20 },
-    "claude-opus-5": { inputPerMTok: 5, outputPerMTok: 25 },
-    "claude-opus-4-8": { inputPerMTok: 5, outputPerMTok: 25 },
-    "claude-opus-4-7": { inputPerMTok: 5, outputPerMTok: 25 },
-    "claude-opus-4-6": { inputPerMTok: 5, outputPerMTok: 25 },
-    "claude-sonnet-5": { inputPerMTok: 2, outputPerMTok: 10 },
-    "claude-sonnet-4-6": { inputPerMTok: 3, outputPerMTok: 15 },
-    "claude-haiku-4-5": { inputPerMTok: 1, outputPerMTok: 5 },
+    "claude-fable-5-1": { inputPerMTok: 10, outputPerMTok: 50, maxOutputTokens: 128_000 },
+    "claude-fable-5": { inputPerMTok: 10, outputPerMTok: 50, maxOutputTokens: 128_000 },
+    "claude-opus-5-5": { inputPerMTok: 4, outputPerMTok: 20, maxOutputTokens: 128_000 },
+    "claude-opus-5": { inputPerMTok: 5, outputPerMTok: 25, maxOutputTokens: 128_000 },
+    "claude-opus-4-8": { inputPerMTok: 5, outputPerMTok: 25, maxOutputTokens: 128_000 },
+    "claude-opus-4-7": { inputPerMTok: 5, outputPerMTok: 25, maxOutputTokens: 128_000 },
+    "claude-opus-4-6": { inputPerMTok: 5, outputPerMTok: 25, maxOutputTokens: 128_000 },
+    "claude-sonnet-5": { inputPerMTok: 2, outputPerMTok: 10, maxOutputTokens: 128_000 },
+    "claude-sonnet-4-6": { inputPerMTok: 3, outputPerMTok: 15, maxOutputTokens: 128_000 },
+    "claude-haiku-4-5": { inputPerMTok: 1, outputPerMTok: 5, maxOutputTokens: 64_000 },
   });
 
 /** Known price for a model id, or null when unpriced. */
@@ -301,10 +327,23 @@ export function costMicroUsd(price: ModelPrice, usage: AgentTokenUsage): number 
   return tokensToMicroUsd(price, usage.promptTokens, usage.completionTokens + unsplit);
 }
 
-/** Pre-call estimate in micro-USD: prompt from request size + reply reserve. */
+/**
+ * AUTONOMY-8.a: reply tokens counted before a call to a priced model — its
+ * listed maximum output, or {@link REPLY_RESERVE_DEFAULT_TOKENS} when none is
+ * listed (or the listed figure is not a positive whole number).
+ */
+export function replyReserveTokens(price: ModelPrice): number {
+  const max = price.maxOutputTokens;
+  return typeof max === "number" && Number.isSafeInteger(max) && max > 0 ? max : REPLY_RESERVE_DEFAULT_TOKENS;
+}
+
+/**
+ * Pre-call estimate in micro-USD: prompt from request size + the model's
+ * worst-case reply (AUTONOMY-8.a, {@link replyReserveTokens}).
+ */
 export function estimateCallMicroUsd(price: ModelPrice, requestBytes: number): number {
   const prompt = Math.ceil(Math.max(0, requestBytes) / REQUEST_BYTES_PER_TOKEN);
-  return tokensToMicroUsd(price, prompt, REPLY_RESERVE_TOKENS);
+  return tokensToMicroUsd(price, prompt, replyReserveTokens(price));
 }
 
 const SPEND_LEDGER_SQL = `
@@ -1208,6 +1247,112 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
       pending = null;
       if (!ask) return result;
       return { summary: SPEND_CAP_SUMMARY, filesChanged: [...result.filesChanged], ask };
+    },
+  };
+}
+
+/** How a flat-priced call ended: billed, certainly not billed, or maybe billed. */
+export type FlatSpendOutcome = "billed" | "not-billed" | "unknown";
+
+/** A flat-priced call's SAFE-8 hold (see {@link reserveFlatSpend}). */
+export type FlatSpendHold =
+  | { kind: "off" }
+  | { kind: "held"; settle(outcome: FlatSpendOutcome): void }
+  | { kind: "stopped"; ask: HumanAsk };
+
+/**
+ * SAFE-8 for a tool call with a flat price per call (REQ-agent-098), such as
+ * a Brave `web-search` (about $0.005, #318): the same rolling 24 h ledger and
+ * total cap as the model calls. No cap at all (neither the total cap nor
+ * SAFE-14's provider caps) ⇒ `off` and the DB is never opened. While any cap
+ * is set the price is reserved in the IMMEDIATE ledger transaction before the
+ * call, so the call is recorded like a provider call; it counts against the
+ * total cap only (a provider cap is keyed on a configured model provider,
+ * REQ-agent-114, so none covers it). A call that would pass the total cap, or
+ * cannot be counted (a spend-cap setting that is not valid, an unavailable
+ * ledger), is `stopped` with the same `spend-cap` ask a model call gets, and
+ * must not be sent. `settle` records the outcome once: `billed` keeps the
+ * price as the call's actual cost, `not-billed` (refused before connecting,
+ * or an HTTP error reply) counts 0, `unknown` (network error, timeout, abort,
+ * unreadable reply) keeps it counted at the estimate. The 80% warning is
+ * noted by the next model call's settle, which sees this row in the window.
+ * A free call (a GIPHY `gif-search`, #318) passes a price of 0: its row is
+ * recorded at $0, and it is stopped only when the window is already past the
+ * cap (spend + 0 > cap).
+ */
+export function reserveFlatSpend(opts: {
+  env?: NodeJS.ProcessEnv;
+  /** Ledger provider label (the API host). */
+  provider: string;
+  /** Ledger model label (the priced call, e.g. `brave-web-search`). */
+  model: string;
+  costMicroUsd: number;
+  /** Test seam: ledger DB (default: shared DB under CORVIDINHO_DATA_DIR, closed after settle). */
+  db?: Database;
+  now?: () => number;
+}): FlatSpendHold {
+  const env = opts.env ?? process.env;
+  const caps = parseSpendCaps(env);
+  if (caps.kind === "off") return { kind: "off" };
+  if (caps.kind === "invalid") return { kind: "stopped", ask: spendCapInvalidAsk(caps.keys) };
+  const total = caps.totalMicroUsd ?? undefined;
+  const now = opts.now ?? Date.now;
+  const cost = Math.max(0, Math.ceil(opts.costMicroUsd));
+  let db: Database | undefined;
+  const close = () => {
+    if (opts.db || !db) return;
+    try {
+      db.close();
+    } catch {
+      // already closed
+    }
+  };
+  let ledger: SpendLedger;
+  let hold: SpendReservation;
+  try {
+    db = opts.db ?? openCorvidinhoDb({ env });
+    ledger = new SpendLedger(db);
+    hold = ledger.reserve({
+      provider: opts.provider,
+      model: opts.model,
+      estimateMicroUsd: cost,
+      ...(total !== undefined ? { capMicroUsd: total } : {}),
+      now: now(),
+    });
+  } catch (err) {
+    close();
+    return { kind: "stopped", ask: spendCapLedgerAsk(err instanceof Error ? err.message : String(err)) };
+  }
+  if (!hold.ok) {
+    close();
+    return { kind: "stopped", ask: spendCapReachedAsk({ estimateMicroUsd: cost, trips: hold.trips }) };
+  }
+  const id = hold.id;
+  let settled = false;
+  return {
+    kind: "held",
+    settle(outcome) {
+      if (settled) return;
+      settled = true;
+      try {
+        ledger.settle(
+          id,
+          outcome === "billed"
+            ? {
+                status: "actual",
+                usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+                costMicroUsd: cost,
+              }
+            : outcome === "not-billed"
+              ? { status: "failed" }
+              : { status: "estimated" },
+          now(),
+        );
+      } catch {
+        // Ledger write failed after the call: the reservation stays counted.
+      } finally {
+        close();
+      }
     },
   };
 }

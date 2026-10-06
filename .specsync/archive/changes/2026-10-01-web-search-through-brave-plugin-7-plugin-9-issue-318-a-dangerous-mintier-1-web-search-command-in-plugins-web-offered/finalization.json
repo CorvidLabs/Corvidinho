@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered",
+  "implementation_commit": "ebf26a3206b2192267083f3ef21f94874b5a0dcb",
+  "implementation_tree": "fa337987bb3a8129fbb8a4c12c2a70ca556f73fb",
+  "contract_digest": "a3f15c787729f567e047f042b27022d7d7a18ff9ee15de2fe457bfccdb699a8a",
+  "workspace_digest": "8ad4fdee65501e29907c43c37d789dae550f2ac613537cdb6ec10458e1a43ba0",
+  "closing_digest": "249d866d6f7ee25e268f9f081528b85250050f3b92b531dec4486f94f4b03764",
+  "review_digest": "c442c86ccd64e036e5dce8b6a74a8f026e9a385ba88655acba9ab67e36d31f88",
+  "finalization_digest": "16207555d06ed01127c6d60380736c21a5c09b4db28e0cfe46bb736e8f91a0c3",
+  "timestamp": 1790869380
+}

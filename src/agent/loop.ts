@@ -12,9 +12,14 @@
  * change, every changed meaningful path must be covered by one first
  * (AGENT-18, REQ-agent-518); on Corvidinho the run then approves and
  * archives the change it opened and verifies again (AGENT-18.a,
- * REQ-agent-519). An idle timeout I set stops a run that went quiet, and
- * the result says when a limit I set stopped it (AGENT-12, REQ-agent-244 /
- * REQ-agent-312; src/agent/limits.ts).
+ * REQ-agent-519). In a hi repo, any change under hi/ since the session base
+ * that approved captures did not make fails verify before the lane
+ * (AGENT-18 hi guard, REQ-agent-520 / REQ-agent-522). An idle timeout I set stops a run
+ * that went quiet, and the result says when a limit I set stopped it
+ * (AGENT-12, REQ-agent-244 / REQ-agent-312; src/agent/limits.ts). A /work
+ * run (`review`) is done only after a second model reviewed its verified
+ * tree in bounded rounds, counted apart from the verify retries (GITHUB-9,
+ * REQ-agent-092).
  */
 
 import { relative, resolve } from "node:path";
@@ -31,6 +36,10 @@ import {
   beginSddRun,
   endSddRun,
   formatRepoWaysLine,
+  HI_GUARD_UNREADABLE_NOTE,
+  hiGuardNote,
+  hiRunChanges,
+  hiSnapshot,
   mergeScans,
   repoWaysBase,
   scanRepoWays,
@@ -38,6 +47,7 @@ import {
   sddUncovered,
   sddUncoveredNote,
   settleOwnSddChanges,
+  type RepoWaysScan,
   type SddRun,
 } from "./repo-ways.ts";
 import { loadRelevantSpecs } from "./specLoader.ts";
@@ -59,8 +69,10 @@ import { startWorkspaceDiff, WORKSPACE_DIFF_MAX_FILES } from "./workspace-diff.t
 import type {
   AgentEvent,
   AgentState,
+  ReviewHookResult,
   RunTaskOptions,
   TaskResult,
+  TaskReview,
   TestDrop,
   WorkspaceDiffTracker,
 } from "./types.ts";
@@ -101,6 +113,15 @@ function setState(
  */
 export const VERIFY_RERUN_FAILED_REASON =
   "Verification failed when re-run over what approving and archiving its own SpecSync change wrote";
+
+/** GITHUB-9: a review hook that threw — no review finished, so no PR (fail closed). */
+export const REVIEW_HOOK_FAILED_REASON =
+  "the second-model review could not run, so there is no PR (GITHUB-9).";
+
+/** GITHUB-9: a review hook that still raised findings at its last round (fail closed). */
+export function reviewOverRoundsReason(maxRounds: number): string {
+  return `the second-model review did not end within ${maxRounds} rounds, so there is no PR (GITHUB-9).`;
+}
 
 /** DISCORD-3.b: the plain reason of a run that gave up after its verify retries. */
 export function verifyGaveUpReason(maxRetries: number): string {
@@ -159,8 +180,17 @@ async function runLane(
   // its output shows tests ran and no test was deleted or turned off since
   // the baseline. Otherwise it is a failed verify like any other (retry
   // with the note first, then failed), with no opt-out (AGENT-14).
-  const laneOutput = result.output;
+  let laneOutput = result.output;
   let evidenceNote: string | undefined;
+  if (!result.success && result.trustNote) {
+    // AGENT-18 (REQ-agent-525): a failed or unavailable Trust step's one-line
+    // reason leads the failure summary and the retry feedback, however long
+    // the step's output after it is.
+    evidenceNote = result.trustNote;
+    laneOutput = result.output.startsWith(result.trustNote)
+      ? result.output.slice(result.trustNote.length).replace(/^\n/, "")
+      : result.output;
+  }
   if (result.success) {
     let drops: TestDrop[] | null;
     try {
@@ -182,7 +212,9 @@ async function runLane(
 /**
  * Run one task through planning → executing → verifying → done|failed.
  * Verifying is skipped only when the run changed nothing (AGENT-14).
- * Does not invent Trust/attest. Injectable execute + verifyRunner for tests.
+ * Trust only where the repo has `.trust.toml` (the default verify runner then
+ * also runs `fledge trust verify`, AGENT-18). Injectable execute +
+ * verifyRunner for tests.
  */
 export async function runTask(opts: RunTaskOptions): Promise<TaskResult> {
   let workspace: WorkspaceDiffTracker | null = null;
@@ -352,8 +384,7 @@ function idleTimeoutResult(r: TaskResult, timeoutMs: number, abandoned = false):
  * has none; null when covered or not required. `paths` null (the diff could
  * not be read) fails closed.
  */
-async function sddGateNote(cwd: string, sdd: SddRun, paths: string[] | null): Promise<string | null> {
-  const scan = mergeScans([sdd.scan, await scanRepoWays(cwd, sdd.base)]);
+function sddGateNote(cwd: string, scan: RepoWaysScan, paths: string[] | null): string | null {
   if (!sddRequiresChange(scan.sdd)) return null;
   if (paths === null) {
     return "SpecSync gate: could not read what changed, so SpecSync change coverage can't be checked and the run is not verified (AGENT-18).";
@@ -362,6 +393,21 @@ async function sddGateNote(cwd: string, sdd: SddRun, paths: string[] | null): Pr
   const rel = paths.map((p) => relative(root, resolve(root, p)));
   const uncovered = sddUncovered(cwd, rel, scan.sdd);
   return uncovered.length > 0 ? sddUncoveredNote(uncovered) : null;
+}
+
+/**
+ * AGENT-18 hi guard (REQ-agent-520): in a hi repo (`scan`: read at the start
+ * and now, merged), the note when anything under hi/ differs from the
+ * session base — a criterion, a retired entry or any other file, made by this
+ * run or left by an earlier one — or from hi/ at planning when the run has no
+ * git base; null when hi/ is unchanged or the repo does not use hi. Only a
+ * change approved captures alone explain is left out (REQ-agent-522); every
+ * other change blocks, and what can't be read fails closed.
+ */
+async function hiGateNote(cwd: string, sdd: SddRun, scan: RepoWaysScan): Promise<string | null> {
+  if (!scan.ways.hi) return null;
+  const changes = await hiRunChanges(cwd, sdd);
+  return changes === null ? HI_GUARD_UNREADABLE_NOTE : hiGuardNote(changes);
 }
 
 async function gate(
@@ -383,6 +429,9 @@ async function gate(
   // Output of the last failed verify, kept for the human-facing summary.
   let lastVerifyFailure: string | undefined;
   let retries = 0;
+  // GITHUB-9 (REQ-agent-092): review rounds that handed findings back, apart
+  // from the AGENT-4.a verify retries.
+  let reviewRounds = 0;
   // Real-diff paths added to filesChanged so far (capped per run).
   let realDiffAdded = 0;
   // AGENT-15 (REQ-agent-085): tool-claimed paths git has not shown, so far.
@@ -434,6 +483,9 @@ async function gate(
   } catch {
     /* no ways found: the run works as before */
   }
+  // AGENT-18 hi guard (REQ-agent-520): with no git session base, hi/ as it
+  // is now is what the gate compares against.
+  if (!sdd.base) sdd.hiStart = hiSnapshot(opts.cwd);
   const repoWays = sdd.scan.ways;
   const waysLine = formatRepoWaysLine(repoWays);
   if (waysLine) emit(onEvent, { type: "Text", text: waysLine });
@@ -636,14 +688,30 @@ async function gate(
     // AGENT-18 (REQ-agent-518): in a repo whose SpecSync workflow requires a
     // change for meaningful files, a changed one no open change covers fails
     // this verify before the lane runs (retry with the note, then failed).
-    let sddNote: string | null;
+    // AGENT-18 hi guard (REQ-agent-520): in a hi repo, so does any change
+    // under hi/ since the session base. Both read the ways from the start
+    // and now, merged (the start alone if a scan now fails), and each fails
+    // closed when its way is on.
+    let scanNow: RepoWaysScan = sdd.scan;
     try {
-      sddNote = await sddGateNote(opts.cwd, sdd, sddPaths);
+      scanNow = mergeScans([sdd.scan, await scanRepoWays(opts.cwd, sdd.base)]);
     } catch {
-      // Fail closed when the workflow was on at the start.
-      sddNote = sddRequiresChange(sdd.scan.sdd)
-        ? "SpecSync gate: could not check SpecSync change coverage, so the run is not verified (AGENT-18)."
-        : null;
+      /* the start scan still decides */
+    }
+    const gateNotes: string[] = [];
+    try {
+      const note = sddGateNote(opts.cwd, scanNow, sddPaths);
+      if (note) gateNotes.push(note);
+    } catch {
+      if (sddRequiresChange(scanNow.sdd)) {
+        gateNotes.push("SpecSync gate: could not check SpecSync change coverage, so the run is not verified (AGENT-18).");
+      }
+    }
+    try {
+      const note = await hiGateNote(opts.cwd, sdd, scanNow);
+      if (note) gateNotes.push(note);
+    } catch {
+      if (scanNow.ways.hi) gateNotes.push(HI_GUARD_UNREADABLE_NOTE);
     }
     if (isAborted(signal)) {
       return cancelledResult(summary, filesChanged, attempts);
@@ -652,15 +720,18 @@ async function gate(
     let result: { success: boolean; output: string };
     let laneOutput: string;
     let evidenceNote: string | undefined;
-    if (sddNote) {
-      emit(onEvent, { type: "Text", text: sddNote });
-      evidenceNote = sddNote;
+    if (gateNotes.length > 0) {
+      for (const text of gateNotes) emit(onEvent, { type: "Text", text });
+      const gateNote = gateNotes.join("\n\n");
+      evidenceNote = gateNote;
       laneOutput = "";
-      result = { success: false, output: sddNote };
+      result = { success: false, output: gateNote };
     } else {
       emit(onEvent, {
         type: "Text",
-        text: "Running fledge lanes run verify --non-interactive (includes spec-check)…",
+        text: repoWays.trust
+          ? "Running fledge lanes run verify --non-interactive (includes spec-check), then fledge trust verify (.trust.toml)…"
+          : "Running fledge lanes run verify --non-interactive (includes spec-check)…",
       });
 
       if (isAborted(signal)) {
@@ -734,6 +805,45 @@ async function gate(
           }
         }
       }
+      // GITHUB-9 (REQ-agent-092): a /work run's second-model review of the
+      // verified tree, in bounded rounds with their own counter (never the
+      // AGENT-4.a retries). Findings go back to the model as the next
+      // attempt's feedback, and that attempt is verified again first.
+      let review: TaskReview | undefined;
+      if (opts.review) {
+        emit(onEvent, {
+          type: "Text",
+          text: "Second-model review (GITHUB-9): a second model reviews the verified diff before the PR…",
+        });
+        let step: ReviewHookResult;
+        try {
+          step = await opts.review.run({ signal });
+        } catch {
+          step = { kind: "refused", reason: REVIEW_HOOK_FAILED_REASON };
+        }
+        if (isAborted(signal)) {
+          return cancelledResult(summary, filesChanged, attempts);
+        }
+        if (step.kind === "ask") {
+          // SAFE-8: the review call stopped at a spend cap — blocked on its ask.
+          setState(onEvent, "blocked");
+          return blockedTaskResult({ summary: step.summary, filesChanged, ask: step.ask }, attempts);
+        }
+        if (step.kind === "findings" && reviewRounds >= opts.review.maxRounds - 1) {
+          step = { kind: "refused", reason: reviewOverRoundsReason(opts.review.maxRounds) };
+        }
+        if (step.kind === "findings") {
+          reviewRounds += 1;
+          emit(onEvent, { type: "Text", text: step.note });
+          verifyFeedback = step.feedback;
+          continue;
+        }
+        emit(onEvent, {
+          type: "Text",
+          text: step.kind === "finished" ? step.note : `Second-model review: no PR — ${step.reason}`,
+        });
+        review = step.kind === "finished" ? { state: "finished" } : { state: "refused", reason: step.reason };
+      }
       setState(onEvent, "done");
       return {
         summary,
@@ -743,6 +853,7 @@ async function gate(
         cancelled: false,
         state: "done",
         attempts,
+        ...(review ? { review } : {}),
       };
     }
 
@@ -785,7 +896,9 @@ async function gate(
     if (evidenceNote) {
       // AGENT-15: the lane passed; the note says what is missing, and the
       // rest of the cap carries the lane's output. AGENT-18: an uncovered
-      // SpecSync path ran no lane, so the note is the whole feedback.
+      // SpecSync path or a hi/ change ran no lane, so the note is the whole
+      // feedback; a failed Trust step's note is followed by that step's
+      // output, an unavailable one's stands alone.
       const head = `${VERIFY_FEEDBACK_HEAD}${evidenceNote}`;
       const room = VERIFY_FEEDBACK_MAX_CHARS - head.length - 2;
       verifyFeedback =

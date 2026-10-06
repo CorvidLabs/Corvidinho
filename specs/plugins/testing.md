@@ -89,6 +89,16 @@ in-root `env -C sub` and a link to an in-root dir still run.
 `tee`, since a `>` edit is refused first by SAFE-21.
 `tests/runners.plugins.test.ts` — the runners' child env is credential-free
 (SAFE-21.a, REQ-plugins-495).
+`tests/agent.cloud-credentials.test.ts` — `shell-exec`, the three runners and
+`fledge-lanes-run` / `fledge-run` start without cloud credentials (SAFE-21.b,
+REQ-plugins-621): stand-in `kubectl` / `aws` / `gcloud` / `az` scripts called
+by absolute path see no cloud key or value from the owner's env and none of
+the owner's default files (`~/.kube/config`, `~/.aws/*`, `~/.config/gcloud/*`,
+`~/.azure/*` under a fake HOME); `KUBECONFIG`, `AWS_SHARED_CREDENTIALS_FILE`,
+`AWS_CONFIG_FILE` and `GOOGLE_APPLICATION_CREDENTIALS` are `/dev/null`,
+`CLOUDSDK_CONFIG` / `AZURE_CONFIG_DIR` fresh dirs removed after the child, a
+"login" one child writes never reaches the next, and `AWS_REGION` /
+`GOOGLE_CLOUD_PROJECT` stay. All 7 tests fail with the base's sources.
 
 ## Language runners (REQ-plugins-313..314)
 
@@ -466,3 +476,297 @@ the four files 82 of 82.
 prints every 0.1 s for 1.5 s keeps a 500 ms idle watchdog from firing; a
 silent 1.2 s child lets it fire. Fail on base: the printing child lets it
 fire.
+
+## Non-git root instructions and read-only others (REQ-plugins-110, REQ-plugins-115, AGENT-1.b, AGENT-1.a)
+
+`tests/plugins.nongit-project-dir.test.ts` (6 tests): in a non-git folder
+`files-write` / `files-edit` / `files-delete` refuse the root `AGENTS.md` and
+`CLAUDE.md` (the names, the absolute path, a path under the name, a missing
+file, a symlink's target, a hard link) with `refused (AGENT-1.b)` for the CLI
+and the owner, other files and `sub/AGENTS.md` are written, SAFE-2 still
+refuses, a git project's root copy stays writable; `actingWorkTask` needs a
+git work tree; a team member's `/work` writes there get the role refusal and
+work in a git repo; the owner writes there. Fail on base: 4 of 6 fail; the
+SAFE-2 and git-project cases hold on both. `tests/roles.team.test.ts` now runs
+in a git fixture dir.
+## File tools leave hi/ alone in hi repos (REQ-plugins-520, AGENT-18 hi guard)
+
+`tests/agent.hi-guard.test.ts` through `runPlugin`: in a temp hi repo,
+`files-write` (relative, `./`, absolute, a new file), `files-edit` and an
+allowlisted `files-delete` under `hi/` all refuse with
+`refused (AGENT-18): 'hi/…' is under hi/, …` (exit 2) and leave the file
+and `hiChangesSince` unchanged; `files-read hi/agent.md` and a write to
+`src/app.ts` still work; a write through `docs/criteria -> ../hi` is refused
+where it lands; in a repo whose `hi/` has no front matter the write goes
+through; a non-git hi project refuses too; inside a `/work` talk worktree the
+refusal holds mid-run.
+- Fail on base (b84c75f's `plugins/files/commands.ts` and
+  `protectedPaths.ts` swapped in): the three file-tool cases fail (the writes
+  go through); restored they pass.
+
+## github-pr-create inside a run opens no PR while hi/ changed (REQ-plugins-521, AGENT-18 hi guard)
+
+`tests/agent.hi-guard.test.ts`: inside a `runTask` in a temp hi repo, a
+criterion committed through the shell makes a dry-run `github-pr-create`
+(`CORVIDINHO_GITHUB_DRY_RUN=1`, a temp repo allowlist) refuse with
+`refused (AGENT-18)`, exit 2, naming `criteria AGENT-23` and "this run opens
+no PR", before any review; with hi/ untouched inside a run, and with a dirty
+hi/ edit but no run in progress, the hi guard does not refuse (GITHUB-9
+answers next).
+- Fail on base (b84c75f's `plugins/github/commands.ts` swapped in): the
+  refusal case fails (no AGENT-18 refusal); restored it passes.
+## Web search through Brave (REQ-plugins-318 / -3181 added, REQ-plugins-065 / -111 / -113 modified, PLUGIN-7 / PLUGIN-9)
+
+`tests/web.search.test.ts` (no network: a fake resolver and a fake transport
+that answers like Brave, the fake key `test-key-not-real`, in-memory ledger
+DBs):
+
+- Gating: `web-search` is dangerous, minTier 1, next to `web-fetch`; the
+  catalog offers it only when allowlisted, at tool/code tier, never at read
+  tier; owner, no role session and team (chat and `/work`) get it, community
+  never, team still without `web-fetch`; `TEAM_SEARCH_TOOLS` is `web-search`
+  only; SAFE-1 deny with a `denied` audit row, allowlisted runs audited
+  `started` / outcome; a community role session is refused at `runPlugin`, a
+  team one reaches the handler; a schedule the owner created is offered it,
+  a team member's schedule is not (DISCORD-SCHEDULE-1.a).
+- Request: one GET to the pinned public address of `api.search.brave.com`
+  `/res/v1/web/search` with `q`, `count` (default 5, `--count 20`),
+  `safesearch=moderate` and `freshness` when given, the key only in
+  `X-Subscription-Token`; usage errors (query words together with
+  `--query`, a `--` term outside `--query` among them), the `not-configured`
+  result (no, blank, malformed key; the error starts `web-search
+  not-configured: web search is not configured`) and secret-carrying queries
+  (the key split by a joiner too) send nothing.
+- Output: hostile hits only inside the untrusted web fence (unique end
+  marker, HTML / entities / controls reduced), nothing of a hit outside it,
+  attribution in the summary, at most `count` hits, non-http and
+  credentialed URLs dropped, `(no results)`; the visible reply line "Search
+  by Brave" is the reply path's (REQ-agent-318, `specs/agent/testing.md`).
+- SAFE-6: the key echoed by results, error bodies, a non-JSON body, a
+  transport error or a DNS error never comes back; through `runPlugin` the
+  result and the audit rows hold neither the key, the request path, the
+  header name nor the pinned address; the key split by a zero-width space,
+  a soft hyphen, a bidi isolate, a tag character or BEL in a title, URL,
+  description and age, in a resolver answer a SAFE-7 refusal names, or
+  straight into `fenceSearchResults`, never comes back whole (the scrub runs
+  last); the env drop lists (workers, verify lane, Fledge children) and
+  `formatErrorLine`.
+- Keyed JSON GET (REQ-plugins-3181): http, other hosts, a look-alike host,
+  port 8443 and URL credentials refused before DNS; non-public answers
+  refused before connecting; 301/302/303/307/308 refused after one dial,
+  Location not echoed; non-JSON, gzip, missing content type, malformed JSON
+  and oversized bodies refused; a stalled transport times out; the run's
+  abort stops it; in both cases the transport's own request signal is
+  aborted; a body that fails mid-read is `network` with the host and
+  `ECONNRESET` only; `web-fetch` unchanged for any public host with its own
+  headers.
+- Brave error mapping (401, 403, 422 `SUBSCRIPTION_TOKEN_INVALID`, 422
+  `VALIDATION`, 429, 503) without server text; the run's abort through the
+  handler ends a pending search `aborted` and aborts the transport's signal,
+  and a run already stopped sends nothing; an unexpected failure is the fixed
+  `web-search unexpected: the search failed unexpectedly` line.
+
+Updated: `tests/web.fetch.test.ts` (REQ-plugins-111: `web-search` now
+exists as its own command), `tests/roles.team.test.ts` (REQ-plugins-065:
+`roleAllowsPlugin` over every plugin with the team search rule; the team
+catalog offers `web-search`, the community catalog does not).
+`tests/fledge.plugins.test.ts` keeps the whole tool surface (builtins plus a
+fake Fledge plugin) under `TOOL_SURFACE_BUDGET_TOKENS` (9000 on main since
+AGENT-18) with `web-search`'s short description (builtins alone: 8078 tokens,
+7951 on main 0aeb345; the reply line adds nothing to any tool schema).
+
+## GIF search through GIPHY (REQ-plugins-3182 added, REQ-plugins-318 / -3181 / -065 / -113 modified, PLUGIN-8 / PLUGIN-9)
+
+`tests/gif.search.test.ts` (no network: a fake resolver and a fake transport
+that answers like GIPHY's Tenor-compatible search, the fake key
+`test-key-not-real`, in-memory ledger DBs):
+
+- Gating: `gif-search` is dangerous, minTier 1, no must-ask entry, in
+  `NO_STATE_CHANGE_TOOLS`; the catalog offers it only when allowlisted, at
+  tool/code tier, never at read tier; owner, no role session and team (chat
+  and `/work`) get it, community never, team still without `web-fetch` and
+  `discord-send-file`; `TEAM_SEARCH_TOOLS` is `web-search` and `gif-search`;
+  SAFE-1 deny with a `denied` audit row, allowlisted runs audited `started`
+  / outcome; a community role session is refused at `runPlugin`, a team one
+  reaches the handler.
+- Request: exactly one GET (no GIF downloaded) to the pinned public address
+  of `api.giphy.com` `/v2/search` with exactly `q`, `key`,
+  `client_key=corvidinho`, `limit` (default 5, `--limit 10`),
+  `media_filter=gif,tinygif` and `contentfilter=medium`, and only the fixed
+  API headers; `cats&contentfilter=off&rating=r` and similar stay the `q`
+  value with one `contentfilter=medium`; `--contentfilter`, `--rating`,
+  `--media-filter`, `--download`, bad limits, words with `--query`,
+  `--query` / `--limit` given twice and missing / 51-character queries are
+  usage errors that send nothing; no /
+  blank / spaced / 5-character key → `not-configured`; secret-carrying
+  queries (the GIPHY and Brave keys, a Discord token, a `ghp_` token, the key
+  split by a joiner) refused before anything is sent.
+- Output: titles and links only inside the fence, in GIPHY's order (a hostile
+  title, a guessed end marker and control characters included), nothing of a
+  result outside it, `postAs: "link"`, the guidance to post one only when
+  someone asks, as a link, and "Powered By GIPHY" in `data` / the summary,
+  and a description that says `only when someone asks`; media-link
+  validation (http, look-alike and suffix hosts, `giphy.com` page URLs,
+  `media5`, credentials, port 8443, trailing dot, over 2048 characters, and
+  Discord markdown or a mention after the host — `)[click](…)` in the path or
+  query, `<@…>`, `**`, `|`, `@everyone` — dropped; a fragment cut off;
+  GIPHY's own `?cid=…&rid=…&ct=g` links kept whole; `tinygif`-only results
+  keep their `Small GIF:` line; results without a valid link dropped and
+  counted in `data.dropped` and the summary; at most `--limit`); results
+  that all fail the link check are an ok `(no results)` that says how many
+  were left out, while a real empty search says nothing of the kind;
+  `(no results)`; a 2xx `error` body → `api-error`, a body without
+  `results` → `bad-response`.
+- SAFE-6: GIPHY echoing the key or the request URL in titles, links, a 401 /
+  500 / 2xx error body, a non-JSON body, a redirect Location, a transport
+  error or a DNS error never brings back the key or the request's query
+  string (GIPHY's own echo inside the fence reads `key=[redacted:env-secret]`,
+  and no error names the path, `key=` or the Location); the key split by a
+  zero-width space, a soft hyphen, a bidi isolate, a tag character or BEL
+  never comes back whole; through `runPlugin` the result and the audit rows
+  hold neither the key, the path, `key=`, the API host nor the pinned
+  address; the env drop lists (workers, verify lane, Fledge children),
+  `redactSecretEnvValues` and `formatErrorLine`.
+- Transport: a non-public answer for `api.giphy.com` is refused before
+  connecting (exit 2), a redirect after one dial (exit 2, Location not
+  echoed); 401 / 403 / 400 / 422 / 429 / 503, `text/html`, malformed JSON, a
+  body over the byte cap (`too-large`) and a failed connection (`network`,
+  host and fixed reason only) map to fixed codes; the run's abort ends a pending search (`aborted`, the
+  transport's signal aborted), a stalled one times out, a run already stopped
+  sends nothing; an unexpected failure is the fixed line.
+- SAFE-8 ($0 rows): a 2xx settles `actual` at 0, also for an `error` body
+  or a body without `results`; an HTTP error or a refusal before connecting
+  settles `failed`, a network failure `estimated`; an invalid
+  `CORVIDINHO_DAILY_SPEND_CAP_USD` stops the search with the spend-cap ask,
+  with no DNS, request or ledger row.
+- Docs: `.env.example` has `# GIPHY_API_KEY=`; `docs/DISCORD-GO-LIVE.md` has
+  the `gif-search` table row, `GIPHY_API_KEY`, `contentfilter=medium` and
+  "Powered By GIPHY".
+
+Updated: `tests/roles.team.test.ts` and `tests/web.search.test.ts`
+(REQ-plugins-065: `TEAM_SEARCH_TOOLS` is `gif-search` and `web-search`; the
+team catalog offers `gif-search`, the community catalog does not;
+REQ-plugins-318: `--query`, `--count` or `--freshness` given twice is a
+usage error). `tests/fledge.plugins.test.ts` (REQ-plugins-114, unchanged
+test) keeps the whole tool surface (builtins plus a fake Fledge plugin)
+under the default budget of 9000: `gif-search` adds about 92 tokens, and
+shorter `web-fetch` and `web-search` descriptions (the same rules, less
+wording) make room for it.
+
+## Roles on GitHub in the tool layer (REQ-plugins-1201 added, REQ-plugins-065 modified; IDENTITY-12.a)
+
+- `tests/watch.github-roles.test.ts` (with the WATCH cases under the watch
+  module): the env a real WATCH spawn hands its child, applied to this
+  process.
+  - "owner and team by GitHub numeric id": `resolveActingIsAdmin` /
+    `resolveActingRole` give owner for the owner's id, team for the team
+    member's; the owner stamp on a stranger's, a re-registered login's or a
+    declared community person's id, a team stamp on the owner's id, a
+    community stamp, a login with no id, the owner's Discord id in a WATCH
+    env, and no WATCH session id all give community.
+  - "a Discord run never uses the GitHub keys": surface `chat` with the
+    owner's GitHub id and no Discord actor → community; with the owner's
+    Discord id → owner.
+  - "live": a team member demoted in the file, on GitHub `deny_users` by
+    login or by id, on `[discord].deny_users` or in `DISCORD_MUTED_USER_IDS`
+    → community at the next call, team again once restored; the owner with no
+    `[owner] github_id` or an unreadable file → community.
+  - "team on GitHub": never a `/work` task (`actingWorkTask` false with a
+    stale stamp), review tools allowed, `files-edit` and `git-push` refused;
+    the owner gets both.
+  - "the owner's must-ask call raises the owner's Approve card": a mutating
+    `prod` must-ask command run through `runPlugin` raises one `mustask` card
+    titled `… · from watch:watch_w1`, runs once on approval, and is refused
+    with nothing run on a deny. Team, community and a re-registered login's
+    run get `not allowed for your role` and no card.
+  - WATCH limits: `secretPathsRefused` is true for the owner's WATCH run and
+    false for the owner's Discord run; `shellToolsGate` refuses the owner's
+    WATCH run; a `delegate` worker built from it resolves community.
+- `tests/agent.safe3a-owner-shell.test.ts` "WATCH, a schedule, a delegate
+  worker and a local CLI run: refused" (updated): a watch stamp with only the
+  owner's Discord id is community now; the owner's GitHub-stamped WATCH run
+  (`CORVIDINHO_WATCH_SESSION_ID`, `[owner] github_id`) is offered
+  `files-delete` but never `shell-exec` / `fledge-run` ("WATCH runs never get
+  them").
+- Fail on base: see the watch module's entry (9 of 12 fail with the base
+  sources, 12 of 12 pass restored).
+## shell-exec never approves, reviews or finalizes a SpecSync change (REQ-plugins-1818, AGENT-18.a)
+
+`tests/shell.sdd-lifecycle.test.ts` through `runPlugin` (`shell-exec`
+allowlisted): temp dirs only, a fake `specsync` on PATH that logs its argv and
+changes the change folder like the real one (approve writes `approvals.json`,
+review `review.json`, finalize / ship archive the folder), fake `bunx` / `npx`
+that log and run it; every refused command starts with `touch spawned`.
+Each refusal is exit 2, `shell-exec refused (AGENT-18.a): …` carrying
+`HUMAN_LIFECYCLE_LINE` and "never does in any repo", `data.rule`
+`AGENT-18.a` with its `step` (null when it can't be read) and `script`, and
+leaves no marker, no specsync or runner call, the `.specsync/` tree
+byte-for-byte unchanged, no `approvals.json` / `review.json` and no
+`.specsync/archive`:
+- approve / review / finalize / ship in a SpecSync repo, in a plain folder
+  (no git, no SpecSync) and on Corvidinho (test seam) with the run's ledger
+  holding `c1` right after a green lane (`selfLifecycleRefusal` would let the
+  plugin approve it);
+- through `sh -c`, `bash -c`, `eval`, `$(…)`, backticks, a function, `if`,
+  a pipeline, quote removal (`appr\ove`, `'fin'alize`) and `$'approve'` (dash
+  reads it as an expansion: step null);
+- behind `env`, `timeout`, `nohup`, `xargs`, `sudo -u`, `exec`, `command`,
+  `find -exec`, the absolute path, `./tools/specsync`, `../tools/specsync`
+  after a `cd`, a symlink `./bin/ss`, `bunx`, `npx -y specsync@6.0.0`,
+  SpecSync's options before the step, and an expanding command word;
+- a step that expands (`"$S"`, `$(echo approve)`) or that xargs supplies;
+- in-root scripts: `sh x.sh`, `bash ./x.sh`, `. ./x.sh`, `./y.sh`, naming
+  the script.
+Read-only `change status|list|show|check|ship-status`, `specsync check`
+(with `--require-coverage 100`), options before `status` and
+`xargs specsync change status` run (the fake logs each argv, the tree is
+unchanged); words that only mention a step (`echo approve …`, a `grep`
+pattern, a `change new` / `change answer` text) run. `shellProdWhy` raises
+no Approve card for `specsync change approve c1 && kubectl get pods`
+(`kubectl get pods` alone still asks). The settle path: on Corvidinho with the
+verified ledger, `specsync-change-approve` still spawns
+`change approve c1 --actor corvid-agent` directly and writes
+`approvals.json`. A unit test of `firstLifecycleStep`: option values,
+`--root change change review`, `cargo run --bin specsync -- change` (and
+`--bin=specsync`), a here-doc handed to `sh`, `watch -n 5 specsync …`,
+`pnpm dlx @corvidlabs/specsync@6`, expanding steps and command words,
+`specsync check change approve` (not a step), `echo specsync change approve`
+(fails closed), `specsync-helper` (not specsync), separate commands, and
+the `bun -e` residual.
+- Fail on base (e1a24ed2's `plugins/shell/commands.ts` and
+  `plugins/shell/must-ask.ts` swapped in, `sdd-lifecycle.ts` removed): 9 of 11
+  fail (every refusal case, the Approve-card case and the unit test); the
+  read-only and settle cases pass on both. Restored: 11 of 11 pass.
+- `tests/agent.repo-ways.test.ts` (the `runTask` settle cases, REQ-agent-519)
+  passes unchanged.
+## The hi/ refusal names the owner's card and hi-draft (REQ-plugins-520 modified; AGENT-18 hi drafts)
+
+`tests/agent.hi-guard.test.ts`: the `files-write` refusal under `hi/` now
+says criteria change only through a capture the owner approves on a card
+(and points at `hi-draft`); every other file-tool case is unchanged and
+passes (20 of 20).
+## The /work round driver shares the review step (REQ-plugins-092 modified; GITHUB-9, GITHUB-9.a)
+
+`tests/work.review.test.ts` ("/work: an owner or team run drives the review
+rounds", temp repos with a bare origin, scripted provider): the untracked
+new file is in the reviewed diff, the reviewer gets `Title: Corvidinho /work
+task` and never the task text, the rounds are stored (round 1 open with its
+finding, round 2 `clean` with `M  src/greet.ts` changed), `workTreeReviewed`
+is true for the tree /work ships, and the /work PR body has the section; a
+spend-cap stop gives the hook's `ask` when the run left one, else a refusal,
+and records nothing; `workReviewFeedback` stays within 3800 characters
+(under the 4000 verify feedback cap) with its fence whole and later findings
+counted. The existing `github-pr-create` cases (run model, no run model,
+declined, max-rounds, refusals) still pass on the shared `reviewStep`. Fail
+on base: the file cannot load (the `/work` exports are missing).
+## `.trust.toml` is SAFE-2 protected (REQ-plugins-525 added; AGENT-18 Trust clause)
+
+`tests/agent.trust-verify.test.ts` (".trust.toml is SAFE-2 protected like
+fledge.toml"): `isProtectedPath` for `.trust.toml` in any directory and case,
+not for `trust.toml`, `docs/trust.md` or `.trust.toml.bak`; `files-write`
+(relative, `./`, absolute, new `sub/.trust.toml`), `files-edit` and an
+allowlisted `files-delete` refuse with SAFE-2 (exit 2) and leave the file
+unchanged; `files-read .trust.toml` and `files-write trust.toml` work;
+`discord-send-file`'s `fileAttachment` refuses it with SAFE-2; `git-commit`
+refuses to stage the deletion of a tracked `.trust.toml`. Both tests fail
+with the base sources.

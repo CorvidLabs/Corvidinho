@@ -150,12 +150,14 @@ describe("bun test preload never writes the operator data dir (SAFE-5)", () => {
     expect(probe!.worktreeBase).toBeNull();
   }, 60_000);
 
-  test("bot run settings (non-interactive, spend cap, LLM keys and model config, a scheduled run's session id) do not reach the suite", async () => {
+  test("bot run settings (non-interactive, spend cap, LLM, Brave and GIPHY keys and model config, a scheduled run's session id) do not reach the suite", async () => {
     // A Discord / WATCH / daemon task run sets CORVIDINHO_NON_INTERACTIVE=1 and
     // its verify lane runs this suite; with it, a SAFE-8 cap or an LLM key in
     // the env, CLI and mock-LLM tests fail (or call a real model) off CI. A
     // scheduled run's `schedule_*` session id narrows the GitHub gate
     // (DISCORD-SCHEDULE-3.a), so the ROLES-CHAT-8 tests would fail under it.
+    // A Brave key (PLUGIN-7) would let a test send a real, paid search, a
+    // GIPHY key (PLUGIN-8) a real GIF search.
     const op = operatorDir();
     const { code, probe, out } = await runProbe(op, {
       CORVIDINHO_NON_INTERACTIVE: "1",
@@ -173,9 +175,13 @@ describe("bun test preload never writes the operator data dir (SAFE-5)", () => {
       CORVIDINHO_LLM_MODEL_READ: "anthropic:operator-read",
       CORVIDINHO_LLM_MODEL_TOOL: "ollama:operator-tool",
       CORVIDINHO_LLM_MODEL_CODE: "ollama:operator-code",
+      // AGENT-17.a: the operator's model order would move a stalled test run.
+      CORVIDINHO_LLM_MODEL_ORDER: "ollama:operator-model,ollama:operator-code",
       CORVIDINHO_LLM_BASE_URL: "http://127.0.0.1:9/v1",
       CORVIDINHO_LLM_TIER: "read",
       CORVIDINHO_DISCORD_SESSION_ID: "schedule_sched_verifylane",
+      BRAVE_SEARCH_API_KEY: "test-key-not-real",
+      GIPHY_API_KEY: "test-key-not-real",
     });
     expect(code, out).toBe(0);
     expect(probe, out).not.toBeNull();

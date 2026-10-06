@@ -87,6 +87,11 @@ on the same data dir:
   note saying the schedule is waiting (no ping; it carries the same
   buttons). `/schedule resume` does
   not answer it. The answer goes to the schedule's next run.
+- A run the daemon claims has no **Stop** button on Discord: the owner or
+  the schedule's creator can stop a scheduled run from Discord only when
+  the bridge's own ticker started it (AGENT-3.c; see
+  [`discord.md`](discord.md) "Stopping a scheduled run"). Stop the daemon
+  (SIGTERM) to stop the daemon's runs.
 
 ## Nightly backup (OPS-1/2)
 
