@@ -7,10 +7,11 @@
   "title": "The verify lane, the shell and the runners start without my cloud credentials (KUBECONFIG, AWS, Google Cloud, Azure and similar), so they can't reach prod by accident (SAFE-21.b)",
   "description": "The verify lane, the shell and the runners start without my cloud credentials (KUBECONFIG, AWS, Google Cloud, Azure and similar), so they can't reach prod by accident (SAFE-21.b)",
   "kind": "feature",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "178480af5e09e7f111a451b44dbd1a86f484ffea",
   "created_at": 1791246275,
-  "updated_at": 1791246732,
+  "updated_at": 1791246750,
   "affected_specs": [
     "agent",
     "plugins"

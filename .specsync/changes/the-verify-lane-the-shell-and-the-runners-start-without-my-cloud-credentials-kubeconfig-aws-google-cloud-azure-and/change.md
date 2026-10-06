@@ -1,6 +1,6 @@
 ---
 id: the-verify-lane-the-shell-and-the-runners-start-without-my-cloud-credentials-kubeconfig-aws-google-cloud-azure-and
-state: approved
+state: implementing
 type: feature
 base_commit: 178480af5e09e7f111a451b44dbd1a86f484ffea
 ---
