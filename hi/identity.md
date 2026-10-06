@@ -28,6 +28,7 @@ Corvidinho knows a durable owner (Discord user id, optional GitHub / display suc
 - **IDENTITY-11**  Community members get Q&A and announcements only, with no mutating tools.
   - **IDENTITY-11.a**  Community members can't start /work.
 - **IDENTITY-12**  The role is checked in the tool layer on every run and surface; anyone undeclared is community at most.
+  - **IDENTITY-12.a**  On GitHub, the owner and team members I've declared get their role's tools too, behind the same must-ask gate; anyone else stays community.
 
 ## Notes (not numbered AC)
 
