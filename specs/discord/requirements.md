@@ -3990,8 +3990,10 @@ were waiting still run afterwards, in order, each with its own button
 carries the same button and a press on it takes this same path, the
 schedule's creator in the requester's place; only a press with no guild on
 the running turn of a schedule with no channel, whose button is in the
-owner's DM (`inOwnerDm`), skips the channel gate (`pressPassesGates` with
-`inDm`), keeping the actor and mute / rate gates; every other press keeps it.
+owner's DM (`inOwnerDm`), or the owner's press with no guild on a Stop button
+whose message shows no running turn (which gets `Nothing is running.`), skips
+the channel gate (`pressPassesGates` with `inDm`), keeping the actor and mute
+/ rate gates; every other press keeps it.
 No new env var, config key, slash command, table or schema change.
 
 Acceptance Criteria
@@ -4008,7 +4010,7 @@ Acceptance Criteria
 - `ThinkingStatus`: components go out with the progress embed (or on a reused stub, by `editMessage` else `editEmbed`), working edits leave them, `done` and `fail` send `components: null`, the collapsed answer carries none or the answer's own; without components no call carries a `components` field and a reused stub's button is still cleared.
 - `parseStopRunCustomId`: `cvstop:run_7` gives `run_7`; `cvstop-schedule:run_7`, extra parts, a missing or malformed id, an ask's or a card's custom id give null.
 - With the base's sources these tests fail; they pass on the branch.
-- A schedule run's Stop button: the creator's or the owner's press stops it, anyone else's gets `This Stop button isn't for you.`; the owner's press in a DM (no guild) on a no-channel schedule's running turn passes without the channel gate, and the same message pressed in a guild channel off the allowlist stops nothing (REQ-discord-304).
+- A schedule run's Stop button: the creator's or the owner's press stops it, anyone else's gets `This Stop button isn't for you.`; the owner's press in a DM (no guild) on a no-channel schedule's running turn passes without the channel gate, the owner's later press there gets only `Nothing is running.` while anyone else's DM press on it keeps the channel gate, and the same message pressed in a guild channel off the allowlist stops nothing (REQ-discord-304).
 
 ### REQ-discord-032
 
@@ -4244,6 +4246,9 @@ daemon passes none: its runs have no Stop control and run as before.
   as before. A press with no guild on a running turn whose button is in the
   owner's DM (`inOwnerDm`) SHALL skip only the channel gate
   (`pressPassesGates` `{ inDm }`), keeping the actor and mute / rate gates;
+  so SHALL the owner's press with no guild on a Stop button whose message
+  shows no running turn (such a DM after its run ended, or one a dead bridge
+  left), which then gets only `Nothing is running.` (not the allowlist tip);
   every other press keeps the channel gate. The bridge reads no DM text, so
   in a DM only the button stops the run.
 - After `runChat` returns (or throws), `runOne` SHALL `finish()` the handle
@@ -4264,9 +4269,16 @@ daemon passes none: its runs have no Stop control and run as before.
   and error and no ask, and leaves `consecutive_failures` as it is, in the
   same IMMEDIATE transaction; `finish` neither auto-pauses nor returns an ask.
   It SHALL post nothing else (no ✅ / ❌ line, no question, no DISCORD-3.b
-  failure DM), still hand a spend warning to the owner's spend DM
-  (SAFE-14.a), and log `[scheduler] run <run id> of schedule <id> stopped on
-  Discord by <user id>`. The stop ends that run only: the schedule stays as
+  failure DM) — except that when a tool result in the stopped run looked like
+  a prompt-injection attempt (SAFE-13, `result.injection`) the schedule's
+  channel, re-checked with `gateTick`, SHALL get one harness post
+  `⏹ <scheduleTitle>: stopped.` carrying the SAFE-13 owner line
+  (`withInjectionNotice`, pinging the configured owner; no `modelText`, so no
+  AUTONOMY-10.a hold), as a stopped chat run's `⏹ Stopped` carries it; a
+  schedule with no channel posts nothing, as for a run that ends on its own —
+  still hand a spend warning to the owner's spend DM (SAFE-14.a), and log
+  `[scheduler] run <run id> of schedule <id> stopped on Discord by <user
+  id>`. The stop ends that run only: the schedule stays as
   it is (its `next_run_at` was set when the run was claimed), so its next due
   run goes ahead as usual.
 - No new env var, config key, slash command, table, column or schema
@@ -4275,8 +4287,8 @@ daemon passes none: its runs have no Stop control and run as before.
 Acceptance Criteria
 - `tests/discord.schedule-stop.test.ts`: through a dry-run bridge, a due schedule's run sends one progress embed `⏳ Schedule **<name>** … running.` to its channel with one red `Stop` button `cvstop:run_<n>`, and its agent gets a signal and the `schedule_<id>` session; a third user's press gets only `This Stop button isn't for you.` and aborts nothing; the creator's press gets only `⏹ Stopping the run.` and aborts the run once; the row is `failed` / `stopped` / `stopped on Discord by <creator>` with no ask, the schedule `active` with its failure count 0 and its next run in the future; the progress message ends `⏹ Stopped` with `components: null`; nothing is posted; a later press gets `Nothing is running.`; the next due run gets its own button, posts its ✅ result and its progress message is deleted.
 - Same file: the owner's `Cancel!` reply to the progress message of someone else's schedule run stops it (one ack reply to the stop message; the row stopped by the owner; no session of the owner's); a third user's `stop` reply does nothing.
-- Same file: a schedule with no channel DMs the owner the line, then adds the Stop button to that DM; the owner's press there (no guild) stops it and the DM is edited to `⏹ Stopped` with `components: null`; the next run, which ends on its own, has its DM deleted; nothing goes to a channel. The same message pressed in a guild channel off the allowlist stops nothing.
-- Same file, `SchedulerService` with a fake control: at `FAILURE_AUTO_PAUSE - 1` failures a stopped run keeps the count, the schedule stays `active`, the question the stopped run raised is not stored or posted, and the control is finished once; a run nobody stopped finishes the control before its ✅ post; a `begin` that throws is logged and the run goes on; a run abandoned at shutdown stays `interrupted: bridge shutdown` even when the control reports a stop.
+- Same file: a schedule with no channel DMs the owner the line, then adds the Stop button to that DM; the owner's press there (no guild) stops it and the DM is edited to `⏹ Stopped` with `components: null`; the owner's later press there gets only `Nothing is running.` and another user's DM press on it keeps the channel gate; the next run, which ends on its own, has its DM deleted; nothing goes to a channel. The same message pressed in a guild channel off the allowlist stops nothing.
+- Same file, `SchedulerService` with a fake control: at `FAILURE_AUTO_PAUSE - 1` failures a stopped run keeps the count, the schedule stays `active`, the question the stopped run raised is not stored or posted, and the control is finished once; a stopped run whose tool result looked like an injection (SAFE-13) posts exactly one line to its channel, `⏹ Schedule **<name>** … : stopped.` with the owner's `🛡️ <@owner> heads-up: …` line, mentioning only the owner and not marked model text; a run nobody stopped finishes the control before its ✅ post; a `begin` that throws is logged and the run goes on; a run abandoned at shutdown stays `interrupted: bridge shutdown` even when the control reports a stop.
 - Same file, `createScheduleRunStop`: no owner or no DM gives null; a DM whose button edit fails is deleted and its turn released; a channel run's turn is `schedule_<id>` / the creator / the channel, `SessionRunControl.stop` aborts the handle's signal, and `finish` resolves the stopper (twice), releases the turn and edits `⏹ Stopped` with `components: null`.
-- With the base's sources (the branch's new `schedule-stop.ts` kept) the bridge and `SchedulerService` tests fail; the two `createScheduleRunStop` units (the new module) pass on both.
+- With the base's sources (the branch's new `schedule-stop.ts` kept) the bridge and `SchedulerService` tests fail; the two `createScheduleRunStop` units (the new module) pass on both. Without the SAFE-13 stop line the injection test fails.
 
