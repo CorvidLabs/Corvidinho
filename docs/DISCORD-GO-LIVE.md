@@ -300,8 +300,10 @@ which are read from disk into every run's instructions there; you edit those you
 In a repo that uses hi (a `hi/*.md` with `hi:` front matter), `files-write`, `files-edit` and `files-delete` refuse every
 path under `hi/` (`refused (AGENT-18): '<path>' is under hi/, …`; reads still work): the agent
 never changes a repo's criteria itself. Criteria change only through a capture the owner
-approves, and no run can make one yet, so any `hi/` change since the session base, however it
-was made, also keeps a run from being verified, `/work` from opening a PR, and the run's own
+approves on the hi card (the owner's and the team's runs draft them with `hi-draft`; see
+[`discord.md`](discord.md) "Drafted hi criteria wait for your card"), so any other `hi/` change
+since the session base, however it was made, also keeps a run from being verified, `/work` from
+opening a PR, and the run's own
 `github-pr-create` from opening one (`refused (AGENT-18): … so this run opens no PR`). The
 session base is where the run's branch left the remote's default branch (HEAD at planning
 when there is none): a capture a person made with the `hi` CLI outside any run that is already

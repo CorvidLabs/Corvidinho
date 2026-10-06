@@ -643,6 +643,12 @@ under the default budget of 9000: `gif-search` adds about 92 tokens, and
 shorter `web-fetch` and `web-search` descriptions (the same rules, less
 wording) make room for it.
 
+## The hi/ refusal names the owner's card and hi-draft (REQ-plugins-520 modified; AGENT-18 hi drafts)
+
+`tests/agent.hi-guard.test.ts`: the `files-write` refusal under `hi/` now
+says criteria change only through a capture the owner approves on a card
+(and points at `hi-draft`); every other file-tool case is unchanged and
+passes (20 of 20).
 ## The /work round driver shares the review step (REQ-plugins-092 modified; GITHUB-9, GITHUB-9.a)
 
 `tests/work.review.test.ts` ("/work: an owner or team run drives the review

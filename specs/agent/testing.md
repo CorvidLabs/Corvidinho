@@ -944,7 +944,8 @@ prose; `hiChangesSince` sorts a reworded criterion, a retired one, an
 intent-prose edit, a committed new criterion, an untracked note and an
 ignored swap file, and a deleted file into criteria / retired / files;
 `hiChangesFromSnapshot` does the same for a non-git project; `hiGuardNote`
-names them and says no run can make an approved capture yet. Through
+names them and says only what approved captures made passes (worded "no run
+can make an approved capture yet" before the hi drafts change). Through
 `runTask`: a shell-style hi/ edit fails verify with the `hi guard:` note and
 no lane call, the retry's feedback carries it, and once hi/ is put back the
 lane runs once and the run is verified; a hi/ change that stays ends
@@ -1077,6 +1078,46 @@ In `tests/gif.search.test.ts`:
   loop that search ends the attempt with `SPEND_CAP_SUMMARY` and the ask
   after one model call.
 
+## hi drafts: the run drafts and asks; the guard lets through only approved captures (REQ-agent-521, REQ-agent-522, REQ-agent-520 modified; AGENT-18 hi clause, drafting half)
+
+`tests/agent.hi-draft.test.ts` (17 tests; temp git repos with a bare
+`origin` and talk worktrees from `ensureTalkWorkspace`, a stand-in `hi` on
+PATH from `tests/fixtures/stand-in-hi.ts`, a scripted model, stub verify
+runners; requests and the ledger in the test data dir): argument parsing
+(one line, whitespace collapsed, control characters, too many) and
+`validateHiDrafts` (unknown family, captured, retired, twice, missing parent,
+parent drafted earlier, over 400 characters, a secret-looking text refused);
+the exact command's shell quoting; `hiDraftGate` gives `card` to the owner's
+and a team member's chat / ask / session / work runs and `cli` to a local
+CLI run, and nothing to community (a team member stamped community too),
+WATCH, schedules, workers, no surface, a non-hi repo, a non-git cwd, the
+main checkout, another talk's worktree, a CLI run with a Discord session id
+or from inside a tool. Through `createTaskExecute`: the owner's chat offers
+`hi-draft`, records one pending request with every field and ends with the
+clarify ask; a second draft of an id already on an open card is refused and
+records no second request; `runTask` with a team
+member ends `blocked` with no lane call; a community run is not offered it
+and its call is refused; a delegate worker is not offered it; bad drafts come
+back to the model one by one and record nothing; the CLI lists the exact
+commands and records nothing. Guard: an approved capture (`runHiCapture`
+inside a transaction) is one commit on the session's branch changing only
+`hi/agent.md`, the main checkout untouched; `hiChangesSince` then lists
+nothing, also with more commits on top, and the next run is verified; an extra criterion on top, a
+new `hi/notes.md`, and a ledger step of a pending request still block;
+`openWorkPr` is not refused with `hi-changed`. `tests/agent.hi-guard.test.ts`
+(20) and `tests/agent.repo-ways.test.ts` (27) pass with their texts updated
+(the guard note, the files refusal, the hi block with and without `hiDraft`).
+- Fail on base (main e1a24ed2, after #348 merged: its `src/agent/execute.ts`,
+  `ask.ts`, `repo-ways.ts`, `loop.ts`, `src/work/pr.ts`,
+  `src/discord/approval-cards.ts`, `bridge.ts`, `slash-types.ts`,
+  `command-handlers/work.ts` and `plugins/files/protectedPaths.ts` swapped
+  in, the new `hi-drafts.ts`, `hi-capture-store.ts` and `hi-card.ts` kept so
+  the files load): 8 of 17 fail — every run case (not offered, no request,
+  no ask, no dedupe) and the two guard cases that need the allowance (the
+  next run is blocked; `/work` is refused `hi-changed`); the 9 that pass are
+  the new module's own units, the gate, the capture itself and the
+  still-blocking cases. Without the new modules the file does not load.
+  Restored: 17 of 17 pass.
 ## /work runs its second-model review rounds before done (REQ-agent-092 modified; GITHUB-9, GITHUB-9.a)
 
 `tests/agent.loop.test.ts` ("runTask second-model review before the PR",

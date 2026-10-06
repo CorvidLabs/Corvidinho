@@ -13,8 +13,8 @@
  * (AGENT-18, REQ-agent-518); on Corvidinho the run then approves and
  * archives the change it opened and verifies again (AGENT-18.a,
  * REQ-agent-519). In a hi repo, any change under hi/ since the session base
- * fails verify before the lane, since no run can make an approved capture
- * yet (AGENT-18 hi guard, REQ-agent-520). An idle timeout I set stops a run
+ * that approved captures did not make fails verify before the lane
+ * (AGENT-18 hi guard, REQ-agent-520 / REQ-agent-522). An idle timeout I set stops a run
  * that went quiet, and the result says when a limit I set stopped it
  * (AGENT-12, REQ-agent-244 / REQ-agent-312; src/agent/limits.ts). A /work
  * run (`review`) is done only after a second model reviewed its verified
@@ -400,9 +400,9 @@ function sddGateNote(cwd: string, scan: RepoWaysScan, paths: string[] | null): s
  * and now, merged), the note when anything under hi/ differs from the
  * session base — a criterion, a retired entry or any other file, made by this
  * run or left by an earlier one — or from hi/ at planning when the run has no
- * git base; null when hi/ is unchanged or the repo does not use hi. No run
- * can make an approved capture yet, so every change blocks; what can't be
- * read fails closed.
+ * git base; null when hi/ is unchanged or the repo does not use hi. Only a
+ * change approved captures alone explain is left out (REQ-agent-522); every
+ * other change blocks, and what can't be read fails closed.
  */
 async function hiGateNote(cwd: string, sdd: SddRun, scan: RepoWaysScan): Promise<string | null> {
   if (!scan.ways.hi) return null;

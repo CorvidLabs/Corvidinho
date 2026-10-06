@@ -1,9 +1,10 @@
 /**
  * AGENT-18 / AGENT-18.a (#89): it works each repo's own way. This module
- * covers the SpecSync clause, the guard half of the hi clause and the Trust
+ * covers the SpecSync clause, the guard half of the hi clause, the Trust
  * clause's detection ({@link usesTrust}: the verify runner,
- * src/agent/verify.ts, then also runs `fledge trust verify`); hi drafting
- * with the capture card comes later.
+ * src/agent/verify.ts, then also runs `fledge trust verify`), and hi
+ * drafting with the capture card (src/agent/hi-drafts.ts,
+ * src/discord/hi-card.ts).
  *
  * - {@link detectRepoWays} finds the ways a repo uses: a SpecSync change
  *   workflow (`.specsync/sdd.json` with `enabled: true`), hi criteria (a
@@ -29,11 +30,16 @@
  *   other hi/ file by path; {@link hiChangesFromSnapshot} for a run with no
  *   git base), and {@link hiGuardNote} is the one line that blocks done (the
  *   verify gate, src/agent/loop.ts) and the PR (`/work` before commit and
- *   push, src/work/pr.ts). No run can make an approved capture yet (drafting
- *   and the capture card come later), so any hi/ change blocks. The file
- *   tools refuse writes, edits and deletes under hi/ in hi repos
- *   (plugins/files). Commits made outside a Corvidinho run are never
- *   checked: the guard lives only in the run's gate and the `/work` PR step.
+ *   push, src/work/pr.ts). The only hi/ change that passes is one approved
+ *   captures made: a run drafts criteria with `hi-draft`
+ *   (src/agent/hi-drafts.ts), the owner approves them on the `hi` card, and
+ *   the capture records what it changed (src/agent/hi-capture-store.ts); a
+ *   changed path whose content now is exactly what those captures made from
+ *   its content at the base is left out ({@link withoutApprovedCaptures}).
+ *   Every other hi/ change blocks. The file tools refuse writes, edits and
+ *   deletes under hi/ in hi repos (plugins/files). Commits made outside a
+ *   Corvidinho run are never checked: the guard lives only in the run's gate
+ *   and the `/work` PR step.
  * - AGENT-18.a: on Corvidinho itself it may approve and archive its own
  *   change once verify is green; elsewhere a human approves, reviews and
  *   finalizes. {@link isCorvidinhoProject} is a fixed fact (the project is
@@ -60,6 +66,7 @@ import {
 import { join, resolve } from "node:path";
 import { runGit, type GitRun } from "../../plugins/git/exec.ts";
 import { delegateDepthFromEnv } from "../autonomous/delegate.ts";
+import { HI_ABSENT, hiCaptureChainAllows, hiContentKey, loadHiCaptureEdges } from "./hi-capture-store.ts";
 import type { PluginHandlerResult } from "../plugins/types.ts";
 import { isScheduleRunEnv, resolveActingRole } from "../plugins/roles.ts";
 import { scrubSecrets } from "../store/scrub.ts";
@@ -479,8 +486,11 @@ export function formatRepoWaysLine(ways: RepoWays): string | null {
   return `Repo ways (AGENT-18): ${found.join(", ")}.`;
 }
 
-/** The fixed prompt block the tool loop adds for the ways found ("" when none applies). */
-export function renderRepoWaysBlock(ways: RepoWays | undefined): string {
+/**
+ * The fixed prompt block the tool loop adds for the ways found ("" when none
+ * applies). `hiDraft`: this run is offered `hi-draft` (AGENT-18 hi drafts).
+ */
+export function renderRepoWaysBlock(ways: RepoWays | undefined, opts: { hiDraft?: boolean } = {}): string {
   if (!ways) return "";
   let out = "";
   if (ways.sdd) {
@@ -497,9 +507,13 @@ export function renderRepoWaysBlock(ways: RepoWays | undefined): string {
       "\n\nThis repo keeps its acceptance criteria in hi/ (AGENT-18). Never invent criteria: " +
       "an acceptance_criteria answer cites the captured hi ids it meets (as hi export lists them). " +
       "Never change hi/ yourself: the file tools refuse every write, edit and delete under hi/, and any change there " +
-      "since the session base (a criterion, a retired entry, intent prose or any other hi/ file, however it was made) " +
+      "since the session base that approved captures did not make (a criterion, a retired entry, intent prose or any other hi/ file, however it was made) " +
       "keeps the run from being verified and /work from opening a PR. Criteria change only through a capture the owner " +
-      "approves, and no run can make one yet; if a criterion seems missing or wrong, say so in your reply.";
+      "approves on a card. " +
+      (opts.hiDraft
+        ? "When the requester wants a criterion that is not captured yet, draft it with hi-draft (their words, a new id in a family hi/ already has); " +
+          "that ends this run and asks before anything is captured. If a captured criterion seems wrong, say so in your reply."
+        : "This run can't draft one; if a criterion seems missing or wrong, say so in your reply.");
   }
   return out ? `${out}\n\n` : "";
 }
@@ -837,9 +851,10 @@ export function citedHiIds(text: string, families: ReadonlySet<string>): string[
  * AGENT-18, the hi clause's guard half ("never inventing them"): what
  * differs under hi/ between the session base and now. Criteria and retired
  * entries come from a parse of each changed `hi/*.md`
- * ({@link parseHiEntries}); every other changed hi/ path is a file. Any
- * entry in any list blocks done and the PR: no run can make an approved
- * capture yet.
+ * ({@link parseHiEntries}); every other changed hi/ path is a file. A path
+ * whose change approved captures alone explain is not listed
+ * ({@link withoutApprovedCaptures}). Any entry in any list blocks done and
+ * the PR.
  */
 export type HiChanges = {
   /** Criteria added, removed or reworded. */
@@ -1009,6 +1024,64 @@ async function hiHiddenEdits(root: string): Promise<string[] | null> {
   return out;
 }
 
+/** The ledger key of a `hi/` path in the working tree of `root` (HI_ABSENT when missing; null when not a readable plain file). */
+function worktreeHiKey(root: string, path: string): string | null {
+  try {
+    const st = lstatSync(join(root, path));
+    if (!st.isFile() || st.size > READ_MAX_BYTES) return null;
+    return hiContentKey(readFileSync(join(root, path), "utf8"), (st.mode & 0o111) !== 0);
+  } catch (e) {
+    return (e as NodeJS.ErrnoException)?.code === "ENOENT" ? HI_ABSENT : null;
+  }
+}
+
+/** The ledger key of a `hi/` path at commit `base` (HI_ABSENT when not there; null when not a readable plain file). */
+async function baseHiKey(root: string, base: string, path: string): Promise<string | null> {
+  const ls = await runGit(root, ["ls-tree", "-z", base, "--", path], { maxStdoutBytes: HI_LIST_MAX_BYTES });
+  if (!ok(ls)) return null;
+  const rec = zList(ls.stdout)[0];
+  if (rec === undefined) return HI_ABSENT;
+  const m = rec.match(/^(\d{6}) blob [0-9a-f]+\t/);
+  if (!m || (m[1] !== "100644" && m[1] !== "100755")) return null;
+  const text = await blob(root, base, path);
+  return text === null ? null : hiContentKey(text, m[1] === "100755");
+}
+
+/** The ledger key of a snapshot entry (HI_ABSENT when missing; null when not a readable plain file). */
+function snapshotHiKey(e: { fp: string; text: string | null } | undefined): string | null {
+  if (!e) return HI_ABSENT;
+  if (!e.fp.startsWith("file:") || e.text === null) return null;
+  return hiContentKey(e.text, e.fp.startsWith("file:x"));
+}
+
+/**
+ * AGENT-18 hi drafts (REQ-agent-522): `paths` less each one approved
+ * captures alone explain — in the ledger of `root`'s repository (its git
+ * common dir; src/agent/hi-capture-store.ts) a chain of one or more approved
+ * capture steps leads from its content at the base (`before`) to its content
+ * now (`after`). With no git repository, an unreadable ledger, or a key that
+ * can't be read, nothing is left out (fail closed).
+ */
+async function withoutApprovedCaptures(
+  root: string,
+  paths: readonly string[],
+  before: (path: string) => Promise<string | null> | string | null,
+  after: (path: string) => string | null,
+): Promise<string[]> {
+  const all = [...new Set(paths)];
+  if (all.length === 0) return all;
+  const repo = await commonGitDir(root);
+  if (!repo) return all;
+  const edges = loadHiCaptureEdges(repo);
+  if (!edges || edges.size === 0) return all;
+  const out: string[] = [];
+  for (const p of all) {
+    if (edges.has(p) && hiCaptureChainAllows(edges, p, await before(p), after(p))) continue;
+    out.push(p);
+  }
+  return out;
+}
+
 /**
  * AGENT-18 hi guard: what changed under hi/ between commit `base` and the
  * working tree of `root` (a git work tree top): tracked paths that differ
@@ -1042,7 +1115,12 @@ export async function hiChangesSince(root: string, base: string): Promise<HiChan
     if (!ok(others)) return null;
     const hidden = await hiHiddenEdits(root);
     if (hidden === null) return null;
-    const paths = [...zList(diff.stdout), ...zList(others.stdout), ...hidden];
+    const paths = await withoutApprovedCaptures(
+      root,
+      [...zList(diff.stdout), ...zList(others.stdout), ...hidden],
+      (p) => baseHiKey(root, base, p),
+      (p) => worktreeHiKey(root, p),
+    );
     return await classifyHiChanges(
       paths,
       (p) => blob(root, base, p),
@@ -1114,10 +1192,16 @@ export function hiSnapshot(root: string): HiSnapshot | null {
 export async function hiChangesFromSnapshot(root: string, start: HiSnapshot): Promise<HiChanges | null> {
   const now = hiSnapshot(root);
   if (!now) return null;
-  const changed: string[] = [];
+  const differ: string[] = [];
   for (const p of new Set([...start.keys(), ...now.keys()])) {
-    if (start.get(p)?.fp !== now.get(p)?.fp) changed.push(p);
+    if (start.get(p)?.fp !== now.get(p)?.fp) differ.push(p);
   }
+  const changed = await withoutApprovedCaptures(
+    root,
+    differ,
+    (p) => snapshotHiKey(start.get(p)),
+    (p) => snapshotHiKey(now.get(p)),
+  );
   return classifyHiChanges(
     changed,
     (p) => start.get(p)?.text ?? null,
@@ -1144,10 +1228,13 @@ export function hiChangeSummary(c: HiChanges): string {
   return parts.join("; ");
 }
 
-/** Why any hi/ change blocks today (said by the gate note and the /work line). */
+/**
+ * Why such a hi/ change blocks (said by the gate note, the /work line and
+ * `github-pr-create`). The name is kept from the guard's first version.
+ */
 export const HI_NO_CAPTURE_YET =
-  "the agent never changes a repo's criteria itself: they change only through a capture the owner approves, " +
-  "and no run can make one yet (drafting criteria and the capture card come later)";
+  "the agent never changes a repo's criteria itself: they change only through a capture the owner approves " +
+  "on a card (drafted with hi-draft), and only what approved captures made passes";
 
 /**
  * The one line the verify gate and the model get when hi/ changed since the

@@ -62,6 +62,8 @@ files:
   - tests/fixtures/approval-code.ts
   - src/discord/forget-card.ts
   - tests/discord.forget-card.test.ts
+  - src/discord/hi-card.ts
+  - tests/discord.hi-card.test.ts
   - src/discord/spend-card.ts
   - tests/discord.spend-card.test.ts
   - src/discord/watch-ask.ts
@@ -279,7 +281,18 @@ deny | code | submit`), `buildApproveDenyComponents`,
 decision, the waiting run uses it once — REQ-discord-198, SAFE-8 / SAFE-8.a),
 `SPEND_CARD_NOTHING_DONE` ("nothing was spent"), `SPEND_CARD_APPROVED`
 (the card's outcome line) and `SPEND_CARD_UNKNOWN_APPROVED` (the outcome line
-of a card whose amount is unknown, SAFE-16.a, REQ-discord-199). `src/memory/forget.ts` adds
+of a card whose amount is unknown, SAFE-16.a, REQ-discord-199).
+`src/discord/hi-card.ts` exports `hiCaptureApprovalKind(deps)` (the `hi`
+kind, class `plain`, over `hi_capture_requests`: audit prefix `hi-capture`,
+plus one `hi-capture-criterion` row per captured criterion; AGENT-18 hi
+drafts, REQ-discord-521), `HI_CARD_KIND`, `HI_CARD_TITLE`,
+`HI_CARD_NOTHING_DONE` ("nothing was captured"), `hiCardView(req)`,
+`hiCardActionHash(req)` and `hiCardOutcomeText(req)`; Approve commits the
+capture on the session's branch (`hiCaptureCommitMessage(req)` in
+`src/agent/hi-drafts.ts`; the request records the commit). An `ApprovalKind` may
+declare `prepare(req)`, which Approve awaits after the hash check and before
+the SAFE-5 `started` row (a throw: nothing runs, the request stays open).
+`SlashCtx.deliverApprovalCards` runs one card pass when a `/work` run ends. `src/memory/forget.ts` adds
 `previewForgetTargets` (`ForgetCounts`) and `ForgetRequestStore.resetCard`.
 `StartBridgeResult.deliverApprovalCards` (and `deliverForgetCards`, the same
 pass); `StartBridgeOptions.approvalPollMs`. `src/discord/gateway.ts` exports
@@ -708,6 +721,14 @@ entry or any other `hi/` file, an assume-unchanged or skip-worktree edit
 included; a `hi/` commit on the branch counts whoever made it, since the PR
 would carry it), or a hi/ diff that cannot be read, keeps the
 PR from opening before the pre-push lane (so a trusted and a re-run verify
+both hold to it) and before anything is committed or pushed; only a path
+whose change approved captures alone explain is left out (AGENT-18 hi guard,
+REQ-discord-520, REQ-agent-522), and
+`not-reviewed`: `github-pr-create` held the PR at the GITHUB-9 second-model
+review gate (this step has no run model, so it starts no round; only a tree a
+run already had reviewed opens), the line reusing the gate's reason
+(`reviewRefusalReason`) with the changes left on the pushed branch
+(REQ-discord-088). `SCRUB_TARGETS` lists `pr_review_rounds` (`reviewer`, and
 both hold to it) and before anything is committed or pushed: no run can make
 an approved capture yet (AGENT-18 hi guard, REQ-discord-520), and
 `not-reviewed`: right before the commit, no finished second-model review
@@ -1643,4 +1664,5 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-10-01 | in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent: In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard) |
 | 2026-09-30 | web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered: Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap |
 | 2026-10-01 | gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins: GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap |
+| 2026-10-05 | where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts: Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts) |
 | 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |

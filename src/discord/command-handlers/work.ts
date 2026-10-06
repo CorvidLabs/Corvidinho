@@ -146,6 +146,9 @@ export async function handleWorkCommand(
     });
   } finally {
     turn?.done();
+    // AGENT-18 hi drafts (REQ-discord-521): a `hi` card this run raised goes
+    // to the owner now, not only on the engine's next poll.
+    void ctx.deliverApprovalCards?.();
   }
 }
 

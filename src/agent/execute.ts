@@ -163,6 +163,7 @@ import {
 } from "./providers.ts";
 import { maxTurnsFromEnv, whileIdlePaused } from "./limits.ts";
 import { renderRepoWaysBlock, type RepoWays } from "./repo-ways.ts";
+import { HI_DRAFT_TOOL, HI_DRAFT_TOOL_RESULT_DETAIL, handleHiDraftCall, hiDraftGate, withHiDraftTool, type HiDraftMode } from "./hi-drafts.ts";
 import { shellToolsGate, shellToolsRefusedLine } from "./shell-gate.ts";
 import {
   allowlistOffers,
@@ -995,8 +996,14 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
     }
     const autonomous =
       opts.autonomous ?? autonomousSessionAllowed({ cwd, env });
+    // AGENT-18 hi drafts (REQ-agent-521): in a repo that uses hi, the owner's
+    // and the team's own interactive runs and a local CLI run get hi-draft;
+    // the gate re-reads the role and markers for every attempt (and the
+    // call re-checks them). Community, WATCH, schedules and workers never.
+    const hiGate = repoWays?.hi ? await hiDraftGate({ env, cwd, ways: repoWays }) : null;
+    const hiDraft: HiDraftMode | undefined = hiGate?.offered ? hiGate.mode : undefined;
     // AUTONOMY-1: ask-human rides along with the plugin catalog.
-    const tools = withAskTool(
+    const tools = withHiDraftTool(withAskTool(
       buildOpenAiTools({
         tier,
         includeDangerous,
@@ -1010,7 +1017,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
         workTask: actingWorkTask(env, cwd),
         autonomous,
       }),
-    );
+    ), hiDraft);
     const offered = new Set(tools.map((t) => t.function.name));
     const landed = await missingCapabilityReply({
       taskText,
@@ -1049,6 +1056,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
       personaBlock,
       specBriefing,
       repoWays,
+      ...(hiDraft ? { hiDraft } : {}),
       roleEnv: env,
       onRoleRefusal: () => {
         roleRefused = true;
@@ -1160,6 +1168,8 @@ type LoopArgs = {
   specBriefing?: string;
   /** AGENT-18: the repo's ways (fixed prompt block, REQ-agent-518). */
   repoWays?: RepoWays;
+  /** AGENT-18 hi drafts: this run is offered `hi-draft`, and how it ends (REQ-agent-521). */
+  hiDraft?: HiDraftMode;
   /** Env the role session and ADMIN bit are read from (ROLES-CHAT-3/6). */
   roleEnv: NodeJS.ProcessEnv;
   /** Called for each tool call refused for the caller's role (ROLES-CHAT-3). */
@@ -1216,6 +1226,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     personaBlock,
     specBriefing,
     repoWays,
+    hiDraft,
     roleEnv,
     onRoleRefusal,
     injectionTripped,
@@ -1264,7 +1275,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       MISSING_CAPABILITY_INSTRUCTIONS +
       (args.capabilityNote ?? "") +
       // AGENT-18: the fixed block for this repo's own ways ("" when none).
-      renderRepoWaysBlock(repoWays) +
+      renderRepoWaysBlock(repoWays, { hiDraft: Boolean(hiDraft) }) +
       "When finished, reply with one concise plain-text message (no tool call) saying what you did, in the persona's voice — never a flat changelog (PERSONA-1). " +
       "Do not claim files were edited unless a tool result reported filesChanged.",
       personaBlock,
@@ -1527,6 +1538,27 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         return askExecuteResult(asked.ask, filesChanged);
       }
 
+      // AGENT-18 hi drafts (REQ-agent-521): hi-draft validates the drafts and
+      // (in a Discord run) records the capture request for the owner's card,
+      // then ends the run blocked with its ask; nothing is captured here. A
+      // refusal goes back to the model. SAFE-13: never after a tool result
+      // looked like an injection.
+      const drafted =
+        name === HI_DRAFT_TOOL && offered.has(name)
+          ? injectionTripped()
+            ? { ok: false as const, refusal: { ok: false, error: injectionToolRefusal(name), exitCode: 2 } }
+            : await handleHiDraftCall({ rawArgs, cwd, env: roleEnv, ...(repoWays ? { ways: repoWays } : {}) })
+          : null;
+      if (drafted?.ok) {
+        emit(onEvent, {
+          type: "ToolResult",
+          name,
+          success: true,
+          detail: HI_DRAFT_TOOL_RESULT_DETAIL,
+        });
+        return askExecuteResult(drafted.ask, filesChanged);
+      }
+
       // AGENT-16: this exact call kept failing with nothing changed and the
       // model already saw the steer in this conversation — don't run it
       // again; stop with the "stuck" ask (the owner is pinged, AUTONOMY-2/4).
@@ -1553,6 +1585,8 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       try {
         result = asked
           ? asked.refusal
+          : drafted
+          ? drafted.refusal
           : offered.has(name) && name === PR_CREATE_TOOL && prHeldThisBatch
           ? PR_HELD_SAME_BATCH
           : offered.has(name) && injectionTripped() && blockedAfterInjection(name)

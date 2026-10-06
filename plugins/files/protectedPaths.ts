@@ -178,9 +178,9 @@ export function isHiPath(relPath: string): boolean {
 export function hiRefuseMessage(path: string): string {
   return (
     `refused (AGENT-18): '${path}' is under hi/, where this repo keeps its acceptance criteria. ` +
-    `The agent never changes them itself: criteria change only through a capture the owner approves, ` +
-    `which no run can make yet, and any hi/ change keeps the run from being verified and /work from opening a PR. ` +
-    `Reading hi/ is fine; say in your reply what you think is missing or wrong.`
+    `The agent never changes them itself: criteria change only through a capture the owner approves on a card, ` +
+    `and any other hi/ change keeps the run from being verified and /work from opening a PR. ` +
+    `Reading hi/ is fine; draft a missing criterion with hi-draft where this run has it, else say in your reply what you think is missing or wrong.`
   );
 }
 

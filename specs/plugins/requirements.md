@@ -2398,9 +2398,10 @@ resolved by `resolveProjectPath`, and on the path as given), after the
 SAFE-2 check and before anything is read or written, with exit 2 and one
 line (`hiRefuseMessage`): `refused (AGENT-18): '<path>' is under hi/, where
 this repo keeps its acceptance criteria. The agent never changes them itself:
-criteria change only through a capture the owner approves, which no run can
-make yet, and any hi/ change keeps the run from being verified and /work
-from opening a PR. …`. There SHALL be no in-band override. Reads
+criteria change only through a capture the owner approves on a card, and any
+other hi/ change keeps the run from being verified and /work from opening a
+PR. Reading hi/ is fine; draft a missing criterion with hi-draft where this
+run has it, …`. There SHALL be no in-band override. Reads
 (`files-read`, `files-list`, `files-glob`) and `hi/` in a repo that does
 not use hi SHALL be unaffected.
 
@@ -2409,6 +2410,7 @@ Acceptance Criteria
 - A write through a symlink that lands in `hi/` is refused.
 - In a repo whose `hi/` has no hi front matter the write goes through; a non-git hi project refuses.
 - `tests/agent.hi-guard.test.ts` fails on the base sources and passes after.
+- The refusal says criteria change only through a capture the owner approves on a card, and points at `hi-draft` (AGENT-18 hi drafts).
 
 ### REQ-plugins-521
 
