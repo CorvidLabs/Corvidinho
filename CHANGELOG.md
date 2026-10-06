@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.0.42
+
+### Agent / land-wave
+
+- **In a Trust repo the verify gate also runs `fledge trust verify`** — [#364](https://github.com/CorvidLabs/Corvidinho/pull/364) (AGENT-18 Trust clause; tip orphan [#376](https://github.com/CorvidLabs/Corvidinho/pull/376)): with a `.trust.toml` in the session base, HEAD or the working tree, verify runs `fledge trust verify` after `fledge lanes run verify` and both must pass; a fledge with no `trust` command fails closed with the exact reason. Corvidinho's own repo still has no Trust re-add.
+- **`/work` runs its second-model review rounds before the PR and skips with `not-reviewed` otherwise** — [#365](https://github.com/CorvidLabs/Corvidinho/pull/365) (GITHUB-9; tip orphan [#377](https://github.com/CorvidLabs/Corvidinho/pull/377)): completes the `/work` half of the second-model review gate (#341 already did `github-pr-create`). With no second model there is no PR and the reply says why.
+- **Where a repo uses hi it drafts criteria and asks on a card before capturing them** — [#367](https://github.com/CorvidLabs/Corvidinho/pull/367) (AGENT-18 hi drafts; tip orphan [#381](https://github.com/CorvidLabs/Corvidinho/pull/381)): drafts proposed criteria, raises an Approve card, and only captures after the owner OK — never invents HI.
+- **In a hi repo it never changes the criteria itself** — [#348](https://github.com/CorvidLabs/Corvidinho/pull/348) (AGENT-18 hi guard; tip orphan [#366](https://github.com/CorvidLabs/Corvidinho/pull/366)): any `hi/` change no approved capture made blocks done and the PR.
+- **In a non-git project my runs work in the folder itself** — [#351](https://github.com/CorvidLabs/Corvidinho/pull/351) (AGENT-1.a/1.b/1.c; tip orphan [#378](https://github.com/CorvidLabs/Corvidinho/pull/378)): owner runs work in the project folder; file tools leave root `AGENTS.md`/`CLAUDE.md` alone; schedules keep their own folder; others only read there.
+- **After the one nudge it moves to the next stronger model in the order I set, and says so** — [#370](https://github.com/CorvidLabs/Corvidinho/pull/370) (AGENT-17, AGENT-17.a; tip orphan [#384](https://github.com/CorvidLabs/Corvidinho/pull/384)): completes the escalate half of AGENT-17 via optional `CORVIDINHO_LLM_MODEL_ORDER`; with no order set it does not move and the one nudge still happens.
+- **`shell-exec` refuses SpecSync change approve/review/finalize/ship** — [#372](https://github.com/CorvidLabs/Corvidinho/pull/372) (AGENT-18.a; tip orphan [#386](https://github.com/CorvidLabs/Corvidinho/pull/386)): only a human, or Corvidinho's own green-lane settle, does those lifecycle steps.
+
+### Discord / autonomy
+
+- **I or a schedule's creator can stop a scheduled run in progress from Discord** — [#369](https://github.com/CorvidLabs/Corvidinho/pull/369) (AGENT-3.c; tip orphan [#383](https://github.com/CorvidLabs/Corvidinho/pull/383)): same Stop button / stop words as a chat run.
+- **Before each call it counts a worst-case reply toward the cap** — [#371](https://github.com/CorvidLabs/Corvidinho/pull/371) (AUTONOMY-8.a; tip orphan [#385](https://github.com/CorvidLabs/Corvidinho/pull/385)): so long replies cannot pass the spend cap unasked; replies are never cut short.
+- **The fixed bridge-live note is system text and posts without the owner's OK** — [#375](https://github.com/CorvidLabs/Corvidinho/pull/375) (AUTONOMY-10.b; tip orphan [#389](https://github.com/CorvidLabs/Corvidinho/pull/389)): docs/criterion capture; runtime already posted without must-ask (DISCORD-ANNOUNCE-4 unchanged).
+
+### CLI / safe / watch / plugins
+
+- **Doctor and init say when the verify lane runs no test step Corvidinho can read** — [#368](https://github.com/CorvidLabs/Corvidinho/pull/368) (CLI-4; tip orphan [#382](https://github.com/CorvidLabs/Corvidinho/pull/382)): one `[warn] test-step` line when no recognised test runner is in the verify lane.
+- **The verify lane, shell and runners start without my cloud credentials** — [#373](https://github.com/CorvidLabs/Corvidinho/pull/373) (SAFE-21.b; tip orphan [#387](https://github.com/CorvidLabs/Corvidinho/pull/387)): drops KUBECONFIG / AWS / Google Cloud / Azure and similar so they cannot reach prod by accident.
+- **On GitHub, the owner and team I've declared get their role's tools behind the must-ask gate; strangers stay community** — [#374](https://github.com/CorvidLabs/Corvidinho/pull/374) (IDENTITY-12.a; tip orphan [#388](https://github.com/CorvidLabs/Corvidinho/pull/388)).
+- **`/work`, `/schedule` and the scheduler can be turned off in `[corvidinho.plugins]`, and existing installs stay on** — [#350](https://github.com/CorvidLabs/Corvidinho/pull/350) (PLUGIN-5/5.a; tip orphan [#390](https://github.com/CorvidLabs/Corvidinho/pull/390)).
+
+### Ops
+
+- Package version **0.0.42** (land-wave) — restart the Discord bridge and `github watch` after update so presence (DISCORD-12) reports 0.0.42. The bridge already ticks schedules; do **not** start a second `corvidinho daemon`. Source `~/.config/corvidinho/env` **and** `watch.env` so `GIPHY_API_KEY` and the watch username stay set. No schema bump; NDJSON protocol stays 2. Live dogfood still needs `GIPHY_API_KEY`. v0.0.42 gets its tag and Release from CI when this bump lands on main.
+- Needs operator action: (1) Update live checkout to the **release commit** (not a tip-orphan ahead of it). (2) Restart bridge + github watch via pidfile pattern with env + watch.env loaded. (3) Post a feature/version summary in the allowlisted main channel. (4) Optional: set `CORVIDINHO_LLM_MODEL_ORDER` for AGENT-17.a escalate; toggle `[corvidinho.plugins]` work/schedule if you want them off.
+- Rollback to the v0.0.41 tag: schema unchanged. That tag does not include the land-wave features above.
+
 ## 0.0.41
 
 ### Agent
