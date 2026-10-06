@@ -24,6 +24,7 @@ import {
   ROLE_REFUSED_MESSAGE,
   actingWorkTask,
   isScheduleRunEnv,
+  isWatchRunEnv,
   resolveActingRole,
   roleAllowsPlugin,
   roleSessionActive,
@@ -954,8 +955,13 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
       (includeDangerous ||
         // DISCORD-SCHEDULE-1.a: a scheduled run, even the owner's own, never
         // gets a discovered Fledge plugin command (it runs arbitrary project
-        // code, like the runners SAFE-3.a keeps from schedules).
-        (actingIsAdmin && !isScheduleRunEnv(env) && allowsFledge(allowlist)))
+        // code, like the runners SAFE-3.a keeps from schedules). Nor does a
+        // WATCH run, even one the owner triggered (IDENTITY-12.a, SAFE-3.a).
+        (actingIsAdmin &&
+          !isScheduleRunEnv(env) &&
+          !isWatchRunEnv(env) &&
+          !(env.CORVIDINHO_WATCH_SESSION_ID ?? "").trim() &&
+          allowsFledge(allowlist)))
     ) {
       // FLEDGE-4: Fledge commands are all dangerous (so mutating), so only
       // discover them when this run's catalog may offer one: the allowlist

@@ -468,6 +468,49 @@ describe("Fledge commands through the allowlist (PLUGIN-3 / FLEDGE-4, REQ-agent-
     expect(r?.success).toBe(false);
     expect(r?.detail ?? "").toContain("not offered");
   });
+
+  test("the owner's own WATCH run (GitHub stamp) never discovers or spawns fledge; its other allowlisted owner tools stay offered, the shell does not (IDENTITY-12.a, SAFE-3.a)", async () => {
+    const fake = makeFledge();
+    const allowFile = join(tempDir("corvidinho-allow-watch-owner-"), "allowlist.toml");
+    writeFileSync(allowFile, `[owner]\ndiscord_id = "${OWNER}"\ngithub_id = "8268288"\n`);
+    const { fetchImpl, seen } = fakeProvider([{ name: "fledge-hello", argv: ["world"] }]);
+    const events: AgentEvent[] = [];
+    const exec = createTaskExecute({
+      taskText: "x",
+      cwd: fake.project,
+      env: {
+        ...fake.env,
+        CORVIDINHO_ALLOWLIST_FILE: allowFile,
+        CORVIDINHO_OWNER_DISCORD_ID: OWNER,
+        // As the WATCH spawn stamps a run the owner's own comment triggered.
+        CORVIDINHO_ACTING_DISCORD_USER_ID: "",
+        CORVIDINHO_ACTING_IS_ADMIN: "1",
+        CORVIDINHO_ACTING_ROLE: "owner",
+        CORVIDINHO_ACTING_WORK_TASK: "0",
+        CORVIDINHO_ACTING_SURFACE: "watch",
+        CORVIDINHO_WATCH_SESSION_ID: "wsess_0123456789abcdef",
+        CORVIDINHO_ACTING_GITHUB_ID: "8268288",
+      },
+      fetchImpl,
+      tier: "code",
+      nonInteractive: true,
+      allowlist: ["fledge-hello", "github-pr-review", "files-delete", "shell-exec"],
+      autonomous: false,
+      projectInstructions: false,
+      onEvent: (e) => events.push(e),
+      maxToolRounds: 2,
+    });
+    await exec({ attempt: 1, signal: new AbortController().signal });
+    expect(seen.offered).toContain("github-pr-review");
+    expect(seen.offered).toContain("files-delete");
+    expect(seen.offered).not.toContain("shell-exec");
+    expect(seen.offered.filter((n) => n.startsWith("fledge-")).sort()).toEqual(FLEDGE_CORE_READS);
+    expect(get("fledge-hello")).toBeUndefined();
+    expect(existsSync(join(fake.bin, "calls.log"))).toBe(false);
+    const r = toolResults(events)[0];
+    expect(r?.success).toBe(false);
+    expect(r?.detail ?? "").toContain("not offered");
+  });
 });
 
 describe("non-git verify gate fails closed after a Fledge command (REQ-agent-502, AGENT-4)", () => {

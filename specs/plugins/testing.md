@@ -630,3 +630,41 @@ test) keeps the whole tool surface (builtins plus a fake Fledge plugin)
 under the default budget of 9000: `gif-search` adds about 92 tokens, and
 shorter `web-fetch` and `web-search` descriptions (the same rules, less
 wording) make room for it.
+
+## Roles on GitHub in the tool layer (REQ-plugins-1201 added, REQ-plugins-065 modified; IDENTITY-12.a)
+
+- `tests/watch.github-roles.test.ts` (with the WATCH cases under the watch
+  module): the env a real WATCH spawn hands its child, applied to this
+  process.
+  - "owner and team by GitHub numeric id": `resolveActingIsAdmin` /
+    `resolveActingRole` give owner for the owner's id, team for the team
+    member's; the owner stamp on a stranger's, a re-registered login's or a
+    declared community person's id, a team stamp on the owner's id, a
+    community stamp, a login with no id, the owner's Discord id in a WATCH
+    env, and no WATCH session id all give community.
+  - "a Discord run never uses the GitHub keys": surface `chat` with the
+    owner's GitHub id and no Discord actor → community; with the owner's
+    Discord id → owner.
+  - "live": a team member demoted in the file, on GitHub `deny_users` by
+    login or by id, on `[discord].deny_users` or in `DISCORD_MUTED_USER_IDS`
+    → community at the next call, team again once restored; the owner with no
+    `[owner] github_id` or an unreadable file → community.
+  - "team on GitHub": never a `/work` task (`actingWorkTask` false with a
+    stale stamp), review tools allowed, `files-edit` and `git-push` refused;
+    the owner gets both.
+  - "the owner's must-ask call raises the owner's Approve card": a mutating
+    `prod` must-ask command run through `runPlugin` raises one `mustask` card
+    titled `… · from watch:watch_w1`, runs once on approval, and is refused
+    with nothing run on a deny. Team, community and a re-registered login's
+    run get `not allowed for your role` and no card.
+  - WATCH limits: `secretPathsRefused` is true for the owner's WATCH run and
+    false for the owner's Discord run; `shellToolsGate` refuses the owner's
+    WATCH run; a `delegate` worker built from it resolves community.
+- `tests/agent.safe3a-owner-shell.test.ts` "WATCH, a schedule, a delegate
+  worker and a local CLI run: refused" (updated): a watch stamp with only the
+  owner's Discord id is community now; the owner's GitHub-stamped WATCH run
+  (`CORVIDINHO_WATCH_SESSION_ID`, `[owner] github_id`) is offered
+  `files-delete` but never `shell-exec` / `fledge-run` ("WATCH runs never get
+  them").
+- Fail on base: see the watch module's entry (9 of 12 fail with the base
+  sources, 12 of 12 pass restored).

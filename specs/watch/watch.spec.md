@@ -26,6 +26,7 @@ files:
   - tests/watch.conversation.test.ts
   - tests/watch.github-numeric-id.test.ts
   - tests/watch.failed-comment.test.ts
+  - tests/watch.github-roles.test.ts
 
 db_tables: []
 depends_on:
@@ -65,7 +66,11 @@ through the shared DB so the owner is pinged on Discord like other stuck asks
 (`src/watch/owner-ask.ts`). Spend-cap stops (AUTONOMY-8, REQ-watch-099): a run
 that ends stopped at a spend cap is handed over the same way, so the bridge
 DMs the owner its details once per cap episode while GitHub shows only that
-work is paused for budget.
+work is paused for budget. Roles on GitHub (IDENTITY-12.a, REQ-watch-1201):
+each run gets the declared role of the person who triggered it — the comment
+or issue-body author, by GitHub numeric id (`watchTriggerRole`); an
+assignment or review request is community — stamped by the spawn like a
+Discord run and re-resolved by the tool layer at every call.
 
 ## Public API
 
@@ -99,7 +104,10 @@ fixture `user_id`) (REQ-watch-036) — the only thing any WATCH path matches a
 sender on (IDENTITY-7.a, REQ-watch-367). `startWatchPoller` loads the owner from its allowlist file +
 env and passes `loadDeclaredPeople` (re-read per event) to `routeEvent`, so a
 declared commenter's prompt opens with a `[Corvidinho acting GitHub user …]`
-paragraph (IDENTITY-14 / IDENTITY-7).
+paragraph (IDENTITY-14 / IDENTITY-7). `watchTriggerRole(event, people)`
+(`router.ts`) and `AgentRunChatOpts.actingRole` (`agent-client.ts`): the
+trigger's declared role the poller passes to the spawn (IDENTITY-12.a,
+REQ-watch-1201).
 Untrusted text (SAFE-12 / SAFE-13, #71, REQ-watch-071): `router.ts` exports
 `watchEventText(event)`, `watchInjectionVerdict(event, people)`,
 `WATCH_BODY_FENCE_HEADER` and `WATCH_PROMPT_MAX_CHARS` (8000); `ack.ts`
@@ -198,9 +206,13 @@ spawn outcomes logged structurally and appended to durable JSONL; on a GitHub
 403/429 rate-limit on the poll fetch, the auto-ack or the run-summary comment
 back off via Retry-After/reset (default 60s) before the next poll cycle without
 tight loop;
-WATCH agent spawn clears `CORVIDINHO_ACTING_DISCORD_USER_ID` and sets
-`CORVIDINHO_ACTING_IS_ADMIN=0` so GitHub runs never act as a Discord memory
-user (REQ-watch-008), and always sets `CORVIDINHO_ACTING_SURFACE=watch`, so a
+WATCH agent spawn clears `CORVIDINHO_ACTING_DISCORD_USER_ID` so GitHub runs
+never act as a Discord memory user (REQ-watch-008), stamps the trigger's role
+(`CORVIDINHO_ACTING_IS_ADMIN=1` and `CORVIDINHO_ACTING_ROLE=owner` only when
+the owner triggered the run, `ROLE=team` for a declared team member, else
+`0` / `community`; `CORVIDINHO_ACTING_WORK_TASK=0`; always overwritten,
+IDENTITY-12.a, REQ-watch-1201), and always sets
+`CORVIDINHO_ACTING_SURFACE=watch`, so a
 WATCH run is never offered the shell, runners or Fledge runs (SAFE-3.a,
 REQ-watch-735). With a DB, WATCH sessions reload on restart; a session
 idle past the soft TTL (`resolveSessionTtlMs`, 30–60m, default 45m) is dropped
@@ -255,9 +267,14 @@ thread holds up nobody else — and giving up a day after the decision; a
 run's retained conversation also keeps the commenter's `github-id:<n>`
 (REQ-watch-1016).
 Every WATCH recognition of the sender — identity block, memory inject, memory
-plugins, SAFE-13 owner exemption — uses `senderId` only, never `sender`; no id
-or an undeclared id is community, never the owner (IDENTITY-7.a,
-REQ-watch-367).
+plugins, SAFE-13 owner exemption, the run's role — uses `senderId` only, never
+`sender`; no id or an undeclared id is community, never the owner (IDENTITY-7.a,
+REQ-watch-367). The run's role is the trigger's (`watchTriggerRole`,
+IDENTITY-12.a, REQ-watch-1201): an `issue_comment`, `issues` or
+`pull_request_review_comment` event is triggered by its sender; an
+`assignment` or `review_request` is triggered by its `actor`, so it is
+community whoever the thread author is, and the identity block's role line
+says so.
 After every run (any event type, ackable or not), `noteWatchRunAsk` hands a
 `stuck` ask or a `spend-cap` stop (its log line says `spend-cap stop` and the
 owner's Discord DM, `AUTONOMY-8`, and names no amount) to the bridge: with an owner Discord id and a DB it is recorded in
@@ -304,6 +321,10 @@ poll posts the outcome on that thread once (REQ-watch-1016).
 A comment from the owner's login re-registered by someone else (another
 numeric id) → `declared_person: none`, no owner memory, and its injection is
 refused like anyone's; the owner's own id → `role: owner` (REQ-watch-367).
+The owner's own comment → the run is stamped owner and its must-ask call
+(say a `git-push` to the default branch) raises the owner's Approve card; a
+team member's → team; a stranger's, a re-registered login's or the owner's
+thread assigned by a team member → community (REQ-watch-1201).
 An assignment whose run ends stuck on a repeated failing call → no GitHub
 comment, one `watch_owner_asks` row for the thread, and the bridge DMs the
 owner the question with the thread link; with no bridge running, one log line

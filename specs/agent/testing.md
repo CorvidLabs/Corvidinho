@@ -1067,3 +1067,24 @@ In `tests/gif.search.test.ts`:
   nothing is sent and the result carries the `spend-cap` ask; in the tool
   loop that search ends the attempt with `SPEND_CAP_SUMMARY` and the ask
   after one model call.
+
+## The owner's GitHub run: owner tools, no discovered Fledge commands, no shell (REQ-agent-1201 added; IDENTITY-12.a)
+
+- `tests/agent.allowlisted-dangerous.test.ts` "the owner's own WATCH run
+  (GitHub stamp) never discovers or spawns fledge; its other allowlisted
+  owner tools stay offered, the shell does not": an env stamped as the WATCH
+  spawn stamps a run the owner's own comment triggered (surface `watch`, a
+  WATCH session id, the owner stamp, `[owner] github_id` as
+  `CORVIDINHO_ACTING_GITHUB_ID`) with `fledge-hello`, `github-pr-review`,
+  `files-delete` and `shell-exec` allowlisted: `github-pr-review` and
+  `files-delete` are offered, `shell-exec` is not, only the Fledge core reads
+  are, `fledge-hello` is never registered, fledge is never spawned and the
+  model's `fledge-hello` call is refused as not offered. With e1a24ed's
+  `src/agent/execute.ts` (the new roles kept) it fails (fledge-hello is
+  discovered and offered); with every base source it fails (the run is
+  community). Restored: it passes.
+- `tests/agent.safe3a-owner-shell.test.ts` "WATCH, a schedule, a delegate
+  worker and a local CLI run: refused" (updated): a watch stamp with only the
+  owner's Discord id is community (`ownerCatalog` false); the owner's
+  GitHub-stamped WATCH run keeps `files-delete` and gets one `WATCH runs never
+  get them` SAFE-3.a operator line.

@@ -635,7 +635,10 @@ run (`isScheduleRunEnv`, `src/plugins/roles.ts`) may now carry the owner
 stamp. `createTaskExecute` SHALL NOT discover Fledge plugin commands in a
 scheduled run, whatever its role (they run arbitrary project code, like the
 runners SAFE-3.a keeps from schedules); the other allowlisted dangerous tools
-stay offered to the owner's schedule. `src/agent/ask.ts` exports
+stay offered to the owner's schedule. Nor in a WATCH run (`isWatchRunEnv` or
+`CORVIDINHO_WATCH_SESSION_ID`), even one the owner's own comment triggered
+and which therefore has the owner's other tools (IDENTITY-12.a,
+REQ-agent-1201). `src/agent/ask.ts` exports
 `mustAskRefusedAsk(tool, result)`: for a `runPlugin` refusal from the
 must-ask gate whose outcome is `denied`, `expired` or `resent` it returns a
 `stuck` HumanAsk naming the tool, the gate's scrubbed `why` (≤300 chars), the
@@ -1336,6 +1339,7 @@ A change the run did not open is never touched.
 | The task names a plugin or asks for a GIF that this run does not offer | summary is the concrete gap (not installed / not allowlisted / not configured / role / tier) plus only HI ids and open PR numbers a lookup returned; no model call; no `ask`; no invented provider (REQ-agent-742) |
 | The same ask when a candidate tool is already offered | the model still runs; a vague install question is steered back to that tool instead of a clarify ask (REQ-agent-742) |
 | Scheduled run (`schedule_*` session), even the owner's, whose allowlist names a Fledge plugin command | no Fledge discovery, so the command is not offered and fledge is never spawned (REQ-agent-741) |
+| WATCH run (surface `watch` or a WATCH session id), even the owner's own (IDENTITY-12.a), whose allowlist names a Fledge plugin command | no Fledge discovery, so the command is not offered and fledge is never spawned; the owner's other allowlisted tools stay offered, the shell does not (REQ-agent-1201) |
 | Scheduled run: a must-ask call the owner denies, lets lapse, or denied before (`denied` / `expired` / `resent`) | nothing done; the run ends `blocked` with the `mustAskRefusedAsk` stuck question naming the tool, why, rule and card, verify skipped (REQ-agent-741) |
 | `shell-exec`, `node-exec`, `python-exec`, `cargo-exec`, `fledge-lanes-run` or `fledge-run` named in the allowlist, and the SAFE-3.a gate refuses the attempt (not the owner, a surface other than chat / ask / session / work, WATCH, a schedule, a delegate or council worker, a local CLI run with `--here`, outside a git repo or not at the top of the worktree it made for itself, a run with no role session that carries a Discord session id or surface stamp, or a cwd other than this talk's own linked worktree) | not in that attempt's catalog; a model call is refused as not offered (the role refusal for a non-owner); one `[operator] SAFE-3.a: … allowlisted but not offered: <why>` Text line per run, never in the reply (REQ-agent-501 / REQ-agent-503) |
 | The same, and the gate grants (the owner's own chat, `/session start`, `/work` or ask answer in its own talk worktree) | offered at code tier (never at tool tier); each call still goes through `runPlugin` (role re-check, SAFE-1, the must-ask Approve card for prod, SAFE-5) and the tool's own clamp, SAFE-21 refusals and credential-free env (REQ-agent-503) |
