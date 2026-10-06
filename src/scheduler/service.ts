@@ -342,6 +342,14 @@ export function scheduleRunStoppedError(userId: string): string {
   return `stopped on Discord by ${userId}`;
 }
 
+/**
+ * The one line a stopped run posts, only to carry a SAFE-13 heads-up
+ * (AGENT-3.c): `⏹ <scheduleTitle>: stopped.`
+ */
+function scheduleRunStoppedLine(title: string): string {
+  return `⏹ ${title}: stopped.`;
+}
+
 /** One finished (or abandoned) schedule run, for operator logs. */
 export type ScheduleRunFinished = {
   scheduleId: string;
@@ -1001,11 +1009,16 @@ export class SchedulerService {
       // AGENT-3.c: the agent is gone, so its stop is released. A run the
       // owner or the creator stopped ends here: recorded stopped (not a
       // failure, no ask), its progress message says `⏹ Stopped`, and nothing
-      // else is posted; the schedule stays as it is. A run abandoned at
-      // shutdown meanwhile is already recorded.
+      // else is posted but a SAFE-13 heads-up; the schedule stays as it is.
+      // A run abandoned at shutdown meanwhile is already recorded.
       const stoppedBy = await stopControl?.finish();
       if (stoppedBy !== undefined && !signal.aborted) {
-        this.recordStopped(schedule, run, stoppedBy);
+        const recorded = this.recordStopped(schedule, run, stoppedBy);
+        // SAFE-13: like a stopped chat run's `⏹ Stopped`, a tool result that
+        // looked like an injection still tells the owner.
+        if (recorded && result.injection) {
+          await this.postStoppedInjection(schedule, result.injection);
+        }
         // SAFE-14.a: a warning the run crossed still reaches the owner by DM.
         await this.spendDm?.deliver({ warning: result.spendWarning });
         return;
@@ -1176,8 +1189,9 @@ export class SchedulerService {
    * AGENT-3.c: record a run the owner or the schedule's creator stopped from
    * Discord — `failed` with the summary `stopped` and who stopped it, not
    * counted as a failure (no auto-pause) and with no ask — and log it.
+   * True when this call recorded it (false: already recorded).
    */
-  private recordStopped(schedule: Schedule, run: ScheduleRun, stoppedBy: string): void {
+  private recordStopped(schedule: Schedule, run: ScheduleRun, stoppedBy: string): boolean {
     const done = this.finish(schedule, run, {
       ok: false,
       stopped: true,
@@ -1186,6 +1200,35 @@ export class SchedulerService {
     });
     if (done) {
       console.log(`[scheduler] run ${run.id} of schedule ${schedule.id} stopped on Discord by ${stoppedBy}`);
+    }
+    return done !== null;
+  }
+
+  /**
+   * AGENT-3.c + SAFE-13: a stopped run posts nothing else, except that a
+   * tool result in it that looked like an injection still tells the owner,
+   * as the SAFE-13 line on a stopped chat run's `⏹ Stopped` does: one
+   * harness line `⏹ <title>: stopped.` carrying that line (pinging the
+   * owner) in the schedule's channel, re-checked against the live allowlist,
+   * where the run's result post would have carried it. A schedule with no
+   * channel posts nothing, as for a run that ends on its own. Never rejects.
+   */
+  private async postStoppedInjection(schedule: Schedule, injection: InjectionNotice): Promise<void> {
+    if (!schedule.channelId || !this.outbound?.post) return;
+    if (!this.gateTick(schedule).ok) return;
+    try {
+      await this.outbound.post(
+        withInjectionNotice(
+          {
+            channelId: schedule.channelId,
+            content: scheduleRunStoppedLine(scheduleTitle(schedule)),
+          },
+          injection,
+          this.owner,
+        ),
+      );
+    } catch (err) {
+      logSchedulerError("run", err);
     }
   }
 

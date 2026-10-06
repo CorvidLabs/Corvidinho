@@ -406,16 +406,26 @@ describe("a scheduled run is stopped from Discord like a chat run (AGENT-3.c, RE
         components: null,
       });
       expect(b.dmDeletes).toEqual([]);
-      // A later press there finds nothing running and stops nothing.
+      // A later press there finds nothing running and stops nothing: the
+      // owner gets "Nothing is running.", not the allowlist tip (a DM a dead
+      // bridge left looks the same).
       const late = await press(b.handlers, {
         customId: button.custom_id,
         userId: OWNER,
         messageId: "dm_1",
         channelId: `dm-${OWNER}`,
       });
-      expect(late).toHaveLength(1);
-      expect(late[0]!.ephemeral).toBe(true);
-      expect(late[0]!.content).not.toBe(RUN_STOP_ACK);
+      expect(late).toEqual([{ content: RUN_STOP_NOTHING_RUNNING, ephemeral: true }]);
+      // Anyone else's DM press on such a button keeps the channel gate.
+      const other = await press(b.handlers, {
+        customId: button.custom_id,
+        userId: BOB,
+        messageId: "dm_1",
+        channelId: `dm-${BOB}`,
+      });
+      expect(other).toHaveLength(1);
+      expect(other[0]!.content).not.toBe(RUN_STOP_NOTHING_RUNNING);
+      expect(other[0]!.content).not.toBe(RUN_STOP_ACK);
 
       // The next due run ends on its own: its DM is deleted, nothing else is sent.
       makeDue(b.db, s.id);
@@ -572,6 +582,74 @@ describe("SchedulerService with a stop control (AGENT-3.c)", () => {
       expect(store.openAsk(s.id)).toBeUndefined();
       expect(posts).toEqual([]);
       expect(stop.state.finishes).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("SAFE-13: a stopped run whose tool result looked like an injection still tells the owner, in one stop line in its channel", async () => {
+    const db = openCorvidinhoDb({ memory: true });
+    const store = new ScheduleStore({ db });
+    const s = store.create({
+      name: "Fetchy",
+      cronExpression: "0 * * * *",
+      project: ".",
+      prompt: "x",
+      createdByUserId: ALICE,
+      channelId: CHAN,
+    });
+    db.run("UPDATE schedules SET next_run_at = ? WHERE id = ?", [Date.now() - 1_000, s.id]);
+    store.refresh();
+    const posts: Array<{ channelId: string; content: string; mentionUserIds?: string[]; modelText?: boolean }> = [];
+    const stop = fakeStop();
+    let calls = 0;
+    const svc = new SchedulerService({
+      store,
+      allowlist: allow([CHAN]),
+      manual: true,
+      useWorktrees: false,
+      owner: { discordId: OWNER },
+      outbound: {
+        post: async (o) => {
+          posts.push(o);
+        },
+      },
+      runStop: stop.runStop,
+      agent: {
+        runChat(input) {
+          calls += 1;
+          return new Promise((resolveRun) => {
+            input.signal?.addEventListener("abort", () =>
+              resolveRun({
+                ok: false,
+                sessionId: input.sessionId,
+                summary: "",
+                exitCode: 137,
+                injection: { source: "web-fetch", reasons: ["ignore-rules"] },
+              }),
+            );
+          });
+        },
+      },
+    });
+    try {
+      await svc.tick();
+      expect(await until(() => calls === 1)).toBe(true);
+      stop.state.stoppedBy = ALICE;
+      stop.state.controllers[0]!.abort();
+      await settled(svc);
+      expect(runsOf(db, s.id).map((r) => [r.status, r.summary])).toEqual([["failed", "stopped"]]);
+      expect(posts).toHaveLength(1);
+      const [line, notice] = posts[0]!.content.split("\n").filter((l) => l.trim() !== "");
+      expect(posts[0]!.channelId).toBe(CHAN);
+      expect(line).toStartWith("⏹ Schedule **Fetchy**");
+      expect(line).toEndWith(": stopped.");
+      expect(notice).toStartWith(
+        `🛡️ <@${OWNER}> heads-up: a web-fetch result in this run looked like a prompt-injection attempt`,
+      );
+      expect(posts[0]!.mentionUserIds).toEqual([OWNER]);
+      // Harness text: no AUTONOMY-10.a hold.
+      expect(posts[0]!.modelText).toBeUndefined();
     } finally {
       db.close();
     }

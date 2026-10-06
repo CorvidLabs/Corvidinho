@@ -1392,12 +1392,18 @@ someone else's schedule run's progress message stops it (one ack reply to the
 stop message; no session of the owner's); a third user's `stop` reply does
 nothing. A schedule with no channel DMs the owner the line, then adds the
 Stop button; the owner's press there (no guild) stops it and the DM becomes
-`⏹ Stopped` with `components: null`; a run that ends on its own has its DM
-deleted; nothing goes to a channel; the same message pressed in a guild
-channel off the allowlist stops nothing. `SchedulerService` with a fake
+`⏹ Stopped` with `components: null`; the owner's later press there gets only
+`Nothing is running.` (not the allowlist tip) and another user's DM press on
+it keeps the channel gate; a run that ends on its own has its DM deleted;
+nothing goes to a channel; the same message pressed in a guild channel off
+the allowlist stops nothing. `SchedulerService` with a fake
 control: at `FAILURE_AUTO_PAUSE - 1` failures a stopped run keeps the count
 and the schedule `active`, stores and posts no question, and finishes the
-control once; a run nobody stopped finishes the control before its ✅ post;
+control once; a stopped run whose tool result looked like an injection
+(SAFE-13) posts exactly one line to its channel, `⏹ Schedule **<name>** … :
+stopped.` with the owner's `🛡️ <@owner> heads-up: …` line, mentioning only
+the owner and not marked model text; a run nobody stopped finishes the
+control before its ✅ post;
 a `begin` that throws is logged and the run goes on; a run abandoned at
 shutdown keeps `interrupted: bridge shutdown`. `createScheduleRunStop`: no
 owner or no DM gives null; a DM whose button edit fails is deleted and its
@@ -1408,8 +1414,11 @@ resolves the stopper (twice), releases the turn and edits `⏹ Stopped` with
 - Fail on base: with the base's (8bf4422) sources swapped in for the four
   modified source files (`bridge.ts`, `scheduler/service.ts`,
   `scheduler/store.ts`, `scheduler/index.ts`; the branch's new
-  `schedule-stop.ts` kept so imports resolve), 7 of the 9 tests fail; the 2
+  `schedule-stop.ts` kept so imports resolve), 8 of the 10 tests fail; the 2
   that pass are the `createScheduleRunStop` units (the new module itself).
+  With only the SAFE-13 stop line taken out of `scheduler/service.ts`, the
+  injection test fails; with only the stale-DM-press branch taken out of
+  `bridge.ts`, the no-channel test fails (the owner gets the allowlist tip).
 ## The owner's own schedule runs as the owner (REQ-discord-741; DISCORD-SCHEDULE-1.a)
 
 `tests/scheduler.owner-role.test.ts` — with `loadOwner` returning the owner,

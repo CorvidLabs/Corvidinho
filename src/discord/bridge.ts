@@ -875,8 +875,11 @@ export async function startBridge(
    * its creator in the requester's place; a schedule with no channel shows
    * it in the owner's DM, and a press there (no guild) on that running
    * run's DM has no channel to allowlist — like a schedule ask's
-   * (AUTONOMY-6.a) — so only the actor and mute / rate gates apply. Every
-   * other press keeps the channel gate.
+   * (AUTONOMY-6.a) — so only the actor and mute / rate gates apply. The
+   * owner's press with no guild on a Stop button whose run is no longer
+   * going (a DM a dead bridge left) skips the channel gate too, so it gets
+   * "Nothing is running." rather than the allowlist tip. Every other press
+   * keeps the channel gate.
    */
   async function pressStopButton(interaction: ComponentInteraction, runId: string): Promise<void> {
     const messageId = interaction.messageId;
@@ -886,7 +889,11 @@ export async function startBridge(
     const talk =
       (shown ? store.get(shown.sessionId) : undefined) ??
       (messageId ? store.getByBotMessage(messageId) : undefined);
-    const inDm = run !== undefined && !interaction.guildId && scheduleRunStop.inOwnerDm(run.runId);
+    const inDm =
+      !interaction.guildId &&
+      (run !== undefined
+        ? scheduleRunStop.inOwnerDm(run.runId)
+        : shown === undefined && isOwnerDiscord(config.owner, interaction.userId));
     if (!(await pressPassesGates(interaction, talk, { inDm }))) return;
     if (!run) {
       await interaction.reply({ content: RUN_STOP_NOTHING_RUNNING, ephemeral: true });

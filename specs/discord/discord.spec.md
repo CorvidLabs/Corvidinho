@@ -1038,7 +1038,9 @@ a schedule run the bridge's ticker starts takes a turn on the same control
 (session `schedule_<id>`, the creator as requester) and shows the same
 `Stop` button (in its channel, or with no channel in the owner's DM), so
 only its creator or the owner stops it, the same way; a stopped schedule run
-posts nothing but `⏹ Stopped`, is recorded `failed` / `stopped` without
+posts nothing but `⏹ Stopped` (and, when a tool result looked like an
+injection, one `⏹ <title>: stopped.` line in its channel carrying the SAFE-13
+owner line), is recorded `failed` / `stopped` without
 counting as a failure or storing an ask, and leaves its schedule as it is;
 a run that ends on its own removes its progress message (REQ-discord-304);
 a run summary's closing `(not allowed for your role)` note survives every cap
@@ -1472,7 +1474,7 @@ owner nothing waiting is posted. Fixed harness text never waits.
 | 'stop' reply to a running progress message from anyone but its requester or the owner, or in another channel | Not a stop: routed as before (no mention ⇒ ignored) and the run goes on (REQ-discord-302) |
 | A second 'stop' while the run winds down | Same short ack; nothing aborted again; one `⏹ Stopped` (REQ-discord-302) |
 | Stop button pressed by anyone but the run's requester or the owner | Ephemeral `This Stop button isn't for you.`; the run goes on (REQ-discord-303) |
-| Stop button of a run that is not running on that message (finished or stopped run, another run's id, another channel, a button from before a restart) | Ephemeral `Nothing is running.`; nothing stopped (REQ-discord-303) |
+| Stop button of a run that is not running on that message (finished or stopped run, another run's id, another channel, a button from before a restart) | Ephemeral `Nothing is running.`; nothing stopped (REQ-discord-303); the owner's press of such a button in a DM (a schedule run's, AGENT-3.c) skips the channel gate and gets the same reply (REQ-discord-304) |
 | Stop button pressed off the allowlist, by a deny-listed or unlisted user, or while muted / rate-limited | The ask press refusals (zero-width ack, the owner's allowlist tip, `MUTED` / `RATE_LIMITED`), all ephemeral; nothing stopped (REQ-discord-303) |
 | A form submit carrying a `cvstop:` id | Ignored: no reply, nothing stopped (REQ-discord-303) |
 | A schedule run's Stop button pressed by anyone but the schedule's creator or the owner | Ephemeral `This Stop button isn't for you.`; the run goes on (REQ-discord-304) |
