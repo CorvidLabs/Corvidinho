@@ -173,6 +173,7 @@ import { maxTurnsFromEnv, whileIdlePaused } from "./limits.ts";
 import { renderRepoWaysBlock, type RepoWays } from "./repo-ways.ts";
 import { HI_DRAFT_TOOL, HI_DRAFT_TOOL_RESULT_DETAIL, handleHiDraftCall, hiDraftGate, withHiDraftTool, type HiDraftMode } from "./hi-drafts.ts";
 import { shellToolsGate, shellToolsRefusedLine } from "./shell-gate.ts";
+import { selfMergeCallerRefusal } from "../../plugins/github/merge.ts";
 import {
   allowlistOffers,
   argvFromToolArguments,
@@ -180,6 +181,7 @@ import {
   editsFilesUnreported,
   filesChangedFromToolData,
   SAFE3A_TOOLS,
+  SELF_MERGE_TOOLS,
   type OpenAiToolDef,
 } from "./tools.ts";
 
@@ -904,6 +906,10 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
   // this run already said once why the gate held them back.
   const safe3aNamed = [...SAFE3A_TOOLS].filter((name) => allowlist.has(name));
   let safe3aNoted = false;
+  // GITHUB-7.a: an allowlisted github-pr-merge, and whether this run already
+  // said once why it was held back.
+  const selfMergeNamed = [...SELF_MERGE_TOOLS].filter((name) => allowlist.has(name));
+  let selfMergeNoted = false;
   // REQ-agent-318: the attribution lines this run's successful tool calls need.
   const attributions = new Set<string>();
 
@@ -1016,6 +1022,22 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
         emit(onEvent, { type: "Text", text: shellToolsRefusedLine(safe3aNamed, verdict.reason) });
       }
     }
+    // GITHUB-7.a: an allowlisted github-pr-merge only in the owner's own
+    // interactive run (chat, /session start, /work, an ask answer, the local
+    // CLI), re-read for every attempt; never team, community, WATCH, a
+    // schedule or a worker. A refusal is one operator Text line per run.
+    let selfMerge = false;
+    if (selfMergeNamed.length > 0 && !includeDangerous) {
+      const refusal = await selfMergeCallerRefusal(env);
+      selfMerge = refusal === null;
+      if (refusal && !selfMergeNoted) {
+        selfMergeNoted = true;
+        emit(onEvent, {
+          type: "Text",
+          text: `[operator] GITHUB-7.a: ${selfMergeNamed.join(", ")} allowlisted but not offered: ${refusal.why}`,
+        });
+      }
+    }
     const autonomous =
       opts.autonomous ?? autonomousSessionAllowed({ cwd, env });
     // AGENT-18 hi drafts (REQ-agent-521): in a repo that uses hi, the owner's
@@ -1034,6 +1056,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
         // filters still apply.
         allowlist,
         safe3a,
+        selfMerge,
         actingRole,
         // AGENT-1.a: team work tools only in a git work tree.
         workTask: actingWorkTask(env, cwd),

@@ -52,8 +52,8 @@ export const ASK_AGENT_SYSTEM_INSTRUCTIONS =
   "public-safe decline or a tiny toy demo — do not open with ask-human or a long formal " +
   "MCQ unless they clearly want a real utility. " +
   "Must-ask (AUTONOMY-9..11): anything inside your guardrails you just do and then say what you did, " +
-  "because only prod or deploy contact and channel posts need the owner's OK and the tool itself waits for " +
-  "it on their Approve card — so never call ask-human for permission first, and never repeat a call the " +
+  "because only prod or deploy contact, channel posts and merging its own PR need the owner's OK and the tool " +
+  "itself waits for it on their Approve card — so never call ask-human for permission first, and never repeat a call the " +
   "owner denied. " +
   "If the user already named a plugin or tool, do not ask what they want installed and do not name a provider that is not an offered tool. ";
 

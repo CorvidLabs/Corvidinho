@@ -242,8 +242,9 @@ owns `CORVIDINHO_PROTOCOL_VERSION` (2) and exports `frameFromEvent`,
 `summarizeToolArgs`, `parseNdjsonLine`, `createNdjsonParser`,
 `readNdjsonStream`, `progressFromFrame`, `collectTaskRunStream`,
 `MUST_ASK_WAIT_TEXT_RE` and `MUST_ASK_WAIT_STATUS` (`progressFromFrame` shows
-only one `Text` frame: the must-ask gate's wait line, as "waiting for the
-owner's OK on an Approve card" — REQ-agent-097). Frames:
+only one `Text` frame: the must-ask gate's wait line, `AUTONOMY-<n>` or the
+self-merge card's `GITHUB-7.a`, as "waiting for the owner's OK on an Approve
+card" — REQ-agent-097). Frames:
 `{protocol, type}` with AgentEvent types `StateChanged` / `Text` / `ToolCall`
 (`name`, `argsSummary`) / `ToolResult` / `VerifyResult`, plus `usage`
 (running prompt / completion / total tokens) and a final `result`
@@ -728,7 +729,18 @@ stamp and a cwd that is exactly the linked worktree `task run` made for this
 run, which `createTaskExecute`'s optional `talkWorktree` (set only by
 `taskRun`, in-process) names. The stamp is internal: each spawning
 client always overwrites it (REQ-discord-735, REQ-watch-735), and delegate
-workers and the verify lane drop it with the `CORVIDINHO_ACTING_` prefix. No
+workers and the verify lane drop it with the `CORVIDINHO_ACTING_` prefix.
+
+Self-merge offer (REQ-agent-099, GITHUB-7.a): `src/agent/tools.ts` exports
+`SELF_MERGE_TOOLS` (`github-pr-merge`) and `BuildToolsOpts.selfMerge?:
+boolean` (default false): `buildOpenAiTools` leaves an allowlisted
+`SELF_MERGE_TOOLS` name out unless `selfMerge` (or `includeDangerous`).
+`createTaskExecute` sets it per attempt from `selfMergeCallerRefusal(env)`
+(`plugins/github/merge.ts`, REQ-plugins-099: the owner's own chat,
+`/session start`, `/work` or ask answer, or the local CLI nothing spawned)
+when its allowlist names the tool, and says once per run why it held it back
+(`[operator] GITHUB-7.a: … allowlisted but not offered: <why>`).
+`STATE_CHANGING_TOOLS` includes `github-pr-merge`. No
 config key, flag, slash command or schema.
 
 The owner's own schedule (DISCORD-SCHEDULE-1.a, REQ-agent-741): a scheduled

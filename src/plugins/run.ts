@@ -128,7 +128,7 @@ export async function runPlugin(opts: RunOptions): Promise<PluginHandlerResult> 
   });
   if (held) {
     try {
-      recordAudit(cmd.name, args, "denied", held.exitCode ?? 2);
+      recordAudit(auditAction(cmd.name, held), args, "denied", held.exitCode ?? 2);
     } catch {
       /* the refusal stands; audit failure must not flip it */
     }
@@ -167,9 +167,24 @@ export async function runPlugin(opts: RunOptions): Promise<PluginHandlerResult> 
     throw e;
   }
   if (dangerous) {
-    safeRecord(cmd.name, args, result.ok ? "ok" : "error", result.exitCode);
+    // SAFE-5: a refusal that names its reason (`auditDenied`) is a `denied`
+    // row under `<command>:<reason>`, not an `error` (GITHUB-7.a).
+    const action = auditAction(cmd.name, result);
+    const outcome = action !== cmd.name ? "denied" : result.ok ? "ok" : "error";
+    safeRecord(action, args, outcome, result.exitCode);
   }
   return result;
+}
+
+/**
+ * SAFE-5: the audit row's action for a result — `<command>:<reason>` for a
+ * refusal that names its reason as a fixed code (`auditDenied`), else the
+ * command name. The code is the command's own, never args or text.
+ */
+function auditAction(name: string, result: PluginHandlerResult): string {
+  return !result.ok && result.auditDenied && /^[a-z0-9-]{1,48}$/.test(result.auditDenied)
+    ? `${name}:${result.auditDenied}`
+    : name;
 }
 
 /** Append one audit row for a plugin run to the shared DB (SAFE-5). */

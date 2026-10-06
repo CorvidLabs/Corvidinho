@@ -75,6 +75,8 @@ export const STATE_CHANGING_TOOLS: ReadonlySet<string> = new Set([
   "github-issue-comment",
   "github-pr-create",
   "github-pr-review",
+  // GITHUB-7.a: a merge of its own Corvidinho PR.
+  "github-pr-merge",
   "discord-post-message",
   "discord-send-file",
   "memory-forget",

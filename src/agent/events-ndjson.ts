@@ -661,11 +661,13 @@ const STATE_LABELS: Record<AgentState, string> = {
 };
 
 /**
- * The must-ask gate's wait line (src/plugins/must-ask.ts, AUTONOMY-9/10):
+ * The must-ask gate's wait line (src/plugins/must-ask.ts, AUTONOMY-9/10 and
+ * the GITHUB-7.a self-merge card):
  * the one `Text` frame the live status shows, so a held call reads as
  * waiting for the owner's OK rather than as a slow tool.
  */
-export const MUST_ASK_WAIT_TEXT_RE = /^\[operator\] AUTONOMY-\d+: waiting for the owner's OK on an Approve card\b/;
+export const MUST_ASK_WAIT_TEXT_RE =
+  /^\[operator\] (?:AUTONOMY-\d+|GITHUB-7\.a): waiting for the owner's OK on an Approve card\b/;
 
 /** The status line while a must-ask call waits for the owner's card. */
 export const MUST_ASK_WAIT_STATUS = "waiting for the owner's OK on an Approve card";

@@ -41,6 +41,8 @@ files:
   - tests/github.review.plugin.test.ts
   - plugins/github/public-docs.ts
   - tests/github.public-docs.test.ts
+  - plugins/github/merge.ts
+  - tests/github.self-merge.test.ts
   - plugins/meta/index.ts
   - plugins/specsync/api.ts
   - plugins/specsync/commands.ts
@@ -177,9 +179,9 @@ back as `data.modelFallback`, which the lead reports as its own run's
 `task run --here …` (REQ-agent-117), so it works in the lead's cwd and never
 makes a worktree of its own (SESSION-WORKTREE-1.a, REQ-cli-122).
 Every call goes through the must-ask gate in `runPlugin`: a call its command
-classes as prod or deploy contact or as a channel post waits for the owner's
-Approve card, and anything else runs with no ask (AUTONOMY-9/10/11,
-REQ-plugins-097).
+classes as prod or deploy contact, as a channel post or as a merge of its own
+PR waits for the owner's Approve card, and anything else runs with no ask
+(AUTONOMY-9/10/11, GITHUB-7.a, REQ-plugins-097).
 `github-pr-create` opens a PR only after a second model reviewed the diff in
 bounded rounds, and the PR body lists what it raised and what changed
 (GITHUB-9 / GITHUB-9.a, REQ-plugins-092, `src/work/review.ts`): the reviewer
@@ -196,6 +198,18 @@ differs from that run's session base (`hiPrRefusal`, the verify gate's own
 comparison; unreadable refuses too); with no run there (an operator's
 `plugins run`, the `/work` PR step) it does not apply (AGENT-18 hi guard,
 REQ-plugins-521).
+`github-pr-merge` (`plugins/github/merge.ts`, GITHUB-7 / GITHUB-7.a,
+REQ-plugins-099) merges its own Corvidinho PR only when the owner asks in
+their own interactive run and every gate is green: only on
+`CorvidLabs/Corvidinho` (outside it a human still merges), only a PR its own
+token opened from one of its own `talk/…` branches, never a draft and only
+once a person (never its own token or an app) marked it ready, never a PR
+whose changed paths touch its gates, only with `smoke` and `spec-sync`
+passed at the exact head and GitHub saying branch protection, reviews and
+CODEOWNERS allow it; then the owner's `mustask-merge` Approve card with the
+one-time code, the whole gate again, and one squash merge pinned to the head
+sha. Every attempt is on the SAFE-5 chain, a refusal as
+`github-pr-merge:<reason>`.
 
 ## Public API
 
@@ -267,6 +281,17 @@ AGENT-18.a). `plugins/specsync/commands.ts` exports `SDD_OFF_REFUSAL`;
 `specsync-change-answer`, `specsync-change-approve` and
 `specsync-change-finalize` (REQ-plugins-518 / REQ-plugins-519);
 `TEAM_WORK_TOOLS` gains the last four;
+`plugins/github/merge.ts` (REQ-plugins-099) exports `SELF_MERGE_TOOL`,
+`SELF_MERGE_REPO`, `SELF_MERGE_CHECKS`, `SELF_MERGE_CHECK_APP`,
+`TALK_BRANCH_RE`, `SELF_MERGE_CODE`, `selfMergeGatePath(path)`,
+`selfMergeCallerRefusal(env)` → `SelfMergeRefusal | null`,
+`checkSelfMerge(args, env, deps)` → `SelfMergeVerdict`,
+`selfMergeCommitTitle(facts)`, `makeGithubPrMergeCommand(deps)` (deps: an
+injectable GitHub `client` factory, `SelfMergeOctokit`) and `githubPrMerge`;
+`loadGithubPlugins` registers it. `MustAskClass` gains `merge`;
+`src/plugins/must-ask.ts` exports `MUST_ASK_MERGE_KIND` (`mustask-merge`) and
+`MUST_ASK_POLICY.merge`; `PluginHandlerResult.auditDenied?` (a refusal's
+reason code, recorded as a `denied` row `<command>:<reason>`, REQ-plugins-095).
 `PluginHandlerArgs.tier?` / `signal?` / `review?` (`PrReviewRun`: the calling
 agent run's `env`, `authors()` and `complete(provider, messages, signal?)`,
 GITHUB-9) and matching `runPlugin` options; `PluginHandlerResult.reviewHold?`
@@ -361,7 +386,7 @@ a no-op outside a run), so a printing tool is never stopped as idle.
 Builtin plugin loaders MAY re-register after an in-process registry clear
 (test seam). Presence of an already-registered command name skips duplicate
 register. GitHub write commands (`github-issue-create`, `github-issue-comment`,
-`github-pr-create`, `github-pr-review`) are dangerous + minTier 1; SAFE-1
+`github-pr-create`, `github-pr-review`, `github-pr-merge`) are dangerous + minTier 1; SAFE-1
 non-interactive deny unless CORVIDINHO_ALLOWLIST names them. Repo gate
 (GITHUB-6 / ALLOW-1) still applies before any Octokit write. PR create appends
 plain Made with Corvidinho attribution (no @handles) unless the body already
@@ -1300,6 +1325,12 @@ command line.
 - **When** the model calls `github-pr-create`
 - **Then** it refuses with `refused (AGENT-18): this repo's hi/ changed since the session base (criteria …) …, so this run opens no PR` before any review; with no run in progress the hi guard does not apply
 
+### Scenario: it merges its own green PR only when the owner asks (GITHUB-7.a)
+
+- **Given** the owner's chat, an allowlisted `github-pr-merge`, and PR #12 on `CorvidLabs/Corvidinho` opened by its own token from a `talk/…` branch as a draft and marked ready by the owner, touching no gate file, with `smoke` and `spec-sync` passed at its head and GitHub reporting `clean`
+- **When** the owner says "merge #12" and the model calls `github-pr-merge 12 --repo CorvidLabs/Corvidinho --sha <head>`
+- **Then** the owner gets a `mustask-merge` Approve card naming the PR and head; Approve plus the one-time code squash-merges it once at that head titled `<title> (#12)`, the reply names the merge sha, and the audit chain shows `started` then `ok`; a draft, a PR that changes `.github/` or `hi/`, someone else's PR or a missing `spec-sync` is refused with no card and one `github-pr-merge:<reason>` row
+
 ### Scenario: non-ADMIN refused files-write (ROLES-CHAT-3)
 
 - **Given** builtins loaded and `CORVIDINHO_ACTING_IS_ADMIN=0` with an acting Discord user
@@ -1352,6 +1383,8 @@ command line.
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
 | WATCH run (surface `watch`) whose GitHub id is not the owner's or a team member's, has no id or no WATCH session id, is on GitHub `deny_users`, or whose person's Discord id is muted or deny-listed — or a stamp claiming more | Resolves community: mutating plugins refused `not allowed for your role` (exit 2) before SAFE-1, the must-ask card or the handler (IDENTITY-12.a, REQ-plugins-1201) |
 | Write/edit/delete under `hi/` in a repo that uses hi (as given, absolute, or through a symlink that lands there) | Refuse (exit 2, `refused (AGENT-18): '<path>' is under hi/, …`); file unchanged; reads unaffected (REQ-plugins-520) |
+| github-pr-merge from anyone but the owner's own interactive run (WATCH, a schedule, a worker, a spawned or non-owner run), on a repo other than Corvidinho, or for a PR that is not its own talk-branch PR, is a draft, self-marked ready or never marked ready by a person, moved past `--sha`, touches a gate path, has changes requested, lacks green `smoke` / `spec-sync` at the head or is not `clean` per GitHub | Refuse (exit 2, `refused (GITHUB-7.a): …`), no card, nothing merged; one `denied` row `github-pr-merge:<reason>` (REQ-plugins-099) |
+| github-pr-merge after the owner's Approve when the PR changed meanwhile, or GitHub refuses the merge (405 / 409 / 422) | Refuse (exit 2) after `started`; nothing merged; `github-pr-merge:<reason>` / `github-pr-merge:github-refused` `denied` row |
 | github-pr-create inside a run in a repo that uses hi, with anything under `hi/` changed since the run's session base (or unreadable) | Refuse (exit 2, `refused (AGENT-18): this repo's hi/ changed since the session base (…) … so this run opens no PR; …`) before the GitHub client and the GITHUB-9 review; no PR (REQ-plugins-521) |
 | shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, redirections, quoting incl. bash `$'…'`, `\`-newline, comments, here-docs, expanded command words, command substitutions, `eval` and shell `-c` strings, DIRSTACK) | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec cd/pushd left open by an unterminated quote or trailing `\`, or a command nested too deeply to check | Refuse (exit 2, SAFE-3); no spawn |

@@ -49,6 +49,17 @@ export const SAFE3A_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * GITHUB-7.a: `github-pr-merge` merges its own Corvidinho PR only when the
+ * owner asks, so the allowlist offers it only to an attempt that is the
+ * owner's own interactive run — the owner's chat, `/session start`, `/work`
+ * or an ask answer of one, or the local CLI nothing spawned
+ * (`selfMergeCallerRefusal`, plugins/github/merge.ts) — never team,
+ * community, WATCH, a schedule or a worker. `includeDangerous` (a test seam)
+ * still offers it.
+ */
+export const SELF_MERGE_TOOLS: ReadonlySet<string> = new Set(["github-pr-merge"]);
+
+/**
  * True when the allowlist puts dangerous plugin `name` in the catalog
  * (SAFE-1 / CLI-3): named in it, and for a {@link SAFE3A_TOOLS} name only
  * when this attempt holds the SAFE-3.a grant (`safe3a`).
@@ -87,6 +98,12 @@ export type BuildToolsOpts = {
    * so the allowlisted {@link SAFE3A_TOOLS} are offered too. Default false.
    */
   safe3a?: boolean;
+  /**
+   * GITHUB-7.a: this attempt is the owner's own interactive run
+   * (`selfMergeCallerRefusal` found nothing), so an allowlisted
+   * {@link SELF_MERGE_TOOLS} tool is offered too. Default false.
+   */
+  selfMerge?: boolean;
   /**
    * When false (non-ADMIN acting session), omit all mutating tools (ROLES-CHAT-2).
    * Default true when unset (local CLI / no role session). Ignored when
@@ -127,6 +144,7 @@ export function buildOpenAiTools(opts: BuildToolsOpts): OpenAiToolDef[] {
     ) {
       continue;
     }
+    if (SELF_MERGE_TOOLS.has(entry.name) && !includeDangerous && !opts.selfMerge) continue;
     if (opts.actingRole !== undefined) {
       if (!roleAllowsPlugin(opts.actingRole, entry, Boolean(opts.workTask))) continue;
     } else if (!actingIsAdmin && isMutatingPlugin(entry)) continue;

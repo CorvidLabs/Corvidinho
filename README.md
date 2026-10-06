@@ -126,6 +126,10 @@ bun src/cli.ts github watch
 
 Before `github-pr-create` opens a PR, a second model reviews the diff in at most 3 rounds, and the PR body lists what it raised and what changed. The reviewer is the first configured model that did not write the change; there is no reviewer setting, so configure at least two models (`CORVIDINHO_LLM_MODEL` and the per-tier keys), or there is no PR and the reply says why (GITHUB-9.a). Details: [`docs/discord.md`](docs/discord.md#second-model-review-before-every-pr-github-9--github-9a).
 
+## Merging its own PR (GITHUB-7)
+
+On Corvidinho it may merge its own PR when you ask and every gate is green; outside Corvidinho a human still merges. Allowlist `github-pr-merge` and say "merge #N" in your own chat, `/session start`, `/work` or a local CLI run (never team, WATCH, schedules or workers). It refuses unless it opened the PR from its own `talk/…` branch with its own token, the PR is not a draft and a person marked it ready (it never marks its own draft ready), no gate file changed (`.github/`, `fledge.toml`, `.fledge/`, `hi/`, `AGENTS.md`, `CODEOWNERS` and a few more), `smoke` and `spec-sync` passed at the head and GitHub says branch protection, reviews and CODEOWNERS allow it; then it waits for your Approve card with the one-time code and squash-merges, naming the merge sha (GITHUB-7.a). Details: [`docs/discord.md`](docs/discord.md#merging-its-own-pr-github-7--github-7a-124).
+
 ## Schedule daemon
 
 ```bash

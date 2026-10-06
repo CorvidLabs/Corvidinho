@@ -1307,3 +1307,20 @@ child `bun` process because it reads PATH as its process started):
   is the whole feedback.
 
 All but the no-Trust case fail with the base sources swapped in.
+## The self-merge tool is offered only in the owner's own interactive run (REQ-agent-099 added, REQ-agent-097 modified; GITHUB-7.a)
+
+`tests/github.self-merge.test.ts`: `buildOpenAiTools` offers an allowlisted
+`github-pr-merge` to the owner (and no role session) only with `selfMerge`,
+never to team (even in `/work`), community, unallowlisted or at read tier;
+through `createTaskExecute` with an injected provider the owner's chat is
+offered it while WATCH (the owner's own GitHub-triggered run included, as
+#374's WATCH spawn stamps it), the owner's own schedule and a team chat are
+not, each with one `[operator] GITHUB-7.a: … allowlisted but not offered`
+line;
+the merge card's wait line maps to `MUST_ASK_WAIT_STATUS`.
+`tests/agent.loop-guards.test.ts`: `github-pr-merge` is in
+`STATE_CHANGING_TOOLS` (fails on the base: in neither set). Fail on base
+(86d68cd0's `tools.ts`, `execute.ts`, `events-ndjson.ts`, `loop-guards.ts`
+and `ask.ts` swapped in with the new merge module kept): the catalog, the
+end-to-end not-offered, the wait-status and the classification tests fail;
+restored, all pass.

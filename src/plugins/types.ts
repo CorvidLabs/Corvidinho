@@ -108,16 +108,27 @@ export type PluginHandlerResult = {
    * or a public reply (SAFE-14.a).
    */
   spendAsk?: HumanAsk;
+  /**
+   * SAFE-5: why a refusal refused, as a fixed kebab-case code (never args,
+   * names or text). `runPlugin` then records the refusal as one `denied` row
+   * whose action is `<command>:<code>` — for a refusal from the must-ask
+   * classifier or card as for one from the handler — instead of a plain
+   * `denied` / `error` row under the command name (`github-pr-merge`,
+   * GITHUB-7.a, REQ-plugins-099).
+   */
+  auditDenied?: string;
 };
 
 /**
  * Must-ask classes a command's call can fall in (AUTONOMY-9/10,
  * src/plugins/must-ask.ts `MUST_ASK_POLICY`): `prod` touches prod or
  * deploys (VPS, secrets, env, DNS; a push to a remote's default branch),
- * `public` is a channel post it makes. Spend over a cap (AUTONOMY-8) is the
- * SAFE-8 spend guard's, not a command class.
+ * `public` is a channel post it makes, `merge` is a merge of its own
+ * Corvidinho PR (`github-pr-merge`, GITHUB-7.a: only when the owner asks).
+ * Spend over a cap (AUTONOMY-8) is the SAFE-8 spend guard's, not a command
+ * class.
  */
-export type MustAskClass = "prod" | "public";
+export type MustAskClass = "prod" | "public" | "merge";
 
 /** One call that must wait for the owner's Approve card, as its card shows it (SAFE-18). */
 export type MustAskAsk = {

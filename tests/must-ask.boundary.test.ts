@@ -5,7 +5,8 @@
  * - Boundary: only the must-ask builtins carry a must-ask class
  *   (discord-post-message, discord-send-file in a public thread whose replies
  *   still wait — AUTONOMY-10.a, REQ-discord-099 — shell-exec, git-push,
- *   fledge-run, fledge-lanes-run and the language runners); every other builtin runs
+ *   fledge-run, fledge-lanes-run, github-pr-merge (GITHUB-7.a) and the
+ *   language runners); every other builtin runs
  *   through runPlugin with no card, and each must-ask builtin's everyday call
  *   (a feature-branch push, `ls`, a dry-run post) runs with no card too.
  * - The model's instructions carry the one AUTONOMY-11 sentence.
@@ -36,6 +37,8 @@ const MUST_ASK_BUILTINS = new Set([
   "git-push",
   "fledge-run",
   "fledge-lanes-run",
+  // GITHUB-7.a: every merge of its own PR waits for the owner's card (REQ-plugins-099).
+  "github-pr-merge",
   "node-exec",
   "python-exec",
   "cargo-exec",

@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "it-can-merge-its-own-corvidinho-pr-when-i-ask-and-every-gate-is-green-never-its-gates-never-someone-else-s-github-7",
+  "slug": "it-can-merge-its-own-corvidinho-pr-when-i-ask-and-every-gate-is-green-never-its-gates-never-someone-else-s-github-7",
+  "title": "It can merge its own Corvidinho PR when I ask and every gate is green; never its gates, never someone else's (GITHUB-7, GITHUB-7.a)",
+  "description": "It can merge its own Corvidinho PR when I ask and every gate is green; never its gates, never someone else's (GITHUB-7, GITHUB-7.a)",
+  "kind": "feature",
+  "state": "approved",
+  "base_commit": "19f8cd8c9b8363361de431d380d956021e75d5e0",
+  "created_at": 1791329119,
+  "updated_at": 1791329137,
+  "affected_specs": [
+    "plugins",
+    "agent"
+  ],
+  "affected_paths": [
+    "hi/github.md",
+    "INTENT.md",
+    "plugins/github/merge.ts",
+    "plugins/github/index.ts",
+    "src/plugins/types.ts",
+    "src/plugins/must-ask.ts",
+    "src/plugins/run.ts",
+    "src/agent/tools.ts",
+    "src/agent/execute.ts",
+    "src/agent/ask.ts",
+    "src/agent/events-ndjson.ts",
+    "src/agent/loop-guards.ts",
+    "tests/github.self-merge.test.ts",
+    "tests/must-ask.boundary.test.ts",
+    "specs/plugins/plugins.spec.md",
+    "specs/plugins/testing.md",
+    "specs/agent/agent.spec.md",
+    "specs/agent/testing.md",
+    "README.md",
+    "docs/discord.md",
+    "docs/DISCORD-GO-LIVE.md",
+    "docs/WATCH.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "GITHUB-7 (on main) and GITHUB-7.a (captured with hi in this change from Leif's 2026-09-28 interview record, round 16 of 2026-10-06) hold through one checked tool, github-pr-merge (plugins/github/merge.ts, dangerous, mutating, minTier 1): it refuses with no card unless the call comes from the owner's own interactive run (the owner's Discord chat, /session start, /work or an ask answer of one, role re-resolved now; or the local CLI nothing spawned — never team, community, WATCH (the owner's own GitHub-triggered run included), a schedule or a delegate/council worker), the repo is CorvidLabs/Corvidinho (outside it a human still merges), the PR is open, comes from one of its own talk/<id>-<16 hex> branches in that repo and was opened by the token's own user (author id == token id), is not a draft, was never marked ready by its own token and was marked ready by a person (not an app), its head is still the --sha named, no changed path (rename old paths included; list read whole) is a gate (.github/, fledge.toml, .fledge/, hi/, AGENTS.md, CODEOWNERS, .trust.toml, bunfig.toml, .specsync config, the merge gate's own files), no reviewer's latest review requests changes, the smoke and spec-sync check runs from GitHub Actions passed at exactly that head with the whole CI verdict there green, and GitHub says mergeable with mergeable_state clean or has_hooks; a passing gate raises the owner's mustask-merge Approve card (class destructive: Approve plus the one-time code) showing the PR, head sha and squash title; after approval the handler re-runs the whole gate and squash-merges via pulls.merge with the expected head sha and the PR title (#N), and its reply names the merge sha; every attempt leaves a SAFE-5 row (denied as github-pr-merge:<reason>, or started then ok/error); the tool loop offers it only to the owner's own interactive run with one operator line otherwise; tests with a fake GitHub client cover each refusal reason, a passing merge, the card engine and the catalog."
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

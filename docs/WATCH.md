@@ -170,6 +170,8 @@ HI: [`hi/watch.md`](../hi/watch.md).
 
 **Outbound writes (GITHUB-2/3/5):** dangerous plugins `github-issue-create`, `github-issue-comment`, `github-pr-create`, `github-pr-review` — require `CORVIDINHO_ALLOWLIST` in non-interactive mode + non-empty GitHub repo allowlist. In WATCH agent runs they are offered only when the owner triggered the run, and `github-issue-comment` / `github-pr-review` when a declared team member did (IDENTITY-12.a); community WATCH runs never get them (ROLES-CHAT-2). The allowlist lets `corvidinho plugins run` and the `/work` draft-PR step use them, and offers them to the model in the owner's runs, team members' review runs and local `task run` (CLI-3). WATCH's own ack/summary comments are posted by the poller and need no allowlist entry. PR bodies get a plain Made with Corvidinho footer (no @handles). `github-pr-create` opens a PR only after a second configured model reviewed the diff in at most 3 rounds, and the body gets a `## Second-model review` section; without a run model (`plugins run`, `/work`) it opens only a tree whose review already finished (GITHUB-9 / GITHUB-9.a, see [`discord.md`](discord.md)). Set `CORVIDINHO_GITHUB_DRY_RUN=1` for local dry-run (the branch's tree is then read from the push remote with `git ls-remote`).
 
+`github-pr-merge` (GITHUB-7.a) is never offered to WATCH runs, the owner's own included (they get the owner's other tools), and refuses inside one with a `github-pr-merge:watch` audit row: it merges only when the owner asks in their own interactive run.
+
 Not in this slice: auto-merge, auto-update, CI-retry, live webhook server.
 
 ## Go-live (poll)

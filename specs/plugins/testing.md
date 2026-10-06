@@ -770,3 +770,41 @@ unchanged; `files-read .trust.toml` and `files-write trust.toml` work;
 `discord-send-file`'s `fileAttachment` refuses it with SAFE-2; `git-commit`
 refuses to stage the deletion of a tracked `.trust.toml`. Both tests fail
 with the base sources.
+## It merges its own Corvidinho PR only when the owner asks (REQ-plugins-099 added, REQ-plugins-097 / REQ-plugins-095 modified; GITHUB-7, GITHUB-7.a)
+
+`tests/github.self-merge.test.ts` (91 tests): a fake GitHub client
+(`makeGithubPrMergeCommand({ client })`, no network or token), a temp data
+dir and allowlist file, the real must-ask gate, card store and SAFE-5 chain.
+- A green PR (own token, own `talk/…` branch, not draft, marked ready by a
+  person, no gate path,
+  `smoke` + `spec-sync` from GitHub Actions passed at the head, `clean`) with
+  an approved `mustask-merge` card merges once via `pulls.merge` with the
+  named sha, `squash` and `<title> (#12)`; the reply names the merge sha;
+  `started` + `ok` rows. On the bridge's real card engine Approve alone merges
+  nothing and Approve plus the one-time code merges once.
+- Each refusal reason (a PR it opened ready that no person marked ready, or
+  one only an app marked ready, is `not-marked-ready`) raises no card, merges
+  nothing and leaves one `github-pr-merge:<reason>` `denied` row; a denied
+  card leaves
+  `card-denied`; a PR turned draft while the card waits is refused after
+  `started`; a GitHub 405 is `github-refused`; a dry run asks and merges
+  nothing.
+- The caller check refuses WATCH (a WATCH session id, a `watch` stamp, and
+  the owner's own GitHub-triggered run as #374's WATCH spawn stamps it), the
+  owner's own schedule, a worker, a missing surface stamp, a muted owner,
+  team and spawned local runs before any GitHub call; a non-Corvidinho repo
+  is refused before any call. Through `runPlugin` the owner's WATCH run
+  passes the role gate (IDENTITY-12.a) and is refused by the tool with one
+  `github-pr-merge:watch` row and no card.
+- Gate paths (`.trust.toml` in any folder and case and every
+  `SELF_MERGE_CODE` file included; ordinary paths such as `trust.toml` are
+  not gates), talk-branch names
+  against `generateTalkBranchName`, and the required check names against
+  `.github/workflows/ci.yml` / `spec-sync.yml`.
+- `tests/must-ask.boundary.test.ts`: `github-pr-merge` is among the
+  must-ask builtins.
+- Fails on the base (86d68cd0): without `plugins/github/merge.ts` the file
+  does not load; with it but the base `run.ts`, `tools.ts`, `execute.ts`,
+  `events-ndjson.ts`, `loop-guards.ts`, `ask.ts`, 33 of 114 tests (with
+  `tests/must-ask.boundary.test.ts` and `tests/agent.loop-guards.test.ts`)
+  fail. Restored: 114 of 114 pass.

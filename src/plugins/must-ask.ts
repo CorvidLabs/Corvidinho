@@ -8,8 +8,9 @@
  * included, AUTONOMY-9.a; a push to a remote's default branch counts as a
  * deploy; updating itself to a tagged release does not); every channel post
  * it makes asks (`public`, AUTONOMY-10/10.a — dictated text and replies to
- * the owner included). Everything else inside its guardrails runs with no ask
- * (AUTONOMY-11).
+ * the owner included); merging its own Corvidinho PR asks (`merge`,
+ * GITHUB-7.a "only when I ask": `github-pr-merge`, plugins/github/merge.ts).
+ * Everything else inside its guardrails runs with no ask (AUTONOMY-11).
  *
  * A command declares its class, or a classifier over its args, as
  * `PluginCommand.mustAsk` (src/plugins/types.ts). The class comes from that
@@ -19,8 +20,9 @@
  * handler. For a must-ask call the gate records an Approve/Deny card on the
  * shared approvals store (src/approvals/store.ts): kind `mustask` for prod
  * (class destructive, so Approve also needs the SAFE-19 one-time code,
- * AUTONOMY-9.a) and kind `mustask-post` for a channel post (class plain) —
- * the engine binds one class per kind. The running Discord bridge DMs it to
+ * AUTONOMY-9.a), kind `mustask-post` for a channel post (class plain) and
+ * kind `mustask-merge` for a self-merge (class destructive) — the engine
+ * binds one class per kind. The running Discord bridge DMs it to
  * the owner (src/discord/approval-cards.ts `mustAskApprovalKinds`); the run
  * waits in-process, says so once ({@link setMustAskNotifier}: a Text event in
  * `task run`, stderr otherwise), and runs the call only on an approval it
@@ -94,17 +96,28 @@ export const MUST_ASK_POLICY: Readonly<Record<"spend" | MustAskClass, MustAskPol
     gate: "runPlugin's must-ask gate",
     card: { kind: "mustask-post", class: "plain" },
   },
+  merge: {
+    criterion: "GITHUB-7.a",
+    what:
+      "every merge of its own Corvidinho PR (github-pr-merge) — it merges only when the owner asks, " +
+      "and only after every self-merge check passed (plugins/github/merge.ts)",
+    gate: "runPlugin's must-ask gate",
+    card: { kind: "mustask-merge", class: "destructive" },
+  },
 };
 
 /** Card kind of the prod asks (class destructive: Approve + one-time code, AUTONOMY-9.a). */
 export const MUST_ASK_PROD_KIND = "mustask";
 /** Card kind of the channel-post asks (class plain). */
 export const MUST_ASK_POST_KIND = "mustask-post";
+/** Card kind of the self-merge asks (class destructive: Approve + one-time code, GITHUB-7.a). */
+export const MUST_ASK_MERGE_KIND = "mustask-merge";
 
 /** The card kinds this gate raises, for the bridge's engine. */
 export const MUST_ASK_CARD_KINDS: readonly { kind: string; class: ApprovalClass }[] = [
   { kind: MUST_ASK_PROD_KIND, class: "destructive" },
   { kind: MUST_ASK_POST_KIND, class: "plain" },
+  { kind: MUST_ASK_MERGE_KIND, class: "destructive" },
 ];
 
 /** How long a must-ask card stays open; no answer by then is a no (SAFE-20). */
@@ -397,6 +410,8 @@ function refusal(
     // The why can quote a script, recipe or lane step: scrubbed (SAFE-6).
     error: scrubSecrets(error),
     exitCode: outcome === "aborted" ? 130 : 2,
+    // GITHUB-7.a: every self-merge attempt's audit row says why it stopped.
+    ...(ask.class === "merge" ? { auditDenied: `card-${outcome}` } : {}),
     data: {
       refused: true,
       rule,
@@ -421,7 +436,12 @@ export async function mustAskVerdict(
     return {
       ask: {
         class: policy,
-        why: policy === "prod" ? "touches prod or deploys" : "posts in a channel",
+        why:
+          policy === "prod"
+            ? "touches prod or deploys"
+            : policy === "merge"
+              ? "merges a pull request"
+              : "posts in a channel",
         target: `in ${resolve(cwd)}`,
         text: JSON.stringify(args),
       },
@@ -465,11 +485,15 @@ function cardFields(cmdName: string, ask: MustAskAsk, surface: string): CardFiel
   const amount =
     ask.class === "public"
       ? `1 message (${(ask.text ?? "").length} characters)`
-      : "1 call (no money)";
+      : ask.class === "merge"
+        ? "1 merge (no money)"
+        : "1 call (no money)";
   const title =
     ask.class === "public"
       ? `Channel post — waits for your OK (${row.criterion}) · from ${surface}`
-      : `Prod / deploy — asks first (${row.criterion}) · from ${surface}`;
+      : ask.class === "merge"
+        ? `Merge its own PR — only when you ask (${row.criterion}) · from ${surface}`
+        : `Prod / deploy — asks first (${row.criterion}) · from ${surface}`;
   return {
     kind: card.kind,
     class: card.class,
