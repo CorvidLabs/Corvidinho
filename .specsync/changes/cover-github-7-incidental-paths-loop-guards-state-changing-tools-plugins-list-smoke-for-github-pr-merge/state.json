@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "89f4d1efdaf5a5b495ab566e4cd1b51cafa53e81",
   "created_at": 1791330490,
-  "updated_at": 1791330816,
+  "updated_at": 1791330818,
   "affected_specs": [],
   "affected_paths": [
     "src/agent/loop-guards.ts",
