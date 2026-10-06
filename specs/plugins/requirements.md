@@ -2522,6 +2522,18 @@ error), so those dirs are removed. Every other key the child got before is
 kept. Fledge plugin commands (`fledge-<command>`, `fledgeChildEnv`) are
 unchanged. No new slash command, env var or config key.
 
+The tier-0 `specsync-check` tool (and `corvidinho specsync check`), which runs
+the verify lane's `spec-check` step, SHALL start its child the same way
+(SAFE-21.b, follow-up to #373): `runSpecCheck` (`plugins/specsync/api.ts`)
+SHALL spawn `fledge run spec-check` with `withoutCloudCredentials(buildVerifyEnv())`
+(the verify lane's own env, REQ-agent-002), and `spawnSpecsync` (its plain
+`specsync check` fallback and the other SpecSync tools) SHALL spawn specsync
+with `withoutCloudCredentials` of `process.env` at call time (every other key
+kept, so `specsync change ship` still reads `GITHUB_TOKEN`); both SHALL call
+`releaseCloudStandIns` once the child has exited (also when the spawn throws)
+and SHALL pass the child's output through `scrubSecrets(redactSecretEnvValues(…))`
+(SAFE-6), the scrub `shell-exec` and the runners use.
+
 Acceptance Criteria
 - With the owner's cloud env set, and separately with only the owner's default
   files under a fake HOME (`~/.kube/config`, `~/.aws/credentials` /
@@ -2539,6 +2551,15 @@ Acceptance Criteria
   not reach the next runner child.
 - The SAFE-21.a git / GitHub scrub and its tests (`tests/runners.plugins.test.ts`,
   `tests/shell.footguns.test.ts`, `tests/fledge.core.test.ts`) are unchanged.
+- With the owner's cloud env set, and separately with only the owner's default
+  files under a fake HOME, `specsync-check` run by a process with the owner's
+  env (a stand-in `fledge` with a `fledge.toml` `spec-check` task, and a
+  stand-in `specsync` with no such task) shows no cloud key, value or file
+  content: the stand-ins are `/dev/null`, `CLOUDSDK_CONFIG` /
+  `AZURE_CONFIG_DIR` lie outside HOME and are gone after the call,
+  `AWS_REGION` / `GOOGLE_CLOUD_PROJECT` stay, and the owner's `GITHUB_TOKEN`
+  value never appears in the tool's output (`tests/agent.cloud-credentials.test.ts`).
+
 ### REQ-plugins-1818
 
 AGENT-18.a in the shell (captured on main, `hi/agent.md`, from Leif's

@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "attempts": [
+    {
+      "timestamp": 1791330688,
+      "commit": "b871d4279b203be05ad8b68497f6f4a431c2bcc1",
+      "contract_digest": "78d38af2be4474b202f1d7efca4f510274ab0969aee29dd4b2a049150436029e",
+      "execution_digest": "37fea39b2cd7905ce2bf93c3a2d2cf9e3fac95d48d297c8166facc47e23393cc",
+      "workspace_digest": "dfb9b252debc66392a16ab157215bb83df2d07f5a0ac37f1474ae5210864aac2",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-621",
+        "REQ-plugins-621"
+      ]
+    }
+  ]
+}
