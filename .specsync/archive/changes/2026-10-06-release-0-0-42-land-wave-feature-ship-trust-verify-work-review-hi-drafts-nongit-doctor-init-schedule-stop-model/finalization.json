@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-42-land-wave-feature-ship-trust-verify-work-review-hi-drafts-nongit-doctor-init-schedule-stop-model",
+  "implementation_commit": "6603803f168c501d2adb1d847bd88dcb9ab123c2",
+  "implementation_tree": "71c687ee19134261f557840d798fa90cb5f8f290",
+  "contract_digest": "3e788705e99e629894d8b436e98b507cf8c962f944601207416571c87dab2ac4",
+  "workspace_digest": "14f341ffc1b5f9194ac8733f898589369e053b4eb9dcaaf5288688215b5f3b1e",
+  "closing_digest": "5c442dad0ac7bd7b1c3ba9044ec88eafef6956e4cb38f2c32a04b42b0004a8ee",
+  "review_digest": "6dab8dd51f95368d12b4685775dada374b33810ae3779e0e04d86c0f5090a1e2",
+  "finalization_digest": "5a70e8073afbf4f59c2a5ea83637d3c66e479b6cd6dcef29fcbb93e501df3595",
+  "timestamp": 1791307509
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-42-land-wave-feature-ship-trust-verify-work-review-hi-drafts-nongit-doctor-init-schedule-stop-model",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "6603803f168c501d2adb1d847bd88dcb9ab123c2",
+  "contract_digest": "3e788705e99e629894d8b436e98b507cf8c962f944601207416571c87dab2ac4",
+  "execution_digest": "ebb13583997b16d8267963b762d67ccf6d6f70224593b78bea1105f21f694309",
+  "workspace_digest": "14f341ffc1b5f9194ac8733f898589369e053b4eb9dcaaf5288688215b5f3b1e",
+  "timestamp": 1791307493
+}

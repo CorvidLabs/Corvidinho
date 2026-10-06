@@ -7,11 +7,11 @@
   "title": "Release 0.0.42: land-wave feature ship (Trust verify, /work review, hi drafts, nongit, doctor/init, schedule stop, model escalate, spend reserve, shell SpecSync refuse, SAFE-21.b, GitHub roles, bridge-live note, PLUGIN-5 toggles)",
   "description": "Release 0.0.42: land-wave feature ship (Trust verify, /work review, hi drafts, nongit, doctor/init, schedule stop, model escalate, spend reserve, shell SpecSync refuse, SAFE-21.b, GitHub roles, bridge-live note, PLUGIN-5 toggles)",
   "kind": "operations",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "c8f3f3e7acf5e5f331ab3735e1693531c46bdabb",
   "created_at": 1791307174,
-  "updated_at": 1791307232,
+  "updated_at": 1791307509,
   "affected_specs": [
     "cli"
   ],
