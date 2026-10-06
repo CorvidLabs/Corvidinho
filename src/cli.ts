@@ -989,11 +989,15 @@ async function taskRun(opts: {
  * tree gets the second-model review before the /work PR step. No review is
  * spent on a PR that cannot open.
  */
-export function workReviewApplies(env: NodeJS.ProcessEnv, allowlist: ReadonlySet<string>): boolean {
+export function workReviewApplies(
+  env: NodeJS.ProcessEnv,
+  allowlist: ReadonlySet<string>,
+  cwd: string = process.cwd(),
+): boolean {
   const role = actingRoleCap(env);
   return (
     actingSurface(env) === "work" &&
-    actingWorkTask(env) &&
+    actingWorkTask(env, cwd) &&
     (role === "owner" || role === "team") &&
     delegateDepthFromEnv(env) === 0 &&
     allowlist.has("git-push") &&
@@ -1089,7 +1093,7 @@ async function taskRunIn(
   // reviewed by a second model in bounded rounds (their own counter, not the
   // AGENT-4.a retries) through this run's models, call path and spend guard,
   // before the /work PR step commits or pushes anything.
-  const review = workReviewApplies(process.env, allowlistFromEnv())
+  const review = workReviewApplies(process.env, allowlistFromEnv(), cwd)
     ? workReviewHook({ cwd, run: execute.review, takeSpendAsk: execute.takeSpendAsk })
     : undefined;
   let spendWarning: SpendWarning | undefined;

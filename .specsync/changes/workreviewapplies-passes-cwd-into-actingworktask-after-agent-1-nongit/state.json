@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "workreviewapplies-passes-cwd-into-actingworktask-after-agent-1-nongit",
+  "slug": "workreviewapplies-passes-cwd-into-actingworktask-after-agent-1-nongit",
+  "title": "WorkReviewApplies passes cwd into actingWorkTask after AGENT-1 nongit",
+  "description": "workReviewApplies passes cwd into actingWorkTask after AGENT-1 nongit",
+  "kind": "bug_fix",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "10b5fcaf98abcfb302574ce854e4989c73574677",
+  "created_at": 1791301520,
+  "updated_at": 1791301553,
+  "affected_specs": [
+    "cli"
+  ],
+  "affected_paths": [
+    "src/cli.ts"
+  ],
+  "no_spec_change": true,
+  "no_spec_change_rationale": "Call-site fix only: actingWorkTask gained cwd in #351; workReviewApplies must forward the run cwd. No requirement text change.",
+  "acceptance_criteria": [
+    "workReviewApplies(env, allowlist, cwd) forwards cwd to actingWorkTask; taskRunIn passes its run cwd; bunx tsc --noEmit is clean on tip"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}
