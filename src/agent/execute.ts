@@ -73,9 +73,11 @@ import {
   repeatFailureSteer,
   stallKind,
   stallNudge,
+  stallMovedNote,
   stallNudgedNote,
   stallStandsNote,
   type RepeatFailureGuard,
+  type StallKind,
   type StallNudgeGuard,
 } from "./loop-guards.ts";
 import {
@@ -151,14 +153,19 @@ import {
   modelCallFailedLine,
   modelFallbackFromUnknown,
   modelLabelFromUnknown,
+  modelOrderFromEnv,
+  moveToStronger,
   providerForTier,
   providerNotice,
   withModelFallbackNote,
+  withStrongerModelNote,
   type ChainCall,
   type ModelChain,
   type ModelFailure,
   type ProviderKind,
   type ResolvedProvider,
+  type StrongerModel,
+  type StrongerMove,
 } from "./providers.ts";
 import { maxTurnsFromEnv, whileIdlePaused } from "./limits.ts";
 import { renderRepoWaysBlock, type RepoWays } from "./repo-ways.ts";
@@ -793,9 +800,18 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
     emit(opts.onEvent, { type: "Text", text: modelFallbackEventText(hop) });
     opts.onModelFallback?.(hop);
   };
+  // AGENT-17 / AGENT-17.a: the model order I set (weakest first; none = the
+  // run never moves) and the one move to a stronger model this run made.
+  const order = modelOrderFromEnv(env);
+  let movedTo: StrongerMove | null = null;
   const models: ModelCalls = {
     chain,
     onFallback: noteFallback,
+    escalate: (kind) => {
+      const next = moveToStronger(chain, order);
+      if (next.ok) movedTo = { from: next.from, to: next.to, kind };
+      return next;
+    },
     onModel: (model) => {
       authors.add(model);
       opts.onModel?.(model);
@@ -1069,6 +1085,8 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
   // keeps it).
   // AGENT-11: once a model failed over in this run, every summary after it
   // carries the failover note (before the role note, which stays last).
+  // AGENT-17: once the run moved to a stronger model, every summary after it
+  // carries that note, right after the failover note.
   // GITHUB-9.a: when the run's last github-pr-create was refused at the
   // second-model review gate, the summary ends with that line (before the
   // role note), so the reply says why there is no PR.
@@ -1084,6 +1102,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): ExecuteFn {
     if (fallbacks.length > 0) {
       result = { ...result, summary: withModelFallbackNote(result.summary, fallbacks) };
     }
+    if (movedTo) result = { ...result, summary: withStrongerModelNote(result.summary, movedTo) };
     if (reviewRefusal) result = { ...result, summary: withReviewRefusalNote(result.summary, reviewRefusal) };
     if (attributions.size > 0) {
       result = { ...result, summary: withReplyAttribution(result.summary, attributions) };
@@ -1102,6 +1121,11 @@ type ModelCalls = {
   chain: ModelChain;
   /** This run's own chain moved to its next configured model. */
   onFallback: (hop: ModelFallback) => void;
+  /**
+   * AGENT-17 / AGENT-17.a: after the nudge, move the chain to the next
+   * stronger model in the order I set (`moveToStronger`), or say why it stays.
+   */
+  escalate: (kind: StallKind) => StrongerModel;
   /** The configured model a reply came from. */
   onModel?: (model: string) => void;
   /** Failovers a delegate or council worker reported in its tool data. */
@@ -1337,6 +1361,9 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     const msg = completion.message;
     messages.push(msg);
 
+    // AGENT-17: the text that stood before this reply (it stands again when
+    // this reply stalls and a stronger model takes the run over).
+    const textBefore = lastText;
     const content = (msg.content ?? "").trim();
     if (content) {
       lastText = content;
@@ -1399,8 +1426,12 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       // claim, when this round offered a state-changing tool, SAFE-13 has not
       // tripped and nothing changed (the real git diff, or tool-reported
       // changes with no git tree): the run's first such reply gets one nudge
-      // to the same model (it never uses up a tool round); after that the
-      // reply stands, with an operator note.
+      // to the same model (it never uses up a tool round). AGENT-17.a: a
+      // stall after the nudge moves the rest of the run to the next stronger
+      // model in the order I set — this stalled reply is dropped and the
+      // same request goes to that model (no second nudge, no tool round
+      // used) — once per run; with no order, at the top of it, or with no
+      // stronger model available, the reply stands with an operator note.
       const stalled = stallKind(lastText, taskText);
       if (
         stalled &&
@@ -1414,13 +1445,23 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
         })) &&
         !signal.aborted
       ) {
-        if (stallGuard.next() === "nudge") {
+        const step = stallGuard.next();
+        if (step === "nudge") {
           emit(onEvent, { type: "Text", text: stallNudgedNote(stalled) });
           messages.push({ role: "user", content: stallNudge(stalled, offered.has(ASK_TOOL_NAME)) });
           roundLimit += 1;
           continue;
         }
-        emit(onEvent, { type: "Text", text: stallStandsNote(stalled) });
+        const move = step === "escalate" ? models.escalate(stalled) : null;
+        if (move?.ok) {
+          stallGuard.moved();
+          emit(onEvent, { type: "Text", text: stallMovedNote(stalled, move.from, move.to) });
+          if (messages.at(-1) === msg) messages.pop();
+          lastText = textBefore;
+          roundLimit += 1;
+          continue;
+        }
+        emit(onEvent, { type: "Text", text: stallStandsNote(stalled, move ? move.why : "moved") });
       }
       if (capFacts && lastText) {
         const vague = vagueInstallOutcome(lastText, taskText, capFacts);

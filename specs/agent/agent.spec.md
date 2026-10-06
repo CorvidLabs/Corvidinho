@@ -63,6 +63,7 @@ files:
   - tests/fixtures/talk-worktree.ts
   - tests/agent.loop-guards.test.ts
   - tests/agent.stall-nudge.test.ts
+  - tests/agent.stall-escalate.test.ts
   - tests/agent.test-evidence.test.ts
   - tests/fixtures/lane-output.ts
   - src/agent/providers.ts
@@ -147,8 +148,12 @@ Plan-only or empty "Done." replies (AGENT-17, nudge half, REQ-agent-087;
 round offered a state-changing tool, SAFE-13 has not tripped and nothing
 changed (the verify gate's real git diff, or tool-reported changes and
 stored memories with no git tree), gets one harness nudge to the same model,
-once per run; a second stall stands with an operator note. Moving to a
-stronger model is not built yet.
+once per run. A stall after the nudge moves the rest of the run to the next
+stronger model in the order I set (AGENT-17.a, REQ-agent-088:
+`CORVIDINHO_LLM_MODEL_ORDER`, the model list's own entries, weakest first;
+only a model the run's tier lists, with its key, that has not failed in the
+run), once per run, saying so in one closing line; with no order, at the top
+of it, or with none available, the reply stands with an operator note.
 
 ## Public API
 
@@ -198,13 +203,27 @@ plan or for nothing to change yet: a plan reply is then null),
 `changedForStall(name, result)` (`changedState`, or a successful
 `STALL_CHANGE_TOOLS` call), `nothingChanged({ sawChange, unreportedEdits,
 workspaceChanged? })` (async), `stallNudge(kind, askOffered)`,
-`stallNudgedNote(kind)`, `stallStandsNote(kind)` and
-`createStallNudgeGuard()` → `StallNudgeGuard` (`changed()` and
-`sawChange()` — a change in any attempt of the run; `next()` → `"nudge"`
-once, then `"stand"`). `ExecuteContext` gains the optional `workspaceChanged()` →
+`stallNudgedNote(kind)`, `stallStandsNote(kind, why)` (`why` a
+`StallStandReason`: `no-order`, `unordered`, `top`, `unavailable` or
+`moved`), `stallMovedNote(kind, from, to)` and `createStallNudgeGuard()` →
+`StallNudgeGuard` (`changed()` and `sawChange()` — a change in any attempt of
+the run; `next()` → `"nudge"` once, then `"escalate"` until `moved()`, then
+`"stand"`). `ExecuteContext` gains the optional `workspaceChanged()` →
 `Promise<string[] | null>`: `runTask` passes its `WorkspaceDiffTracker`'s
-`changed` when the run has a git snapshot. No env var, config key, flag,
-HumanAsk reason or NDJSON field is added.
+`changed` when the run has a git snapshot. No config key, flag, HumanAsk
+reason or NDJSON field is added.
+
+Stronger model (REQ-agent-088, AGENT-17 / AGENT-17.a): `src/agent/providers.ts`
+exports `MODEL_ORDER_ENV` (`CORVIDINHO_LLM_MODEL_ORDER`, the only setting:
+optional, same `kind:model` entries as the model list, weakest first),
+`modelOrderFromEnv(env)` (`parseModelChain`; [] when unset = no order),
+`StayReason` (`no-order` / `unordered` / `top` / `unavailable`),
+`StrongerModel` (`{ ok: true, index, from, to }` or `{ ok: false, why }`),
+`strongerModel(chain, order)` (pure), `moveToStronger(chain, order)` (sets
+`chain.index` only when there is one), `StrongerMove` (`{ from, to, kind }`),
+`STRONGER_MODEL_NOTE_PREFIX` (`(stronger model: `), `strongerModelNote(move)`
+and `withStrongerModelNote(summary, move)`; `closingNotesTail` keeps that
+note after the AGENT-11 fallback note.
 
 Export `MEMORY_AGENT_SYSTEM_INSTRUCTIONS` from `src/agent/execute.ts` (and
 `src/agent/index.ts`).
@@ -262,7 +281,9 @@ entry without its key is skipped with `<KEY> is not set`), `ModelFailure` /
 `modelFailureReason` (`HTTP <status>`, `timed out`, `network error`,
 `malformed reply`), `modelFallbackEventText`, `MODEL_FALLBACK_NOTE_PREFIX`,
 `modelFallbackNote`, `withModelFallbackNote`, `formatModelFallbackLog`
-(`llm.fallback: …`), `answeredModelLabel` (`b (fell back from a)`),
+(`llm.fallback: …`), `answeredModelLabel` (`b (fell back from a)`), the
+AGENT-17.a model order (`MODEL_ORDER_ENV`, `strongerModel`, `moveToStronger`,
+REQ-agent-088, above),
 `modelIdOfLabel`, `modelFallbackFromUnknown` / `modelUsageFromUnknown` /
 `modelLabelFromUnknown` (a child's result read back: scrubbed, one line,
 bounded, at most `MODEL_FALLBACK_MAX` 16), `mergeModelFallbacks` and
@@ -537,8 +558,9 @@ Personality traits, Background, Communication style, Example messages).
 `chatBodyFromTaskRunOutput` alongside `summarizeTaskResult`, plus
 `ROLE_REFUSED_SUMMARY_NOTE`, `closingNotesTail` and `clipKeepingRoleNote`
 (REQ-agent-333; it keeps the AGENT-11 `(model fallback: …)` note before the
-role note too, REQ-agent-080, and the REQ-agent-318 attribution note between
-them), and `REPLY_ATTRIBUTION_BY_TOOL` (tool name → the visible line its
+role note too, REQ-agent-080, the AGENT-17 `(stronger model: …)` note right
+after it, REQ-agent-088, and the REQ-agent-318 attribution note before the
+role note), and `REPLY_ATTRIBUTION_BY_TOOL` (tool name → the visible line its
 provider's terms ask a reply to end with: `web-search` → "Search by Brave"),
 `replyAttributionNote`, `withoutReplyAttribution` and `withReplyAttribution`
 (REQ-agent-318). Discord/NDJSON
@@ -775,8 +797,19 @@ reports in any attempt of the run — the stall guard remembers both — and an
 empty real diff where there is a git tree; an unreadable diff counts as a
 change; the diff is read only for a reply that stalls). The nudge is one user message to
 the same conversation and model chain, never uses up a tool round, and comes
-at most once per `createTaskExecute`; a later stall stands with one
-`[operator] AGENT-17` line (no ask, no error). `stallKind` is null for any
+at most once per `createTaskExecute`. A later stall moves the run to a
+stronger model at most once per `createTaskExecute` (AGENT-17.a,
+REQ-agent-088): only the next entry after the chain's current model in
+`CORVIDINHO_LLM_MODEL_ORDER` that the chain itself (the run's tier's list)
+holds, with its key, that has not failed in the run (later ones in the order
+in turn) — never a weaker or unordered one, never a price or benchmark
+ranking; the stalled reply is dropped and the same request goes to that
+model through the same chain and spend guard (no second nudge, no tool round
+used), with one `[operator] AGENT-17 … moving from <a> to the stronger model
+<b>` line and the `(stronger model: …)` closing note on every later summary.
+With no order, an unordered current model, the top of the order, no stronger
+model available, or after the move, the stall stands with one `[operator]
+AGENT-17 … the reply stands (<why>)` line (no ask, no error). `stallKind` is null for any
 "?", code fence, "let me know" or offer, decline, toy / demo / joke or
 deferral, for answers and social replies, and for a plan when the task text
 asks for one or for nothing to change yet. The model chain (AGENT-11), the
@@ -1305,7 +1338,13 @@ A change the run did not open is never touched.
 
 - **Given** a code-tier run (the catalog offers `files-write`) in a project whose tree has not changed
 - **When** the model's final reply is "Done." (or only a plan, or empty)
-- **Then** the same model gets one `[Corvidinho harness — AGENT-17]` nudge and its next reply is the answer; if that reply stalls again it stands with an `[operator] AGENT-17 … the reply stands` line; a Q&A answer, a social reply, a question, "let me know", a decline or a toy demo is never nudged (REQ-agent-087)
+- **Then** the same model gets one `[Corvidinho harness — AGENT-17]` nudge and its next reply is the answer; with no model order set, if that reply stalls again it stands with an `[operator] AGENT-17 … the reply stands (no model order is set …)` line; a Q&A answer, a social reply, a question, "let me know", a decline or a toy demo is never nudged (REQ-agent-087)
+
+### Scenario: it still only says "Done." after the nudge and I set a model order
+
+- **Given** `CORVIDINHO_LLM_MODEL=gpt-4.1-mini,anthropic:claude-sonnet-5` and `CORVIDINHO_LLM_MODEL_ORDER=gpt-4.1-mini,anthropic:claude-sonnet-5`, a code-tier run whose tree has not changed
+- **When** `gpt-4.1-mini` says "Done." and, after the one nudge, "Done." again
+- **Then** that second reply is dropped and the same request goes to `anthropic:claude-sonnet-5` (no second nudge), which keeps the rest of the run; its calls are counted under its own model by the spend guard; the answer ends with `(stronger model: gpt-4.1-mini said it was done with nothing changed after the nudge, so anthropic:claude-sonnet-5 took over)`; with no order, or with `gpt-4.1-mini` last in the order, it does not move and the reply stands (REQ-agent-088)
 
 ### Scenario: the owner's schedule posts to a channel and the owner says no
 
@@ -1356,7 +1395,11 @@ A change the run did not open is never touched.
 | That call is made again after the model saw the steer | not run; `ToolResult` success=false with `REPEAT_FAILURE_BLOCK_DETAIL`, one `[operator] AGENT-16` Text line; state blocked with a `stuck` ask naming only the tool (REQ-agent-086) |
 | Identical failing calls in one batch, or in a fresh verify-retry conversation | they run and get the steer again; never the ask before the model saw the steer (REQ-agent-086) |
 | Final reply is only a plan or a short "Done."-style / empty claim, a state-changing tool was offered, no SAFE-13 trip, nothing changed | one `[Corvidinho harness — AGENT-17]` user message to the same model (no tool round used), one `[operator] AGENT-17 … nudged once` line; its next reply is the answer (REQ-agent-087) |
-| It stalls again after the run's nudge | the reply stands; one `[operator] AGENT-17 … the reply stands` line; no ask, no error (REQ-agent-087) |
+| It stalls again after the run's nudge, with no model order set | the reply stands; one `[operator] AGENT-17 … the reply stands (no model order is set …)` line; no ask, no error (REQ-agent-087, REQ-agent-088) |
+| It stalls again after the nudge and the order has a stronger model the tier lists, with its key, not failed in the run | that reply is dropped; the same request goes to it (no second nudge, no tool round used); one `moving from <a> to the stronger model <b>` operator line; every later summary ends with `(stronger model: …)` (REQ-agent-088) |
+| The current model is not in the order, is the last in it, or no stronger one is available (another tier's, no key, failed in this run) | no move: the reply stands with the operator line naming why (REQ-agent-088) |
+| The stronger model stalls too | the reply stands (`it already moved to a stronger model once`); one move per run (REQ-agent-088) |
+| The stronger model's call would pass a spend cap (or is unpriced under one) | it stops and asks like any call (SAFE-8 / AUTONOMY-8); never routed to another model (REQ-agent-088) |
 | The git diff cannot be read (null or throws) when a reply stalls | counted as a change: no nudge (REQ-agent-087) |
 | "Done." after a memory was stored (`memory-store` / `memory-forget-me` ok) | counted as a change: no nudge, so nothing is stored twice (REQ-agent-087) |
 | A plan-only reply to a task that asks for the plan, or for no changes yet | the plan is the answer: no nudge (REQ-agent-087) |

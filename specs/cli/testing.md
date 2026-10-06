@@ -279,3 +279,10 @@ child sees none of them, so the suite never sends a real, paid web search.
 REQ-cli-262 (#318 slice B): the same child `bun test` also starts with
 `GIPHY_API_KEY` set; the probe's run-settings list includes it and the child
 sees none of them, so the suite never sends a real GIF search.
+
+REQ-cli-262 / REQ-cli-009 (AGENT-17.a): the same child `bun test` also starts
+with `CORVIDINHO_LLM_MODEL_ORDER` set; the probe's run-settings list includes
+it and the child sees none of them, so an operator's model order never moves
+a stalled test run. `tests/agent.cli.test.ts` checks `--help` lists
+`CORVIDINHO_LLM_MODEL_ORDER`. Fail on base: with the base's `tests/preload.ts`
+and `src/cli.ts`, both fail (the child sees the key; help lacks it).

@@ -4,7 +4,8 @@
  * src/agent/loop-guards.ts, the task-run tool loop over the fake LLM
  * (tests/fixtures/fake-llm.ts; no network, no real key), runTask with a
  * stubbed git diff, and the real CLI against the localhost fake LLM.
- * Moving to a stronger model is not built yet: a second stall stands.
+ * With no model order set (AGENT-17.a), a second stall stands; the move to a
+ * stronger model is tests/agent.stall-escalate.test.ts.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
@@ -260,17 +261,20 @@ describe("nothingChanged, the catalog check, the nudge text and the guard (REQ-a
     expect(stallNudgedNote("plan")).toBe(
       "[operator] AGENT-17: the reply was only a plan with nothing changed; nudged once (same model)",
     );
-    expect(stallStandsNote("done-claim")).toBe(
-      "[operator] AGENT-17: the reply was a 'Done.'-style or empty claim with nothing changed, after the nudge; the reply stands (moving to a stronger model is not built yet)",
+    expect(stallStandsNote("done-claim", "no-order")).toBe(
+      "[operator] AGENT-17: the reply was a 'Done.'-style or empty claim with nothing changed, after the nudge; the reply stands (no model order is set, so it does not move to another model)",
     );
   });
 
-  test("one nudge per guard, then the reply stands; a change is remembered", () => {
+  test("one nudge per guard, then a move is tried until one happens, then the reply stands; a change is remembered", () => {
     const g = createStallNudgeGuard();
     expect(g.sawChange()).toBe(false);
     g.changed();
     expect(g.sawChange()).toBe(true);
     expect(g.next()).toBe("nudge");
+    expect(g.next()).toBe("escalate");
+    expect(g.next()).toBe("escalate");
+    g.moved();
     expect(g.next()).toBe("stand");
     expect(g.next()).toBe("stand");
   });
@@ -334,7 +338,7 @@ describe("tool loop: a plan-only or empty 'Done.' reply that changed nothing get
     expect(r.summary).toBe("Checked README.md: nothing to change.");
   });
 
-  test("it stalls again after the nudge: the reply stands with an operator note (no stronger model yet)", async () => {
+  test("it stalls again after the nudge with no model order set: the reply stands with an operator note (AGENT-17.a)", async () => {
     const { exec, bodies, events } = makeExec(["Done."]);
     const r = await run(exec);
     expect(bodies).toHaveLength(2);
@@ -343,7 +347,7 @@ describe("tool loop: a plan-only or empty 'Done.' reply that changed nothing get
     expect(r.error).toBeUndefined();
     expect(agent17(events)).toEqual([
       "[operator] AGENT-17: the reply was a 'Done.'-style or empty claim with nothing changed; nudged once (same model)",
-      "[operator] AGENT-17: the reply was a 'Done.'-style or empty claim with nothing changed, after the nudge; the reply stands (moving to a stronger model is not built yet)",
+      "[operator] AGENT-17: the reply was a 'Done.'-style or empty claim with nothing changed, after the nudge; the reply stands (no model order is set, so it does not move to another model)",
     ]);
   });
 

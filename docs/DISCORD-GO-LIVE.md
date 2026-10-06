@@ -48,6 +48,7 @@ cp allowlist.example.toml ~/.config/corvidinho/allowlist.toml
 #   ollama: optional OLLAMA_HOST (default 127.0.0.1:11434), no key
 #   anthropic: ANTHROPIC_API_KEY
 #   CORVIDINHO_LLM_TIER=read|tool|code (default tool); CORVIDINHO_LLM_MODEL_READ/_TOOL/_CODE per tier
+#   optional AGENT-17.a: CORVIDINHO_LLM_MODEL_ORDER=<same entries, weakest first>   # move up after the nudge (E.9)
 # optional SESSION-5: CORVIDINHO_LLM_CONTEXT_TOKENS=8192   # model window; long chats condense at ~80% of it
 ```
 
@@ -774,6 +775,21 @@ and your own stop is a stop. It tells you on every surface:
 A `delegate` or `council` worker that fell back is reported by its lead the same way, marked
 `delegate worker:` / `council worker:`. The fallback order is yours: there is no ranking by
 price or benchmark and no setting beyond the list itself.
+
+**Model order (AGENT-17 / AGENT-17.a).** The fallback list's order is not a strength order. To
+let a stalled run move to a stronger model, set `CORVIDINHO_LLM_MODEL_ORDER` to the same
+`kind:model` entries, weakest first, e.g.
+`CORVIDINHO_LLM_MODEL_ORDER=ollama:qwen3:30b,openai:gpt-4.1,anthropic:claude-sonnet-5`. When a
+run's reply only plans, or says "Done." with nothing changed, it gets one nudge (docs/discord.md);
+if it still stalls, the rest of that run moves to the next model after the current one in your
+order that the run's tier lists (its key set, not one that already failed in the run; later ones
+in the order are tried in turn), and the answer ends with one line such as `(stronger model:
+gpt-4.1-mini only planned after the nudge, so anthropic:claude-sonnet-5 took over)`. It moves at
+most once per run and never to a weaker or unordered model; the new model's calls go through the
+same spend caps and cards (SAFE-8 / SAFE-14 / AUTONOMY-8) at its own price. Unset (the default),
+there is no order: the one nudge still happens and the reply then stands. A model that is not in
+your order, or is already the last in it, never moves. Delegate workers inherit the setting and
+apply it in their own run; restart the bridge, `github watch` and the daemon after changing it.
 
 With no usable model for a tier (nothing set, or its first entry's key is missing) it says so:
 

@@ -34,15 +34,20 @@
  *   and the verify gate's real git diff (where there is a git tree) is empty.
  * - {@link createStallNudgeGuard}: remembers a change in any attempt of the
  *   run; the first stall of a run gets {@link stallNudge} (to the same
- *   model); later ones stand with an operator note. Moving to a stronger
- *   model is not built yet.
+ *   model); a stall after it moves the run to the next stronger model in the
+ *   order I set (AGENT-17.a, `strongerModel` in src/agent/providers.ts), once
+ *   per run; a stall that cannot move, or comes after the move, stands with
+ *   an operator note.
  *
- * Thresholds are constants; there is no knob (no env var, config key or flag).
+ * Thresholds are constants; there is no knob (no env var, config key or
+ * flag). The only setting is the model order itself (AGENT-17.a,
+ * `CORVIDINHO_LLM_MODEL_ORDER`): with none, a stall after the nudge stands.
  */
 
 import { get } from "../plugins/registry.ts";
 import type { PluginHandlerResult } from "../plugins/types.ts";
 import { scrubSecrets } from "../store/scrub.ts";
+import type { StayReason } from "./providers.ts";
 import { argvFromToolArguments, filesChangedFromToolData } from "./tools.ts";
 import type { HumanAsk } from "./types.ts";
 
@@ -245,10 +250,11 @@ export function createRepeatFailureGuard(): RepeatFailureGuard {
 }
 
 // ---------------------------------------------------------------------------
-// AGENT-17 (#86), the nudge half: "If it only plans, or says 'Done.' without
-// changing anything, it gets one nudge, then moves to a stronger model I've
-// configured." Moving to a stronger model is not built yet: a second stall
-// stands, with an operator note.
+// AGENT-17 (#86): "If it only plans, or says 'Done.' without changing
+// anything, it gets one nudge, then moves to a stronger model I've
+// configured." AGENT-17.a: "A stronger model is the next one in an order I
+// set in the model list; with no order set it doesn't move, and the one nudge
+// still happens."
 
 /** A final reply that stalls: only a plan, or a short "Done."-style or empty claim. */
 export type StallKind = "plan" | "done-claim";
@@ -453,9 +459,29 @@ export function stallNudgedNote(kind: StallKind): string {
   return `[operator] AGENT-17: the reply was ${stallLabel(kind)} with nothing changed; nudged once (same model)`;
 }
 
+/** Why a stall after the nudge stands: the run stays on its model (AGENT-17.a), or it already moved once. */
+export type StallStandReason = StayReason | "moved";
+
+const STAND_REASON: Readonly<Record<StallStandReason, string>> = {
+  "no-order": "no model order is set, so it does not move to another model",
+  unordered: "this model is not in the model order, so it does not move",
+  top: "this model is already the strongest in the model order",
+  unavailable: "no stronger model in the model order is available for this run",
+  moved: "it already moved to a stronger model once in this run",
+};
+
 /** Operator Text line when a stall after the nudge stands. */
-export function stallStandsNote(kind: StallKind): string {
-  return `[operator] AGENT-17: the reply was ${stallLabel(kind)} with nothing changed, after the nudge; the reply stands (moving to a stronger model is not built yet)`;
+export function stallStandsNote(kind: StallKind, why: StallStandReason): string {
+  return `[operator] AGENT-17: the reply was ${stallLabel(kind)} with nothing changed, after the nudge; the reply stands (${STAND_REASON[why]})`;
+}
+
+/**
+ * Operator Text line when a stall after the nudge moves the run to the next
+ * stronger model in the order I set (AGENT-17 / AGENT-17.a).
+ */
+export function stallMovedNote(kind: StallKind, from: string, to: string): string {
+  const one = (s: string) => s.replace(/\s+/g, " ").trim();
+  return `[operator] AGENT-17: the reply was ${stallLabel(kind)} with nothing changed, after the nudge; moving from ${one(from)} to the stronger model ${one(to)} (next in the model order)`;
 }
 
 function stallLabel(kind: StallKind): string {
@@ -470,13 +496,20 @@ export type StallNudgeGuard = {
   changed(): void;
   /** True once {@link StallNudgeGuard.changed} was called in this run. */
   sawChange(): boolean;
-  /** A stall in this run: "nudge" the first time, "stand" after that. */
-  next(): "nudge" | "stand";
+  /**
+   * A stall in this run: "nudge" the first time; after that "escalate" (try
+   * the next stronger model in the order, AGENT-17.a) until the run has
+   * {@link StallNudgeGuard.moved}, then "stand".
+   */
+  next(): "nudge" | "escalate" | "stand";
+  /** The run moved to a stronger model (at most once per run). */
+  moved(): void;
 };
 
-/** One per `createTaskExecute` (one run, every attempt): one nudge per run. */
+/** One per `createTaskExecute` (one run, every attempt): one nudge and at most one move per run. */
 export function createStallNudgeGuard(): StallNudgeGuard {
   let nudged = false;
+  let movedOnce = false;
   let changedOnce = false;
   return {
     changed() {
@@ -484,9 +517,14 @@ export function createStallNudgeGuard(): StallNudgeGuard {
     },
     sawChange: () => changedOnce,
     next() {
-      if (nudged) return "stand";
-      nudged = true;
-      return "nudge";
+      if (!nudged) {
+        nudged = true;
+        return "nudge";
+      }
+      return movedOnce ? "stand" : "escalate";
+    },
+    moved() {
+      movedOnce = true;
     },
   };
 }
