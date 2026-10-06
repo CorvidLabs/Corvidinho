@@ -286,7 +286,9 @@ kind, class `plain`, over `hi_capture_requests`: audit prefix `hi-capture`,
 plus one `hi-capture-criterion` row per captured criterion; AGENT-18 hi
 drafts, REQ-discord-521), `HI_CARD_KIND`, `HI_CARD_TITLE`,
 `HI_CARD_NOTHING_DONE` ("nothing was captured"), `hiCardView(req)`,
-`hiCardActionHash(req)` and `hiCardOutcomeText(req)`. An `ApprovalKind` may
+`hiCardActionHash(req)` and `hiCardOutcomeText(req)`; Approve commits the
+capture on the session's branch (`hiCaptureCommitMessage(req)` in
+`src/agent/hi-drafts.ts`; the request records the commit). An `ApprovalKind` may
 declare `prepare(req)`, which Approve awaits after the hash check and before
 the SAFE-5 `started` row (a throw: nothing runs, the request stays open).
 `SlashCtx.deliverApprovalCards` runs one card pass when a `/work` run ends. `src/memory/forget.ts` adds

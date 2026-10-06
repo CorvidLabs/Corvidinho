@@ -706,8 +706,9 @@ mode)`, `parseHiDraftArgs(raw)`, `HiExport` / `parseHiExport(json)` /
 `readHiExport(cwd, env)`, `hiBin(env)`, `validateHiDrafts(drafts, exp)`,
 `hiCaptureCommand(draft)`, `hiDraftCardQuestion(drafts, id)`,
 `hiDraftCliQuestion(drafts)`, `handleHiDraftCall({ rawArgs, cwd, env, ways
-})`, `hiCaptureWorktreeProblem(req)`, `ensureHiCaptureWorktree(req)` and
-`runHiCapture({ db, req, actor, env })`. `src/agent/hi-capture-store.ts`
+})`, `hiCaptureWorktreeProblem(req)`, `ensureHiCaptureWorktree(req)`,
+`hiCaptureCommitMessage(req)` and `runHiCapture({ db, req, actor, env })`
+(its result carries the capture's `commit`). `src/agent/hi-capture-store.ts`
 exports `HiDraft`, `HiCaptureRequest`, `HiCaptureStore`, `HI_CAPTURE_TTL_MS`
 (24 h), `HI_ABSENT`, `hiContentKey(text, executable)`,
 `ensureHiCaptureTables(db)`, `recordHiCaptureFiles`, `hiCaptureEdges`,
@@ -1150,23 +1151,24 @@ made it, since the run cannot tell.
 
 hi drafts (AGENT-18 hi clause, drafting half, REQ-agent-521 / REQ-agent-522):
 in a repo that uses hi, the owner's and the team's own interactive Discord
-runs (chat, an ask answer, `/session start`, `/work`) in a git worktree, and a
-local CLI run nothing spawned, are offered `hi-draft`; community runs, WATCH,
+runs (chat, an ask answer, `/session start`, `/work`) in that talk's own
+linked worktree, and a local CLI run nothing spawned, are offered `hi-draft`; community runs, WATCH,
 schedules and delegate or council workers never are, and the role is
 re-resolved for every attempt and at the call. A call carries 1–5 drafts
 (`{"drafts":[{"id","text"}]}`); each is checked against `hi export` (a new
 id in a declared family, not retired, a dotted id under a captured or
 earlier-drafted parent) and must be one line of at most 400 characters, not
-starting with `-`, that SAFE-6 scrubbing leaves unchanged. A refusal goes back to the model and
-records nothing. In a Discord run it records a hi capture request (the
+starting with `-`, that SAFE-6 scrubbing leaves unchanged; in a Discord run
+an id already waiting on an open card is refused too. A refusal goes back to
+the model and records nothing. In a Discord run it records a hi capture request (the
 drafts, the session worktree's path, branch and HEAD, the repository, who
 asked from where) for the owner's `hi` card (REQ-discord-521) and ends the
 run blocked with a clarify ask naming the drafts and the request; in the CLI
 it records nothing and ends with an ask listing the exact `hi <ID> '<text>'`
 commands. The run itself never captures. When the owner approves, the
-capture's ledger records each `hi/` path it changed (content before and
-after), and the hi guard leaves out a path that a chain of approved steps
-explains, so a later done or `/work` PR is not blocked by it; an edit on top
+capture is committed on the session's branch (REQ-discord-521), its ledger
+records each `hi/` path it changed (content before and after), and the hi
+guard leaves out a path that a chain of approved steps explains, so a later done or `/work` PR is not blocked by it; an edit on top
 of it, any other `hi/` file, or steps of a request that was not approved
 still block.
 

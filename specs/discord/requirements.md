@@ -4220,37 +4220,49 @@ Approve after the hash (and any code) check and before the SAFE-5 `started`
 row, outside its transaction; a throw SHALL leave the request open, write an
 `-approve` `error` row and run nothing. The `hi` kind's `prepare` SHALL make
 sure the session worktree is the one the drafts were made in
-(`ensureHiCaptureWorktree`): there, a git work tree top of the same
-repository, on the same branch; when its directory is gone it SHALL be
-re-created at the same path on the same branch from the main checkout
-(`git worktree add`), and when that can't be done — the branch is gone, the
-folder is on another branch or belongs elsewhere, a bare repository — it
-SHALL fail closed. Then, inside the transaction (`runHiCapture`), with the
-`hi` CLI on the bridge's PATH and only PATH and HOME in its env: the
-worktree and the drafts SHALL be checked again (`hi export`, the scrub
-check), `hi <ID> <text>` SHALL run for each draft in the worktree, `hi
-export` SHALL then show each id with exactly its text and `hi check` SHALL
-pass; on any failure `hi/` (and a root `INTENT.md` the CLI created) SHALL be
-put back as it was and nothing SHALL count as captured (the transaction
-rolls back; the request stays open). On success each criterion SHALL write a
-SAFE-5 `hi-capture-criterion` row (digest of the request, id and text), the
-ledger SHALL record what changed under `hi/` (REQ-agent-522), the request
-SHALL record the captured ids, and the card SHALL close with `Approved by you
-— captured <ids> into hi/ on branch <branch> (AGENT-18).` The capture stays
-uncommitted in that worktree. The asker SHALL get one outcome post naming the
-ids only (never the drafted text), mentioning only them, in the conversation
-they asked in while it is still allowlisted, else by DM, retried for a day.
+(`ensureHiCaptureWorktree`): there, a linked git work tree top of the same
+repository (never its main checkout), on the same branch; when its directory
+is gone (the talk ended and was parked) it SHALL be re-created at the same
+path on the same branch from the main checkout (`git worktree add`), and when
+parking also deleted that branch (a talk with no commits of its own) the
+branch SHALL be re-made at the commit the drafts were made on (the request's
+recorded HEAD, `git worktree add -b`); when that can't be done — that commit
+is gone too, the folder is on another branch or belongs elsewhere, a bare
+repository — it SHALL fail closed. Then, inside the transaction
+(`runHiCapture`), with the `hi` CLI on the bridge's PATH and only PATH and
+HOME in its env: the worktree and the drafts SHALL be checked again (`hi
+export`, the scrub check), `hi/` SHALL hold nothing uncommitted (no staged,
+unstaged or untracked change) and no symlink, `hi <ID> <text>` SHALL run for
+each draft in the worktree, `hi export` SHALL then show each id with exactly
+its text and `hi check` SHALL pass, and exactly the `hi/` paths the capture
+changed SHALL be committed on the session's branch (`git commit --only`,
+hooks off, the host's git identity; message `hi: capture <ids> (AGENT-18;
+approved on the owner's hi card, request <id>)`; local only, never pushed),
+so the capture outlives the talk (parking force-removes a worktree and
+deletes a branch with no commits of its own). On any failure the commit and
+what it staged SHALL be undone, `hi/` (and a root `INTENT.md` the CLI
+created) SHALL be put back as it was and nothing SHALL count as captured (the
+transaction rolls back; the request stays open). On success each criterion
+SHALL write a SAFE-5 `hi-capture-criterion` row (digest of the request, id
+and text), the ledger SHALL record what changed under `hi/`
+(REQ-agent-522), the request SHALL record the captured ids and the commit,
+and the card SHALL close with `Approved by you — captured <ids> into hi/ on
+branch <branch>, commit <12 hex> (AGENT-18).` The asker SHALL get one outcome
+post naming the ids, the branch and the commit only (never the drafted
+text), mentioning only them, in the conversation they asked in while it is
+still allowlisted, else by DM, retried for a day.
 The engine's delivery pass SHALL send the card after each chat run and ask
 answer, when a `/work` run ends (`SlashCtx.deliverApprovalCards`), on
 scheduler ticks and on its own poll. No env var, config key or flag.
 
 Acceptance Criteria
 - The owner gets the commands DM first and then the card with the action, `widget on branch …`, the team member's `/work` run, `2 criteria: AGENT-20, AGENT-18.b`, Approve and Deny buttons and no Enter code.
-- A stranger's press answers "Only the owner can answer this card." and captures nothing; the owner's Approve captures exactly the drafts, records the ids, writes `hi-capture-card`, `hi-capture-approve` `started`, two `hi-capture-criterion` and `hi-capture-approve` `ok` rows, and posts one outcome to the asker's channel naming the ids, not the text; a second press finds it closed.
+- A stranger's press answers "Only the owner can answer this card." and captures nothing; the owner's Approve captures exactly the drafts in one commit on the session's branch that changes only `hi/agent.md` (leaving `hi/` clean), records the ids and the commit, writes `hi-capture-card`, `hi-capture-approve` `started`, two `hi-capture-criterion` and `hi-capture-approve` `ok` rows, and posts one outcome to the asker's channel naming the ids, branch and commit, not the text; a second press finds it closed.
 - With the owner config changed after the card went out, Approve fails ("only Corvidinho's configured owner can approve a capture") and nothing is captured.
 - Deny and a lapsed card capture nothing and tell the asker.
-- A removed worktree whose branch has a commit is re-created on that branch and captured into; with the branch deleted, Approve fails closed ("so is its branch …"), nothing is created and the request stays open.
-- A worktree switched to another branch, an id captured by hand since the draft, a capture that fails on its second draft, and a failing `hi check` each capture nothing and leave `hi/` (and `INTENT.md`) as before.
+- A removed worktree whose branch has a commit is re-created on that branch and captured into; a talk parked with `parkWorktree` (worktree removed, branch deleted) is re-made at the recorded commit and captured into, the capture on the re-made branch; with that commit gone too, Approve fails closed ("so are its branch … and the commit the drafts were made on"), nothing is created and the request stays open.
+- An approved capture outlives its talk: after `parkWorktree` the branch is kept and its tip is the capture's commit.
+- A worktree switched to another branch, a request naming the main checkout, an id captured by hand since the draft, a capture that fails on its second draft, a failing `hi check`, a failing `git commit`, an uncommitted `hi/notes.md`, and a `hi/agent.md` that is a symlink each capture nothing, leave `hi/` (and `INTENT.md`), HEAD and the index as before, and never write through the link.
 - Through the bridge with a fake gateway, the `hi` card is delivered, a stranger's `cvok:hi:approve` press is refused, the owner's captures, and the hi guard then lists nothing for the talk.
-- `tests/discord.hi-card.test.ts` fails on the stacked base sources and passes after.
+- `tests/discord.hi-card.test.ts` fails on the base (main) sources and passes after.
 
