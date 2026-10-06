@@ -13,6 +13,7 @@
  */
 
 import type { PluginHandlerResult } from "../plugins/types.ts";
+import type { HiDraftToolDef } from "./hi-drafts.ts";
 import type { OpenAiToolDef } from "./tools.ts";
 import type {
   AskOption,
@@ -76,8 +77,11 @@ export type AskToolDef = {
   };
 };
 
-/** Tool definitions sent to the provider: plugin tools plus ask-human. */
-export type ChatToolDef = OpenAiToolDef | AskToolDef;
+/**
+ * Tool definitions sent to the provider: plugin tools plus ask-human, and
+ * `hi-draft` where a run is offered it (AGENT-18, src/agent/hi-drafts.ts).
+ */
+export type ChatToolDef = OpenAiToolDef | AskToolDef | HiDraftToolDef;
 
 export function buildAskToolDef(): AskToolDef {
   return {

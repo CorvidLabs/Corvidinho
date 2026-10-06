@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "in-a-non-git-project-my-runs-work-in-the-folder-itself-its-file-tools-leave-the-root-agents-md-and-claude-md-alone",
+  "implementation_commit": "037ee9d694572b955010d24f231f44da3e541bbf",
+  "implementation_tree": "1467b77209b6f11e4b2121e8f1a75b95a8959be8",
+  "contract_digest": "bf36be14c195506d625a7da4400a67305f08bbe6417d7f06abeda883791886cb",
+  "workspace_digest": "41c895e75b86dea39f3fdf340ab29113a0961628a66bdd439dc1d49235b0ada1",
+  "closing_digest": "c9468178cd856befac3ff8c46dbfaee693db011916ff363741fba9a8057dd3f3",
+  "review_digest": "c9468178cd856befac3ff8c46dbfaee693db011916ff363741fba9a8057dd3f3",
+  "finalization_digest": "bf36be14c195506d625a7da4400a67305f08bbe6417d7f06abeda883791886cb",
+  "timestamp": 1791301187,
+  "note": "tip-orphan archive after #351 squash (same class as #377 / #376)"
+}
