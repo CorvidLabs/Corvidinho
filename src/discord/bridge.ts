@@ -2489,6 +2489,7 @@ export async function startBridge(
       console.log(`[discord] bot user id ${id}; monitoring ${config.channelIds.length} channel(s)`);
       // DISCORD-ANNOUNCE-4 — post bridge-live note only to configured announce channel;
       // PERSONA-1.a — one short in-voice line linking the release notes (fixed template).
+      // AUTONOMY-10.b — system text, not an announcement: no Approve card, no reply gate.
       if (announceStore && replyRef.fn) {
         const note = formatBridgeLiveAnnouncement(version);
         void postAnnouncement(announceStore, replyRef.fn, note).then((r) => {
