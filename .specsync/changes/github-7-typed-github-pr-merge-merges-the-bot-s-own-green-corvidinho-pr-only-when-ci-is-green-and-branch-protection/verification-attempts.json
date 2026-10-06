@@ -90,6 +90,24 @@
       "requirement_ids": [
         "REQ-plugins-099"
       ]
+    },
+    {
+      "timestamp": 1791331132,
+      "commit": "1331552077a2123eb180eadf2e3be11507b18cc6",
+      "contract_digest": "8ed4e5b834479fd626ef4d59688895e793d8c8a3142578aac01b303f18e99964",
+      "execution_digest": "4933ffa8370e4f6a061666610ebbea0c07b6368d1840811fc1e3377a44c65ee1",
+      "workspace_digest": "a28df5b0a06740bff64715485834578494a3abe26f93504ef5c3d00e7a51f23d",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec cli --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-099"
+      ]
     }
   ]
 }
