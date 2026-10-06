@@ -7,11 +7,11 @@
   "title": "After the one nudge a stalled run moves to the next stronger model in the order I set, and says so (AGENT-17, AGENT-17.a)",
   "description": "After the one nudge a stalled run moves to the next stronger model in the order I set, and says so (AGENT-17, AGENT-17.a)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "94c2e479b7b95812010e77a7c4812e94b4f497b7",
   "created_at": 1791246117,
-  "updated_at": 1791303624,
+  "updated_at": 1791303855,
   "affected_specs": [
     "agent",
     "cli"
