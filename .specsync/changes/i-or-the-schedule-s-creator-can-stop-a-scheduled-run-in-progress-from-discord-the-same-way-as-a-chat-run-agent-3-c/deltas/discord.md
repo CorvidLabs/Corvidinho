@@ -39,8 +39,9 @@ daemon passes none: its runs have no Stop control and run as before.
   (`setProgressMessage`). With no channel it SHALL DM the configured owner the
   same line (`sendDm`), take the turn with the DM's channel id, add the Stop
   components to that DM (`editMessage`) and map it to the turn; no owner, no
-  DM, or a failed edit gives null (a sent DM is deleted and the turn
-  released). The progress message is fixed harness text: no Approve card and
+  DM, or a failed edit (false or thrown, logged) gives null (a sent DM is
+  deleted and the turn released, so the schedule's next run never waits
+  behind it). The progress message is fixed harness text: no Approve card and
   no AUTONOMY-10.a hold.
 - The Stop press (REQ-discord-303's `cvstop` branch) and the stop words
   (REQ-discord-302's `stop_run` route: a reply to the progress message in its
@@ -95,8 +96,8 @@ Acceptance Criteria
 - Same file: the owner's `Cancel!` reply to the progress message of someone else's schedule run stops it (one ack reply to the stop message; the row stopped by the owner; no session of the owner's); a third user's `stop` reply does nothing.
 - Same file: a schedule with no channel DMs the owner the line, then adds the Stop button to that DM; the owner's press there (no guild) stops it and the DM is edited to `⏹ Stopped` with `components: null`; the owner's later press there gets only `Nothing is running.` and another user's DM press on it keeps the channel gate; the next run, which ends on its own, has its DM deleted; nothing goes to a channel. The same message pressed in a guild channel off the allowlist stops nothing.
 - Same file, `SchedulerService` with a fake control: at `FAILURE_AUTO_PAUSE - 1` failures a stopped run keeps the count, the schedule stays `active`, the question the stopped run raised is not stored or posted, and the control is finished once; a stopped run whose tool result looked like an injection (SAFE-13) posts exactly one line to its channel, `⏹ Schedule **<name>** … : stopped.` with the owner's `🛡️ <@owner> heads-up: …` line, mentioning only the owner and not marked model text; a run nobody stopped finishes the control before its ✅ post; a `begin` that throws is logged and the run goes on; a run abandoned at shutdown stays `interrupted: bridge shutdown` even when the control reports a stop.
-- Same file, `createScheduleRunStop`: no owner or no DM gives null; a DM whose button edit fails is deleted and its turn released; a channel run's turn is `schedule_<id>` / the creator / the channel, `SessionRunControl.stop` aborts the handle's signal, and `finish` resolves the stopper (twice), releases the turn and edits `⏹ Stopped` with `components: null`.
-- With the base's sources (the branch's new `schedule-stop.ts` kept) the bridge and `SchedulerService` tests fail; the two `createScheduleRunStop` units (the new module) pass on both. Without the SAFE-13 stop line the injection test fails.
+- Same file, `createScheduleRunStop`: no owner or no DM gives null; a DM whose button edit fails (returns false, or throws and is logged) is deleted and its turn released; a channel run's turn is `schedule_<id>` / the creator / the channel, `SessionRunControl.stop` aborts the handle's signal, and `finish` resolves the stopper (twice), releases the turn and edits `⏹ Stopped` with `components: null`.
+- With the base's sources (the branch's new `schedule-stop.ts` kept) the bridge and `SchedulerService` tests fail; the two `createScheduleRunStop` units (the new module) pass on both. Without the SAFE-13 stop line the injection test fails; without the stale-DM-press branch the no-channel bridge test fails; with an edit that throws left uncaught the DM unit fails.
 
 ## Modified
 

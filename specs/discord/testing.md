@@ -1406,8 +1406,8 @@ the owner and not marked model text; a run nobody stopped finishes the
 control before its ✅ post;
 a `begin` that throws is logged and the run goes on; a run abandoned at
 shutdown keeps `interrupted: bridge shutdown`. `createScheduleRunStop`: no
-owner or no DM gives null; a DM whose button edit fails is deleted and its
-turn released; a channel run's turn is `schedule_<id>` / the creator / the
+owner or no DM gives null; a DM whose button edit fails (returns false, or
+throws and is logged) is deleted and its turn released; a channel run's turn is `schedule_<id>` / the creator / the
 channel, `SessionRunControl.stop` aborts the handle's signal, `finish`
 resolves the stopper (twice), releases the turn and edits `⏹ Stopped` with
 `components: null`.
@@ -1418,7 +1418,9 @@ resolves the stopper (twice), releases the turn and edits `⏹ Stopped` with
   that pass are the `createScheduleRunStop` units (the new module itself).
   With only the SAFE-13 stop line taken out of `scheduler/service.ts`, the
   injection test fails; with only the stale-DM-press branch taken out of
-  `bridge.ts`, the no-channel test fails (the owner gets the allowlist tip).
+  `bridge.ts`, the no-channel test fails (the owner gets the allowlist tip);
+  with a throwing DM edit left uncaught in `schedule-stop.ts`, the DM unit
+  fails (the turn stays held).
 ## The owner's own schedule runs as the owner (REQ-discord-741; DISCORD-SCHEDULE-1.a)
 
 `tests/scheduler.owner-role.test.ts` — with `loadOwner` returning the owner,

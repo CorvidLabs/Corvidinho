@@ -177,10 +177,17 @@ async function beginInOwnerDm(
     await remove();
     return null;
   }
+  // A throwing edit must not keep the turn, or the schedule's next run would
+  // wait behind it for good.
   const shown = await edit({
     ...at,
     content: input.content,
     components: buildStopComponents(turn.runId),
+  }).catch((err: unknown) => {
+    console.warn(
+      `[discord] schedule run ${turn.runId} (${turn.sessionId}): Stop button not added to the owner's DM: ${formatErrorLine(err)}`,
+    );
+    return false;
   });
   if (!shown) {
     turn.done();

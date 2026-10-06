@@ -803,6 +803,35 @@ describe("createScheduleRunStop (AGENT-3.c)", () => {
     expect(await failedEdit.begin({ scheduleId: "sched_a", creatorId: OWNER, title: "t" })).toBeNull();
     expect(deletes).toEqual(["m1"]);
     expect(control.busy("schedule_sched_a")).toBe(false);
+
+    // An edit that throws (not just false) releases the turn too, so the
+    // schedule's next run never waits behind it.
+    const warns: string[] = [];
+    const origWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warns.push(args.map(String).join(" "));
+    };
+    try {
+      const throwingEdit = createScheduleRunStop({
+        runControl: control,
+        outbound: () => memoryThinkingOutbound(),
+        sendDm: () => async () => ({ channelId: "dm", messageId: "m2" }),
+        editMessage: () => async () => {
+          throw new Error("edit blew up");
+        },
+        deleteMessage: () => async (o) => {
+          deletes.push(o.messageId);
+          return true;
+        },
+        owner: () => ({ discordId: OWNER }),
+      });
+      expect(await throwingEdit.begin({ scheduleId: "sched_b", creatorId: OWNER, title: "t" })).toBeNull();
+    } finally {
+      console.warn = origWarn;
+    }
+    expect(deletes).toEqual(["m1", "m2"]);
+    expect(control.busy("schedule_sched_b")).toBe(false);
+    expect(warns.some((l) => l.includes("Stop button not added to the owner's DM: edit blew up"))).toBe(true);
   });
 
   test("a channel run's handle: the stop goes through SessionRunControl.stop, finish releases the turn once and says who stopped it", async () => {
