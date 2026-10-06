@@ -1,6 +1,6 @@
 ---
 id: the-fixed-bridge-live-note-it-posts-after-a-restart-is-system-text-not-an-announcement-so-it-posts-without-waiting-for
-state: approved
+state: implementing
 type: feature
 base_commit: 4569a5095dce48afca0379b9c36549787bf4f1de
 ---

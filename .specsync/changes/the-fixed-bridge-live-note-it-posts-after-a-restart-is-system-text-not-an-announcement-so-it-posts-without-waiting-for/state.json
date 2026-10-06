@@ -7,10 +7,11 @@
   "title": "The fixed bridge-live note it posts after a restart is system text, not an announcement, so it posts without waiting for the owner's OK (AUTONOMY-10.b, #124)",
   "description": "The fixed bridge-live note it posts after a restart is system text, not an announcement, so it posts without waiting for the owner's OK (AUTONOMY-10.b, #124)",
   "kind": "feature",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "4569a5095dce48afca0379b9c36549787bf4f1de",
   "created_at": 1791247515,
-  "updated_at": 1791247768,
+  "updated_at": 1791247786,
   "affected_specs": [
     "discord"
   ],
