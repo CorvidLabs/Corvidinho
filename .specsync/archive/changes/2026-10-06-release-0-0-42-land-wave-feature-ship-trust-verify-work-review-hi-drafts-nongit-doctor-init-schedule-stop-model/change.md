@@ -1,6 +1,6 @@
 ---
 id: release-0-0-42-land-wave-feature-ship-trust-verify-work-review-hi-drafts-nongit-doctor-init-schedule-stop-model
-state: implementing
+state: accepted
 type: operations
 base_commit: c8f3f3e7acf5e5f331ab3735e1693531c46bdabb
 ---
