@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2",
+  "implementation_commit": "13abe4d0da8b30a01e96e785d25d5de70d8078a7",
+  "implementation_tree": "aa6f880dafc81ac2d7671d2163b7cd1de00e7dbe",
+  "contract_digest": "bbda6839cea5ee29669494581fd28f1c1068fbc65e40a2b63253632c453a1195",
+  "workspace_digest": "a8d3ab746914da411238573ccd6015d6f5dbe55b0656ed56eba3a0dd06882c69",
+  "closing_digest": "110d8c27a6625e4c2b7e4d806db76676f8a6907344b743cd6833c9d2f5d43b40",
+  "review_digest": "110d8c27a6625e4c2b7e4d806db76676f8a6907344b743cd6833c9d2f5d43b40",
+  "finalization_digest": "bbda6839cea5ee29669494581fd28f1c1068fbc65e40a2b63253632c453a1195",
+  "timestamp": 1791299657,
+  "note": "tip-orphan archive after #364 squash (same class as #366 / #363 / #361)"
+}

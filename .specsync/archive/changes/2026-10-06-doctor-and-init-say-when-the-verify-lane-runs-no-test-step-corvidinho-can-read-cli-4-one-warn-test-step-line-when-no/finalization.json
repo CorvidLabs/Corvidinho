@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "doctor-and-init-say-when-the-verify-lane-runs-no-test-step-corvidinho-can-read-cli-4-one-warn-test-step-line-when-no",
+  "implementation_commit": "56eaf2b04516d09179978cb18cc2530fb0019e09",
+  "implementation_tree": "59541262804b21eed15a6c713f7990627a1f239e",
+  "contract_digest": "764c95bb808663abcc9b980813abd47a7e96bd324e1fc2b8266f1cb6d900b10f",
+  "workspace_digest": "f952b625ac0b98e6170c1c1c9a8288cb27c34eecad62f700983c23847627d01d",
+  "closing_digest": "aaeafa02b852697a34de5ceabc97aece71187a9ffdaf20f01a0cd20c300c4d60",
+  "review_digest": "aaeafa02b852697a34de5ceabc97aece71187a9ffdaf20f01a0cd20c300c4d60",
+  "finalization_digest": "764c95bb808663abcc9b980813abd47a7e96bd324e1fc2b8266f1cb6d900b10f",
+  "timestamp": 1791302827,
+  "note": "tip-orphan after #368"
+}

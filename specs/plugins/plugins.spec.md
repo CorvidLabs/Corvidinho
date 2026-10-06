@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 64
+version: 65
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -56,6 +56,7 @@ files:
   - plugins/files/resolvePath.ts
   - plugins/files/argv.ts
   - plugins/files/image.ts
+  - tests/plugins.nongit-project-dir.test.ts
   - plugins/search/index.ts
   - plugins/search/commands.ts
   - src/memory/confirm.ts
@@ -180,9 +181,11 @@ REQ-plugins-097).
 bounded rounds, and the PR body lists what it raised and what changed
 (GITHUB-9 / GITHUB-9.a, REQ-plugins-092, `src/work/review.ts`): the reviewer
 is the first other configured model that did not write the change (no
-reviewer setting); an agent run starts the rounds, a caller with no run model
-opens only a tree whose review already finished, and no second model means no
-PR, with one line saying why. Before any of that, a `github-pr-create` called
+reviewer setting); an agent run starts the rounds, an owner or team `/work`
+run drives them itself once its tree is verified (the tree `/work` will
+commit, untracked files included; `workReviewHook`, REQ-agent-092), a caller
+with no run model opens only a tree whose review already finished, and no
+second model means no PR, with one line saying why. Before any of that, a `github-pr-create` called
 while a Corvidinho run is in progress in its cwd, in a repo that uses hi,
 refuses with exit 2 and `refused (AGENT-18): this repo's hi/ changed since the
 session base (…) …, so this run opens no PR; …` while anything under `hi/`
@@ -269,14 +272,19 @@ models as `data.models` (REQ-plugins-117). `runGit` takes `indexFile`
 (200 KiB), `REVIEW_FINDINGS_MAX` (10), `REVIEW_FINDING_MAX_CHARS`,
 `REVIEW_PATHS_MAX`, `REVIEW_TITLE_MAX`, `REVIEW_SECTION_HEADING`,
 `REVIEW_REFUSED_PREFIX`, `REVIEW_REFUSAL`, `REVIEW_SYSTEM_PROMPT`,
-`configuredModels(env)`, `resolveReviewer(env, authors)`, `reviewTree(root)`,
+`configuredModels(env)`, `resolveReviewer(env, authors)`, `reviewTree(root,
+{untracked?})` (`/work`: `git add --all`, untracked non-ignored files count),
 `reviewMergeBase`, `reviewDiffText`, `changedPaths`, `pushRemoteTree(cwd,
 branch)`, `reviewMessages(title, diff)`, `parseReviewFindings(text)`,
 `reviewDiff(o)`, `ReviewSpendStop`, `PR_REVIEW_ROUNDS_SQL`,
 `ensurePrReviewRounds`, `reviewRepoKey`, `latestReviewCycle`,
 `branchReviewAuthors`, `recordReviewRound`, `endReviewCycle`, `ReviewRound`,
-`ReviewEnd`, `reviewSection(rounds)`, `withReviewSection(body, section)` and
-`reviewRefusalReason(error)`; `plugins/github/commands.ts` exports
+`ReviewEnd`, `reviewSection(rounds)`, `withReviewSection(body, section)`,
+`reviewRefusalReason(error)`, `ReviewStep`, and for `/work` `reviewWorkRound`,
+`workReviewHook`, `workReviewTarget`, `workReviewFeedback`,
+`workTreeReviewed`, `WorkReviewOutcome`, `WorkReviewTarget`,
+`WORK_REVIEW_TITLE`, `WORK_REVIEW_FEEDBACK_MAX` (3800) and
+`WORK_REVIEW_REFUSAL`; `plugins/github/commands.ts` exports
 `githubBranchTree(octokit, owner, repo, head)`.
 `src/plugins/proc-group.ts` (REQ-plugins-154) exports `killProcessTree`,
 `signalProcessTree`, `collectProcessTree`, `readProcTable`, `parseProcStat`,
@@ -328,6 +336,16 @@ check`).
 
 ## Invariants
 
+In a project folder that isn't a git repo (`isGitRepo(cwd)` false) the file
+tools never change its root `AGENTS.md` or `CLAUDE.md` (AGENT-1.b,
+REQ-plugins-110): `refuseProtected` refuses, for every caller,
+`isNonGitRootInstructionPath` — the root names, paths under them, the file a
+symlink of that name leads to, a hard link to one — with `refused (AGENT-1.b)`.
+Team work tools need a git work tree: `actingWorkTask(env, cwd)` reads the
+`/work` stamp and `isGitRepo(cwd)`, and `runPlugin` passes the call's cwd, so
+other people's runs only read in a non-git folder (AGENT-1.a,
+REQ-plugins-115).
+
 `spawnCapped` counts each output chunk of its child as the calling run's
 activity for the idle timeout (AGENT-12, REQ-plugins-125, `noteIdleActivity`;
 a no-op outside a run), so a printing tool is never stopped as idle.
@@ -349,7 +367,9 @@ CORVIDINHO_GITHUB_DRY_RUN=1. File write/edit/delete require minTier 2 (code);
 `files-delete` is dangerous. Paths clamp to plugin cwd; symlink escapes refuse;
 a dangling symlink is followed by hand and its target clamped (loops refuse).
 Protected infra (`.env*`, `.git`, `fledge.toml`, `.fledge/**` (lane imports
-the verify gate runs, SAFE-2.a), `bunfig.toml`,
+the verify gate runs, SAFE-2.a), `.trust.toml` (the Trust config a Trust
+repo's verify gate runs `fledge trust verify` for, AGENT-18,
+REQ-plugins-525), `bunfig.toml`,
 `specs/**` / `*.spec.md`, `.specsync/` state outside the files of an active
 `.specsync/changes/<id>/` folder, and any keystore file or directory inside
 the project; a change folder's slug name is not a keystore) cannot be
@@ -364,7 +384,8 @@ also refuse every path under `hi/` (`isHiPath`, judged where the write lands
 with symlinks resolved and as given), exit 2 with one line
 (`hiRefuseMessage`: `refused (AGENT-18): '<path>' is under hi/, …`): the
 agent never changes a repo's criteria itself, since they change only through
-a capture the owner approves and no run can make one yet. Reads, and hi/ in a
+a capture the owner approves on a card (drafted with `hi-draft`, AGENT-18 hi
+drafts, REQ-agent-521). Reads, and hi/ in a
 repo that does not use hi, are unaffected (AGENT-18 hi guard,
 REQ-plugins-520). Memory plugins take the acting user and ADMIN
 only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID` /
@@ -1423,6 +1444,10 @@ and current rows for plugins host evolution.
 | 2026-10-01 | before-a-pr-opens-a-second-model-reviews-the-diff-in-bounded-rounds-and-the-pr-lists-what-it-raised-and-what-changed: Before a PR opens, a second model reviews the diff in bounded rounds, and the PR lists what it raised and what changed (GITHUB-9, GITHUB-9.a) |
 | 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |
 | 2026-10-01 | the-second-model-review-sees-an-edit-made-in-the-same-second-as-the-last-index-write-its-index-copy-keeps-the-real: The second-model review sees an edit made in the same second as the last index write: its index copy keeps the real index's time (GITHUB-9) |
+| 2026-10-01 | in-a-non-git-project-my-runs-work-in-the-folder-itself-its-file-tools-leave-the-root-agents-md-and-claude-md-alone: In a non-git project my runs work in the folder itself, its file tools leave the root AGENTS.md and CLAUDE.md alone, schedules keep their own folder, and others only read there (AGENT-1.a, AGENT-1.b, AGENT-1.c) |
 | 2026-10-01 | in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent: In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard) |
 | 2026-09-30 | web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered: Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap |
 | 2026-10-01 | gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins: GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap |
+| 2026-10-05 | where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts: Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts) |
+| 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
+| 2026-10-05 | in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2: In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause) |

@@ -1992,6 +1992,26 @@ first. It SHALL open a PR only for a tree with a finished review cycle:
   /work PR step, REQ-discord-088): no round SHALL start; the PR opens only
   when the latest cycle for (repo, head) ended on the exact tree of the
   branch on GitHub.
+- **`/work`** (REQ-agent-092, REQ-cli-092, REQ-discord-088): the run's
+  review hook (`workReviewHook`, `maxRounds` 3) SHALL run the same review
+  step as the gate with a run model (`reviewStep`: the same reviewer,
+  rounds, declined and max-rounds ends and `pr_review_rounds` records) on
+  the tree `/work` will commit — `reviewTree(root, {untracked: true})`
+  stages with `git add --all` into the index copy, so untracked,
+  non-ignored files count (a secret-looking one's content is still never
+  sent) — keyed by the (repo, branch) its PR opens on (`workReviewTarget`:
+  the OWNER/REPO of `origin`'s push URL, the branch checked out, the base
+  from `resolveBase`; no branch, repo or base refuses in one line), with the
+  fixed title `Corvidinho /work task` (the run's task text, which carries
+  identity and memory blocks, is not sent). A round with findings SHALL come
+  back as the next attempt's feedback (`workReviewFeedback`: what to do —
+  change the tree, or leave it to decline — then the findings numbered in an
+  untrusted-data fence, scrubbed, at most `WORK_REVIEW_FEEDBACK_MAX` (3800,
+  under the verify feedback cap) characters, later findings counted). A
+  `ReviewSpendStop` SHALL become the run's spend-cap ask
+  (`takeSpendAsk`), else a refusal; any other error is a refusal.
+  `workTreeReviewed(cwd, repo, branch)` SHALL be true only when the latest
+  cycle for (repo, branch) ended on exactly that tree (fail closed).
 
 Either way the branch on GitHub SHALL be the reviewed tree — read with
 `repos.getBranch` (an `owner:branch` head on that owner's same-named repo;
@@ -2037,6 +2057,8 @@ Acceptance Criteria
 - A review completion with no model failure (a spend-cap stop) makes `runPlugin` reject with `ReviewSpendStop` and records nothing.
 - Without a run model: no finished cycle, a finished cycle for another tree, or an open cycle refuse in one line; a finished cycle for the pushed tree opens with its findings listed. Live mode without a token fails before any review call.
 - `githubBranchTree` returns the head commit's tree, reads an `owner:branch` head on that owner's repo, and is null on a 404. `SCRUB_TARGETS` lists `pr_review_rounds` (`reviewer`; JSON `authors`, `findings`, `changed`) and `pr_change_authors` (`model`).
+- `/work` (temp repo, scripted provider, the real tool loop and verify gate): the untracked new file is in the reviewed diff, the reviewer gets `Title: Corvidinho /work task` and not the task text, the rounds are stored (round 1 open with its finding, round 2 `clean` with `M  src/greet.ts` changed), `workTreeReviewed` is true, and the /work PR opens with the section; a finished review of an earlier tree is not this tree's.
+- `workReviewFeedback` stays within 3800 characters (under the 4000 verify feedback cap) with its fence whole and later findings counted; a spend-cap stop gives the hook's `ask` when the run left one, else a refusal, and records nothing.
 
 ### REQ-plugins-125
 
@@ -2318,6 +2340,54 @@ Acceptance Criteria
 - The run's abort reaches a pending search (`aborted`, the transport's signal aborted), a stalled one times out, and a run already stopped sends nothing; an unexpected failure is the fixed `gif-search unexpected: the GIF search failed unexpectedly` line.
 - Tests in `tests/gif.search.test.ts` (a new module on the base sources) fail on the base sources and pass after.
 
+### REQ-plugins-110
+
+In a project folder that isn't a git repo, its file tools can't change the
+root AGENTS.md or CLAUDE.md; the owner edits those (AGENT-1.b, captured in
+this change's PR from Leif's 2026-09-30 decision, round 13 of the 2026-09-28
+record). There the AGENT-1 loader reads those files from disk into every
+run's prompt (REQ-agent-084), so a file tool that could change them could
+plant instructions for later runs.
+
+- When `isGitRepo(cwd)` is false, `files-write`, `files-edit` and
+  `files-delete` SHALL refuse (exit 2, `refused (AGENT-1.b): …`, nothing
+  written) a path that, where the write would land (`resolveProjectPath`),
+  is equal to or under `<realRoot(cwd)>/AGENTS.md` or `/CLAUDE.md`
+  (`PROJECT_INSTRUCTION_FILES`), or equal to or under the file a symlink of
+  that name leads to, or a regular file that shares the inode of one of them
+  (a hard link); `isNonGitRootInstructionPath` in
+  `plugins/files/protectedPaths.ts`, checked in `refuseProtected` after the
+  SAFE-2 and SpecSync-record rules.
+- It SHALL apply to every caller (the owner's runs, the local CLI, `plugins
+  run`), with no override. Creating a missing root file is a change too.
+- A nested `AGENTS.md` (not at the root), other files, reads, and a git
+  project's root copy (where only the committed copy is loaded) SHALL be
+  unchanged.
+
+Acceptance Criteria
+- `tests/plugins.nongit-project-dir.test.ts`: in a non-git folder, `files-write` of `AGENTS.md`, `./CLAUDE.md`, the absolute root path and `AGENTS.md/inner.md`, and `files-edit` / `files-delete` of both, are refused with `refused (AGENT-1.b)` for the local CLI and the owner, and the files stay as they were.
+- Same file: a missing `CLAUDE.md` is not created; with `CLAUDE.md` a symlink to `docs/rules.md`, writing `docs/rules.md` is refused; writing a hard link to `AGENTS.md` is refused; `notes.txt`, `src/app.ts`, `sub/AGENTS.md` and `docs/other.md` are written.
+- Same file: in a git project `files-write AGENTS.md` still works.
+- With the base sources the refusals fail; the git-project case passes on both.
+
+### REQ-plugins-115
+
+Other people's runs only read in a project folder that isn't a git repo
+(AGENT-1.a, captured in `hi/agent.md` from Leif's 2026-09-28 interview).
+`actingWorkTask(env, cwd)` SHALL be true only when the run carries the
+`/work` stamp (`CORVIDINHO_ACTING_WORK_TASK`) and `isGitRepo(cwd)`; `cwd`
+is required. `runPlugin` SHALL pass the call's cwd (`opts.cwd`, else the
+process cwd), and the agent's catalog and invented-call refusal SHALL pass the
+run's cwd (REQ-agent-110), so in a non-git folder a team member's `/work`
+run gets the role refusal (`not allowed for your role`, exit 2) for
+`files-write`, `files-edit` and the SpecSync change tools, while reads and
+review tools are unchanged and in a git worktree the work tools are kept
+(IDENTITY-10). The owner and community are unchanged.
+
+Acceptance Criteria
+- `tests/plugins.nongit-project-dir.test.ts`: `actingWorkTask` is true for a git repo with the stamp and false for a non-git folder or without the stamp.
+- Same file: a team member's `/work` `files-write` / `files-edit` in a non-git folder get the role refusal and the file is unchanged, `files-read` works; in a git repo the write works; the owner's write in the folder works.
+- `tests/roles.team.test.ts` (fixture dir now a git repo) keeps team `/work` edits working in a git work tree.
 ### REQ-plugins-520
 
 AGENT-18 hi guard: in a repo that uses hi (`repoWaysNow(cwd)`: a `hi/*.md`
@@ -2328,9 +2398,10 @@ resolved by `resolveProjectPath`, and on the path as given), after the
 SAFE-2 check and before anything is read or written, with exit 2 and one
 line (`hiRefuseMessage`): `refused (AGENT-18): '<path>' is under hi/, where
 this repo keeps its acceptance criteria. The agent never changes them itself:
-criteria change only through a capture the owner approves, which no run can
-make yet, and any hi/ change keeps the run from being verified and /work
-from opening a PR. …`. There SHALL be no in-band override. Reads
+criteria change only through a capture the owner approves on a card, and any
+other hi/ change keeps the run from being verified and /work from opening a
+PR. Reading hi/ is fine; draft a missing criterion with hi-draft where this
+run has it, …`. There SHALL be no in-band override. Reads
 (`files-read`, `files-list`, `files-glob`) and `hi/` in a repo that does
 not use hi SHALL be unaffected.
 
@@ -2339,6 +2410,7 @@ Acceptance Criteria
 - A write through a symlink that lands in `hi/` is refused.
 - In a repo whose `hi/` has no hi front matter the write goes through; a non-git hi project refuses.
 - `tests/agent.hi-guard.test.ts` fails on the base sources and passes after.
+- The refusal says criteria change only through a capture the owner approves on a card, and points at `hi-draft` (AGENT-18 hi drafts).
 
 ### REQ-plugins-521
 
@@ -2362,4 +2434,27 @@ Acceptance Criteria
 - Inside a run in a temp hi repo, a criterion committed through the shell makes a dry-run `github-pr-create` refuse with `refused (AGENT-18)`, exit 2, naming `criteria AGENT-23` and "this run opens no PR"; with hi/ untouched in a run, it is not refused by the hi guard (the next gate, GITHUB-9, answers).
 - With no run in progress, a dirty hi/ edit does not make `github-pr-create` refuse with AGENT-18.
 - `tests/agent.hi-guard.test.ts` fails on the base sources and passes after.
+
+### REQ-plugins-525
+
+`.trust.toml` is SAFE-2 protected like `fledge.toml` (AGENT-18 Trust clause,
+REQ-agent-525): in a repo that has it the verify gate also runs `fledge trust
+verify`, so a run must not rewrite or delete the Trust config it is verified
+by. `isProtectedPath` SHALL be true for any path whose basename is
+`.trust.toml` (any directory, any letter case), so `files-write`,
+`files-edit` and `files-delete` refuse it with the SAFE-2 refusal (exit 2,
+no override; its list now reads `(.env* / .git / fledge.toml / .fledge /
+.trust.toml / bunfig.toml / specs / *.spec.md / .specsync / keystores)`),
+checked on the path as given and where it resolves; `git-commit` SHALL
+refuse to stage its deletion, and `discord-send-file` (which checks
+`isProtectedPath`) SHALL never attach it. Reads stay allowed, and
+`trust.toml`, `.trust.toml.bak` or `docs/trust.md` are not protected.
+Corvidinho's own repo has no `.trust.toml`.
+
+Acceptance Criteria
+- `isProtectedPath` is true for `.trust.toml`, `./.trust.toml`, `pkg/.Trust.TOML` and an absolute path under the root, and false for `trust.toml`, `docs/trust.md` and `.trust.toml.bak`.
+- `files-write` (relative, `./`, absolute, a new `sub/.trust.toml`), `files-edit` and an allowlisted `files-delete` of `.trust.toml` are refused with `refused (SAFE-2)` naming `.trust.toml` (exit 2); the file is unchanged and nothing is created; `files-read .trust.toml` and `files-write trust.toml` work.
+- `git-commit` of a deleted tracked `.trust.toml` is refused (exit 2, SAFE-2); it stays in `ls-files` and nothing is staged.
+- `discord-send-file`'s `fileAttachment` of `.trust.toml` is refused with `refused (SAFE-2)`.
+- `tests/agent.trust-verify.test.ts` fails on the base sources and passes after.
 

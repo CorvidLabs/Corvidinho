@@ -14,7 +14,7 @@
 
 import { ROLE_REFUSED_MESSAGE } from "../plugins/roles.ts";
 import { scrubSecrets } from "../store/scrub.ts";
-import { MODEL_FALLBACK_NOTE_PREFIX } from "./providers.ts";
+import { MODEL_FALLBACK_NOTE_PREFIX, STRONGER_MODEL_NOTE_PREFIX } from "./providers.ts";
 
 /**
  * ROLES-CHAT-3 (REQ-agent-333): the short in-session note a run's summary
@@ -28,9 +28,18 @@ const ROLE_NOTE_TAIL = `\n\n${ROLE_REFUSED_SUMMARY_NOTE}`;
  * AGENT-11: a closing `(model fallback: …)` paragraph (one line) at the end
  * of `text` (providers `modelFallbackNote`).
  */
-const FALLBACK_NOTE_TAIL_RE = new RegExp(
-  `\\n\\n${MODEL_FALLBACK_NOTE_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^\\n]*\\)$`,
-);
+const FALLBACK_NOTE_TAIL_RE = closingNoteTailRe(MODEL_FALLBACK_NOTE_PREFIX);
+
+/**
+ * AGENT-17: a closing `(stronger model: …)` paragraph (one line) at the end of
+ * `text` (providers `strongerModelNote`); it follows the fallback note.
+ */
+const STRONGER_NOTE_TAIL_RE = closingNoteTailRe(STRONGER_MODEL_NOTE_PREFIX);
+
+/** A one-line closing paragraph that starts with `prefix` and ends with ")" at the end of a text. */
+function closingNoteTailRe(prefix: string): RegExp {
+  return new RegExp(`\\n\\n${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^\\n]*\\)$`);
+}
 
 /**
  * REQ-agent-318 (PLUGIN-7, #318; Leif's go on #318): the short visible line a
@@ -121,9 +130,9 @@ function attributionTail(text: string): string {
 
 /**
  * The closing notes `text` ends with, as they stand (each after a blank
- * line): the model fallback note (AGENT-11), then the attribution note
- * (REQ-agent-318), then the role note (REQ-agent-333), any of them; "" when
- * none.
+ * line): the model fallback note (AGENT-11), then the stronger-model note
+ * (AGENT-17), then the attribution note (REQ-agent-318), then the role note
+ * (REQ-agent-333), any of them; "" when none.
  */
 export function closingNotesTail(text: string): string {
   let rest = text;
@@ -137,6 +146,11 @@ export function closingNotesTail(text: string): string {
     tail = `${credit}${tail}`;
     rest = rest.slice(0, rest.length - credit.length);
   }
+  const stronger = STRONGER_NOTE_TAIL_RE.exec(rest);
+  if (stronger) {
+    tail = `${stronger[0]}${tail}`;
+    rest = rest.slice(0, rest.length - stronger[0].length);
+  }
   const fallback = FALLBACK_NOTE_TAIL_RE.exec(rest);
   return fallback ? `${fallback[0]}${tail}` : tail;
 }
@@ -144,7 +158,8 @@ export function closingNotesTail(text: string): string {
 /**
  * Clip already-scrubbed `text` longer than `max` with `clip`, keeping its
  * closing notes (`closingNotesTail`: the model fallback note, AGENT-11, the
- * attribution note, REQ-agent-318, and the role note, REQ-agent-333): a long
+ * stronger-model note, AGENT-17, the attribution note, REQ-agent-318, and the
+ * role note, REQ-agent-333): a long
  * reply loses the end of its body, never a note. Text within `max` is
  * returned as is.
  */
