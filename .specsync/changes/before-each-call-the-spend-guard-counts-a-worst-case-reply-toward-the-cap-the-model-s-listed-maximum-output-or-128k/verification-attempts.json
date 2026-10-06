@@ -57,6 +57,25 @@
         "REQ-agent-098",
         "REQ-agent-298"
       ]
+    },
+    {
+      "timestamp": 1791248682,
+      "commit": "bcd3b0b15d55eae6dcbfc784303c469f30a4687c",
+      "contract_digest": "c959833e3ebec232de13fa9aa485acadb057909f0a2844ffc1159d895e50a5ca",
+      "execution_digest": "2e269384ac006da6710079ab62956adb0535b289a5a4c758494e5774f4ec6490",
+      "workspace_digest": "ec0d6d87a7afc0c3cdb38cf4fd171cb5640241c264ae9f024dad6e54d1871a0d",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-agent-298"
+      ]
     }
   ]
 }
