@@ -33,6 +33,13 @@
  * condensed at about 80% of the model's window (SESSION-5/6); an expired
  * session's conversation is kept 30 days so a reply resumes it (SESSION-3.a,
  * AGENT-6.a; src/store/conversation.ts).
+ * PLUGIN-5 / PLUGIN-5.a (REQ-discord-157): `[corvidinho.plugins]` `work` /
+ * `schedule` (the install root's fledge.toml and the owner's allowlist file,
+ * src/autonomous/enabled.ts) are read fresh for every slash command, every
+ * reply or button press that would resume a /work talk, and every scheduler
+ * tick. While `work` is off such a reply or press gets the fixed turned-off
+ * line and runs nothing; a run in flight is not stopped and stays stoppable.
+ * While `schedule` is off the ticker claims no run (its other jobs go on).
  */
 
 import type { AgentClient } from "./agent-client.ts";
@@ -163,7 +170,15 @@ import {
   parseStopRunCustomId,
 } from "./run-control.ts";
 import { answerTurnText } from "./session-thread.ts";
-import { handleSlashInteraction } from "./slash-dispatch.ts";
+import { extraOffReply, extraOffText, handleSlashInteraction } from "./slash-dispatch.ts";
+import {
+  EXTRA_NAMES,
+  formatExtraStateLog,
+  loadExtrasToggles,
+  trackExtraState,
+  type ExtraName,
+  type ExtraState,
+} from "../autonomous/enabled.ts";
 import type { SlashContext } from "./slash-types.ts";
 import {
   ThinkingStatus,
@@ -559,6 +574,23 @@ export async function startBridge(
         appendAudit(db, entry, { key: auditKeyFromEnv(env) })
     : undefined;
   const mutedUsers = new Set<string>(config.mutedUserIds);
+  // PLUGIN-5 / PLUGIN-5.a: /work and /schedule (with the scheduler) as the
+  // owner set them in [corvidinho.plugins] now — read fresh on every use, so
+  // turning one off or on needs no restart. An unreadable settings file is
+  // off (fail closed) and logged each time it refuses something.
+  const extraState = (name: ExtraName): ExtraState => {
+    const state = loadExtrasToggles({ installRoot: config.projectRoot, env })[name];
+    if (!state.on && state.reason === "config-unreadable") {
+      console.warn(`[discord] ${formatExtraStateLog(name, state)}`);
+    }
+    return state;
+  };
+  {
+    const atStart = loadExtrasToggles({ installRoot: config.projectRoot, env });
+    for (const name of EXTRA_NAMES) {
+      if (!atStart[name].on) console.warn(`[discord] ${formatExtraStateLog(name, atStart[name])}`);
+    }
+  }
   // SAFE-18..20: everything that needs the owner's OK reaches them as a DM
   // Approve/Deny card from one engine (src/discord/approval-cards.ts); the
   // MEMORY-ACL-6 forget request is its `forget` kind, and the must-ask gate's
@@ -987,6 +1019,8 @@ export async function startBridge(
       owner: config.owner ?? null,
       env: opts.env,
       gitTipSha,
+      // PLUGIN-5.a: /work and /schedule are refused while turned off.
+      extraState,
     };
   }
 
@@ -1002,6 +1036,12 @@ export async function startBridge(
         rateLimit: { state: rateLimitState, config: rateLimitConfig },
         // AGENT-3.a (REQ-discord-302): a reply 'stop' to a run's progress message.
         runs: runControl,
+        // PLUGIN-5.a (REQ-discord-157): an expired /work talk's conversation
+        // is not resumed as a new session (SESSION-3.a) while /work is off.
+        refuseResume: (priorSessionId) =>
+          workStore.isWorkSession(priorSessionId) && !extraState("work").on
+            ? extraOffText("work")
+            : null,
       });
 
       if (action.kind === "ignore") return;
@@ -1083,6 +1123,27 @@ export async function startBridge(
             }))
         ) {
           return;
+        }
+
+        // PLUGIN-5.a (REQ-discord-157): while /work is turned off, a message
+        // that would resume a /work talk gets the fixed turned-off line (in
+        // the channel, so never the owner's config hint) and runs nothing; its
+        // open asks stay as they were. Read when it would run, so a message
+        // that waited behind a run sees the setting as it is now. A run in
+        // flight was not stopped and 'stop' still reaches it (above).
+        if (action.kind === "continue_session" && workStore.isWorkSession(session.id)) {
+          const work = extraState("work");
+          if (!work.on) {
+            const sent = replyRef.fn
+              ? await replyRef.fn({
+                  channelId,
+                  content: extraOffText("work"),
+                  replyToMessageId: msg.id,
+                })
+              : null;
+            store.trackBotMessage(sent?.messageId ?? `bot_reply_for_${msg.id}`, session);
+            return;
+          }
         }
 
         // DISCORD-ASK-5 / REQ-discord-044: a button ask past its timeout is
@@ -1843,6 +1904,21 @@ export async function startBridge(
         return;
       }
 
+      // PLUGIN-5.a (REQ-discord-157): while /work is turned off, the
+      // requester's press on a /work talk's ask (open, pick, or the Answer
+      // form) gets the turned-off line privately (the owner also sees why)
+      // and resumes nothing; the ask stays open.
+      if (workStore.isWorkSession(session.id)) {
+        const work = extraState("work");
+        if (!work.on) {
+          await interaction.reply({
+            content: extraOffReply("work", work, isOwnerDiscord(config.owner, interaction.userId)),
+            ephemeral: true,
+          });
+          return;
+        }
+      }
+
       if (isAskExpired(pending)) {
         // DISCORD-ASK-4.a: a late Answer press or form submit on a free-text
         // ask leaves it pending, so a reply still answers it as before; a
@@ -2546,10 +2622,25 @@ export async function startBridge(
           },
         })
       : undefined;
+    // PLUGIN-5.a: schedules on/off, read at every tick; one log line per
+    // change (the start-up line above covers the first read), so an
+    // unreadable file is not logged again on every tick.
+    const schedulesState = trackExtraState(
+      () => loadExtrasToggles({ installRoot: config.projectRoot, env }).schedule,
+      (state, previous) => {
+        if (!previous) return;
+        const line = `[discord] scheduler ${formatExtraStateLog("schedule", state)}`;
+        if (state.on) console.log(line);
+        else console.warn(line);
+      },
+    );
     scheduler = new SchedulerService({
       store: scheduleStore,
       agent,
       allowlist: config.allowlist,
+      // PLUGIN-5.a: only the schedules part of the tick is gated; cards,
+      // stuck-ask DMs, schedule asks, spend DMs and the backup keep running.
+      schedulesEnabled: () => schedulesState().on,
       pollIntervalMs: opts.schedulerPollIntervalMs,
       ...(opts.schedulerNow ? { now: opts.schedulerNow } : {}),
       defaultProjectRoot: config.projectRoot,

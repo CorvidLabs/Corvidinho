@@ -1385,6 +1385,30 @@ Acceptance Criteria
 - Through `createTaskExecute` with `talkWorktree`: `shell-exec` and `fledge-run` are offered at code tier and `shell-exec` runs in the worktree (not the checkout), with no SAFE-3.a line and `unreportedEditTools: ["shell-exec"]`, on attempt 2 too; the checkout, a non-git folder and a subdirectory are not offered either over two attempts, both calls refused as not offered, exactly one SAFE-3.a line, none in the summaries; `kubectl get pods; touch ran.marker` raises one `mustask` destructive card, which nobody answers, so the call fails with the lapse reason, nothing runs and the wait line says no answer means no.
 - The real CLI against a localhost fake model: by default `shell-exec` is offered and runs in the kept worktree, not the checkout, exit 0; `--here` (text) prints exactly one SAFE-3.a line on stderr and offers none; a non-git folder (`--json`) has exactly one SAFE-3.a `Text` event and offers none.
 - With the base's sources the file cannot load; with `isCliRunWorktree` and `TOOL_CHILD_ENV` stubbed in, 11 of 12 fail (the role-session guard passes there too); with the gate as it was before the tool-child refusal, the two cases holding tool-child rows fail (granted); all pass on the branch.
+### REQ-cli-157
+
+PLUGIN-5.a in `corvidinho daemon`. `startDaemon` SHALL read
+`[corvidinho.plugins] schedule` through `loadExtrasToggles({ installRoot:
+projectRoot, env })` (its working directory's `fledge.toml` and the
+allowlist file, REQ-agent-157) at start and at every tick, and pass it to the
+scheduler as `schedulesEnabled` (REQ-discord-157), so while it is off a tick
+claims and starts no schedule run, runs in flight finish and the nightly
+backup still runs; no restart is needed.
+
+- `daemon.started` SHALL carry `schedules`: `on`, `off` or
+  `config-unreadable`.
+- When it is not on at start, a `schedules.off` warn line SHALL follow with
+  `reason` (`off` plus `offIn`, or `config-unreadable` plus `error`;
+  never a path).
+- Each later change SHALL be logged once: `schedules.off` (warn, same
+  fields) or `schedules.on` (info).
+- `[corvidinho.autonomous]` SHALL have no say.
+
+Acceptance Criteria
+- `schedule = false` in the allowlist file: `daemon.started` has `schedules: "off"`, then one `schedules.off` (`level: "warn"`, `reason: "off"`, `offIn: ["allowlist file"]`); two ticks return `{ started: [], skipped: [] }` with no run row while the nightly backup writes one snapshot (`backup.ok`); after the file is emptied the next tick logs one `schedules.on` and starts the due schedule.
+- Nothing set: `daemon.started` has `schedules: "on"`, no `schedules.off`, and the due schedule runs.
+- An install root whose `fledge.toml` is a directory: `schedules: "config-unreadable"` and `schedules.off` with `error: "the install's fledge.toml could not be read (EISDIR)"`; a tick starts nothing.
+- Fixture: `tests/plugins.extras-toggle.test.ts`.
 
 ### REQ-cli-432
 

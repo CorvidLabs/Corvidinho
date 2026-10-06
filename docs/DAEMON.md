@@ -42,6 +42,11 @@ The bridge has its own schedule ticker. You can run the bridge and the daemon
 on the same data dir:
 
 - Every tick first re-reads the `schedules` table.
+- `[corvidinho.plugins] schedule = false` (PLUGIN-5.a) is read by each ticker
+  from the shared allowlist file and from its own working directory's
+  `fledge.toml`. Put it in the allowlist file so both tickers see it: a
+  `fledge.toml`-only off in one checkout would leave the other ticker firing
+  the same schedules.
 - Each due run is **claimed atomically in SQLite**, so it fires once, in
   whichever process claims it first.
 - Updates write only the columns they own. A run that ends in the daemon
@@ -158,6 +163,7 @@ optional `CORVIDINHO_BACKUP_DIR` (nightly backup, above) is read by both.
 | `CORVIDINHO_ALLOWLIST_FILE`, `CORVIDINHO_DISCORD_ALLOW_CHANNELS`, `DISCORD_CHANNEL_IDS`, … | The same allowlists as the bridge. An empty channel list refuses every schedule that has a channel. Users and roles both empty leave only the channel gate and the deny lists, so any creator's schedule runs; once either is set, the creator gate above applies. Deny lists always win. |
 | `CORVIDINHO_LLM_MODEL` (+ its key: `CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`; `OLLAMA_HOST` for `ollama:`) | The model the spawned `task run` calls: `openai:<model>`, `ollama:<model>` or `anthropic:<model>` (AGENT-13); a comma list is a fallback chain (AGENT-11, `llm.fallback` below). There is no built-in default: unset, every scheduled run fails and the `llm.no_provider` start line says why (never commit keys) |
 | `CORVIDINHO_BACKUP_DIR` | Optional absolute local directory for the nightly backup (OPS-1/2); unset = no backup |
+| `[corvidinho.plugins]` `schedule = false` (allowlist file, or `fledge.toml` in the daemon's working directory) | Turns schedule runs off (PLUGIN-5.a): read at every tick, no restart; while off no run is claimed, runs in flight finish and the nightly backup still runs. Off in either file is off; a file that cannot be read is off (`config-unreadable`). Logged as `schedules` on `daemon.started` and `schedules.off` / `schedules.on`. When it is back on, each overdue schedule runs once. See [`DISCORD-GO-LIVE.md`](DISCORD-GO-LIVE.md) E.11 |
 | `CORVIDINHO_MAX_TURNS`, `CORVIDINHO_IDLE_TIMEOUT_MS` | Optional run limits every spawned `task run` reads (AGENT-12): model/tool rounds per attempt (default 8) and the idle timeout in ms (default 600000). A run stopped for no output fails and its reason is logged like any failed run; a run whose last attempt hit the turn cap posts its best answer so far and the scheduler logs `[scheduler] schedule <id>: run stopped=turn-cap …` |
 
 ## Single instance
@@ -207,7 +213,8 @@ scrubbed for secrets (SAFE-6).
 
 | Event | When |
 |-------|------|
-| `daemon.started` | Lock taken, DB open, ticker armed; `backup` is the backup directory, `off`, or why it is unusable; `llm` is the model runs at the default tier call (`<model> @ <host>`), or `none` (AGENT-13) |
+| `daemon.started` | Lock taken, DB open, ticker armed; `backup` is the backup directory, `off`, or why it is unusable; `llm` is the model runs at the default tier call (`<model> @ <host>`), or `none` (AGENT-13); `schedules` is `on`, `off` or `config-unreadable` (`[corvidinho.plugins] schedule`, PLUGIN-5.a) |
+| `schedules.off` / `schedules.on` | (warn / info) Schedule runs were turned off or back on in `[corvidinho.plugins]` (PLUGIN-5.a), logged once per change (and `schedules.off` at start when off). `reason` is `off` (with `offIn`: `fledge.toml`, `allowlist file`) or `config-unreadable` (with `error`). While off no `tick` starts a run; the backup still runs |
 | `llm.no_provider` | (warn, at start) Some or every tier has no usable model provider (AGENT-10): `notice` says which and what to set (`CORVIDINHO_LLM_MODEL`, or the entry's missing key). Those scheduled runs fail until one is set (each `run.finished` `error` reads `failed (exit 1): No model provider is configured …`); there is no built-in default |
 | `daemon.lock_held` / `daemon.lock_failed` | Start refused (exit 1) |
 | `daemon.start_failed` | Start refused (exit 1): start-up setup failed, for example an allowlist file that cannot be read or parsed or a DB that cannot open. `message` gives the reason; nothing runs and the lock is released |

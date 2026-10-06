@@ -23,6 +23,7 @@ import type { SpendDm } from "./spend-dm.ts";
 import type { FailureOwnerDm } from "./failure-reason.ts";
 import type { PublicReplyGate } from "./public-reply-gate.ts";
 import type { GithubUserLookup } from "../identity/github-user.ts";
+import type { ExtraName, ExtraState } from "../autonomous/enabled.ts";
 
 export type SlashOptionValue = string | number | boolean | null;
 
@@ -176,6 +177,12 @@ export type SlashContext = {
    * inject a fake so no git push or GitHub call happens.
    */
   openWorkPr?: WorkPrRunner;
+  /**
+   * PLUGIN-5 / PLUGIN-5.a — whether `/work` / `/schedule` is on right now
+   * (the bridge reads `[corvidinho.plugins]` fresh on every call,
+   * `loadExtrasToggles`). Unset ⇒ on.
+   */
+  extraState?: (name: ExtraName) => ExtraState;
   /**
    * IDENTITY-7.a — looks a GitHub login up to its numeric user id for
    * `/admin people link github:<login>`. Default `createGithubUserLookup`

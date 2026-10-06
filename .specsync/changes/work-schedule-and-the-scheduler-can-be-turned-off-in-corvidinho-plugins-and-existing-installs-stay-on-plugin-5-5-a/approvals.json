@@ -1,0 +1,122 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790830802,
+      "digest": "91f38ff1ee9d14882654bf0dd348625849d242d6d41dd67f62abb03f3ac20454",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "work-schedule-and-the-scheduler-can-be-turned-off-in-corvidinho-plugins-and-existing-installs-stay-on-plugin-5-5-a",
+        "title": "/work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a)",
+        "description": "/work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord"
+        ],
+        "affected_paths": [
+          "allowlist.example.toml",
+          "docs/BOX-UPDATE.md",
+          "docs/DAEMON.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "fledge.toml",
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/cli/cli.spec.md",
+          "specs/cli/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "src/autonomous/enabled.ts",
+          "src/daemon/daemon.ts",
+          "src/discord/bridge.ts",
+          "src/discord/slash-dispatch.ts",
+          "src/discord/slash-types.ts",
+          "src/discord/work-store.ts",
+          "src/scheduler/service.ts",
+          "tests/docs.operator-facts.test.ts",
+          "tests/plugins.extras-toggle.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "PLUGIN-5 and PLUGIN-5.a (captured on main from Leif's 2026-09-28 interview, round 10) hold: [corvidinho.plugins] work and schedule are read from the install root's fledge.toml and the owner's allowlist file (TOML table, dotted or inline keys, or a corvidinho.plugins object in a .json allowlist file) on every slash command, every reply or button press that would resume a /work talk and every scheduler tick; off in either file is off, a missing file, table or key is on (existing installs stay on), only the literal true is on otherwise, and a file that exists but cannot be read is off as config-unreadable and logged; the slash gate runs after the channel, actor and mute/rate gates and before minPermission, and while off /work and every /schedule subcommand answer only the fixed ephemeral '/<name> is turned off on this install.' (the owner also gets why and how to turn it back on, never a path) with nothing created; while work is off a reply, an @mention or a button press that would resume a /work talk gets the same line and runs nothing, its asks stay open, and a /work run in flight is not aborted and stays stoppable; while schedule is off the bridge's and the daemon's ticks gate only the schedules part (refresh, due scan, claim) so the onTick hook (Approve / forget cards, stuck WATCH asks), the pending schedule-ask delivery pass, the owner's spend DMs and the nightly backup keep running, and back on each overdue schedule fires at most once; the daemon logs schedules on daemon.started and schedules.off / schedules.on on each change; [corvidinho.autonomous] has no say; no /admin knob, env var, schema or protocol change; tests/plugins.extras-toggle.test.ts fails on the base sources and passes on the branch"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "bde50e6302681a00fd98fa30b63cbe278b1880762a60f6970bacf9a924f16a0d",
+        "cli": "6f553273840319d65a119201a606f79f1fc03a4a4d1cb7ef98fb2dc4468ee33d",
+        "discord": "a626a92428c20ce84ff24d320c50a19175fd93294719043d7388d0de0e9c0bbf"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1790832017,
+      "digest": "c38d66a6e85b57208ebd539964de58db689561bef3906c4caf7bf66550e5c308",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "work-schedule-and-the-scheduler-can-be-turned-off-in-corvidinho-plugins-and-existing-installs-stay-on-plugin-5-5-a",
+        "title": "/work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a)",
+        "description": "/work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord"
+        ],
+        "affected_paths": [
+          "allowlist.example.toml",
+          "docs/BOX-UPDATE.md",
+          "docs/DAEMON.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "fledge.toml",
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/cli/cli.spec.md",
+          "specs/cli/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "src/autonomous/enabled.ts",
+          "src/daemon/daemon.ts",
+          "src/discord/bridge.ts",
+          "src/discord/message-router.ts",
+          "src/discord/slash-dispatch.ts",
+          "src/discord/slash-types.ts",
+          "src/discord/work-store.ts",
+          "src/scheduler/service.ts",
+          "tests/docs.operator-facts.test.ts",
+          "tests/plugins.extras-toggle.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "PLUGIN-5 and PLUGIN-5.a (captured on main from Leif's 2026-09-28 interview, round 10) hold: [corvidinho.plugins] work and schedule are read from the install root's fledge.toml and the owner's allowlist file (TOML table, dotted or inline keys, or a corvidinho.plugins object in a .json allowlist file) on every slash command, every reply or button press that would resume a /work talk and every scheduler tick; off in either file is off, a missing file, table or key is on (existing installs stay on), only the literal true is on otherwise, and a file that exists but cannot be read is off as config-unreadable and logged; the slash gate runs after the channel, actor and mute/rate gates and before minPermission, and while off /work and every /schedule subcommand answer only the fixed ephemeral '/<name> is turned off on this install.' (the owner also gets why and how to turn it back on, never a path) with nothing created; while work is off a reply, an @mention or a button press that would resume a /work talk gets the same line and runs nothing, its asks stay open, and a /work run in flight is not aborted and stays stoppable; while schedule is off the bridge's and the daemon's ticks gate only the schedules part (refresh, due scan, claim) so the onTick hook (Approve / forget cards, stuck WATCH asks), the pending schedule-ask delivery pass, the owner's spend DMs and the nightly backup keep running, and back on each overdue schedule fires at most once; the daemon logs schedules on daemon.started and schedules.off / schedules.on on each change; [corvidinho.autonomous] has no say; no /admin knob, env var, schema or protocol change; tests/plugins.extras-toggle.test.ts fails on the base sources and passes on the branch"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "702f01212dd80dd1886b60bfb592af42ac7bb349e7a77cfd4c31698b45818de4",
+        "cli": "6f553273840319d65a119201a606f79f1fc03a4a4d1cb7ef98fb2dc4468ee33d",
+        "discord": "cd06abb635dec31c2603063714f146b7a8caed828143cc55cf406cfd226cdaf3"
+      }
+    }
+  ],
+  "reopenings": []
+}
