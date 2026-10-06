@@ -359,7 +359,8 @@ describe("GitHub WATCH recognises declared people (IDENTITY-14 / IDENTITY-7)", (
     const owner = formatWatchIdentityBlock({ sender: "0xLeif", senderId: 8268288 }, withId)!;
     expect(owner).toContain("- declared_person: owner");
     expect(owner).toContain("- display_name: Leif");
-    expect(owner).toContain("- role: owner (recognised here; a GitHub run still gets no ADMIN tools)");
+    // IDENTITY-12.a: the owner's own comment gives the run the owner's tools, behind the must-ask gate.
+    expect(owner).toContain("- role: owner (this run has the owner's tools, behind the same must-ask gate as on Discord)");
     expect(formatWatchIdentityBlock({ sender: "0xLeif" }, dir)).toContain("declared_person: none");
     expect(formatWatchIdentityBlock({ sender: "0xLeif", senderId: 1 }, withId)).toContain("declared_person: none");
     expect(formatWatchIdentityBlock({ sender: "Tofu" }, dir)).toContain("declared_person: none");

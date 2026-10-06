@@ -29,6 +29,8 @@ const OWNER = MUST_ASK_TEST_OWNER;
 const TEAM = "200000000000000002";
 const SID = "sess_safe3a_e2e";
 const SURFACE = "CORVIDINHO_ACTING_SURFACE";
+/** The owner's GitHub numeric id (`[owner] github_id`), for the owner's own WATCH run (IDENTITY-12.a). */
+const OWNER_GH = "8268288";
 
 /** Keys the owner's run env sets in process.env (runPlugin reads it); restored after each test. */
 const KEYS = [
@@ -43,6 +45,7 @@ const KEYS = [
   "CORVIDINHO_ACTING_WORK_TASK",
   "CORVIDINHO_DISCORD_SESSION_ID",
   "CORVIDINHO_WATCH_SESSION_ID",
+  "CORVIDINHO_ACTING_GITHUB_ID",
   "CORVIDINHO_DELEGATE_DEPTH",
   "DISCORD_MUTED_USER_IDS",
   SURFACE,
@@ -120,7 +123,7 @@ async function ownerTalk(): Promise<Talk> {
   const allowlist = join(base, "allowlist.toml");
   writeFileSync(
     allowlist,
-    `[discord]\nchannels = ["600000000000000006"]\ndeny_users = []\n\n[owner]\ndiscord_id = "${OWNER}"\ndisplay = "Leif"\n\n[people.tofu]\ndisplay = "Tofu"\nrole = "team"\ndiscord_ids = ["${TEAM}"]\n`,
+    `[discord]\nchannels = ["600000000000000006"]\ndeny_users = []\n\n[owner]\ndiscord_id = "${OWNER}"\ndisplay = "Leif"\ngithub_id = "${OWNER_GH}"\n\n[people.tofu]\ndisplay = "Tofu"\nrole = "team"\ndiscord_ids = ["${TEAM}"]\n`,
   );
   // The owner's chat as the Discord spawn client stamps it (process.env,
   // which runPlugin and the must-ask gate read), nothing left from before.
@@ -312,7 +315,25 @@ describe("SAFE-3.a: everywhere else the shell stays out, with one operator line"
   });
 
   test("WATCH, a schedule, a delegate worker and a local CLI run: refused", async () => {
-    await refused((t) => t.work, { [SURFACE]: "watch" }, "only the owner's chat, /session start, /work and their ask answers get them (this run: watch)");
+    // A watch stamp never takes a Discord id (IDENTITY-12.a), so this run is community.
+    await refused(
+      (t) => t.work,
+      { [SURFACE]: "watch" },
+      "only the owner's chat, /session start, /work and their ask answers get them (this run: watch)",
+      false,
+    );
+    // The owner's own GitHub run (IDENTITY-12.a): the owner's other tools, never the shell.
+    await refused(
+      (t) => t.work,
+      {
+        [SURFACE]: "watch",
+        CORVIDINHO_WATCH_SESSION_ID: "wsess_safe3a",
+        CORVIDINHO_DISCORD_SESSION_ID: "",
+        CORVIDINHO_ACTING_DISCORD_USER_ID: "",
+        CORVIDINHO_ACTING_GITHUB_ID: OWNER_GH,
+      },
+      "WATCH runs never get them",
+    );
     await refused((t) => t.work, { [SURFACE]: "schedule", CORVIDINHO_DISCORD_SESSION_ID: `schedule_${SID}` }, "scheduled runs never get them");
     await refused((t) => t.work, { CORVIDINHO_DELEGATE_DEPTH: "1" }, "a delegate or council worker never gets them");
     // A local CLI run (no role session, nothing spawned it) given no worktree

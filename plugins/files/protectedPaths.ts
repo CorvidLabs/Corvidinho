@@ -7,6 +7,7 @@ import { statSync } from "node:fs";
 import { basename, isAbsolute, join, relative } from "node:path";
 import { PROJECT_INSTRUCTION_FILES } from "../../src/agent/project-instructions.ts";
 import {
+  isWatchRunEnv,
   resolveActingIsAdmin,
   roleSessionActive,
 } from "../../src/plugins/roles.ts";
@@ -258,15 +259,19 @@ export const SECRET_GIT_EXCLUDE_PATHSPECS: readonly string[] = [
  * ROLES-CHAT-8: true when this call runs in a non-ADMIN role session, so the
  * read-ish file tools refuse an explicit secret path and leave secret paths
  * out of listings and searches. ADMIN and the local CLI (no role session) keep
- * full access. Re-checked each call (ROLES-CHAT-6).
+ * full access. Re-checked each call (ROLES-CHAT-6). A WATCH run is refused
+ * for every role, the owner's included (IDENTITY-12.a): its answer goes to a
+ * GitHub thread, which is public.
  */
 export async function secretPathsRefused(): Promise<boolean> {
-  return roleSessionActive() && !(await resolveActingIsAdmin());
+  if (!roleSessionActive()) return false;
+  if (isWatchRunEnv()) return true;
+  return !(await resolveActingIsAdmin());
 }
 
 export function secretRefuseMessage(path: string): string {
   return (
     `refused (ROLES-CHAT-8): '${path}' looks like a secret path ` +
-    `(.env* / .ssh / keys / keystores) — not available in community chat`
+    `(.env* / .ssh / keys / keystores) — not available in community chat or on GitHub`
   );
 }

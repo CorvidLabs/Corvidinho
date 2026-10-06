@@ -248,7 +248,9 @@ the limit / query caps; REQ-plugins-3182), `plugins/gif/hosts.ts` (no
 imports) exports `GIPHY_MEDIA_HOSTS` and `hasGiphyMediaLink`, which
 `giphy.ts` re-exports and the Discord reply path uses so a GIF link is never
 put in an embed (REQ-discord-075), `src/plugins/roles.ts` exports
-`TEAM_SEARCH_TOOLS` (PLUGIN-9: `web-search` and `gif-search`) and `PluginHandlerResult.spendAsk` carries a
+`TEAM_SEARCH_TOOLS` (PLUGIN-9: `web-search` and `gif-search`) and
+`isWatchRunEnv(env)` (IDENTITY-12.a: the surface stamp is `watch`;
+REQ-plugins-1201), and `PluginHandlerResult.spendAsk` carries a
 flat-priced call's SAFE-8 ask (REQ-agent-098),
 `githubRepoOfUrl(url)` says whether a URL is on a GitHub host and which
 `OWNER/REPO` it names (DISCORD-SCHEDULE-3.a),
@@ -475,7 +477,8 @@ or other server-chosen header values and are one line, control-free and at
 most 300 chars.
 `web-search` (REQ-plugins-318) is dangerous + minTier 1 like `web-fetch`:
 SAFE-1 allowlist, SAFE-5 audit, never at the read tier, and for the owner and
-team only (`TEAM_SEARCH_TOOLS`, PLUGIN-9; community, WATCH and schedules other
+team only (`TEAM_SEARCH_TOOLS`, PLUGIN-9; community — WATCH runs no declared
+owner or team member triggered included, IDENTITY-12.a — and schedules other
 people created never; a schedule the owner created runs as the owner,
 DISCORD-SCHEDULE-1.a; `web-fetch` stays the owner's). The key is `BRAVE_SEARCH_API_KEY` from the run's env only (no
 default; missing is a `not configured` error, never an empty success) and
@@ -828,19 +831,35 @@ the acting role (IDENTITY-8..12, REQ-plugins-065) is resolved at every call by
 bridge bit + configured owner, not muted or deny-listed) runs every mutating
 plugin, still behind SAFE-1 for dangerous tools (ROLES-CHAT-4 / IDENTITY-9);
 `team` — only when the spawning surface stamped `CORVIDINHO_ACTING_ROLE=team`
-(Discord chat, slash, buttons) and the owner's people list, re-read now,
-declares the acting Discord id team — runs only `TEAM_REVIEW_TOOLS`
+(Discord chat, slash, buttons, or a WATCH run a team member triggered) and the
+owner's people list, re-read now, declares the acting Discord id (on GitHub:
+the trigger's GitHub numeric id) team — runs only `TEAM_REVIEW_TOOLS`
 (`github-issue-comment`, `github-pr-review`) plus, in a `/work` run
 (`CORVIDINHO_ACTING_WORK_TASK=1`), `TEAM_WORK_TOOLS` (`files-write`,
 `files-edit`); `community` (everyone else: undeclared, declared community,
-WATCH, schedules other people create, workers, muted / deny-listed, any read
-failure) runs none (IDENTITY-10/11). A scheduled run (`isScheduleRunEnv`) is
+WATCH runs no declared owner or team member triggered, schedules other people
+create, workers, muted / deny-listed, any read failure) runs none
+(IDENTITY-10/11). A scheduled run (`isScheduleRunEnv`) is
 the owner (the owner's own schedule, which the scheduler stamps with the
 ADMIN bit, re-checked here) or community, never team, whatever its stamp
-(DISCORD-SCHEDULE-1.a, REQ-plugins-065). Refusals are "not allowed for your role" (ROLES-CHAT-3/6).
+(DISCORD-SCHEDULE-1.a, REQ-plugins-065). On GitHub (IDENTITY-12.a,
+REQ-plugins-1201) a WATCH run (`isWatchRunEnv`: the surface stamp
+`CORVIDINHO_ACTING_SURFACE=watch`, which both spawning clients always
+overwrite) is resolved from the GitHub numeric id the WATCH spawn stamps for
+the person who triggered it (`CORVIDINHO_ACTING_GITHUB_ID`, with
+`CORVIDINHO_WATCH_SESSION_ID` set) in the owner's people list re-read now —
+never a login, never a Discord id; a Discord run never uses the GitHub keys:
+`owner` needs the owner stamp, the ADMIN bit and that id resolving to the
+owner's person; `team` the team (or owner) stamp and a team person; a GitHub
+`deny_users` login or id, or the person's Discord id muted or Discord
+deny-listed, is community. A WATCH run is never a `/work` task
+(`actingWorkTask` false whatever its stamp), and every must-ask call the owner's
+WATCH run makes raises the owner's Approve card like any other run
+(REQ-plugins-097). Refusals are "not allowed for your role" (ROLES-CHAT-3/6).
 `files-edit`, `specsync-change-new`, `specsync-change-answer`,
 `specsync-change-approve`, `specsync-change-finalize`); `community` (everyone else: undeclared, declared community,
-WATCH, schedules, workers, muted / deny-listed, any read failure) runs none
+WATCH runs no declared owner or team member triggered, schedules, workers,
+muted / deny-listed, any read failure) runs none
 (IDENTITY-10/11). Refusals are "not allowed for your role" (ROLES-CHAT-3/6).
 A team `github-pr-review` posts as `COMMENT` only: `--event APPROVE` /
 `REQUEST_CHANGES` get the role refusal (exit 2) unless the role, re-resolved
@@ -902,7 +921,10 @@ files) for non-ADMIN role sessions via `isSecretPath`. `search-grep`,
 through a symlink), and `search-grep`, `git-diff`, `files-glob` and
 `files-list` leave secret paths out of their results, whatever `--include`,
 glob or `--staged` is passed (REQ-plugins-267). ADMIN and the local CLI keep
-the access `files-read` gives.
+the access `files-read` gives — except in a WATCH run, where
+`secretPathsRefused` hides and refuses them for every role, the owner's
+included, because the answer goes to a public GitHub thread (IDENTITY-12.a,
+REQ-plugins-1201).
 
 `files-read` image mode (DISCORD-9 / REQ-plugins-427): after the path clamp,
 the ROLES-CHAT-8 secret gate and the existing-file check, a file whose leading
@@ -1284,6 +1306,12 @@ command line.
 - **When** the agent runs `files-write`
 - **Then** the run fails with exit 2 and a "not allowed for your role" message; no file is written
 
+### Scenario: the owner's and a team member's GitHub runs get their role's tools (IDENTITY-12.a)
+
+- **Given** a WATCH run stamped by the WATCH spawn for the GitHub numeric id that triggered it (`CORVIDINHO_ACTING_SURFACE=watch`, `CORVIDINHO_WATCH_SESSION_ID`, `CORVIDINHO_ACTING_GITHUB_ID`, the owner or team stamp)
+- **When** a mutating must-ask plugin is run for the owner's id, and owner-only, review and `/work` tools are checked for a team member's id
+- **Then** the owner's call raises the owner's Approve card (`… · from watch:<session>`) and runs only on approval; the team member gets `github-issue-comment` / `github-pr-review` but not `files-edit` (never a `/work` task there) or owner-only tools, which are refused for the role before any card; the owner's stamp on a stranger's or a re-registered login's id, a login alone, a Discord id, a GitHub `deny_users` entry or a muted Discord id resolves community; secret-looking paths stay hidden for every role there
+
 ### Scenario: ADMIN files-write still allowed (ROLES-CHAT-4)
 
 - **Given** `CORVIDINHO_ACTING_IS_ADMIN=1` and the acting user is the configured owner
@@ -1322,6 +1350,7 @@ command line.
 | specsync-check, fledge on PATH but the project defines no `spec-check` task | Run local `specsync check` (no `Unknown task` failure) |
 | specsync-check, project `fledge.toml` unparsable | Keep `fledge run spec-check` (fail closed; Fledge reports the error) |
 | Write/edit/delete protected infra | Refuse (exit 2, SAFE-2); no override |
+| WATCH run (surface `watch`) whose GitHub id is not the owner's or a team member's, has no id or no WATCH session id, is on GitHub `deny_users`, or whose person's Discord id is muted or deny-listed — or a stamp claiming more | Resolves community: mutating plugins refused `not allowed for your role` (exit 2) before SAFE-1, the must-ask card or the handler (IDENTITY-12.a, REQ-plugins-1201) |
 | Write/edit/delete under `hi/` in a repo that uses hi (as given, absolute, or through a symlink that lands there) | Refuse (exit 2, `refused (AGENT-18): '<path>' is under hi/, …`); file unchanged; reads unaffected (REQ-plugins-520) |
 | github-pr-create inside a run in a repo that uses hi, with anything under `hi/` changed since the run's session base (or unreadable) | Refuse (exit 2, `refused (AGENT-18): this repo's hi/ changed since the session base (…) … so this run opens no PR; …`) before the GitHub client and the GITHUB-9 review; no PR (REQ-plugins-521) |
 | shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, redirections, quoting incl. bash `$'…'`, `\`-newline, comments, here-docs, expanded command words, command substitutions, `eval` and shell `-c` strings, DIRSTACK) | Refuse (exit 2, SAFE-3); no spawn |
@@ -1510,6 +1539,7 @@ and current rows for plugins host evolution.
 | 2026-10-01 | in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent: In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard) |
 | 2026-09-30 | web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered: Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap |
 | 2026-10-01 | gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins: GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap |
+| 2026-10-06 | on-github-the-owner-and-team-i-ve-declared-get-their-role-s-tools-behind-the-must-ask-gate-strangers-stay-community: On GitHub the owner and team I've declared get their role's tools behind the must-ask gate; strangers stay community (IDENTITY-12.a) |
 | 2026-10-06 | the-verify-lane-the-shell-and-the-runners-start-without-my-cloud-credentials-kubeconfig-aws-google-cloud-azure-and: The verify lane, the shell and the runners start without my cloud credentials (KUBECONFIG, AWS, Google Cloud, Azure and similar), so they can't reach prod by accident (SAFE-21.b) |
 | 2026-10-06 | shell-exec-refuses-specsync-change-approve-review-finalize-and-ship-in-every-repo-only-a-human-or-corvidinho-s-own: Shell-exec refuses specsync change approve, review, finalize and ship in every repo: only a human, or Corvidinho's own green-lane settle, does them (AGENT-18.a) |
 | 2026-10-05 | where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts: Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts) |

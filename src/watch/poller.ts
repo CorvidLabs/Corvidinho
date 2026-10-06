@@ -6,6 +6,10 @@
  * REQ-watch-037: sessions persist in the shared SQLite DB with the soft TTL;
  * cycles are single-flight, stop() halts before the next event and waits for
  * the in-flight cycle, and one failing event never aborts the cycle.
+ * IDENTITY-12.a (REQ-watch-1201): each run is stamped with the declared role
+ * (owner / team) of the person who triggered it, matched by GitHub numeric
+ * id (`watchTriggerRole`); anyone else, and every assignment or review
+ * request, is community.
  * REQ-watch-067 (MEMORY-8/9): before each run the commenter's declared
  * person's memory and the thread repo's project memory are searched for the
  * comment and prepended, and the run acts for the commenter's GitHub ids.
@@ -77,7 +81,7 @@ import {
   parseGithubRateLimit,
 } from "./rate-limit.ts";
 import { enrichWatchPromptWithMemories } from "./memory-inject.ts";
-import { gateEvent, routeEvent, watchInjectionVerdict } from "./router.ts";
+import { gateEvent, routeEvent, watchInjectionVerdict, watchTriggerRole } from "./router.ts";
 import { INJECTION_AUDIT_ACTION, type InjectionReason } from "../agent/untrusted.ts";
 import { providerNotice } from "../agent/providers.ts";
 import { appendAudit, argsDigest, auditKeyFromEnv } from "../audit/index.ts";
@@ -682,6 +686,10 @@ export async function startWatchPoller(
             actingGithubLogin: event.sender,
             ...(event.senderId !== undefined ? { actingGithubId: event.senderId } : {}),
             repo: event.repo,
+            // IDENTITY-12.a: the declared role of whoever triggered the run
+            // (by GitHub numeric id; an assignment or review request is
+            // community), re-checked by the tool layer at every call.
+            actingRole: watchTriggerRole(event, people),
           });
           spawnOk = spawn.ok;
           spawnExit = spawn.exitCode;

@@ -270,9 +270,10 @@ in the owner's tool catalog, see below). The allowlist file
 Dangerous tools on `main` (printed from the registry after loading the builtins and the
 project's Fledge plugins; re-check any time with `corvidinho plugins list`). An entry lets
 `corvidinho plugins run` run the tool and offers it to the model in the owner's runs, plus
-declared team members' Discord runs for `github-issue-comment`, `github-pr-review`,
-`web-search` and `gif-search` (IDENTITY-10, PLUGIN-9), never community, WATCH, schedules other people created or
-council voices; `shell-exec`, the runners and the Fledge core runs `fledge-lanes-run` /
+declared team members' runs (Discord, and WATCH runs they triggered, IDENTITY-12.a) for
+`github-issue-comment`, `github-pr-review`, `web-search` and `gif-search` (IDENTITY-10,
+PLUGIN-9), never community (WATCH runs anyone else triggered included), schedules other
+people created or council voices; `shell-exec`, the runners and the Fledge core runs `fledge-lanes-run` /
 `fledge-run` only in the owner's own chat, `/session start`, `/work` and their ask answers,
 inside that talk's own worktree, and in a local `corvidinho task run` inside the worktree it made for itself
 (SAFE-3.a, see "What an entry unlocks" below):
@@ -347,11 +348,13 @@ What an entry unlocks **today**:
 - The model's tool catalog in `task run` (CLI-3 / SAFE-1). A dangerous tool is offered to the
   model only when the run's `CORVIDINHO_ALLOWLIST` names it and its `minTier` fits the run's
   tier; an unlisted one stays out, and a call to a tool that is not offered is refused. Role
-  gates still apply: ADMIN runs (the owner's Discord chat, `/session start`, `/work` and the
-  schedules the owner created, DISCORD-SCHEDULE-1.a) and a local `corvidinho task run` get
-  them, plus declared team members' Discord runs for `github-issue-comment`,
-  `github-pr-review`, `web-search` and `gif-search` (IDENTITY-10, PLUGIN-9); community chats, WATCH,
-  schedules other people created and council voices never do (E.6). A `delegate` worker gets the lead's effective allowlist (never a wider
+  gates still apply: ADMIN runs (the owner's Discord chat, `/session start`, `/work`, the
+  schedules the owner created, DISCORD-SCHEDULE-1.a, and WATCH runs the owner triggered,
+  IDENTITY-12.a) and a local `corvidinho task run` get
+  them, plus declared team members' runs (Discord, and WATCH runs they triggered) for
+  `github-issue-comment`, `github-pr-review`, `web-search` and `gif-search` (IDENTITY-10,
+  PLUGIN-9); community chats, WATCH runs anyone else triggered, schedules other people
+  created and council voices never do (E.6). A `delegate` worker gets the lead's effective allowlist (never a wider
   one), so a worker of a local run is offered the same tools, and a worker of a role session is
   non-ADMIN and offered none.
 - The shell, the runners and the Fledge core runs (SAFE-3.a): `shell-exec`, `node-exec`,
@@ -441,8 +444,9 @@ two places, like `web-fetch`:
    sends nothing.
 2. `web-search` in `CORVIDINHO_ALLOWLIST` (SAFE-1, E.3). Then it is offered at the tool and code
    tiers to the owner's runs (a schedule the owner created included, DISCORD-SCHEDULE-1.a) and
-   to declared team members' Discord runs (chat, button picks, `/session start`, `/work`).
-   Community, WATCH and schedules anyone else created never get it, `delegate` / `council`
+   to declared team members' runs (Discord chat, button picks, `/session start`, `/work`, and
+   WATCH runs they triggered, IDENTITY-12.a). Community (WATCH runs anyone else triggered
+   included) and schedules anyone else created never get it, `delegate` / `council`
    workers never get the key, and `web-fetch` stays the owner's.
 
 What one search does:
@@ -494,8 +498,9 @@ For **`gif-search`** (secondary), two places like `web-search`:
    nothing. Get a key from the GIPHY developer dashboard; a new key starts as a beta key limited
    to 100 calls an hour.
 2. `gif-search` in `CORVIDINHO_ALLOWLIST` (SAFE-1, E.3). Then it is offered at the tool and code
-   tiers to the owner's runs and to declared team members' Discord runs (chat, button picks,
-   `/session start`, `/work`). Community, WATCH and schedules never get it, and `delegate` /
+   tiers to the owner's runs and to declared team members' runs (Discord chat, button picks,
+   `/session start`, `/work`, and WATCH runs they triggered, IDENTITY-12.a). Community (WATCH
+   runs anyone else triggered included) and schedules never get it, and `delegate` /
    `council` workers never get the key.
 
 What one search does:
@@ -612,9 +617,10 @@ counts; a missing file, section or key, or any other value, means off.
   Discord/GitHub tokens or the audit key. `council` is for a top-level lead only (a delegated
   worker is refused): 2–5 voices (default 3) at `read` tier by default and never above `tool`,
   at most 2 councils per run, 15 min cap per council.
-- WATCH runs and schedules other people create are never ADMIN, so they never get `delegate`
-  or `council`. A schedule the owner created is ADMIN, so with the gate on and the tier `code`
-  it may get them; its workers are community like any worker.
+- Schedules other people create, and WATCH runs anyone but the owner triggered, are never
+  ADMIN, so they never get `delegate` or `council`. A schedule the owner created, and a WATCH
+  run the owner's own comment triggered (IDENTITY-12.a), are ADMIN, so with the gate on and the
+  tier `code` they may get them; their workers are community like any worker.
 - `ask-human` (AUTONOMY-1) is not behind this gate.
 
 ### E.6 Roles: owner, team, community (IDENTITY-8..12, ROLES-CHAT)
@@ -639,7 +645,14 @@ Who is who in an allowlisted channel:
 - Everyone else ⇒ **community**: declared `community`, declared without a role, undeclared,
   muted or deny-listed (IDENTITY-11/12). Muted users are refused (the mute and rate gate runs on
   chat and on every slash command). Community can't start `/work` (IDENTITY-11.a).
-- WATCH runs, schedules anyone but the owner created and `delegate` / `council` workers are
+- On GitHub (IDENTITY-12.a) a WATCH run gets the role of the person who triggered it, matched
+  by their GitHub numeric user id in the people list (never a login): the owner's tools for the
+  owner, the team's for a team member (not `/work` file edits), behind the same must-ask gate;
+  community for anyone else and for every assignment or review request. It never gets the
+  shell, runners, Fledge runs or a discovered Fledge plugin command, and secret-looking
+  paths stay hidden there for every role
+  ([`WATCH.md`](WATCH.md) "Roles on GitHub").
+- Schedules anyone but the owner created and `delegate` / `council` workers are
   community whoever triggered them. A schedule the owner created runs as the owner
   (DISCORD-SCHEDULE-1.a): their allowlisted tools and must-ask cards, never the shell,
   runners or Fledge commands. A scheduled run is never team, even a team member's.
@@ -653,8 +666,9 @@ Who is who in an allowlisted channel:
   chat. A refused chat message gets no reply, session or run; a refused slash command gets only
   an ephemeral zero-width ack.
 
-Community sessions (every non-owner who is not team, plus all WATCH runs and every schedule
-the owner did not create):
+Community sessions (every non-owner who is not team, plus every WATCH run no declared owner
+or team member triggered — every assignment and review request included, IDENTITY-12.a —
+and every schedule the owner did not create):
 
 - **Catalog:** only read/chat tools. No dangerous or mutating tool is offered, so no file
   write/edit/delete, no shell, no git/GitHub writes, no Discord posts, no memory
@@ -684,7 +698,8 @@ the owner did not create):
   paths (`.env*`, `.ssh`, keystores, `credentials`, `id_rsa`, `id_ed25519`, `*.pem`) are
   refused when named to `files-read`, `files-list`, `search-grep` or `git-diff`, and left out
   of `files-glob` / `files-list` results, recursive `search-grep` output and `git-diff`.
-  Team sessions get the same secret-path refusals.
+  Team sessions get the same secret-path refusals, and so does every WATCH run, the owner's
+  included (its answer goes to a public GitHub thread, IDENTITY-12.a).
 - **Site and roadmap (ROLES-CHAT-8.a):** only the public repo docs (README, `docs/`, STATUS,
   CHANGELOG — `github-docs-read`, or the project files) and the public issues and milestones
   of allowed public repos (`github-issue-list`, `github-milestone-list`). No site URL is a
