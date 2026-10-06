@@ -10,4 +10,4 @@ artifact: plan
 3. Verifying Text in `src/agent/loop.ts`.
 4. `.trust.toml` in SAFE-2 `isProtectedPath` and its refusal text.
 5. `tests/agent.trust-verify.test.ts` with a stand-in fledge; prove it fails on the base sources.
-6. Specs (REQ-agent-525, REQ-plugins-525), STATUS.md (docs/discord.md in a follow-up once #348's change is archived).
+6. Specs (REQ-agent-525, REQ-plugins-525), STATUS.md, docs/discord.md.

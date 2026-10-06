@@ -25,6 +25,7 @@
     "tests/agent.trust-verify.test.ts",
     "specs/agent",
     "specs/plugins",
+    "docs/discord.md",
     "STATUS.md"
   ],
   "no_spec_change": false,
