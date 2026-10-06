@@ -150,6 +150,13 @@ export type ApprovalKind<R extends ApprovalRecord = ApprovalRecord, A = unknown>
   snapshot(req: R): { view: ApprovalCardView; actionHash: string };
   /** What a closed card still shows (no live amounts). */
   summary(req: R): ApprovalCardView;
+  /**
+   * Before Approve acts (after the hash and code checks, before the SAFE-5
+   * `started` row, outside the transaction): get what `onApprove` needs
+   * ready (the hi card makes sure its session worktree is there). A throw
+   * means nothing runs and the request stays open.
+   */
+  prepare?(req: R): Promise<void>;
   /** Runs inside the engine's IMMEDIATE transaction, after the compare-and-set to approved. */
   onApprove(req: R, actor: string): A;
   /** After the approval committed (best effort). */
@@ -687,6 +694,19 @@ export function createApprovalCards(deps: ApprovalCardsDeps): ApprovalCards {
 
     // Act (SAFE-5): `started` first, committed; no row ⇒ nothing runs.
     const again = codeFlow ? " Press Approve for a new code." : "";
+    if (k.prepare) {
+      try {
+        await k.prepare(req);
+      } catch (err) {
+        auditBestEffort(k, `${k.audit}-approve`, actor, req, "error");
+        await reply({
+          content: `${k.failed ?? "It failed"} — ${k.nothingDone}; the request stays open.${again} ${errText(err)}`.trim(),
+          ephemeral: true,
+        });
+        if (codeFlow) await reopenCard("The last code was used up — press Approve for a new one.");
+        return;
+      }
+    }
     try {
       audit(k, `${k.audit}-approve`, actor, req, "started");
     } catch (err) {

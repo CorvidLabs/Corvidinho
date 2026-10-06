@@ -15,6 +15,12 @@
  * fails over. Nothing is remembered across processes: each `task run` process
  * tries the head once, then keeps the model it fell back to.
  *
+ * The optional `CORVIDINHO_LLM_MODEL_ORDER` (same entries, weakest first) is
+ * the order I set for AGENT-17.a ({@link strongerModel}): a run that still
+ * only plans, or says "Done." with nothing changed, after its one nudge moves
+ * to the next model in that order that its tier's list has. Unset = no order,
+ * so it never moves; nothing is ranked by price or benchmark.
+ *
  * Each kind has its vendor endpoint (the endpoint of a provider the operator
  * chose, not a default model):
  * - `openai`: `CORVIDINHO_LLM_BASE_URL` (else `https://api.openai.com/v1`),
@@ -422,6 +428,105 @@ export async function callChain<T>(
     chain.fallbacks.push(hop);
     onFallback?.(hop);
   }
+}
+
+// ─── Model order (AGENT-17.a) ─────────────────────────────────────────────
+
+/**
+ * The optional order I set for AGENT-17.a, weakest first: a comma list of the
+ * same `kind:model` entries as the model list. The fallback chain's own order
+ * is not a strength order; unset or empty = no order, so a stalled run never
+ * moves (the one nudge still happens). Never a price or benchmark ranking.
+ */
+export const MODEL_ORDER_ENV = "CORVIDINHO_LLM_MODEL_ORDER";
+
+/** The configured model order (AGENT-17.a), weakest first; [] when unset. */
+export function modelOrderFromEnv(env: NodeJS.ProcessEnv): ModelEntry[] {
+  return parseModelChain(env[MODEL_ORDER_ENV]);
+}
+
+/** Why a stalled run stays on its model after the nudge (AGENT-17.a). */
+export type StayReason = "no-order" | "unordered" | "top" | "unavailable";
+
+/** Where a stalled run moves after the nudge (AGENT-17 / AGENT-17.a), or why it stays. */
+export type StrongerModel =
+  | { ok: true; index: number; from: string; to: string }
+  | { ok: false; why: StayReason };
+
+/**
+ * AGENT-17 / AGENT-17.a: the stronger model a run on `chain` moves to — the
+ * next entry after the chain's current model in `order` (weakest first) that
+ * is one of the chain's own entries (the run's tier's model list), has its
+ * key, and has not failed in this run; later ones in the order are tried in
+ * turn when one is not available. Never a weaker or unordered model: with no
+ * order (`no-order`), a current model not in the order (`unordered`), none
+ * after it in the order (`top`) or none of those available (`unavailable`)
+ * it stays. Pure: {@link moveToStronger} moves the chain.
+ */
+export function strongerModel(
+  chain: ModelChain,
+  order: readonly ModelEntry[],
+): StrongerModel {
+  if (order.length === 0) return { ok: false, why: "no-order" };
+  const current = chain.entries[chain.index];
+  if (!current) return { ok: false, why: "unavailable" };
+  const from = entryLabel(current.entry);
+  const ranked = order.map(entryLabel);
+  const at = ranked.indexOf(from);
+  if (at < 0) return { ok: false, why: "unordered" };
+  const stronger = ranked.slice(at + 1).filter((label) => label !== from);
+  if (stronger.length === 0) return { ok: false, why: "top" };
+  const failed = new Set(chain.fallbacks.map((h) => h.from));
+  for (const to of stronger) {
+    if (failed.has(to)) continue;
+    const index = chain.entries.findIndex(
+      (p, i) => i !== chain.index && p.usable && entryLabel(p.entry) === to,
+    );
+    if (index >= 0) return { ok: true, index, from, to };
+  }
+  return { ok: false, why: "unavailable" };
+}
+
+/**
+ * Move `chain` to its {@link strongerModel} for every later call of the run
+ * (AGENT-17): the chain keeps that model, and a failure of it falls back
+ * the usual way (AGENT-11). The chain is unchanged when it stays.
+ */
+export function moveToStronger(
+  chain: ModelChain,
+  order: readonly ModelEntry[],
+): StrongerModel {
+  const next = strongerModel(chain, order);
+  if (next.ok) chain.index = next.index;
+  return next;
+}
+
+/** What a run that moved to a stronger model did before the move (AGENT-17). */
+export type StrongerMove = { from: string; to: string; kind: "plan" | "done-claim" };
+
+/** Start of the closing note a run's summary carries after it moved to a stronger model. */
+export const STRONGER_MODEL_NOTE_PREFIX = "(stronger model: ";
+
+/**
+ * The closing note of a run that moved to a stronger model (AGENT-17), one
+ * plain line like the AGENT-11 fallback note, e.g. `(stronger model:
+ * gpt-5-mini only planned after the nudge, so anthropic:claude-opus-5 took
+ * over)`. Clips and message splits keep it (task-summary `closingNotesTail`).
+ */
+export function strongerModelNote(move: StrongerMove): string {
+  const did = move.kind === "plan" ? "only planned" : "said it was done with nothing changed";
+  return `${STRONGER_MODEL_NOTE_PREFIX}${oneLine(move.from)} ${did} after the nudge, so ${oneLine(move.to)} took over)`;
+}
+
+/**
+ * `summary` with the stronger-model note after it, added once; it goes on
+ * after the AGENT-11 fallback note and before every other closing note.
+ */
+export function withStrongerModelNote(summary: string, move: StrongerMove): string {
+  const note = strongerModelNote(move);
+  if (summary.includes(note)) return summary;
+  const body = summary.trim();
+  return body ? `${body}\n\n${note}` : note;
 }
 
 /** One line of text: whitespace runs collapsed (model ids come from env). */

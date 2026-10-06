@@ -48,6 +48,15 @@
  * that a result or ask carrying model text is marked `modelText`, so in a
  * public thread, while fewer than 20 replies were approved, the bridge holds
  * it for the owner's OK (AUTONOMY-10.a, REQ-discord-099).
+ * AGENT-3.c (REQ-discord-304): with the bridge's stop control (`runStop`),
+ * a run puts a Stop control up where its posts go (its channel, or with no
+ * channel the owner's DM) just before its agent starts; the owner or the
+ * schedule's creator can stop it from Discord the way a chat run is stopped
+ * (src/discord/schedule-stop.ts). A stopped run kills its agent's process
+ * tree, is recorded `failed` / `stopped` without counting as a failure,
+ * posts no result, asks nothing and leaves the schedule as it is, so its
+ * next due run goes ahead. A ticker without the control (the daemon) runs
+ * schedules as before.
  */
 
 import { basename } from "node:path";
@@ -101,6 +110,7 @@ import {
   isGitRepo,
   parkWorktree,
   resolveProjectDir,
+  type TalkWorkspaceKind,
 } from "../worktree/index.ts";
 import type {
   AnsweredScheduleAsk,
@@ -228,7 +238,7 @@ function errorLine(err: unknown): string {
  * rejecting.
  */
 function logSchedulerError(
-  where: "tick" | "tick hook" | "run" | "recovery" | "ask" | "owner",
+  where: "tick" | "tick hook" | "run" | "recovery" | "ask" | "owner" | "stop control",
   err: unknown,
 ): void {
   console.error(`[scheduler] ${where} failed: ${errorLine(err)}`);
@@ -290,6 +300,56 @@ export type SchedulerOutbound = {
    */
   dm?: (opts: { userId: string; content: string; components?: unknown[] }) => Promise<boolean>;
 };
+
+/**
+ * AGENT-3.c (REQ-discord-304) — the bridge's stop control for schedule runs
+ * (`createScheduleRunStop`, src/discord/schedule-stop.ts), on the same
+ * `SessionRunControl` and Stop button as a chat run.
+ */
+export type ScheduleRunStop = {
+  /**
+   * Put the run's Stop control up: a progress message with the Stop button
+   * in `channelId`, or with no channel in the owner's DM; the schedule's
+   * creator is the run's requester. Resolves null when no control went out
+   * (then the run cannot be stopped from Discord and goes on as before).
+   */
+  begin(input: {
+    scheduleId: string;
+    creatorId: string;
+    channelId?: string;
+    /** The schedule's title as its posts show it (`scheduleTitle`). */
+    title: string;
+  }): Promise<ScheduleRunStopHandle | null>;
+};
+
+/** One schedule run's Stop control (AGENT-3.c). */
+export type ScheduleRunStopHandle = {
+  /** Aborted when a person stops the run (or the bridge closes). */
+  readonly signal: AbortSignal;
+  /**
+   * The run is over: release its stop (a later press or 'stop' finds nothing
+   * running), then show `⏹ Stopped` on the progress message when a person
+   * stopped it, else remove it. Resolves who stopped it (a Discord user id),
+   * if anyone did. Idempotent; never rejects.
+   */
+  finish(): Promise<string | undefined>;
+};
+
+/** The run row's summary of a run stopped from Discord (AGENT-3.c). */
+export const SCHEDULE_RUN_STOPPED_SUMMARY = "stopped";
+
+/** The run row's error of a run `userId` stopped from Discord (AGENT-3.c). */
+export function scheduleRunStoppedError(userId: string): string {
+  return `stopped on Discord by ${userId}`;
+}
+
+/**
+ * The one line a stopped run posts, only to carry a SAFE-13 heads-up
+ * (AGENT-3.c): `⏹ <scheduleTitle>: stopped.`
+ */
+function scheduleRunStoppedLine(title: string): string {
+  return `⏹ ${title}: stopped.`;
+}
 
 /** One finished (or abandoned) schedule run, for operator logs. */
 export type ScheduleRunFinished = {
@@ -382,6 +442,12 @@ export type SchedulerServiceOpts = {
    * is fenced as community, as their chat would be (SAFE-12).
    */
   mutedUsers?: Set<string>;
+  /**
+   * AGENT-3.c — the bridge's stop control: each run's Stop button, so the
+   * owner or the schedule's creator can stop it from Discord. Without it
+   * (the daemon) a run has no Stop control.
+   */
+  runStop?: ScheduleRunStop;
 };
 
 /** What a start-up `recoverAbandoned()` fixed (REQ-discord-346). */
@@ -426,6 +492,7 @@ export class SchedulerService {
   private readonly backup?: Pick<BackupTicker, "tick">;
   private readonly recordAudit?: (entry: AuditEntryInput) => unknown;
   private readonly mutedUsers?: Set<string>;
+  private readonly runStop?: ScheduleRunStop;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly running = new Map<string, InFlight>();
   /** Runs already finished/abandoned — a run is recorded once. */
@@ -458,6 +525,7 @@ export class SchedulerService {
     this.backup = opts.backup;
     this.recordAudit = opts.recordAudit;
     this.mutedUsers = opts.mutedUsers;
+    this.runStop = opts.runStop;
     if (!opts.manual) {
       this.start();
     }
@@ -810,8 +878,10 @@ export class SchedulerService {
   ): Promise<void> {
     let workDir: string | undefined;
     let projectDir: string | undefined;
-    let workspaceKind: "worktree" | "scoped_dir" | undefined;
+    let workspaceKind: TalkWorkspaceKind | undefined;
     let branchName: string | undefined;
+    // AGENT-3.c: the run's Stop control, once its agent is about to start.
+    let stopControl: ScheduleRunStopHandle | null = null;
     try {
       // Creator + channel allowlist re-check before any work (DISCORD-SCHEDULE-3).
       const allowed = this.gateTick(schedule);
@@ -869,6 +939,9 @@ export class SchedulerService {
           sessionId: runKey,
           worktreeId: `talk-${runKey}`,
           branchName: `talk/${runKey}`,
+          // AGENT-1.c: a schedule on a non-git project works in its own
+          // scoped folder, never in the live project folder.
+          nonGit: "scoped_dir",
         }).catch((err: unknown) => ({ ok: false as const, error: errorLine(err) }));
         if (!ensured.ok) {
           await this.failBeforeRun(
@@ -915,6 +988,11 @@ export class SchedulerService {
         .filter((l) => l !== undefined)
         .join("\n");
 
+      // AGENT-3.c (REQ-discord-304): the Stop control goes up just before the
+      // agent starts; a person's stop aborts its signal, which kills the
+      // agent's process tree like an abandon at shutdown does.
+      stopControl = await this.beginStop(schedule);
+
       // MEMORY scope to schedule creator; forget/override stay deny without live ADMIN re-check.
       const result = await this.agent.runChat({
         prompt,
@@ -929,8 +1007,26 @@ export class SchedulerService {
         // SAFE-3.a: schedules never get the shell, runners or Fledge runs.
         surface: "schedule",
         cwd: workDir,
-        signal,
+        signal: stopControl ? AbortSignal.any([signal, stopControl.signal]) : signal,
       });
+
+      // AGENT-3.c: the agent is gone, so its stop is released. A run the
+      // owner or the creator stopped ends here: recorded stopped (not a
+      // failure, no ask), its progress message says `⏹ Stopped`, and nothing
+      // else is posted but a SAFE-13 heads-up; the schedule stays as it is.
+      // A run abandoned at shutdown meanwhile is already recorded.
+      const stoppedBy = await stopControl?.finish();
+      if (stoppedBy !== undefined && !signal.aborted) {
+        const recorded = this.recordStopped(schedule, run, stoppedBy);
+        // SAFE-13: like a stopped chat run's `⏹ Stopped`, a tool result that
+        // looked like an injection still tells the owner.
+        if (recorded && result.injection) {
+          await this.postStoppedInjection(schedule, result.injection);
+        }
+        // SAFE-14.a: a warning the run crossed still reaches the owner by DM.
+        await this.spendDm?.deliver({ warning: result.spendWarning });
+        return;
+      }
 
       // AGENT-12 (REQ-agent-312): a schedule's post has no footer to carry
       // `stopped=turn-cap`, and AGENT-9 keeps the stop out of the post, so
@@ -1016,6 +1112,13 @@ export class SchedulerService {
       // reaches the owner by DM, never in the schedule's post.
       await this.spendDm?.deliver({ warning: result.spendWarning });
     } catch (err) {
+      // AGENT-3.c: a run a person stopped is recorded stopped, even when its
+      // agent client threw as it went.
+      const stoppedBy = await stopControl?.finish();
+      if (stoppedBy !== undefined && !signal.aborted) {
+        this.recordStopped(schedule, run, stoppedBy);
+        return;
+      }
       const msg = err instanceof Error ? err.message : String(err);
       const done = this.finish(schedule, run, { ok: false, error: msg });
       if (!done) {
@@ -1044,6 +1147,8 @@ export class SchedulerService {
       }
     } finally {
       try {
+        // AGENT-3.c: never leave a Stop control up for a run that is over.
+        await stopControl?.finish();
         // Park/remove so another talk never silently reuses this cwd.
         if (workDir && projectDir) {
           await parkWorktree(projectDir, workDir, {
@@ -1057,6 +1162,77 @@ export class SchedulerService {
           this.running.delete(schedule.id);
         }
       }
+    }
+  }
+
+  /**
+   * AGENT-3.c (REQ-discord-304): the run's Stop control (the bridge's
+   * `runStop`), put up where the schedule's posts go — its channel,
+   * re-checked against the live allowlist first (DISCORD-SCHEDULE-3), or
+   * with no channel the owner's DM. Null without the control, when the
+   * channel is refused or when nothing went out; never rejects (a failure is
+   * logged and the run goes on without one).
+   */
+  private async beginStop(schedule: Schedule): Promise<ScheduleRunStopHandle | null> {
+    if (!this.runStop) return null;
+    if (schedule.channelId && !this.gateTick(schedule).ok) return null;
+    try {
+      return await this.runStop.begin({
+        scheduleId: schedule.id,
+        creatorId: schedule.createdByUserId,
+        ...(schedule.channelId ? { channelId: schedule.channelId } : {}),
+        title: scheduleTitle(schedule),
+      });
+    } catch (err) {
+      logSchedulerError("stop control", err);
+      return null;
+    }
+  }
+
+  /**
+   * AGENT-3.c: record a run the owner or the schedule's creator stopped from
+   * Discord — `failed` with the summary `stopped` and who stopped it, not
+   * counted as a failure (no auto-pause) and with no ask — and log it.
+   * True when this call recorded it (false: already recorded).
+   */
+  private recordStopped(schedule: Schedule, run: ScheduleRun, stoppedBy: string): boolean {
+    const done = this.finish(schedule, run, {
+      ok: false,
+      stopped: true,
+      summary: SCHEDULE_RUN_STOPPED_SUMMARY,
+      error: scheduleRunStoppedError(stoppedBy),
+    });
+    if (done) {
+      console.log(`[scheduler] run ${run.id} of schedule ${schedule.id} stopped on Discord by ${stoppedBy}`);
+    }
+    return done !== null;
+  }
+
+  /**
+   * AGENT-3.c + SAFE-13: a stopped run posts nothing else, except that a
+   * tool result in it that looked like an injection still tells the owner,
+   * as the SAFE-13 line on a stopped chat run's `⏹ Stopped` does: one
+   * harness line `⏹ <title>: stopped.` carrying that line (pinging the
+   * owner) in the schedule's channel, re-checked against the live allowlist,
+   * where the run's result post would have carried it. A schedule with no
+   * channel posts nothing, as for a run that ends on its own. Never rejects.
+   */
+  private async postStoppedInjection(schedule: Schedule, injection: InjectionNotice): Promise<void> {
+    if (!schedule.channelId || !this.outbound?.post) return;
+    if (!this.gateTick(schedule).ok) return;
+    try {
+      await this.outbound.post(
+        withInjectionNotice(
+          {
+            channelId: schedule.channelId,
+            content: scheduleRunStoppedLine(scheduleTitle(schedule)),
+          },
+          injection,
+          this.owner,
+        ),
+      );
+    } catch (err) {
+      logSchedulerError("run", err);
     }
   }
 
@@ -1408,17 +1584,24 @@ export class SchedulerService {
       /** Recorded on the run row until a bridge posts it (REQ-discord-347). */
       ask?: HumanAsk;
       spendWarning?: SpendWarning;
+      /**
+       * AGENT-3.c: a person stopped it from Discord — not a failure of the
+       * schedule (its count is kept, no auto-pause) and no ask.
+       */
+      stopped?: boolean;
     },
   ): { ask?: HumanAsk; autoPaused: boolean } | null {
     if (this.finishedRuns.has(run)) return null;
+    const stopped = !result.ok && result.stopped === true;
     // AUTONOMY-2: a failure that pauses the schedule asks about the pause.
-    const pauseAsk = result.ok ? undefined : autoPauseAsk(result.ask);
+    const pauseAsk = result.ok || stopped ? undefined : autoPauseAsk(result.ask);
     const record = {
       ok: result.ok,
       summary: result.summary,
       error: result.error,
-      ...(result.ask ? { ask: result.ask } : {}),
+      ...(result.ask && !stopped ? { ask: result.ask } : {}),
       ...(pauseAsk ? { autoPause: { at: FAILURE_AUTO_PAUSE, ask: pauseAsk } } : {}),
+      ...(stopped ? { stopped: true } : {}),
     };
     let outcome: { ok: boolean; error?: string } = record;
     try {
@@ -1442,8 +1625,8 @@ export class SchedulerService {
       }
     }
     this.finishedRuns.add(run);
-    const autoPaused = this.maybeAutoPause(schedule);
-    const ask = autoPaused ? (pauseAsk ?? autoPauseAsk()) : result.ask;
+    const autoPaused = stopped ? false : this.maybeAutoPause(schedule);
+    const ask = stopped ? undefined : autoPaused ? (pauseAsk ?? autoPauseAsk()) : result.ask;
     this.onRunFinished?.({
       scheduleId: schedule.id,
       runId: run.id,

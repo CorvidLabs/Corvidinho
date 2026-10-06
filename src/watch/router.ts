@@ -11,6 +11,14 @@
  * (Planning ignores that paragraph, as it does the Discord identity block).
  * No id, or an id nobody declared, is undeclared (community), never the owner.
  *
+ * IDENTITY-12.a (#65, REQ-watch-1201): {@link watchTriggerRole} is the role
+ * the run gets — the declared role (owner / team) of the person who
+ * triggered it: the comment or issue-body author that @mentioned the watch
+ * user, matched by GitHub numeric id in the people list. An assignment or a
+ * review request was triggered by its `actor` (known by login only), never
+ * by the thread author, so it is community; so is anyone undeclared or with
+ * no id. The identity block's role line says which tools the run has.
+ *
  * SAFE-12 / SAFE-13 (#71): the issue / PR / comment title and body go to the
  * model inside an untrusted-data fence (clipped first, so the end marker
  * always survives the prompt cap); `watchInjectionVerdict` is the detector's
@@ -31,8 +39,10 @@ import {
 import {
   OWNER_PERSON_ID,
   resolvePerson,
+  roleOfPerson,
   validGithubLogin,
   type PeopleDirectory,
+  type PersonRole,
 } from "../identity/people.ts";
 import type { SessionStore } from "./session-store.ts";
 import {
@@ -52,6 +62,35 @@ export type RouterDeps = {
   people?: PeopleDirectory | null;
 };
 
+/**
+ * Event types started by someone acting on the thread (assigning the watch
+ * user, requesting its review), who need not be the thread author.
+ */
+const ACTOR_GATED_TYPES: ReadonlySet<DetectedEventType> = new Set([
+  "assignment",
+  "review_request",
+]);
+
+/**
+ * IDENTITY-12.a — the role a WATCH run gets: the declared role of the person
+ * who triggered it, resolved by the GitHub numeric user id the API reported
+ * (`senderId`, IDENTITY-7.a) in the owner's people list — never a login or a
+ * name. Only a comment or issue-body mention is triggered by its author
+ * (`sender`); an assignment or review request is triggered by its `actor`,
+ * whose numeric id the event does not carry, so it is community (never the
+ * thread author's role). No people list, no id or an undeclared id ⇒
+ * community. The tool layer re-resolves it at every call
+ * (src/plugins/roles.ts).
+ */
+export function watchTriggerRole(
+  event: Pick<DetectedEvent, "type" | "senderId">,
+  people: PeopleDirectory | null | undefined,
+): PersonRole {
+  if (ACTOR_GATED_TYPES.has(event.type)) return "community";
+  if (!people || event.senderId === undefined) return "community";
+  return roleOfPerson(resolvePerson(people, { githubId: event.senderId }));
+}
+
 export const WATCH_IDENTITY_HEADER =
   "[Corvidinho acting GitHub user — recognised from the owner's people list by GitHub numeric user id only, never by a login or a name]";
 
@@ -65,7 +104,7 @@ export const WATCH_IDENTITY_HEADER =
  * even silently).
  */
 export function formatWatchIdentityBlock(
-  event: Pick<DetectedEvent, "sender" | "senderId">,
+  event: Pick<DetectedEvent, "sender" | "senderId"> & Partial<Pick<DetectedEvent, "type">>,
   people: PeopleDirectory | null | undefined,
 ): string | null {
   if (!people) return null;
@@ -90,8 +129,16 @@ export function formatWatchIdentityBlock(
   if (person.person.nicknames.length > 0) {
     lines.push(`- nicknames: ${person.person.nicknames.join(", ")}`);
   }
-  if (person.role === "owner") {
-    lines.push("- role: owner (recognised here; a GitHub run still gets no ADMIN tools)");
+  if (person.role === "owner" || person.role === "team") {
+    // IDENTITY-12.a: the run has this role's tools only when this person
+    // triggered it (a comment or body mention), never on an assignment or
+    // review request someone else made on their thread.
+    const triggered = event.type === undefined || !ACTOR_GATED_TYPES.has(event.type);
+    lines.push(
+      triggered
+        ? `- role: ${person.role} (this run has the ${person.role}'s tools, behind the same must-ask gate as on Discord)`
+        : `- role: ${person.role} (but this run was started by an assignment or review request, so it has community tools)`,
+    );
   }
   lines.push("- Address this user by display_name when present; do not invent alternate names.");
   return lines.join("\n");
@@ -166,15 +213,6 @@ export function watchInjectionVerdict(
   const verdict = detectInjection(watchEventText(event));
   return verdict.suspected ? verdict : null;
 }
-
-/**
- * Event types started by someone acting on the thread (assigning the watch
- * user, requesting its review), who need not be the thread author.
- */
-const ACTOR_GATED_TYPES: ReadonlySet<DetectedEventType> = new Set([
-  "assignment",
-  "review_request",
-]);
 
 export type EventGateResult =
   | { ok: true }

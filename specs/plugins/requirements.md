@@ -1235,8 +1235,8 @@ the acting Discord user id, matched in the owner's people list re-read now
 (`loadDeclaredPeople` + `resolvePerson`, stable ids only), is a person whose
 role is team, not muted (`DISCORD_MUTED_USER_IDS`) and not on
 `[discord].deny_users`; else `community` — undeclared, declared community or
-without a role, WATCH / schedules / workers (community stamp or no actor), and
-any read failure. A stamp never raises the role. `roleAllowsPlugin(role, cmd,
+without a role, schedules / workers (community stamp or no actor), WATCH runs
+no declared owner or team member triggered, and any read failure. A stamp never raises the role. `roleAllowsPlugin(role, cmd,
 workTask)` SHALL be the one rule: read plugins for every role; mutating
 plugins (`isMutatingPlugin`) for the owner and `null`; for team only
 `TEAM_REVIEW_TOOLS` (`github-issue-comment`, `github-pr-review`) and
@@ -1267,13 +1267,22 @@ allowlisted repo; community reads keep the confirmed-public path
 (ROLES-CHAT-8) and community writes are refused; owner and `null` keep the
 GITHUB-6 allowlist. Secret-path hiding (REQ-plugins-267) keeps treating team
 like community. No new table, column or schema version; the two env keys are
-internal, set only by the Discord spawn client.
+internal, set only by the Discord and WATCH spawn clients.
 In a scheduled run (`isScheduleRunEnv`, REQ-plugins-496)
 `checkRepoGateForActingRole` SHALL first refuse, after the deny lists, a repo
 off the GITHUB-6 allowlist for every role with no visibility lookup
 (DISCORD-SCHEDULE-3.a); the role rules above then apply unchanged to what
 passes.
 
+
+- On GitHub (IDENTITY-12.a, REQ-plugins-1201) a WATCH run (surface stamp
+  `watch`) SHALL resolve owner and team from the GitHub numeric id the WATCH
+  spawn stamps for the person who triggered it, never from a Discord id, with
+  the same rules otherwise: the stamp only lowers the role, and anyone else
+  is community.
+- A WATCH run SHALL never be a `/work` task: `actingWorkTask` is false there
+  whatever `CORVIDINHO_ACTING_WORK_TASK` says, so team never gets the work
+  tools on GitHub.
 Acceptance Criteria
 - A `role = "team"` person with a team stamp resolves team; the same person with a community stamp, no stamp, muted, deny-listed or demoted in the file resolves community at the next call; an owner stamp for a team person resolves team; undeclared, declared-community and no-role people resolve community even with a team stamp; the owner with the bridge bit resolves owner; no role session resolves null; an unreadable allowlist file resolves community.
 - `roleAllowsPlugin` allows every read plugin for every role, every plugin for owner and null, only the review and search tools (plus the work tools with the work flag) of the mutating plugins for team, none for community; `TEAM_SEARCH_TOOLS` is exactly `web-search` and `gif-search`, and the team catalog offers both (allowlisted) while the community catalog offers neither; team still gets neither `web-fetch` nor `discord-send-file`; a community role session's `runPlugin gif-search` gets the role refusal while a team one reaches the handler (`tests/gif.search.test.ts`).
@@ -1283,6 +1292,7 @@ Acceptance Criteria
 - Team reads pass on an allowlisted or confirmed-public repo and are refused on a private non-allowlisted one; team writes on a public non-allowlisted repo are refused; community writes are refused; deny lists win.
 - Every existing ROLES-CHAT test passes unchanged; regression tests in `tests/roles.team.test.ts` fail on the base sources and pass after.
 - In a scheduled run a public repo off the allowlist is refused for every role before any visibility lookup, and the role rules still apply to an allowlisted one (`tests/github.schedule-repo-gate.test.ts`).
+- In a WATCH env the owner's GitHub id with the owner stamp resolves owner, a team member's with the team stamp team, and a team member's run gets the review tools but not `files-edit` even with a stale work stamp (`tests/watch.github-roles.test.ts`).
 
 ### REQ-plugins-066
 
@@ -1992,6 +2002,26 @@ first. It SHALL open a PR only for a tree with a finished review cycle:
   /work PR step, REQ-discord-088): no round SHALL start; the PR opens only
   when the latest cycle for (repo, head) ended on the exact tree of the
   branch on GitHub.
+- **`/work`** (REQ-agent-092, REQ-cli-092, REQ-discord-088): the run's
+  review hook (`workReviewHook`, `maxRounds` 3) SHALL run the same review
+  step as the gate with a run model (`reviewStep`: the same reviewer,
+  rounds, declined and max-rounds ends and `pr_review_rounds` records) on
+  the tree `/work` will commit — `reviewTree(root, {untracked: true})`
+  stages with `git add --all` into the index copy, so untracked,
+  non-ignored files count (a secret-looking one's content is still never
+  sent) — keyed by the (repo, branch) its PR opens on (`workReviewTarget`:
+  the OWNER/REPO of `origin`'s push URL, the branch checked out, the base
+  from `resolveBase`; no branch, repo or base refuses in one line), with the
+  fixed title `Corvidinho /work task` (the run's task text, which carries
+  identity and memory blocks, is not sent). A round with findings SHALL come
+  back as the next attempt's feedback (`workReviewFeedback`: what to do —
+  change the tree, or leave it to decline — then the findings numbered in an
+  untrusted-data fence, scrubbed, at most `WORK_REVIEW_FEEDBACK_MAX` (3800,
+  under the verify feedback cap) characters, later findings counted). A
+  `ReviewSpendStop` SHALL become the run's spend-cap ask
+  (`takeSpendAsk`), else a refusal; any other error is a refusal.
+  `workTreeReviewed(cwd, repo, branch)` SHALL be true only when the latest
+  cycle for (repo, branch) ended on exactly that tree (fail closed).
 
 Either way the branch on GitHub SHALL be the reviewed tree — read with
 `repos.getBranch` (an `owner:branch` head on that owner's same-named repo;
@@ -2037,6 +2067,8 @@ Acceptance Criteria
 - A review completion with no model failure (a spend-cap stop) makes `runPlugin` reject with `ReviewSpendStop` and records nothing.
 - Without a run model: no finished cycle, a finished cycle for another tree, or an open cycle refuse in one line; a finished cycle for the pushed tree opens with its findings listed. Live mode without a token fails before any review call.
 - `githubBranchTree` returns the head commit's tree, reads an `owner:branch` head on that owner's repo, and is null on a 404. `SCRUB_TARGETS` lists `pr_review_rounds` (`reviewer`; JSON `authors`, `findings`, `changed`) and `pr_change_authors` (`model`).
+- `/work` (temp repo, scripted provider, the real tool loop and verify gate): the untracked new file is in the reviewed diff, the reviewer gets `Title: Corvidinho /work task` and not the task text, the rounds are stored (round 1 open with its finding, round 2 `clean` with `M  src/greet.ts` changed), `workTreeReviewed` is true, and the /work PR opens with the section; a finished review of an earlier tree is not this tree's.
+- `workReviewFeedback` stays within 3800 characters (under the 4000 verify feedback cap) with its fence whole and later findings counted; a spend-cap stop gives the hook's `ask` when the run left one, else a refusal, and records nothing.
 
 ### REQ-plugins-125
 
@@ -2318,6 +2350,54 @@ Acceptance Criteria
 - The run's abort reaches a pending search (`aborted`, the transport's signal aborted), a stalled one times out, and a run already stopped sends nothing; an unexpected failure is the fixed `gif-search unexpected: the GIF search failed unexpectedly` line.
 - Tests in `tests/gif.search.test.ts` (a new module on the base sources) fail on the base sources and pass after.
 
+### REQ-plugins-110
+
+In a project folder that isn't a git repo, its file tools can't change the
+root AGENTS.md or CLAUDE.md; the owner edits those (AGENT-1.b, captured in
+this change's PR from Leif's 2026-09-30 decision, round 13 of the 2026-09-28
+record). There the AGENT-1 loader reads those files from disk into every
+run's prompt (REQ-agent-084), so a file tool that could change them could
+plant instructions for later runs.
+
+- When `isGitRepo(cwd)` is false, `files-write`, `files-edit` and
+  `files-delete` SHALL refuse (exit 2, `refused (AGENT-1.b): …`, nothing
+  written) a path that, where the write would land (`resolveProjectPath`),
+  is equal to or under `<realRoot(cwd)>/AGENTS.md` or `/CLAUDE.md`
+  (`PROJECT_INSTRUCTION_FILES`), or equal to or under the file a symlink of
+  that name leads to, or a regular file that shares the inode of one of them
+  (a hard link); `isNonGitRootInstructionPath` in
+  `plugins/files/protectedPaths.ts`, checked in `refuseProtected` after the
+  SAFE-2 and SpecSync-record rules.
+- It SHALL apply to every caller (the owner's runs, the local CLI, `plugins
+  run`), with no override. Creating a missing root file is a change too.
+- A nested `AGENTS.md` (not at the root), other files, reads, and a git
+  project's root copy (where only the committed copy is loaded) SHALL be
+  unchanged.
+
+Acceptance Criteria
+- `tests/plugins.nongit-project-dir.test.ts`: in a non-git folder, `files-write` of `AGENTS.md`, `./CLAUDE.md`, the absolute root path and `AGENTS.md/inner.md`, and `files-edit` / `files-delete` of both, are refused with `refused (AGENT-1.b)` for the local CLI and the owner, and the files stay as they were.
+- Same file: a missing `CLAUDE.md` is not created; with `CLAUDE.md` a symlink to `docs/rules.md`, writing `docs/rules.md` is refused; writing a hard link to `AGENTS.md` is refused; `notes.txt`, `src/app.ts`, `sub/AGENTS.md` and `docs/other.md` are written.
+- Same file: in a git project `files-write AGENTS.md` still works.
+- With the base sources the refusals fail; the git-project case passes on both.
+
+### REQ-plugins-115
+
+Other people's runs only read in a project folder that isn't a git repo
+(AGENT-1.a, captured in `hi/agent.md` from Leif's 2026-09-28 interview).
+`actingWorkTask(env, cwd)` SHALL be true only when the run carries the
+`/work` stamp (`CORVIDINHO_ACTING_WORK_TASK`) and `isGitRepo(cwd)`; `cwd`
+is required. `runPlugin` SHALL pass the call's cwd (`opts.cwd`, else the
+process cwd), and the agent's catalog and invented-call refusal SHALL pass the
+run's cwd (REQ-agent-110), so in a non-git folder a team member's `/work`
+run gets the role refusal (`not allowed for your role`, exit 2) for
+`files-write`, `files-edit` and the SpecSync change tools, while reads and
+review tools are unchanged and in a git worktree the work tools are kept
+(IDENTITY-10). The owner and community are unchanged.
+
+Acceptance Criteria
+- `tests/plugins.nongit-project-dir.test.ts`: `actingWorkTask` is true for a git repo with the stamp and false for a non-git folder or without the stamp.
+- Same file: a team member's `/work` `files-write` / `files-edit` in a non-git folder get the role refusal and the file is unchanged, `files-read` works; in a git repo the write works; the owner's write in the folder works.
+- `tests/roles.team.test.ts` (fixture dir now a git repo) keeps team `/work` edits working in a git work tree.
 ### REQ-plugins-520
 
 AGENT-18 hi guard: in a repo that uses hi (`repoWaysNow(cwd)`: a `hi/*.md`
@@ -2328,9 +2408,10 @@ resolved by `resolveProjectPath`, and on the path as given), after the
 SAFE-2 check and before anything is read or written, with exit 2 and one
 line (`hiRefuseMessage`): `refused (AGENT-18): '<path>' is under hi/, where
 this repo keeps its acceptance criteria. The agent never changes them itself:
-criteria change only through a capture the owner approves, which no run can
-make yet, and any hi/ change keeps the run from being verified and /work
-from opening a PR. …`. There SHALL be no in-band override. Reads
+criteria change only through a capture the owner approves on a card, and any
+other hi/ change keeps the run from being verified and /work from opening a
+PR. Reading hi/ is fine; draft a missing criterion with hi-draft where this
+run has it, …`. There SHALL be no in-band override. Reads
 (`files-read`, `files-list`, `files-glob`) and `hi/` in a repo that does
 not use hi SHALL be unaffected.
 
@@ -2339,6 +2420,7 @@ Acceptance Criteria
 - A write through a symlink that lands in `hi/` is refused.
 - In a repo whose `hi/` has no hi front matter the write goes through; a non-git hi project refuses.
 - `tests/agent.hi-guard.test.ts` fails on the base sources and passes after.
+- The refusal says criteria change only through a capture the owner approves on a card, and points at `hi-draft` (AGENT-18 hi drafts).
 
 ### REQ-plugins-521
 
@@ -2362,4 +2444,173 @@ Acceptance Criteria
 - Inside a run in a temp hi repo, a criterion committed through the shell makes a dry-run `github-pr-create` refuse with `refused (AGENT-18)`, exit 2, naming `criteria AGENT-23` and "this run opens no PR"; with hi/ untouched in a run, it is not refused by the hi guard (the next gate, GITHUB-9, answers).
 - With no run in progress, a dirty hi/ edit does not make `github-pr-create` refuse with AGENT-18.
 - `tests/agent.hi-guard.test.ts` fails on the base sources and passes after.
+
+### REQ-plugins-1201
+
+IDENTITY-12.a (#65, captured from Leif's 2026-09-28 interview, round 16):
+"On GitHub, the owner and team members I've declared get their role's tools
+too, behind the same must-ask gate; anyone else stays community." The tool
+layer SHALL resolve a WATCH run's role from the person who triggered it, at
+every call, the way it resolves a Discord run's (IDENTITY-12):
+
+- `isWatchRunEnv(env)` (`src/plugins/roles.ts`) SHALL be true when the
+  surface stamp `CORVIDINHO_ACTING_SURFACE` is `watch` (both spawning clients
+  always overwrite it). In such a run the role SHALL come only from the GitHub
+  numeric id the WATCH spawn stamps (`CORVIDINHO_ACTING_GITHUB_ID`, REQ-watch-1201),
+  matched in the owner's people list re-read now (`loadDeclaredPeople` +
+  `resolvePerson`, the owner's `[owner] github_id` included, IDENTITY-7.a) —
+  never a login and never a Discord id. A run whose surface is not `watch`
+  SHALL never use the GitHub keys.
+- `resolveActingIsAdmin` SHALL be true in a WATCH run only with the ADMIN bit,
+  an owner stamp (`actingRoleCap` owner), `CORVIDINHO_WATCH_SESSION_ID` set and
+  that id resolving to the owner's person. `resolveActingRole` SHALL give
+  `team` only with a team (or owner) stamp and a person whose declared role is
+  team; anything else is `community`. Either way the id SHALL count as
+  community when it, or `CORVIDINHO_ACTING_GITHUB_LOGIN`, is on the GitHub
+  `deny_users` list, when the person's Discord id is muted
+  (`DISCORD_MUTED_USER_IDS`) or on `[discord].deny_users`, when there is no
+  id or no WATCH session id, and on any read failure (never throws).
+- `actingWorkTask` SHALL be false in a WATCH run whatever its stamp (a WATCH
+  run works in the watcher's checkout, never a `/work` worktree), so team
+  gets its review and search tools there but never the work tools.
+- `runPlugin` is unchanged: the owner's WATCH run reaches the must-ask gate
+  (REQ-plugins-097) for every must-ask call — a `git-push` to the default
+  branch, a `discord-post-message` — which raises the owner's Approve card
+  (`… · from watch:<session>`) on the shared approvals store that the running
+  bridge DMs, and runs only on an approval it uses once; a deny or no answer
+  runs nothing (SAFE-20). Team and community WATCH runs are refused an
+  owner-only tool for their role before any card.
+- `secretPathsRefused` (`plugins/files/protectedPaths.ts`) SHALL be true in
+  every WATCH run, the owner's included — the answer goes to a public GitHub
+  thread — so the file, search and git tools refuse and hide secret-looking
+  paths there (ROLES-CHAT-8, REQ-plugins-267); the refusal line says "not
+  available in community chat or on GitHub".
+- Unchanged on GitHub: the shell, runners and Fledge runs are never offered
+  (SAFE-3.a, `shellToolsGate`), `delegate` / `council` workers are community
+  (the worker env drops every `CORVIDINHO_ACTING_*` key), WATCH runs never
+  approve or archive a SpecSync change (AGENT-18.a), the memory plugins' GitHub
+  rules (REQ-plugins-067, REQ-plugins-710). No env var, config key, flag,
+  table or schema change.
+
+Acceptance Criteria
+- With the env a real WATCH spawn hands its child: the owner's id with the owner stamp → owner (ADMIN re-check true); the team member's with the team stamp → team.
+- The owner stamp on a stranger's, a re-registered login's or a declared community person's id, a team stamp on the owner's id, a community stamp, a login with no id, the owner's Discord id in a WATCH env, and no WATCH session id → community.
+- Surface `chat` with the owner's GitHub id and no Discord actor → community; with the owner's Discord id → owner.
+- A team member demoted in the file, on GitHub `deny_users` by login or by id, on `[discord].deny_users` or muted → community at the next call; the owner with no `[owner] github_id` or an unreadable file → community.
+- The owner's WATCH run: a mutating `prod` must-ask command raises one `mustask` card titled `… · from watch:watch_w1`, runs once on approval and is refused with nothing run on a deny; team, community and a re-registered login's runs get `not allowed for your role` and no card.
+- `secretPathsRefused` is true for the owner's WATCH run and false for the owner's Discord run; `shellToolsGate` refuses the owner's WATCH run; a `delegate` worker built from it resolves community.
+- `tests/watch.github-roles.test.ts` fails on the base sources and passes on the branch.
+### REQ-plugins-621
+
+The `shell-exec` child, the language runners' children (`node-exec`,
+`python-exec`, `cargo-exec`, REQ-plugins-313) and the Fledge core runs
+(`fledge-lanes-run`, `fledge-run`, and the two lane reads, REQ-plugins-461)
+SHALL start without the owner's cloud credentials (SAFE-21.b, captured in
+this change's PR from Leif's 2026-09-28 interview, round 16): `runnerChildEnv`
+(`plugins/runners/commands.ts`) and `fledgeCoreChildEnv`
+(`plugins/fledge/core.ts`) SHALL apply `withoutCloudCredentials`
+(`src/agent/verify.ts`, REQ-agent-621) after the verify-lane scrub and the
+SAFE-21.a git / GitHub scrub (REQ-plugins-495, unchanged): every
+`isCloudCredentialEnvKey` key dropped, `KUBECONFIG`,
+`AWS_SHARED_CREDENTIALS_FILE`, `AWS_CONFIG_FILE` and
+`GOOGLE_APPLICATION_CREDENTIALS` = `/dev/null`,
+`AWS_EC2_METADATA_DISABLED=true`, and `CLOUDSDK_CONFIG` / `AZURE_CONFIG_DIR`
+fresh empty dirs made for that one child. `runRunner`, the `shell-exec`
+handler and the Fledge core spawn SHALL call `releaseCloudStandIns` on that
+env once the child has exited (also after a timeout, an abort or a spawn
+error), so those dirs are removed. Every other key the child got before is
+kept. Fledge plugin commands (`fledge-<command>`, `fledgeChildEnv`) are
+unchanged. No new slash command, env var or config key.
+
+Acceptance Criteria
+- With the owner's cloud env set, and separately with only the owner's default
+  files under a fake HOME (`~/.kube/config`, `~/.aws/credentials` /
+  `config`, `~/.config/gcloud/*` with the ADC file, `~/.azure/*`),
+  `shell-exec` running stand-in `kubectl` / `aws` / `gcloud` / `az` by
+  absolute path, each of `node-exec` / `python-exec` / `cargo-exec`
+  (`runRunner` with a stand-in binary) and `fledge-lanes-run verify` /
+  `fledge-run deploy` (a stand-in fledge) show no cloud key, value or file
+  content; `KUBECONFIG`, `AWS_SHARED_CREDENTIALS_FILE`, `AWS_CONFIG_FILE` and
+  `GOOGLE_APPLICATION_CREDENTIALS` are `/dev/null`,
+  `AWS_EC2_METADATA_DISABLED=true`, `CLOUDSDK_CONFIG` / `AZURE_CONFIG_DIR`
+  lie outside HOME and are gone after the call; `AWS_REGION`,
+  `GOOGLE_CLOUD_PROJECT` and other keys stay (`tests/agent.cloud-credentials.test.ts`).
+- A runner child that writes a login into its gcloud and az config dirs does
+  not reach the next runner child.
+- The SAFE-21.a git / GitHub scrub and its tests (`tests/runners.plugins.test.ts`,
+  `tests/shell.footguns.test.ts`, `tests/fledge.core.test.ts`) are unchanged.
+### REQ-plugins-1818
+
+AGENT-18.a in the shell (captured on main, `hi/agent.md`, from Leif's
+2026-09-28 interview, round 13: "On Corvidinho it may approve and archive
+its own SpecSync change once verify is green; in other repos a human
+approves, reviews and finalizes."). `shell-exec` SHALL refuse
+`specsync change approve|review|finalize|ship` in every repo, with no repo
+check and synchronously, before the SAFE-21 check (REQ-plugins-494), the
+SAFE-3 clamp and any spawn: ok=false, exit 2, `data.refused` true with
+`rule: "AGENT-18.a"`, `step` (`approve`, `review`, `finalize` or
+`ship`; null when it can't be read) and the in-root `script` it was found
+in (null for the typed command), and the message
+`shell-exec refused (AGENT-18.a): <invocation> would <step> a SpecSync change
+from the shell[ (in SCRIPT)], which the shell never does in any repo;
+<HUMAN_LIFECYCLE_LINE without "refused: ">, through its own settle step and
+never the shell`. The check (`lifecycleRefusal` / `firstLifecycleStep`,
+`plugins/shell/sdd-lifecycle.ts`) SHALL read every simple command over the
+SAFE-21 ground through the same walker (`forEachSimpleCommand`: the dash
+and bash readings, `eval` / `trap` / shell `-c` strings, command
+substitutions, and the in-root scripts the command runs in a shell). An
+invocation SHALL start at any word named `specsync` (by basename; an
+npm-style `specsync@<version>` or `@scope/specsync` too), so every exec
+wrapper (`env`, `timeout`, `nohup`, `xargs`, `sudo`, `exec`,
+`find -exec`) and package runner (`bunx`, `npx`) in front of it is
+covered; at a command word (`commandChain` link) that is a path to an
+existing link whose target is named `specsync`; and at a command word that
+expands, where only a literal step refuses. Its step SHALL be the first word
+past SpecSync's options after `change` (every `change` the subcommand scan
+reaches past options and what may be their values is read); a word right
+after an option (no `=`) may be that option's value or the step, so a
+lifecycle step there SHALL count. A step that expands SHALL refuse, and
+under `xargs` a missing step, or one that is not another `specsync change`
+subcommand, SHALL refuse (xargs supplies it). `shellProdWhy` (AUTONOMY-9)
+SHALL classify no command this check refuses, so no Approve card is raised
+for it. Read-only `specsync change status|list|show|check|ship-status` and
+`specsync check` SHALL still run. `runTask`'s settle after a green lane
+(REQ-agent-519) is unchanged: on Corvidinho the SpecSync plugin's approve and
+finalize tools (REQ-plugins-519) spawn `specsync` themselves, never through
+the shell. Residual (stated, not checked): code an interpreter runs
+(`bun -e`, `node -e`, `python -c`, a script handed to `node` /
+`python`, the `node-exec` / `python-exec` / `cargo-exec` runners) that
+spawns specsync itself is not parsed; neither are package-manager scripts,
+`make` / `just` recipes and git aliases, nor a copy of the binary under
+another name or a link the same command makes. No new command, env var,
+flag, config key or schema.
+
+Acceptance Criteria
+- In a SpecSync repo, a plain folder and on Corvidinho with the run's own change right after a green lane, `specsync change approve|review|finalize|ship c1` through `shell-exec` returns exit 2 with `shell-exec refused (AGENT-18.a): …` and `HUMAN_LIFECYCLE_LINE`; nothing is spawned, `state.json` is unchanged, no `approvals.json` / `review.json` is written and nothing moves to `.specsync/archive`.
+- The same through `sh -c` / `bash -c`, `eval`, `$(…)`, backticks, a function, `env` / `timeout` / `nohup` / `xargs` / `sudo` / `exec` / `find -exec`, an absolute or relative path or a link to the binary, `bunx` / `npx`, options before the step, an expanding step or command word, and an in-root script run with `sh x.sh`, `. ./x.sh` or `./y.sh` (naming it).
+- `specsync change status|list|show|check|ship-status` and `specsync check` still run; `shellProdWhy` returns null for a refused lifecycle command.
+- On Corvidinho the `specsync-change-approve` tool still spawns `change approve c1 --actor corvid-agent`; `tests/agent.repo-ways.test.ts` passes unchanged.
+- `tests/shell.sdd-lifecycle.test.ts` fails on the base sources and passes after.
+### REQ-plugins-525
+
+`.trust.toml` is SAFE-2 protected like `fledge.toml` (AGENT-18 Trust clause,
+REQ-agent-525): in a repo that has it the verify gate also runs `fledge trust
+verify`, so a run must not rewrite or delete the Trust config it is verified
+by. `isProtectedPath` SHALL be true for any path whose basename is
+`.trust.toml` (any directory, any letter case), so `files-write`,
+`files-edit` and `files-delete` refuse it with the SAFE-2 refusal (exit 2,
+no override; its list now reads `(.env* / .git / fledge.toml / .fledge /
+.trust.toml / bunfig.toml / specs / *.spec.md / .specsync / keystores)`),
+checked on the path as given and where it resolves; `git-commit` SHALL
+refuse to stage its deletion, and `discord-send-file` (which checks
+`isProtectedPath`) SHALL never attach it. Reads stay allowed, and
+`trust.toml`, `.trust.toml.bak` or `docs/trust.md` are not protected.
+Corvidinho's own repo has no `.trust.toml`.
+
+Acceptance Criteria
+- `isProtectedPath` is true for `.trust.toml`, `./.trust.toml`, `pkg/.Trust.TOML` and an absolute path under the root, and false for `trust.toml`, `docs/trust.md` and `.trust.toml.bak`.
+- `files-write` (relative, `./`, absolute, a new `sub/.trust.toml`), `files-edit` and an allowlisted `files-delete` of `.trust.toml` are refused with `refused (SAFE-2)` naming `.trust.toml` (exit 2); the file is unchanged and nothing is created; `files-read .trust.toml` and `files-write trust.toml` work.
+- `git-commit` of a deleted tracked `.trust.toml` is refused (exit 2, SAFE-2); it stays in `ls-files` and nothing is staged.
+- `discord-send-file`'s `fileAttachment` of `.trust.toml` is refused with `refused (SAFE-2)`.
+- `tests/agent.trust-verify.test.ts` fails on the base sources and passes after.
 

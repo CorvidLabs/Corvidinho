@@ -22,9 +22,13 @@ export {
   DEFAULT_MAX_CONCURRENT,
   DEFAULT_POLL_INTERVAL_MS,
   FAILURE_AUTO_PAUSE,
+  SCHEDULE_RUN_STOPPED_SUMMARY,
   SchedulerService,
+  scheduleRunStoppedError,
   type ScheduleRecovery,
   type ScheduleRunFinished,
+  type ScheduleRunStop,
+  type ScheduleRunStopHandle,
   type SchedulerOutbound,
   type SchedulerServiceOpts,
 } from "./service.ts";

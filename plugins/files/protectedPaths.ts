@@ -3,11 +3,16 @@
  * No in-band override (Merlin files-delete pattern).
  */
 
-import { basename, isAbsolute, relative } from "node:path";
+import { statSync } from "node:fs";
+import { basename, isAbsolute, join, relative } from "node:path";
+import { PROJECT_INSTRUCTION_FILES } from "../../src/agent/project-instructions.ts";
 import {
+  isWatchRunEnv,
   resolveActingIsAdmin,
   roleSessionActive,
 } from "../../src/plugins/roles.ts";
+import { isGitRepo } from "../../src/worktree/manager.ts";
+import { isInsideRoot, realRoot, resolveProjectPath } from "./resolvePath.ts";
 
 function pathParts(p: string): string[] {
   return p.split("/").filter((part) => part.length > 0 && part !== ".");
@@ -80,6 +85,9 @@ export function isProtectedPath(filePath: string, root?: string): boolean {
 
   const baseLower = basename(normalized).toLowerCase();
   if (baseLower === "fledge.toml") return true;
+  // Trust config: in a repo that has it the verify gate also runs `fledge
+  // trust verify`, so a run must not rewrite or delete it (AGENT-18).
+  if (baseLower === ".trust.toml") return true;
   // Bun runtime config: a planted `preload` runs code in every spawned agent.
   if (baseLower === "bunfig.toml" || baseLower === ".bunfig.toml") return true;
   if (baseLower.endsWith(".spec.md")) return true;
@@ -117,6 +125,47 @@ export function sddRecordRefuseMessage(path: string): string {
 }
 
 /**
+ * AGENT-1.b: in a project folder that isn't a git repo (`isGitRepo(cwd)`
+ * false), the root `AGENTS.md` and `CLAUDE.md` are read from disk into every
+ * run's prompt (AGENT-1, `PROJECT_INSTRUCTION_FILES`), so the file tools
+ * never change them; the owner edits them. `absPath` is where the tool would
+ * write (`resolveProjectPath`). True for the root names themselves, anything
+ * under them, the file a symlink of that name leads to (the loader reads
+ * through it), and a hard link to one. A git project is unchanged: there only
+ * the committed copy is loaded.
+ */
+export function isNonGitRootInstructionPath(absPath: string, cwd: string): boolean {
+  if (isGitRepo(cwd)) return false;
+  const root = realRoot(cwd);
+  for (const name of PROJECT_INSTRUCTION_FILES) {
+    const named = join(root, name);
+    const targets = [named];
+    try {
+      targets.push(resolveProjectPath(cwd, name));
+    } catch {
+      /* a link out of the project: the loader refuses it, the tools can't reach it */
+    }
+    if (targets.some((t) => isInsideRoot(t, absPath))) return true;
+    try {
+      const a = statSync(absPath);
+      const b = statSync(named);
+      if (a.isFile() && b.isFile() && a.dev === b.dev && a.ino === b.ino) return true;
+    } catch {
+      /* either missing: no shared inode */
+    }
+  }
+  return false;
+}
+
+export function rootInstructionRefuseMessage(path: string): string {
+  return (
+    `refused (AGENT-1.b): '${path}' is this project's root AGENTS.md / CLAUDE.md (or the file one leads to). ` +
+    `In a project folder that isn't a git repo they are read into every run's instructions, ` +
+    `so the file tools never change them; the owner edits them outside the agent.`
+  );
+}
+
+/**
  * AGENT-18 hi guard: true when a project-relative path is `hi/` or under it,
  * where a hi repo keeps its acceptance criteria (case-insensitive, like the
  * SAFE-2 names). Only the file tools' write, edit and delete check it, and
@@ -130,16 +179,16 @@ export function isHiPath(relPath: string): boolean {
 export function hiRefuseMessage(path: string): string {
   return (
     `refused (AGENT-18): '${path}' is under hi/, where this repo keeps its acceptance criteria. ` +
-    `The agent never changes them itself: criteria change only through a capture the owner approves, ` +
-    `which no run can make yet, and any hi/ change keeps the run from being verified and /work from opening a PR. ` +
-    `Reading hi/ is fine; say in your reply what you think is missing or wrong.`
+    `The agent never changes them itself: criteria change only through a capture the owner approves on a card, ` +
+    `and any other hi/ change keeps the run from being verified and /work from opening a PR. ` +
+    `Reading hi/ is fine; draft a missing criterion with hi-draft where this run has it, else say in your reply what you think is missing or wrong.`
   );
 }
 
 export function protectedRefuseMessage(path: string): string {
   return (
     `refused (SAFE-2): '${path}' is protected project infra ` +
-    `(.env* / .git / fledge.toml / .fledge / bunfig.toml / specs / *.spec.md / .specsync / keystores). ` +
+    `(.env* / .git / fledge.toml / .fledge / .trust.toml / bunfig.toml / specs / *.spec.md / .specsync / keystores). ` +
     `There is NO override — edit via SpecSync or outside the agent file tools.`
   );
 }
@@ -210,15 +259,19 @@ export const SECRET_GIT_EXCLUDE_PATHSPECS: readonly string[] = [
  * ROLES-CHAT-8: true when this call runs in a non-ADMIN role session, so the
  * read-ish file tools refuse an explicit secret path and leave secret paths
  * out of listings and searches. ADMIN and the local CLI (no role session) keep
- * full access. Re-checked each call (ROLES-CHAT-6).
+ * full access. Re-checked each call (ROLES-CHAT-6). A WATCH run is refused
+ * for every role, the owner's included (IDENTITY-12.a): its answer goes to a
+ * GitHub thread, which is public.
  */
 export async function secretPathsRefused(): Promise<boolean> {
-  return roleSessionActive() && !(await resolveActingIsAdmin());
+  if (!roleSessionActive()) return false;
+  if (isWatchRunEnv()) return true;
+  return !(await resolveActingIsAdmin());
 }
 
 export function secretRefuseMessage(path: string): string {
   return (
     `refused (ROLES-CHAT-8): '${path}' looks like a secret path ` +
-    `(.env* / .ssh / keys / keystores) — not available in community chat`
+    `(.env* / .ssh / keys / keystores) — not available in community chat or on GitHub`
   );
 }

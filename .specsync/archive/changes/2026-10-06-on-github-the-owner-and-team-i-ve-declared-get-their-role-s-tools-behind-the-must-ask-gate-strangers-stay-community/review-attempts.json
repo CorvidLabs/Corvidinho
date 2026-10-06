@@ -1,0 +1,18 @@
+[
+  {
+    "schema_version": 2,
+    "change_id": "on-github-the-owner-and-team-i-ve-declared-get-their-role-s-tools-behind-the-must-ask-gate-strangers-stay-community",
+    "reviewer": "corvid-agent",
+    "provenance": {
+      "schema_version": 1,
+      "provider": "github_actions_check",
+      "required_check": "SpecSync scoped review"
+    },
+    "verdict": "pass",
+    "implementation_commit": "c0ad2520782fa2d0aceeca5426824084edb99fda",
+    "contract_digest": "efde28de5c4a2923be36dd51da98140aefee76ec47e605815b5cb5b363220419",
+    "execution_digest": "0910cb7f4aa8377a5c245e8dd4e6ca5412558e72094178e8e17bfb348466d26a",
+    "workspace_digest": "ebe2987b6c5cfa5c66d9ef02220abb62b8ed273184e19dcab1ea3f1003f80d0e",
+    "timestamp": 1791305783
+  }
+]

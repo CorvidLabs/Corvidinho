@@ -1,0 +1,24 @@
+---
+id: before-each-call-the-spend-guard-counts-a-worst-case-reply-toward-the-cap-the-model-s-listed-maximum-output-or-128k
+state: implementing
+type: feature
+base_commit: d0b847d7733820deef204618081c0afa803e0a2a
+---
+
+# Before each call the spend guard counts a worst-case reply toward the cap, the model's listed maximum output or 128K tokens for a priced model with none listed, so it asks before a long reply could take spend past it; replies are never cut short (AUTONOMY-8.a)
+
+## Intent
+
+Before each call the spend guard counts a worst-case reply toward the cap, the model's listed maximum output or 128K tokens for a priced model with none listed, so it asks before a long reply could take spend past it; replies are never cut short (AUTONOMY-8.a)
+
+## Affected Canonical Specs
+
+- `agent`
+
+## Acceptance Criteria
+
+- AUTONOMY-8.a is captured verbatim in hi/autonomy.md with the hi CLI (Leif's 2026-09-28 interview, round 16) and hi check passes. With a spend cap set, the pre-call estimate of every priced provider call is request bytes / 3 prompt tokens plus the model's worst-case reply: its listed maximum output (MODEL_PRICES_USD_PER_MTOK maxOutputTokens: 16384 for gpt-4o and gpt-4o-mini, 32768 for gpt-4.1*, 128000 for gpt-5* and the Claude Opus/Sonnet/Fable models, 100000 for o3 and o4-mini, 64000 for claude-haiku-4-5), or REPLY_RESERVE_DEFAULT_TOKENS (128000) for a priced model with none listed, never the old fixed 4096. A call whose worst case would cross any cap (the total cap or its provider's cap) asks first: with no owner it stops with the spend-cap ask and nothing is sent or recorded; with an owner the #316/#335 spend card is raised at the worst-case amount, Approve plus the code sends that one call and a no sends nothing. A call whose worst case fits does not ask, holds the worst case while in flight, and after the reply counts the provider-reported usage as before. No max_tokens is sent, so replies are never cut short. Unpriced models keep their SAFE-16 / SAFE-16.a behaviour (unknown-price card under a cap, unrecorded when no cap covers them). tests/agent.spend-reserve.test.ts fails on main's src/agent/spend.ts and index.ts and passes on the branch; no schema bump, no new config key or env var.
+
+## No-spec Rationale
+
+Not applicable

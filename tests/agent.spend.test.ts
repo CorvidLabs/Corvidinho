@@ -14,7 +14,6 @@ import {
   formatUsd,
   parseSpendCap,
   priceForModel,
-  REPLY_RESERVE_TOKENS,
   SPEND_CAP_ENV,
   SPEND_WINDOW_MS,
   SpendCapRefusal,
@@ -95,9 +94,9 @@ describe("parseSpendCap", () => {
 
 describe("pricing", () => {
   test("exact model ids, case-insensitive; unknown and dated ids are unpriced", () => {
-    expect(priceForModel("gpt-4o-mini")).toEqual({ inputPerMTok: 0.15, outputPerMTok: 0.6 });
+    expect(priceForModel("gpt-4o-mini")).toEqual({ inputPerMTok: 0.15, outputPerMTok: 0.6, maxOutputTokens: 16_384 });
     expect(priceForModel(" GPT-4o-Mini ")).not.toBeNull();
-    expect(priceForModel("claude-sonnet-5")).toEqual({ inputPerMTok: 2, outputPerMTok: 10 });
+    expect(priceForModel("claude-sonnet-5")).toEqual({ inputPerMTok: 2, outputPerMTok: 10, maxOutputTokens: 128_000 });
     expect(priceForModel("gpt-4o-2024-05-13")).toBeNull();
     expect(priceForModel("local-llama")).toBeNull();
     expect(priceForModel("")).toBeNull();
@@ -113,10 +112,10 @@ describe("pricing", () => {
     expect(costMicroUsd(p, { promptTokens: 0, completionTokens: 0, totalTokens: 1000 })).toBe(600);
   });
 
-  test("estimate = request bytes / 3 prompt tokens + reply reserve", () => {
+  test("estimate = request bytes / 3 prompt tokens + the model's worst-case reply (AUTONOMY-8.a)", () => {
     const p = priceForModel("gpt-4o")!;
-    // 3000 bytes → 1000 prompt tokens × 2.5 + 4096 × 10
-    expect(estimateCallMicroUsd(p, 3000)).toBe(1000 * 2.5 + REPLY_RESERVE_TOKENS * 10);
+    // 3000 bytes → 1000 prompt tokens × 2.5 + gpt-4o's 16384-token maximum output × 10
+    expect(estimateCallMicroUsd(p, 3000)).toBe(1000 * 2.5 + 16_384 * 10);
   });
 
   test("formatUsd", () => {

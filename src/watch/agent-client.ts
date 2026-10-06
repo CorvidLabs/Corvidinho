@@ -6,9 +6,14 @@
  * --here: the run works in the watcher's cwd, never a worktree of its own,
  * REQ-cli-122).
  * Sets the commenter's GitHub login / numeric id and the thread's repo for
- * the memory plugins (MEMORY-8, REQ-watch-067); no Discord actor, never ADMIN
- * (REQ-watch-008), and stamps the `watch` surface, which never gets the
- * shell, runners or Fledge runs (SAFE-3.a, REQ-watch-735). The ask a run
+ * the memory plugins (MEMORY-8, REQ-watch-067); no Discord actor
+ * (REQ-watch-008). IDENTITY-12.a (REQ-watch-1201): stamps the role the
+ * poller resolved for the person who triggered the run — owner (the ADMIN
+ * bit and `CORVIDINHO_ACTING_ROLE=owner`), team, else community (ADMIN bit
+ * 0) — exactly like a Discord run, so the tool layer re-resolves it from the
+ * GitHub numeric id at every call; never a `/work` task. Stamps the `watch`
+ * surface, which never gets the shell, runners or Fledge runs (SAFE-3.a,
+ * REQ-watch-735). The ask a run
  * stopped on comes back as `ask`: a stuck one pings the owner on Discord
  * (AGENT-16.a, REQ-watch-086). A run that failed over to another configured
  * model (AGENT-11) is an `llm.fallback` warn line in the watcher's log; its
@@ -32,6 +37,7 @@ import type { ModelFallback } from "../agent/types.ts";
 import { stopReasonFromUnknown } from "../agent/limits.ts";
 import { injectionNoticeFromUnknown } from "../agent/untrusted.ts";
 import { failureReasonFromUnknown } from "../discord/failure-reason.ts";
+import type { PersonRole } from "../identity/people.ts";
 import type { AgentSpawnResult } from "./types.ts";
 
 export type AgentRunChatOpts = {
@@ -52,6 +58,15 @@ export type AgentRunChatOpts = {
   actingGithubLogin?: string;
   actingGithubId?: number | string;
   repo?: string;
+  /**
+   * IDENTITY-12.a: the declared role of the person who triggered the run
+   * (the poller's `watchTriggerRole`: the comment or body author matched by
+   * GitHub numeric id; never the thread author of an assignment or review
+   * request). Owner and team are stamped as on Discord; anything else,
+   * including omitted, is community. Only caps the run: the tool layer
+   * re-resolves the role from the GitHub id at every call.
+   */
+  actingRole?: PersonRole;
 };
 
 export type AgentClient = {
@@ -76,7 +91,9 @@ export function warnWatchModelFallback(hops: ModelFallback[], sessionId: string)
 
 export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient {
   return {
-    async runChat({ prompt, sessionId, onStatus, actingGithubLogin, actingGithubId, repo }) {
+    async runChat({ prompt, sessionId, onStatus, actingGithubLogin, actingGithubId, repo, actingRole }) {
+      // IDENTITY-12.a: the trigger's role, stamped like a Discord run's (fail closed).
+      const role: PersonRole = actingRole === "owner" || actingRole === "team" ? actingRole : "community";
       const cmd = buildCorvidinhoArgv(opts.bin, [
         "task",
         "run",
@@ -96,9 +113,14 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
           ...process.env,
           ...opts.env,
           CORVIDINHO_WATCH_SESSION_ID: sessionId,
-          // GitHub runs have no Discord actor and are never ADMIN (REQ-watch-008).
+          // GitHub runs have no Discord actor (REQ-watch-008).
           CORVIDINHO_ACTING_DISCORD_USER_ID: "",
-          CORVIDINHO_ACTING_IS_ADMIN: "0",
+          // IDENTITY-12.a: the trigger's role, always overwritten, never
+          // inherited; the tool layer re-checks it against the GitHub id.
+          CORVIDINHO_ACTING_IS_ADMIN: role === "owner" ? "1" : "0",
+          CORVIDINHO_ACTING_ROLE: role,
+          // A WATCH run is never a /work task.
+          CORVIDINHO_ACTING_WORK_TASK: "0",
           CORVIDINHO_ACTING_CONFIRM_TOKENS: "",
           // SAFE-3.a: a WATCH run never gets the shell, runners or Fledge
           // runs; always overwritten, never inherited.

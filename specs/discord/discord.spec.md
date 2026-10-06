@@ -44,6 +44,7 @@ files:
   - tests/worktree.test.ts
   - tests/discord.session-worktree.test.ts
   - tests/worktree.project-scope.test.ts
+  - tests/discord.nongit-project-dir.test.ts
   - src/memory/types.ts
   - src/memory/store.ts
   - src/memory/index.ts
@@ -61,6 +62,8 @@ files:
   - tests/fixtures/approval-code.ts
   - src/discord/forget-card.ts
   - tests/discord.forget-card.test.ts
+  - src/discord/hi-card.ts
+  - tests/discord.hi-card.test.ts
   - src/discord/spend-card.ts
   - tests/discord.spend-card.test.ts
   - src/discord/watch-ask.ts
@@ -165,6 +168,8 @@ files:
   - src/discord/run-control.ts
   - tests/discord.run-queue.test.ts
   - tests/discord.stop-run.test.ts
+  - src/discord/schedule-stop.ts
+  - tests/discord.schedule-stop.test.ts
   - src/discord/allowed-mentions.ts
   - tests/discord.allowed-mentions.test.ts
   - plugins/discord/send-file.ts
@@ -278,7 +283,18 @@ deny | code | submit`), `buildApproveDenyComponents`,
 decision, the waiting run uses it once — REQ-discord-198, SAFE-8 / SAFE-8.a),
 `SPEND_CARD_NOTHING_DONE` ("nothing was spent"), `SPEND_CARD_APPROVED`
 (the card's outcome line) and `SPEND_CARD_UNKNOWN_APPROVED` (the outcome line
-of a card whose amount is unknown, SAFE-16.a, REQ-discord-199). `src/memory/forget.ts` adds
+of a card whose amount is unknown, SAFE-16.a, REQ-discord-199).
+`src/discord/hi-card.ts` exports `hiCaptureApprovalKind(deps)` (the `hi`
+kind, class `plain`, over `hi_capture_requests`: audit prefix `hi-capture`,
+plus one `hi-capture-criterion` row per captured criterion; AGENT-18 hi
+drafts, REQ-discord-521), `HI_CARD_KIND`, `HI_CARD_TITLE`,
+`HI_CARD_NOTHING_DONE` ("nothing was captured"), `hiCardView(req)`,
+`hiCardActionHash(req)` and `hiCardOutcomeText(req)`; Approve commits the
+capture on the session's branch (`hiCaptureCommitMessage(req)` in
+`src/agent/hi-drafts.ts`; the request records the commit). An `ApprovalKind` may
+declare `prepare(req)`, which Approve awaits after the hash check and before
+the SAFE-5 `started` row (a throw: nothing runs, the request stays open).
+`SlashCtx.deliverApprovalCards` runs one card pass when a `/work` run ends. `src/memory/forget.ts` adds
 `previewForgetTargets` (`ForgetCounts`) and `ForgetRequestStore.resetCard`.
 `StartBridgeResult.deliverApprovalCards` (and `deliverForgetCards`, the same
 pass); `StartBridgeOptions.approvalPollMs`. `src/discord/gateway.ts` exports
@@ -655,6 +671,25 @@ the ask presses use, shared with them — then the run the pressed message
 shows (`byProgressMessage`, same channel and id), the requester-or-owner
 check and the stop words' `SessionRunControl.stop`.
 
+Stopping a scheduled run (AGENT-3.c, REQ-discord-304):
+`src/scheduler/service.ts` exports `ScheduleRunStop` (`begin({ scheduleId,
+creatorId, channelId?, title })` → `ScheduleRunStopHandle | null`),
+`ScheduleRunStopHandle` (`signal`, idempotent `finish()` → who stopped the
+run, if anyone), `SCHEDULE_RUN_STOPPED_SUMMARY` (`stopped`) and
+`scheduleRunStoppedError(userId)` (`stopped on Discord by <id>`), all
+re-exported by `src/scheduler/index.ts`; `SchedulerServiceOpts` takes an
+optional `runStop`. `ScheduleStore.markRunFinished` takes an optional
+`stopped` (recorded `failed`, failure count kept, no ask).
+`src/discord/schedule-stop.ts` exports `createScheduleRunStop(deps)` →
+`ScheduleRunStopControl` (`begin` plus `inOwnerDm(runId)`),
+`ScheduleRunStopDeps` (`runControl`, `outbound`, `sendDm`, `editMessage`,
+`deleteMessage`, `owner`, optional `model`, `debounceMs`, `tickMs`) and
+`scheduleRunProgressText(title)` (`⏳ <title>: running.`). The bridge wires
+one control over its `SessionRunControl` into its scheduler; the daemon
+passes none. Its `pressPassesGates` takes an optional `{ inDm }` that skips
+only the channel gate, set for a press with no guild on a running turn whose
+button is in the owner's DM.
+
 Outbound mention safety (REQ-discord-205, DISCORD-8):
 `src/discord/allowed-mentions.ts` exports `outboundAllowedMentions({ users,
 repliedUser })` (always `parse: []`) and `defangMassMentions` (re-exported by
@@ -707,13 +742,30 @@ entry or any other `hi/` file, an assume-unchanged or skip-worktree edit
 included; a `hi/` commit on the branch counts whoever made it, since the PR
 would carry it), or a hi/ diff that cannot be read, keeps the
 PR from opening before the pre-push lane (so a trusted and a re-run verify
-both hold to it) and before anything is committed or pushed: no run can make
-an approved capture yet (AGENT-18 hi guard, REQ-discord-520), and
+both hold to it) and before anything is committed or pushed; only a path
+whose change approved captures alone explain is left out (AGENT-18 hi guard,
+REQ-discord-520, REQ-agent-522), and
 `not-reviewed`: `github-pr-create` held the PR at the GITHUB-9 second-model
 review gate (this step has no run model, so it starts no round; only a tree a
 run already had reviewed opens), the line reusing the gate's reason
 (`reviewRefusalReason`) with the changes left on the pushed branch
 (REQ-discord-088). `SCRUB_TARGETS` lists `pr_review_rounds` (`reviewer`, and
+both hold to it) and before anything is committed or pushed: no run can make
+an approved capture yet (AGENT-18 hi guard, REQ-discord-520), and
+`not-reviewed`: right before the commit, no finished second-model review
+covers exactly the tree about to be committed and pushed (`workTreeReviewed`,
+src/work/review.ts; the owner or team `/work` run drives the rounds itself,
+REQ-agent-092), so nothing is committed or pushed and the line gives the
+run's own reason from its result frame (`WorkRunFacts.review`; GITHUB-9.a:
+no second model) or `WORK_REVIEW_REFUSAL.notFinished`; or, after the push,
+`github-pr-create` held the PR at the same gate, the line reusing its reason
+(`reviewRefusalReason`) (REQ-discord-088). `buildWorkPrBody` takes
+`reviewed` and then adds `WORK_PR_REVIEWED_LINE` under Verify, pointing to
+the `## Second-model review` section `github-pr-create` writes;
+`OpenWorkPrDeps.reviewed` injects the tree check in tests. The spawn client
+passes the result frame's `review` on `AgentSpawnResult.task`
+(`taskReviewFromUnknown`: validated, the reason scrubbed, one line, at most
+300 characters). `SCRUB_TARGETS` lists `pr_review_rounds` (`reviewer`, and
 the JSON `authors`, `findings`, `changed`; REQ-plugins-092).
 `src/worktree/base.ts` exports `resolveBase` (the talk base: the remote's
 default branch, else `main`, and HEAD's merge-base with it; shared by
@@ -1013,6 +1065,15 @@ owner (by that reply) stops a run, and the stop kills its process tree
 `Stop` button while it runs that only its requester or the owner can press
 to stop it, past the channel, actor and mute / rate gates, and that is gone
 once the run is done, failed or stopped (REQ-discord-303);
+a schedule run the bridge's ticker starts takes a turn on the same control
+(session `schedule_<id>`, the creator as requester) and shows the same
+`Stop` button (in its channel, or with no channel in the owner's DM), so
+only its creator or the owner stops it, the same way; a stopped schedule run
+posts nothing but `⏹ Stopped` (and, when a tool result looked like an
+injection, one `⏹ <title>: stopped.` line in its channel carrying the SAFE-13
+owner line), is recorded `failed` / `stopped` without
+counting as a failure or storing an ask, and leaves its schedule as it is;
+a run that ends on its own removes its progress message (REQ-discord-304);
 a run summary's closing `(not allowed for your role)` note survives every cap
 between the agent and the post: schedule run rows and posts, `/work` and
 `/session start` answers (fitted under 1900), and an appended SAFE-13 line or
@@ -1080,6 +1141,8 @@ Each schedule run is gated against the live allowlist before any worktree or age
 A schedule's text is its creator's words (SAFE-12 / SAFE-13, #71, REQ-discord-713): `src/scheduler/service.ts` exports `scheduleInjection(text, role)` (the detector over the name, description and prompt; null for the owner or when nothing trips) and `injectedScheduleQuestion(reasons)`; `SpeakerSurface` gains `schedule-prompt`; `SchedulerServiceOpts` gains optional `recordAudit` (the bridge wires its SAFE-5 trail) and `mutedUsers` (the bridge's live mute set). `/schedule create` resolves the requester's role before the ADMIN gate (as `/work` does) and a non-owner's `name` or `prompt` that trips the detector is refused through `refuseInjectedSlash` with an ephemeral reply (the owner pinged in one fresh channel post, one `injection-suspected` / `denied` row with surface `discord:/schedule`); nothing is stored, and a non-owner create that trips nothing is still the ephemeral `NOT_AUTHORIZED`. Every tick, after the DISCORD-SCHEDULE-3 gate and before any worktree, re-resolves the creator's role (`resolveDiscordActingRole`: live allowlist, owner, mute set, people list; no Discord role ids): stored non-owner text that trips the detector runs nothing — one `denied` row (surface `scheduler:<id>`), the run recorded failed with the stuck ask `injectedScheduleQuestion` (never the text), the schedule paused, and the ask posted through the usual ask path (owner pinged once; a daemon tick leaves it pending for a bridge; titled by id alone when the name is what tripped); otherwise a non-owner creator's run gets `Scheduled work on project: <project>` and its name and prompt inside `fenceSpeakerText(…, role, "schedule-prompt")`, while the owner's schedule keeps its prompt exactly as before. Runs pass no acting role and `actingIsAdmin` only for the live owner's own schedule (DISCORD-SCHEDULE-1.a, REQ-discord-741; never the shell or runners, SAFE-3.a); posts and asks are otherwise unchanged.
 
 A schedule the owner creates runs as the owner; schedules other people create stay read-only (DISCORD-SCHEDULE-1.a, REQ-discord-741): `SchedulerServiceOpts` gains optional `loadOwner` (`() => OwnerRecord | null`, sync or async), which the bridge wires to `loadOwnerConfig({ env, filePath: <allowlist source> })` and the daemon to `loadOwnerConfig({ env })`, so each run reads the owner as configured now (without it the start-time `owner`; a read that throws is logged `[scheduler] owner failed: …` and is no owner). `runOne`, after the DISCORD-SCHEDULE-3 gate, resolves the creator's role against that live owner (the SAFE-12 fence, the SAFE-13 scan and the answered-ask block use it too) and spawns with `actingIsAdmin: true` only when that role is owner and `isOwnerDiscord(liveOwner, createdByUserId)` (so not muted or deny-listed); every other schedule gets `actingIsAdmin: false`, and no schedule passes `actingRole`, so the spawn client stamps `owner` or `community`, never `team`. The run keeps its `schedule` surface and `schedule_<id>` session, so the SAFE-3.a gate still refuses the shell, runners and Fledge runs (REQ-agent-503), `createTaskExecute` discovers no Fledge plugin command (REQ-agent-741) and the repo gate stays on (DISCORD-SCHEDULE-3.a); the tool layer re-checks the owner at every call (REQ-plugins-065). A must-ask call the model starts (a `discord-post-message` included) goes through the Approve card like any owner run; a deny, a lapse or a resent deny ends the run blocked with a stuck ask naming the refused action (`mustAskRefusedAsk`, REQ-agent-741), which blocks the schedule (AUTONOMY-6.a, REQ-discord-606), so later due ticks are skipped with one wait note and raise no new card. The schedule's own posts (result, ask, wait note) go out through the scheduler's outbound, never through `runPlugin`, so they need no card (not AUTONOMY-10 announcements it starts). A non-git project still gets its own `scoped-talk-schedule_…` folder. No new env var, config key, slash option, table, column or schema version.
+
+A Discord talk in a project that isn't a git repo works in the project folder itself (AGENT-1.a, REQ-discord-110): `SessionStore.bindWorktree` asks `ensureTalkWorkspace` for `nonGit: "project_dir"`, which hands back the folder (`kind: "project_dir"`) and makes no `.corvid-worktrees` base, scoped dir or branch; the row's kind is derived, not stored (`sessionWorkspaceKind`: branch ⇒ worktree, path = project by realpath ⇒ project_dir, else scoped_dir), so a restart re-binds in place, a legacy scoped-dir row of a non-git project (or an in-place row whose folder became a git repo) is parked and re-bound, and a switch is still refused. Park and remove never delete a dir that equals or contains the project folder by realpath (`guardsProjectDir`), whatever kind is passed; a git main checkout included. Only the owner's runs change files there (team work tools need a git work tree, REQ-plugins-115; the file tools never change the folder's root AGENTS.md / CLAUDE.md, REQ-plugins-110; SAFE-2, SAFE-3.a and the verify gate apply, REQ-agent-110). The owner's images go to `<project>/.corvidinho/attachments/<session id>/`, removed on every end path by `parkSessionWorktree` (`removeSessionAttachments`, strictly inside the project); anyone else's are URL-only (REQ-discord-013). Schedules pass `nonGit: "scoped_dir"` and keep their own scoped folder (AGENT-1.c). Concurrent talks in one non-git folder are not serialized (pending Leif). No new env var, config key, table, column or schema version.
 
 A schedule reads and acts only on allowlisted repos, even public ones (DISCORD-SCHEDULE-3.a, REQ-discord-202): the scheduler builds each run's session id from `SCHEDULE_SESSION_PREFIX` (`schedule_<schedule id>`, `src/plugins/roles.ts`), which the spawn client writes to `CORVIDINHO_DISCORD_SESSION_ID`, so the tool layer's `isScheduleRunEnv` gates that run and its `delegate` / `council` workers to GitHub-allowlisted repos (REQ-plugins-496: the GitHub tools with no visibility lookup, `web-fetch` GitHub hops). `resolveProjectDir` takes `schedule: true` from `/schedule create` and from every tick (not from `/work`, `/session start` or start-up recovery): a directory inside the bridge root that lies in a git checkout nested there (its `--show-toplevel` is inside the root and is not the root) passes only when that checkout's `origin` OWNER/REPO passes the GitHub allowlist (deny wins; no origin or no allowlist ⇒ refused); the root's own checkout (or one enclosing it) and plain folders are unchanged. A refused create stores nothing; a stored schedule on such a checkout fails its tick through the REQ-discord-353 `project resolve failed` path (upgrade note in `docs/discord.md`).
 When `memoryStore` is available on the bridge, every routed chat spawn SHALL
@@ -1263,6 +1326,12 @@ template (no model call, no model text).
 - **When** someone else presses it, and then the user (or the owner) presses it
 - **Then** the other person gets only the private `This Stop button isn't for you.` and the run goes on; the user's press gets the private `⏹ Stopping the run.`, the run's process tree is killed, the progress message becomes `⏹ Stopped` with its footer and no button, and a message they sent meanwhile then runs with its own progress message and button
 
+### Scenario: Stop a scheduled run from Discord (AGENT-3.c)
+
+- **Given** someone's schedule with a channel whose run the bridge started, its progress message `⏳ Schedule **<name>** … running.` showing a red `Stop` button
+- **When** a third user presses it, and then the schedule's creator (or the owner) presses it — or replies `stop` to it
+- **Then** the third user gets only `This Stop button isn't for you.` and the run goes on; the creator's press gets the private `⏹ Stopping the run.`, the run's process tree is killed, the progress message becomes `⏹ Stopped` with no button and nothing else is posted; the run row is `failed` / `stopped` / `stopped on Discord by <creator>` with no question, the schedule is still active with its failure count unchanged, and its next due run goes ahead and posts its result as before (its own progress message is removed when it ends)
+
 ### Scenario: Spawn with seeded identity
 
 - **Given** a MemoryStore row `person/identity` for Discord user U
@@ -1444,9 +1513,12 @@ template (no model call, no model text).
 | 'stop' reply to a running progress message from anyone but its requester or the owner, or in another channel | Not a stop: routed as before (no mention ⇒ ignored) and the run goes on (REQ-discord-302) |
 | A second 'stop' while the run winds down | Same short ack; nothing aborted again; one `⏹ Stopped` (REQ-discord-302) |
 | Stop button pressed by anyone but the run's requester or the owner | Ephemeral `This Stop button isn't for you.`; the run goes on (REQ-discord-303) |
-| Stop button of a run that is not running on that message (finished or stopped run, another run's id, another channel, a button from before a restart) | Ephemeral `Nothing is running.`; nothing stopped (REQ-discord-303) |
+| Stop button of a run that is not running on that message (finished or stopped run, another run's id, another channel, a button from before a restart) | Ephemeral `Nothing is running.`; nothing stopped (REQ-discord-303); the owner's press of such a button in a DM (a schedule run's, AGENT-3.c) skips the channel gate and gets the same reply (REQ-discord-304) |
 | Stop button pressed off the allowlist, by a deny-listed or unlisted user, or while muted / rate-limited | The ask press refusals (zero-width ack, the owner's allowlist tip, `MUTED` / `RATE_LIMITED`), all ephemeral; nothing stopped (REQ-discord-303) |
 | A form submit carrying a `cvstop:` id | Ignored: no reply, nothing stopped (REQ-discord-303) |
+| A schedule run's Stop button pressed by anyone but the schedule's creator or the owner | Ephemeral `This Stop button isn't for you.`; the run goes on (REQ-discord-304) |
+| A schedule with no channel and no owner configured, or the owner's DM (or its button edit) does not go out; a schedule run the daemon claimed | No Stop control: the run goes on and ends as before (a sent DM whose button could not be added is deleted) (REQ-discord-304) |
+| The Stop control's `begin` throws | Logged `[scheduler] stop control failed: <scrubbed line>`; the run goes on without one (REQ-discord-304) |
 | A waiting message's session ended, idled out or its requester was forgotten before its turn | Nothing runs or is posted; its in-flight row is cleared (REQ-discord-301) |
 | A waiting message's author (or a waiting pick's presser) was muted or deny-listed, or its channel dropped from the allowlist or deny-listed, before its turn | Nothing runs or is posted; its in-flight row is cleared; the rate limit is not counted again (REQ-discord-301) |
 | A 'stop' lands after the `/work` agent exited, before its PR step | Short ack; no PR (`PR: not opened — the run was stopped.`), task `failed` / `stopped` (REQ-discord-302) |
@@ -1633,7 +1705,11 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-10-01 | an-idle-timeout-and-a-turn-cap-i-set-stop-stalled-or-endless-runs-and-it-says-so-agent-12: An idle timeout and a turn cap I set stop stalled or endless runs, and it says so (AGENT-12) |
 | 2026-10-01 | its-first-20-replies-in-public-threads-each-wait-for-my-ok-on-an-approve-card-even-text-i-dictated-and-replies-to-me: Its first 20 replies in public threads each wait for my OK on an Approve card, even text I dictated and replies to me (AUTONOMY-10, AUTONOMY-10.a) |
 | 2026-10-01 | a-team-member-s-failed-session-or-work-reply-and-someone-else-s-failed-schedule-post-is-checked-for-the-reason-s-401: A team member's failed /session or /work reply, and someone else's failed schedule post, is checked for the reason's 401 with the run's own random ids masked, so an id that happens to contain 401 no longer fails the DISCORD-3.b test |
+| 2026-10-01 | in-a-non-git-project-my-runs-work-in-the-folder-itself-its-file-tools-leave-the-root-agents-md-and-claude-md-alone: In a non-git project my runs work in the folder itself, its file tools leave the root AGENTS.md and CLAUDE.md alone, schedules keep their own folder, and others only read there (AGENT-1.a, AGENT-1.b, AGENT-1.c) |
 | 2026-10-01 | in-a-hi-repo-it-never-changes-the-criteria-itself-any-hi-change-no-approved-capture-made-blocks-done-and-the-pr-agent: In a hi repo it never changes the criteria itself: any hi/ change no approved capture made blocks done and the PR (AGENT-18, hi guard) |
 | 2026-09-30 | web-search-through-brave-plugin-7-plugin-9-issue-318-a-dangerous-mintier-1-web-search-command-in-plugins-web-offered: Web search through Brave (PLUGIN-7, PLUGIN-9, issue 318): a dangerous minTier-1 web-search command in plugins/web, offered only when allowlisted and only to the owner and team; Brave results reach the model only inside the untrusted web fence and are SAFE-13 scanned; the key comes from BRAVE_SEARCH_API_KEY only and never appears in any output; requests go through a shared https-only, host-allowlisted, redirect-refusing JSON GET on the pinned-DNS public-address checks; each search reserves about 0.005 USD against the SAFE-8 cap |
 | 2026-10-01 | gif-search-through-giphy-plugin-8-plugin-9-issue-318-slice-b-a-dangerous-mintier-1-gif-search-command-in-a-new-plugins: GIF search through GIPHY (PLUGIN-8, PLUGIN-9, issue 318 slice B): a dangerous minTier-1 gif-search command in a new plugins/gif, offered only when allowlisted and only to the owner and team; GIPHY's Tenor-compatible v2 search with contentfilter=medium (G and PG) always sent; titles and GIPHY media links reach the model only inside the untrusted web fence and are SAFE-13 scanned, posted as a link only; the key comes from GIPHY_API_KEY only, sits in the request URL and never appears in any output; each search is recorded at 0 USD against the SAFE-8 cap |
 | 2026-10-06 | the-fixed-bridge-live-note-it-posts-after-a-restart-is-system-text-not-an-announcement-so-it-posts-without-waiting-for: The fixed bridge-live note it posts after a restart is system text, not an announcement, so it posts without waiting for the owner's OK (AUTONOMY-10.b, #124) |
+| 2026-10-06 | i-or-the-schedule-s-creator-can-stop-a-scheduled-run-in-progress-from-discord-the-same-way-as-a-chat-run-agent-3-c: I or the schedule's creator can stop a scheduled run in progress from Discord, the same way as a chat run (AGENT-3.c) |
+| 2026-10-05 | where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts: Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts) |
+| 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |

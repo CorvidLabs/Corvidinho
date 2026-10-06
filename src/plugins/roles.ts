@@ -11,13 +11,27 @@
  * - team (read tools, reviews, `web-search` and `gif-search` (PLUGIN-9) and
  *   `/work` edits):
  *   the spawning surface allowed team (`CORVIDINHO_ACTING_ROLE=team`,
- *   Discord chat / slash / buttons only) AND the acting Discord user id
- *   resolves, in the owner's people list re-read now, to a person whose
- *   declared role is team (IDENTITY-8/10). The surface's stamp can only lower
- *   the role, never raise it;
- * - community: everyone else — undeclared people, declared community, WATCH,
+ *   Discord chat / slash / buttons, or a WATCH run a team member triggered)
+ *   AND the acting Discord user id (on GitHub: the trigger's GitHub numeric
+ *   id, IDENTITY-12.a) resolves, in the owner's people list re-read now, to a
+ *   person whose declared role is team (IDENTITY-8/10). The surface's stamp
+ *   can only lower the role, never raise it;
+ * - community: everyone else — undeclared people, declared community,
  *   schedules other people create, delegate/council workers, a muted or
  *   deny-listed actor, or any read failure (IDENTITY-11/12).
+ *
+ * IDENTITY-12.a (#65): on GitHub (a WATCH run: the surface stamp
+ * `CORVIDINHO_ACTING_SURFACE=watch`, which both spawning clients always
+ * overwrite, plus `CORVIDINHO_WATCH_SESSION_ID`) the person is the one who
+ * triggered the run, matched by the GitHub numeric user id the poller stamps
+ * (`CORVIDINHO_ACTING_GITHUB_ID`, from the GitHub API event) in the owner's
+ * people list re-read now — never by a login, never by a Discord id. The
+ * owner (owner stamp + ADMIN bit) gets the owner's tools and team (team
+ * stamp) the team's, behind the same must-ask gate as on Discord; a WATCH
+ * run is never a `/work` task. A GitHub id or login on the GitHub deny list,
+ * or a declared person whose Discord id is muted or deny-listed, is
+ * community; so is anyone undeclared. A Discord run never uses the GitHub
+ * keys.
  *
  * DISCORD-SCHEDULE-1.a: a schedule the owner created runs as the owner (the
  * scheduler stamps the ADMIN bit only for the live owner's own schedule, and
@@ -33,10 +47,12 @@ import {
 } from "../identity/owner.ts";
 import {
   loadDeclaredPeople,
+  normalizeGithubId,
   resolvePerson,
   roleOfPerson,
   type PersonRole,
 } from "../identity/people.ts";
+import { isGitRepo } from "../worktree/manager.ts";
 import { isMutatingPlugin, type MutatingLike } from "./mutating.ts";
 
 export const ROLE_REFUSED_MESSAGE =
@@ -48,7 +64,8 @@ export type ActingRole = PersonRole;
 /**
  * Env key the spawning surface sets: the most this surface allows for its
  * actor ("owner" | "team" | "community"). Only Discord chat, slash and
- * buttons stamp "team"; anything else ⇒ community (fail closed).
+ * buttons, and a WATCH run a declared team member triggered (IDENTITY-12.a),
+ * stamp "team"; anything else ⇒ community (fail closed).
  */
 export const ACTING_ROLE_ENV = "CORVIDINHO_ACTING_ROLE";
 
@@ -71,6 +88,54 @@ export const SCHEDULE_SESSION_PREFIX = "schedule_";
  */
 export function isScheduleRunEnv(env: NodeJS.ProcessEnv = process.env): boolean {
   return (env.CORVIDINHO_DISCORD_SESSION_ID ?? "").startsWith(SCHEDULE_SESSION_PREFIX);
+}
+
+/**
+ * The surface stamp key (`ACTING_SURFACE_ENV` in src/agent/shell-gate.ts,
+ * which imports this module): both spawning clients always overwrite it.
+ */
+const SURFACE_ENV = "CORVIDINHO_ACTING_SURFACE";
+
+/**
+ * True in a WATCH (GitHub) run's process (IDENTITY-12.a): the surface stamp
+ * is `watch`. Its role comes from the GitHub trigger's numeric id only,
+ * never from a Discord id.
+ */
+export function isWatchRunEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (env[SURFACE_ENV] ?? "").trim().toLowerCase() === "watch";
+}
+
+/**
+ * IDENTITY-12.a: the declared role of the person who triggered this WATCH
+ * run, re-read now: the GitHub numeric user id the poller stamped
+ * (`CORVIDINHO_ACTING_GITHUB_ID`) in the owner's people list (the owner's
+ * `[owner] github_id` included, IDENTITY-7.a). No WATCH session id, no id, an
+ * id or login on the GitHub deny list, an undeclared id, a declared person
+ * whose Discord id is muted or Discord-deny-listed, or any read failure ⇒
+ * community. Never throws.
+ */
+async function watchTriggerRoleNow(env: NodeJS.ProcessEnv): Promise<ActingRole> {
+  if (!(env.CORVIDINHO_WATCH_SESSION_ID ?? "").trim()) return "community";
+  const id = normalizeGithubId(env.CORVIDINHO_ACTING_GITHUB_ID?.trim() || undefined);
+  if (!id) return "community";
+  try {
+    const allow = await loadAllowlist({ env });
+    const deny = allow.github.denyUsers.map((d) => d.trim().toLowerCase());
+    const login = (env.CORVIDINHO_ACTING_GITHUB_LOGIN ?? "").trim().toLowerCase();
+    if (deny.includes(id) || (login && deny.includes(login))) return "community";
+    const owner = (await loadOwnerConfig({ env, filePath: allow.sourcePath })).owner;
+    const person = resolvePerson(loadDeclaredPeople({ allowlist: allow, owner }), { githubId: id });
+    if (!person) return "community";
+    const muted = parseList(env.DISCORD_MUTED_USER_IDS);
+    const discordDeny = allow.discord.denyUsers.map((d) => d.trim().toLowerCase());
+    for (const d of person.person.discordIds) {
+      const did = d.toLowerCase();
+      if (muted.includes(did) || discordDeny.includes(did)) return "community";
+    }
+    return roleOfPerson(person);
+  } catch {
+    return "community";
+  }
 }
 
 /**
@@ -150,6 +215,13 @@ export async function resolveActingIsAdmin(
   if (!roleSessionActive(env)) return false;
   if (!truthy(env.CORVIDINHO_ACTING_IS_ADMIN)) return false;
 
+  // IDENTITY-12.a: on GitHub the owner is the run's trigger, matched by the
+  // GitHub numeric id only (owner stamp + ADMIN bit); never a Discord id.
+  if (isWatchRunEnv(env)) {
+    if (actingRoleCap(env) !== "owner") return false;
+    return (await watchTriggerRoleNow(env)) === "owner";
+  }
+
   const actor =
     (userId ?? env.CORVIDINHO_ACTING_DISCORD_USER_ID ?? "").trim();
   if (!actor) return false;
@@ -184,9 +256,17 @@ export function actingRoleCap(env: NodeJS.ProcessEnv = process.env): ActingRole 
   return s === "owner" || s === "team" ? s : "community";
 }
 
-/** True when the run is a `/work` task (team work tools, IDENTITY-10). */
-export function actingWorkTask(env: NodeJS.ProcessEnv = process.env): boolean {
-  return truthy(env[ACTING_WORK_TASK_ENV]);
+/**
+ * True when the run is a `/work` task (team work tools, IDENTITY-10) whose
+ * `cwd` is in a git work tree (`isGitRepo`). In a project that is not a git
+ * repo the talk runs in the project folder itself, so other people's runs
+ * only read there (AGENT-1.a): their work tools are not offered or run.
+ * A WATCH run never is (IDENTITY-12.a: it works in the watcher's checkout,
+ * not a `/work` worktree), whatever its stamp says.
+ */
+export function actingWorkTask(env: NodeJS.ProcessEnv, cwd: string): boolean {
+  if (isWatchRunEnv(env)) return false;
+  return truthy(env[ACTING_WORK_TASK_ENV]) && isGitRepo(cwd);
 }
 
 /**
@@ -205,6 +285,9 @@ export async function resolveActingRole(
   // DISCORD-SCHEDULE-1.a: schedules other people create stay read-only; a
   // scheduled run is never team, whatever its stamp says.
   if (isScheduleRunEnv(env)) return "community";
+  // IDENTITY-12.a: on GitHub, team is the trigger's declared role by GitHub
+  // numeric id (team stamp); never a Discord id.
+  if (isWatchRunEnv(env)) return (await watchTriggerRoleNow(env)) === "team" ? "team" : "community";
   const actor = (userId ?? env.CORVIDINHO_ACTING_DISCORD_USER_ID ?? "").trim();
   if (!actor) return "community";
   const id = actor.toLowerCase();

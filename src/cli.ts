@@ -37,6 +37,8 @@ import type { ModelFallback, ModelUsage, TaskWorkspaceReport } from "./agent/typ
 import type { InjectionNotice } from "./agent/untrusted.ts";
 import { startWorkspaceDiff } from "./agent/workspace-diff.ts";
 import { delegateDepthFromEnv } from "./autonomous/delegate.ts";
+import { actingSurface } from "./agent/shell-gate.ts";
+import { workReviewHook } from "./work/review.ts";
 import { SPAWN_BUN_CONFIG } from "./agent/spawn-argv.ts";
 import { spendDoctorChecks } from "./agent/spend.ts";
 import { attribution } from "./attribution.ts";
@@ -79,7 +81,7 @@ import { allowlistFromEnv, isNonInteractive } from "./plugins/env.ts";
 import { forwardedSignals } from "./plugins/proc-group.ts";
 import { get, list, size } from "./plugins/registry.ts";
 import { setMustAskNotifier } from "./plugins/must-ask.ts";
-import { roleSessionActive } from "./plugins/roles.ts";
+import { actingRoleCap, actingWorkTask, roleSessionActive } from "./plugins/roles.ts";
 import { PluginNotFoundError, runPlugin } from "./plugins/run.ts";
 import {
   formatPluginsListText,
@@ -175,6 +177,9 @@ Env / allowlists (ALLOW-4; default-deny, never Merlin BASIC):
   ANTHROPIC_API_KEY                                     key for anthropic: models (never commit)
   CORVIDINHO_LLM_TIER=read|tool|code                    capability tier (AGENT-5; default tool)
   CORVIDINHO_LLM_MODEL_READ / _TOOL / _CODE             optional model per tier (AGENT-5; else CORVIDINHO_LLM_MODEL)
+  CORVIDINHO_LLM_MODEL_ORDER                            optional model order, weakest first, same entries: a run that still only plans or
+                                                        says Done with nothing changed after its one nudge moves to the next stronger
+                                                        model in it that its tier lists, and says so; unset = it never moves (AGENT-17.a)
   CORVIDINHO_MAX_TURNS                                  optional turn cap: model/tool rounds per attempt (default 8); a run whose
                                                         last attempt hits it ends with its best answer so far and says so (AGENT-12)
   CORVIDINHO_IDLE_TIMEOUT_MS                            optional idle timeout (default 600000 = 10 min): a run with no output for this
@@ -979,6 +984,30 @@ async function taskRun(opts: {
   }
 }
 
+/**
+ * GITHUB-9 (REQ-cli-092): this `task run` is an owner or team `/work` run —
+ * the bridge's stamps say surface `work`, the /work bit and role owner or
+ * team, and it is no `delegate` / `council` worker — whose PR path is
+ * allowlisted (`git-push` and `github-pr-create`, GITHUB-5), so its verified
+ * tree gets the second-model review before the /work PR step. No review is
+ * spent on a PR that cannot open.
+ */
+export function workReviewApplies(
+  env: NodeJS.ProcessEnv,
+  allowlist: ReadonlySet<string>,
+  cwd: string = process.cwd(),
+): boolean {
+  const role = actingRoleCap(env);
+  return (
+    actingSurface(env) === "work" &&
+    actingWorkTask(env, cwd) &&
+    (role === "owner" || role === "team") &&
+    delegateDepthFromEnv(env) === 0 &&
+    allowlist.has("git-push") &&
+    allowlist.has("github-pr-create")
+  );
+}
+
 /** The body of {@link taskRun}, in the directory the run works in. */
 async function taskRunIn(
   cwd: string,
@@ -1063,6 +1092,13 @@ async function taskRunIn(
       if (!privateReplies.includes(text)) privateReplies.push(text);
     },
   });
+  // GITHUB-9 (REQ-cli-092): an owner or team /work run's verified tree is
+  // reviewed by a second model in bounded rounds (their own counter, not the
+  // AGENT-4.a retries) through this run's models, call path and spend guard,
+  // before the /work PR step commits or pushes anything.
+  const review = workReviewApplies(process.env, allowlistFromEnv(), cwd)
+    ? workReviewHook({ cwd, run: execute.review, takeSpendAsk: execute.takeSpendAsk })
+    : undefined;
   let spendWarning: SpendWarning | undefined;
   let injection: InjectionNotice | undefined;
   const privateReplies: string[] = [];
@@ -1084,6 +1120,7 @@ async function taskRunIn(
       signal: io.signal,
       // AGENT-12 (REQ-agent-244): no output for this long stops the run.
       idleTimeoutMs: idle.value,
+      ...(review ? { review } : {}),
       onEvent: handleEvent,
       execute: async (ctx) => {
         if (ctx.verifyFeedback && !quiet) {

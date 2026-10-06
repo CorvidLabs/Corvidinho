@@ -44,10 +44,25 @@ export type EnsureTalkWorkspaceOptions = {
   worktreeId?: string;
   /** Override branch name. */
   branchName?: string;
+  /**
+   * Workspace for a project that is not a git repo (`isGitRepo` false):
+   * `scoped_dir` (default) makes the talk its own empty folder under the
+   * worktree base; `project_dir` works in the project folder itself and
+   * creates nothing (AGENT-1.a: Discord talks). Schedules keep `scoped_dir`
+   * (AGENT-1.c). A git project always gets a linked worktree.
+   */
+  nonGit?: "scoped_dir" | "project_dir";
 };
 
+/**
+ * Where a talk runs: its own linked git worktree, its own scoped folder under
+ * the worktree base (non-git), or the non-git project folder itself
+ * (`project_dir`, AGENT-1.a), which park and remove never delete.
+ */
+export type TalkWorkspaceKind = "worktree" | "scoped_dir" | "project_dir";
+
 export type TalkWorkspace = {
-  kind: "worktree" | "scoped_dir";
+  kind: TalkWorkspaceKind;
   workDir: string;
   projectWorkingDir: string;
   branchName?: string;
@@ -108,6 +123,26 @@ export function talkWorktreeId(sessionId: string): string {
 function isWithin(child: string, parent: string): boolean {
   const rel = relative(parent, child);
   return rel === "" || (rel !== ".." && !rel.startsWith("../") && !isAbsolute(rel));
+}
+
+function realOrResolved(p: string): string {
+  try {
+    return realpathSync(resolve(p));
+  } catch {
+    return resolve(p);
+  }
+}
+
+/**
+ * True when `dir` is the project folder or one of its ancestors, by realpath
+ * (and lexically, for a path that no longer resolves). Park and remove never
+ * delete such a dir, whatever kind a caller passes (AGENT-1.a).
+ */
+export function guardsProjectDir(projectWorkingDir: string, dir: string): boolean {
+  if (!dir) return false;
+  const project = realOrResolved(projectWorkingDir);
+  const target = realOrResolved(dir);
+  return isWithin(project, target) || isWithin(resolve(projectWorkingDir), resolve(dir));
 }
 
 function gitStdout(dir: string, args: string[]): string | null {
@@ -386,6 +421,8 @@ export async function removeWorktree(
   worktreeDir: string,
   options?: RemoveWorktreeOptions,
 ): Promise<void> {
+  // AGENT-1.a: never the project folder itself (or a dir holding it).
+  if (guardsProjectDir(projectWorkingDir, worktreeDir)) return;
   let branchName: string | undefined;
   if (options?.cleanBranch) {
     branchName = await detectWorktreeBranch(projectWorkingDir, worktreeDir);
@@ -423,14 +460,21 @@ export async function removeWorktree(
 /**
  * Park a worktree: remove the directory from active use so another talk
  * cannot silently reuse it as cwd. Keep branch when it has commits.
- * For scoped dirs (non-git), rename aside or remove.
+ * For scoped dirs (non-git), rename aside or remove. A `project_dir` talk
+ * (AGENT-1.a) is a no-op.
  */
 export async function parkWorktree(
   projectWorkingDir: string,
   workDir: string,
-  opts?: { kind?: "worktree" | "scoped_dir"; branchName?: string },
+  opts?: { kind?: TalkWorkspaceKind; branchName?: string },
 ): Promise<WorktreeState> {
   if (!workDir) return "removed";
+  // AGENT-1.a: a `project_dir` talk runs in the project folder itself, so
+  // parking it only lets go of it. Whatever kind is passed, a dir that is
+  // the project folder or holds it is never deleted.
+  if (opts?.kind === "project_dir" || guardsProjectDir(projectWorkingDir, workDir)) {
+    return "removed";
+  }
   const kind = opts?.kind ?? (isGitRepo(projectWorkingDir) ? "worktree" : "scoped_dir");
 
   if (kind === "scoped_dir" || !isGitRepo(projectWorkingDir)) {
@@ -462,7 +506,8 @@ export async function parkWorktree(
 
 /**
  * Ensure an isolated workspace for a talk/schedule run.
- * Git repo → worktree; otherwise → scoped directory under worktree base.
+ * Git repo → worktree; otherwise → scoped directory under worktree base, or,
+ * with `nonGit: "project_dir"`, the project folder itself (AGENT-1.a).
  */
 export async function ensureTalkWorkspace(
   options: EnsureTalkWorkspaceOptions,
@@ -479,7 +524,6 @@ export async function ensureTalkWorkspace(
   const branchName =
     options.branchName ?? generateTalkBranchName(options.sessionId);
   const base = getWorktreeBaseDir(projectWorkingDir);
-  mkdirSync(base, { recursive: true });
 
   if (isGitRepo(projectWorkingDir)) {
     const result = await createWorktree({
@@ -507,8 +551,27 @@ export async function ensureTalkWorkspace(
     };
   }
 
-  // Non-git: project-scoped directory (SESSION-WORKTREE-1 allows scoped dir)
+  // AGENT-1.a: a talk in a non-git project works in the folder itself. No
+  // worktree base, no scoped dir; parking it is a no-op.
+  if (options.nonGit === "project_dir") {
+    return {
+      ok: true,
+      workspace: {
+        kind: "project_dir",
+        workDir: projectWorkingDir,
+        projectWorkingDir,
+        worktreeId,
+        state: "active",
+      },
+    };
+  }
+
+  // Non-git: project-scoped directory (SESSION-WORKTREE-1 allows scoped dir;
+  // schedules keep one, AGENT-1.c).
   const workDir = resolve(base, `scoped-${worktreeId}`);
+  if (guardsProjectDir(projectWorkingDir, workDir)) {
+    return { ok: false, error: `scoped dir would hold the project folder: ${workDir}` };
+  }
   if (existsSync(workDir)) {
     try {
       rmSync(workDir, { recursive: true, force: true });

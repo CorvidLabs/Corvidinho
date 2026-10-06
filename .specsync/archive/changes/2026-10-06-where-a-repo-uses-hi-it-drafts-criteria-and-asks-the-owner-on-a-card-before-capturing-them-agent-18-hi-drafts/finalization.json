@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts",
+  "implementation_commit": "17c59fb49d5e8177d5b49dc98da16250466fca41",
+  "implementation_tree": "58bef87800f394e3fa4b8c7547ffcbf11ecbf98b",
+  "contract_digest": "01c2565bfa1df196819f19a320dba516c37751c23ae6d58ebf6d6f826a78d31a",
+  "workspace_digest": "f79c9f14e6809aa7b0ded7666f151a28434285aa1e09bba1a3c39ab5068e488d",
+  "closing_digest": "4cace75cbf090521b3b2eb0ea4109ae0926c07093a42c1fb03563b5f8d90cf1e",
+  "review_digest": "4cace75cbf090521b3b2eb0ea4109ae0926c07093a42c1fb03563b5f8d90cf1e",
+  "finalization_digest": "01c2565bfa1df196819f19a320dba516c37751c23ae6d58ebf6d6f826a78d31a",
+  "timestamp": 1791302491,
+  "note": "tip-orphan after #367"
+}

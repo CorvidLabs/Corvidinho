@@ -44,14 +44,20 @@
  * OLDPWD and, like `shell-exec` and the runners, without the owner's GitHub
  * or git credentials (`withoutGitCredentials`, SAFE-21.a: the model may be
  * offered the runs under SAFE-3.a, and a lane or task it runs must not push,
- * open PRs or merge outside the checked GitHub tools), stdin closed, a
+ * open PRs or merge outside the checked GitHub tools) or cloud credentials
+ * (`withoutCloudCredentials`, SAFE-21.b: a lane run is the verify lane, and
+ * none can reach prod by accident), stdin closed, a
  * timeout, per-stream output caps, and the process group killed on timeout or
  * the calling run's abort (spawn.ts). Output is secret-scrubbed (SAFE-6).
  */
 
 import { lstatSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
-import { buildVerifyEnv } from "../../src/agent/verify.ts";
+import {
+  buildVerifyEnv,
+  releaseCloudStandIns,
+  withoutCloudCredentials,
+} from "../../src/agent/verify.ts";
 import { get, register } from "../../src/plugins/registry.ts";
 import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
 import { scrubSecrets } from "../../src/store/scrub.ts";
@@ -96,14 +102,16 @@ export function resolveFledgeBin(env: NodeJS.ProcessEnv): string | null {
 
 /**
  * Child env: the verify lane's scrub, no CDPATH / OLDPWD, no GitHub or git
- * credentials (SAFE-21.a, the env `shell-exec` and the runners get),
- * non-interactive, project root hint.
+ * credentials (SAFE-21.a) and no cloud credentials (SAFE-21.b; the env
+ * `shell-exec` and the runners get, its stand-in dirs released with
+ * `releaseCloudStandIns` once fledge exits), non-interactive, project root
+ * hint.
  */
 export function fledgeCoreChildEnv(
   base: NodeJS.ProcessEnv,
   projectRoot: string,
 ): Record<string, string> {
-  const env = withoutGitCredentials(buildVerifyEnv(base));
+  const env = withoutCloudCredentials(withoutGitCredentials(buildVerifyEnv(base)));
   delete env.CDPATH;
   delete env.OLDPWD;
   env.FLEDGE_NON_INTERACTIVE = "1";
@@ -208,13 +216,19 @@ async function spawnFledge(
     };
   }
   const maxBytes = opts.maxOutputBytes ?? FLEDGE_CORE_MAX_OUTPUT_BYTES;
-  const res = await spawnCapped([bin, "--non-interactive", ...fledgeArgs], {
-    cwd: root,
-    env: fledgeCoreChildEnv(env, root),
-    timeoutMs,
-    maxBytes,
-    signal,
-  });
+  const childEnv = fledgeCoreChildEnv(env, root);
+  let res: SpawnCappedResult;
+  try {
+    res = await spawnCapped([bin, "--non-interactive", ...fledgeArgs], {
+      cwd: root,
+      env: childEnv,
+      timeoutMs,
+      maxBytes,
+      signal,
+    });
+  } finally {
+    releaseCloudStandIns(childEnv);
+  }
   if (res.spawnError) {
     return {
       ok: false,

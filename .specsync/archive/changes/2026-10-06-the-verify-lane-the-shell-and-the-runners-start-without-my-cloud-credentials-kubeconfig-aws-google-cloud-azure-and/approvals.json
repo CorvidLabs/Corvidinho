@@ -1,0 +1,48 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791246732,
+      "digest": "9ec5982b674af6bf53411a5684dbcaa2c8984c098378a3cb06981408a9f3f2d7",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "the-verify-lane-the-shell-and-the-runners-start-without-my-cloud-credentials-kubeconfig-aws-google-cloud-azure-and",
+        "title": "The verify lane, the shell and the runners start without my cloud credentials (KUBECONFIG, AWS, Google Cloud, Azure and similar), so they can't reach prod by accident (SAFE-21.b)",
+        "description": "The verify lane, the shell and the runners start without my cloud credentials (KUBECONFIG, AWS, Google Cloud, Azure and similar), so they can't reach prod by accident (SAFE-21.b)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "plugins"
+        ],
+        "affected_paths": [
+          "INTENT.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "hi/safe.md",
+          "plugins/fledge/core.ts",
+          "plugins/runners/commands.ts",
+          "plugins/shell/commands.ts",
+          "src/agent/verify.ts",
+          "tests/agent.cloud-credentials.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "SAFE-21.b (captured in this change's PR with hi from Leif's 2026-09-28 interview, round 16 on 2026-10-06): 'The verify lane, the shell and the runners start without my cloud credentials (KUBECONFIG, AWS, Google Cloud, Azure and similar), so they can't reach prod by accident.' Observable outcomes: (1) the default verify runner (runTask's lane), shell-exec, node-exec / python-exec / cargo-exec and fledge-lanes-run / fledge-run start their child with no key isCloudCredentialEnvKey names (KUBECONFIG, KUBERNETES_SERVICE_HOST / _PORT; AWS access keys, session / security tokens, profiles, credential and config files, role ARN / session name, web identity token file, AWS_CONTAINER_*; GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_CREDENTIALS, GOOGLE_CLOUD_KEYFILE_JSON, GCLOUD_KEYFILE_JSON, GOOGLE_OAUTH_ACCESS_TOKEN, GOOGLE_IMPERSONATE_SERVICE_ACCOUNT, GOOGLE_GHA_CREDS_PATH, every CLOUDSDK_*; Azure and ARM_* service principal, user, certificate, federated token, managed identity (IDENTITY_*, MSI_*), config dir and storage keys; any AWS_ / GOOGLE_ / GCLOUD_ / GCP_ / AZURE_ / ARM_ key naming an access key, API key, token, secret, password, credential, key file or connection string; TF_TOKEN_*; and the listed DigitalOcean, Hetzner, Cloudflare, Linode, Vultr, Scaleway, OCI, IBM Cloud, Alibaba, OpenStack, Heroku, Fly, Vercel, Netlify, Railway, Terraform Cloud, Pulumi, Vault, Nomad and Consul tokens); (2) each tool's default files are neutralised: KUBECONFIG, AWS_SHARED_CREDENTIALS_FILE, AWS_CONFIG_FILE and GOOGLE_APPLICATION_CREDENTIALS are /dev/null, AWS_EC2_METADATA_DISABLED=true, and CLOUDSDK_CONFIG / AZURE_CONFIG_DIR are fresh empty 0700 dirs in one temp dir made for that one child and removed once it exits, so stand-in kubectl / aws / gcloud / az scripts see neither the owner's cloud env nor ~/.kube/config, ~/.aws/*, ~/.config/gcloud/* (ADC file included) or ~/.azure/*, and a login one child writes never reaches the next; (3) ordinary settings (AWS_REGION, GOOGLE_CLOUD_PROJECT, PATH, HOME, other keys) are kept and the SAFE-21.a git / GitHub scrub and the verify-lane scrub are unchanged; (4) Fledge plugin commands (fledge-<command>) and delegate workers keep their env (not named by SAFE-21.b). No new env var, config key, slash command, table or schema version. Tests: tests/agent.cloud-credentials.test.ts (stand-in tools on a temp PATH called by absolute path, fake HOME; no network), 7 of 7 failing on the base (e1a24ed2) and passing on the branch."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "168b0351aa9326dbabc778b08480907675e8ad1a5a8323155f0a94e629fb441c",
+        "plugins": "db5e3d1c3d2d8b52abdcd97d4505fc4b322e89efcff85d82ed3ac819679eef95"
+      }
+    }
+  ],
+  "reopenings": []
+}
