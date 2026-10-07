@@ -96,6 +96,64 @@
         }
       ],
       "requirement_ids": []
+    },
+    {
+      "timestamp": 1791332005,
+      "commit": "51fd45e8d3d28e9bc767e3600337c44c553806d3",
+      "contract_digest": "5312779e5025d4daf8863b4884ff004991a6006f440888ae723e0224980acb0c",
+      "execution_digest": "605621515894671769803c3f1a93ba3b8e3b6981b0f1b7395e878a34ef9276c5",
+      "workspace_digest": "a28df5b0a06740bff64715485834578494a3abe26f93504ef5c3d00e7a51f23d",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": []
+    },
+    {
+      "timestamp": 1791332005,
+      "commit": "51fd45e8d3d28e9bc767e3600337c44c553806d3",
+      "contract_digest": "5312779e5025d4daf8863b4884ff004991a6006f440888ae723e0224980acb0c",
+      "execution_digest": "605621515894671769803c3f1a93ba3b8e3b6981b0f1b7395e878a34ef9276c5",
+      "workspace_digest": "a28df5b0a06740bff64715485834578494a3abe26f93504ef5c3d00e7a51f23d",
+      "acceptance_input_digest": "c9604736d8d216ac85eb96e958a70b66a749c22347bb45c8dd7bd8ae5dca1038",
+      "acceptance_manifest": {
+        "schema_version": 1,
+        "entries": [
+          {
+            "path": "src/agent/loop-guards.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "acd13b350a9689bba9c6804a21de84ba04451cefa3f946832cba50af97689a02",
+            "entry_digest": "7f3b5f37d1321bcb3d69acdc9bc667a89ced60e071f8e04694eade5e1f0392af",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "tests/plugins.list.smoke.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "afa3bc7f24d02c32f1f130345635c463f4e328faee438ab2ab144e1cc0d87318",
+            "entry_digest": "656920b497beb8fd33096fd0124e779fd25f7cdad4cf7f66bdc63ca77d107175",
+            "owners": [
+              "@exact:test"
+            ]
+          }
+        ]
+      },
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": []
     }
   ]
 }

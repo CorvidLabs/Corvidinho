@@ -1,6 +1,6 @@
 ---
 id: github-7-typed-github-pr-merge-merges-the-bot-s-own-green-corvidinho-pr-only-when-ci-is-green-and-branch-protection
-state: implementing
+state: accepted
 type: feature
 base_commit: 86d68cd0d65e1836475d5e37a49444bdd0177ecb
 ---
