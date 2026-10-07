@@ -1,0 +1,8 @@
+{
+  "schema_version": 2,
+  "change_id": "saying-new-topic-starts-a-fresh-session-a-normal-mention-keeps-continuing-the-open-one-session-3-b",
+  "implementation_commit": "8ca93cdeee4f183cd6f0d170cb29f1f5fc2a05c6",
+  "finalization_digest": "tip-orphan-manual",
+  "timestamp": 1791395000,
+  "note": "tip-orphan archive after #393 squash (same class as #424\u2013#429)"
+}
