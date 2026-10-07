@@ -23,4 +23,5 @@ artifact: research
   and the WATCH role resolution from #374 (`watchTriggerRole`).
 - GitHub `deny_users` holds logins or numeric ids (`src/plugins/roles.ts`
   checks both), so `github_user` accepts either and the lockout check covers
-  the owner's login and id.
+  the owner's login and id. WATCH's event gate (`gateEvent`) matched the
+  sender's login only, so it now also matches the event's `senderId`.

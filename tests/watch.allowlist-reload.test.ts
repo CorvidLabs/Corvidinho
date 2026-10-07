@@ -160,6 +160,25 @@ describe("github watch re-reads the allowlist every cycle (ADMIN-3.c, REQ-watch-
     }
   });
 
+  test("/admin deny add github_user:<numeric id> refuses that sender's next event by their id, whatever login they use", async () => {
+    const w = await poller([[ev({ id: "comment-10" })], [ev({ id: "comment-11", sender: "alice-renamed" })], [ev({ id: "comment-12", senderId: 999 })]]);
+    try {
+      // alice (id 4242) is on [github].users; deny her numeric id only.
+      await adminChange("github.deny_users", "add", "4242");
+      const first = await w.poll();
+      expect(first.refused).toBe(1);
+      expect(first.started).toBe(0);
+      // A renamed login with the same id is refused too.
+      expect((await w.poll()).refused).toBe(1);
+      expect(w.runs).toHaveLength(0);
+      // Another id with the allowlisted login still runs (the deny is the id).
+      expect((await w.poll()).started).toBe(1);
+      expect(w.runs.map((r) => r.actingGithubId)).toEqual([999]);
+    } finally {
+      await w.close();
+    }
+  });
+
   test("a file that cannot be loaded skips the cycle: nothing polled, the last good lists kept; fixed ⇒ polls again", async () => {
     const w = await poller([[ev()], [ev({ id: "comment-9" })]]);
     try {

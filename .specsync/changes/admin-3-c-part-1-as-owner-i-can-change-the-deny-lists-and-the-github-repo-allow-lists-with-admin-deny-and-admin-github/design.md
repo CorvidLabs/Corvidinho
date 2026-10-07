@@ -30,5 +30,11 @@ artifact: design
 - WATCH: `reloadWatchAllowlist` assigns the new `sourcePath` / `github` /
   `discord` onto the same `allowlist` object and re-expands `repos` in place;
   the poller replaces its in-memory denied-id store on a GitHub-list change.
-  Startup checks are unchanged.
+  Startup checks are unchanged. The event gate (`gateEvent`,
+  `src/watch/router.ts`) also refuses a sender whose numeric id from the API
+  event is on `deny_users`, so an id `/admin deny add github_user:` stores
+  denies on WATCH as it does in the tool layer.
+- Deny wins on an allow add: an org is refused when it is on `deny_orgs` or
+  its `OWNER/*` is on `deny_repos`; a repo when its owner is on `deny_orgs`
+  or `deny_repos` names it or its `OWNER/*`.
 - No new env var, config key, table, schema or protocol version.

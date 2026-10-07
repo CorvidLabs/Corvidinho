@@ -535,8 +535,14 @@ describe("/admin github add|remove (ADMIN-3.c: the GitHub repo allow lists)", ()
     expect(await run(f, "github", "add", { org: "evil-org" })).toContain("deny always wins");
     expect(await run(f, "github", "add", { repo: "evil-org/x" })).toContain("deny always wins");
     expect(await run(f, "github", "add", { repo: "blocked/x" })).toContain("deny always wins");
+    // An org whose every repo is denied (`blocked/*`) is refused like a denied org.
+    const org = await run(f, "github", "add", { org: "blocked" });
+    expect(org).toStartWith("Refused:");
+    expect(org).toContain("deny always wins");
+    expect(isRepoAllowed("blocked/x", f.ctx.allowlist.github).ok).toBe(false);
+    expect(f.ctx.allowlist.github.orgs).toEqual(["corvidlabs"]);
     expect(readFileSync(f.path, "utf8")).toBe(before);
-    expect(rows(f.db).map((x) => x[2])).toEqual(["denied", "denied", "denied"]);
+    expect(rows(f.db).map((x) => x[2])).toEqual(["denied", "denied", "denied", "denied"]);
   });
 
   test("removing the last org/repo is allowed and says WATCH now polls nothing; env-only refused; usage when not exactly one", async () => {

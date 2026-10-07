@@ -194,7 +194,9 @@ Empty github orgs+repos fail-start; after start every poll cycle re-reads the
 allowlist (file and env) and splices it into the config in place, skips the
 cycle when the file fails to load (fail closed, last good lists kept), polls
 nothing while the repo/org allowlist is empty and forgets its in-memory denied
-ids when the GitHub lists change (ADMIN-3.c, REQ-watch-043); empty users = deny-all for triggers;
+ids when the GitHub lists change (ADMIN-3.c, REQ-watch-043); a `deny_users`
+entry may be a login or a numeric id, and the event gate refuses a sender
+matched by either (the event's `senderId`, REQ-watch-043); empty users = deny-all for triggers;
 allowlist BEFORE session spawn; assignment / review_request also gate the
 user who assigned / requested (actor; missing actor refused, deny wins) in the
 router and before the poller's per-issue dedupe; denied refuse quietly (no

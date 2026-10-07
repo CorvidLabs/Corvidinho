@@ -1810,8 +1810,8 @@ before `github-pr-create` refuses, and drops the frame's `review`);
     owner's GitHub login and id → `denied`); env-only removal refused and
     file + env noted; no trail or a throwing trail fails closed; non-owner
     refused at dispatch and at the handler (`denied` there); `github add`
-    org / repo, deny-wins refusals, last entry removable with the WATCH
-    warning; `config show` lists entries, `[github].users` read-only, under
+    org / repo, deny-wins refusals (an org whose `OWNER/*` is on
+    `deny_repos` included), last entry removable with the WATCH warning; `config show` lists entries, `[github].users` read-only, under
     2000 characters with 60 entries per list.
 - `tests/discord.admin-slash.test.ts` (updated): the `/admin` body now ends
   with the `deny` and `github` groups (`add`, `remove`).
@@ -1819,5 +1819,7 @@ before `github-pr-create` refuses, and drops the frame's `review`);
   `src/discord/{admin-allowlist,command-handlers/admin,slash-commands}.ts`,
   `src/identity/people.ts` and `src/watch/{config,poller}.ts` swapped in, all
   28 cases of `tests/discord.admin-lists.test.ts` fail; restored, 28 of 28
-  pass.
+  pass. Review follow-up: with the PR's first-round `command-handlers/admin.ts`
+  swapped in, the deny-wins case fails (`/admin github add org:blocked` was
+  allowed while `deny_repos` held `blocked/*`); restored, it passes.
 

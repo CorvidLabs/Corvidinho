@@ -446,6 +446,9 @@ function preRefusal(
     if (c.key === "github.orgs" && g.denyOrgs.includes(c.id)) {
       return `Refused: ${target} is on [github].deny_orgs and deny always wins. Remove it first (/admin deny remove github_org:${c.id}, or the VM file / env), then retry.`;
     }
+    if (c.key === "github.orgs" && g.denyRepos.includes(`${c.id}/*`)) {
+      return `Refused: every repo of ${target} is on [github].deny_repos (\`${c.id}/*\`) and deny always wins. Remove it first (/admin deny remove github_repo:${c.id}/*, or the VM file / env), then retry.`;
+    }
     if (c.key === "github.repos") {
       const [owner] = c.id.split("/");
       const denied =

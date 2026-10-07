@@ -320,6 +320,9 @@ with an org name and a request id in its body; no network, no real key):
   - `/admin github add repo:` → the next cycle polls the new repo (same
     `repos` array, same `allowlist` object) and runs its event; `/admin deny
     add github_user:` → that user's next event is refused.
+  - `/admin deny add github_user:<numeric id>` → that sender's events are
+    refused by their id (`senderId`), a renamed login included; another id
+    with an allowlisted login still runs.
   - A file that fails to load → `allowlistSkip: "unreadable"`, no fetch, no
     run, lists unchanged; fixed → polls again with the file's deny list.
   - The last repo removed → `allowlistSkip: "empty"`, nothing fetched; an org
@@ -329,5 +332,8 @@ with an org name and a request id in its body; no network, no real key):
   - IDENTITY-12.a after a reload: the owner's comment runs as `owner`, a
     stranger's as `community`.
 - Fail on base (`origin/main` 54d6a6c, same sources swapped in as the
-  discord evidence): 5 of 5 fail; restored, 5 of 5 pass.
+  discord evidence): 5 of 5 fail; restored, 5 of 5 pass. Review follow-up:
+  with the PR's first-round `src/watch/router.ts` swapped in, the numeric-id
+  case fails (the event gate matched `deny_users` against the login only);
+  restored, 6 of 6 pass.
 

@@ -20,6 +20,7 @@ artifact: plan
    = 8).
 4. `src/watch/config.ts` `reloadWatchAllowlist` + `src/watch/poller.ts`: re-read
    every cycle, skip on load failure, poll nothing when empty, fresh denied-id
-   store on a change.
+   store on a change; `src/watch/router.ts` `gateEvent` also refuses a sender
+   whose numeric id is on `deny_users`.
 5. Tests that fail on the base, docs (discord.md, WATCH.md, DISCORD-GO-LIVE.md,
    README, allowlist.example.toml), spec prose and deltas.
