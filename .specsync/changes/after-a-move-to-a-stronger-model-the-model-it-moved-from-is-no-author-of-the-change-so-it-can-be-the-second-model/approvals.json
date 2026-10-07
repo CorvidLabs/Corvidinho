@@ -1,0 +1,40 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791332207,
+      "digest": "586cb61f1d43f5321abb9a9481863600e3fbd2c1308f0d33ccb7bc476cdb8d75",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "after-a-move-to-a-stronger-model-the-model-it-moved-from-is-no-author-of-the-change-so-it-can-be-the-second-model",
+        "title": "After a move to a stronger model, the model it moved from is no author of the change, so it can be the second-model reviewer (AGENT-17.a, GITHUB-9.a)",
+        "description": "After a move to a stronger model, the model it moved from is no author of the change, so it can be the second-model reviewer (AGENT-17.a, GITHUB-9.a)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent"
+        ],
+        "affected_paths": [
+          "src/agent/execute.ts",
+          "tests/agent.stall-escalate.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "With CORVIDINHO_LLM_MODEL=fake-weak,fake-strong and the order fake-weak,fake-strong, a code-tier run whose weak model says Done. twice moves to fake-strong, which changes README.md; the run's review authors() is [fake-strong] only and resolveReviewer picks fake-weak (on main authors() is [fake-weak, fake-strong] and resolveReviewer is null, so no PR); in a worker whose lead's authors name fake-weak it stays an author after the move; tests/agent.stall-escalate.test.ts, the full suite and verify pass"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "c843864e8fdc2bff4f2291f7ac0d0fc3b9069804f0688c42a29b9533aa943ad3"
+      }
+    }
+  ],
+  "reopenings": []
+}

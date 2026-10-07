@@ -1,0 +1,18 @@
+{
+  "timestamp": 1791332384,
+  "commit": "5ebef34d96c0bacff99d59b8da344e1d08acbe86",
+  "contract_digest": "586cb61f1d43f5321abb9a9481863600e3fbd2c1308f0d33ccb7bc476cdb8d75",
+  "execution_digest": "01db15ad8a49f7f2053aebb6e5f07d4d527caa58b918af5e53ba0cedba25d5ec",
+  "workspace_digest": "70919714f098dec64ad2b756b10b1e7fef9cf096d8431ff20bb4d668f0824c07",
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec agent",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": [
+    "REQ-agent-088"
+  ]
+}

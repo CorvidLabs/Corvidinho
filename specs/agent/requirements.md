@@ -2775,6 +2775,17 @@ SAFE-14 spend guard as every call, counted and priced under its own model
 No config key, flag, slash command, HumanAsk reason, NDJSON field, table or
 schema version is added.
 
+A move only follows a stall in a run where nothing changed, so the model the
+run moved from wrote none of the change: on a move `createTaskExecute` SHALL
+drop it from the run's `authors()` (REQ-agent-092, GITHUB-9.a: the reviewer
+is the first configured model that didn't write the change), so a later
+state change records only the models that wrote it (`recordChangeAuthors`)
+and, with two configured models, the model it moved from can review the
+stronger model's change. It SHALL stay an author when the lead's authors
+(`CORVIDINHO_DELEGATE_AUTHORS`), a `delegate` result's `data.models` or a
+failover (the run's own or a worker's) also name it, and a later reply from
+it in the run makes it an author again (`onModel`).
+
 Acceptance Criteria
 - `modelOrderFromEnv` is [] unset or blank and parses `kind:model` entries in order; `MODEL_ORDER_ENV` is `CORVIDINHO_LLM_MODEL_ORDER`.
 - `strongerModel`: no order ⇒ `no-order`; the next entry the tier's chain holds ⇒ that entry (bare and `openai:` match); the order, not the fallback list, decides; the last in the order ⇒ `top`; a model not in the order ⇒ `unordered`; an order entry the tier's list lacks, one without its key, or another tier's model is skipped (none left ⇒ `unavailable`); a model that failed in the run is never moved back to; `moveToStronger` changes `chain.index` only on a move.
@@ -2786,6 +2797,8 @@ Acceptance Criteria
 - Under a spend cap the stronger model's call is in the spend ledger under its own model; an unpriced stronger model under a cap stops and asks (`spend-cap`) before it is sent.
 - A delegate worker's env keeps `CORVIDINHO_LLM_MODEL_ORDER`.
 - The real CLI (`task run --output ndjson`, two localhost `ollama:` models, the order set) makes three requests (weak, weak, strong), emits both operator lines, and ends `done` with the note and `model` naming the stronger model.
+- After a move (two configured models, the order set, the weak model saying "Done." twice, the stronger one changing `README.md`), the run's `review.authors()` is the stronger model only and `resolveReviewer` picks the weak model; in a worker whose lead's authors name the weak model it stays an author after the move and there is no reviewer.
+
 ### REQ-agent-525
 
 Trust where the repo uses Trust (AGENT-18, captured on main from Leif's
