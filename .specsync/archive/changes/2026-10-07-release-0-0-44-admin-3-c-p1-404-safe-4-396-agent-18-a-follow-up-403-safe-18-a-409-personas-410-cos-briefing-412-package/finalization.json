@@ -1,13 +1,13 @@
 {
   "schema_version": 2,
   "change_id": "release-0-0-44-admin-3-c-p1-404-safe-4-396-agent-18-a-follow-up-403-safe-18-a-409-personas-410-cos-briefing-412-package",
-  "implementation_commit": "38bbd2ed2fd5c2545d675af92fff260eac777863",
-  "implementation_tree": "afb68e363a9994d9b13e60100d738ea11b36c0ed",
+  "implementation_commit": "dcb2ed8dba89bcf9e96105052bd913353ea2a0bd",
+  "implementation_tree": "b5f572feb361ed4f269c830dca0d3b477a9a3f6e",
   "contract_digest": "01c7303dec8707ce9dd967105c91ff81fc1bbf3febed14ab0babbecf12468406",
   "workspace_digest": "e8fde82e05327cbcda663ff4692f6fb3fb662fad7ca7baad66c20126e36c0b43",
   "closing_digest": "c4f14fbc9d9a8563ecf767d10a880b7b7fb02816f0cd409b3f9f2a70a4b2b9ea",
   "review_digest": "aa47cbbfa962bd07c45bdc0c4ae3efecea256da7732b359fd7e08c8068309dc9",
   "finalization_digest": "487371f1a618079637cfb728b11760b30340f11482ba5bd779edbcfa7cca666c",
   "timestamp": 1791388671,
-  "note": "release 0.0.44 accept; tip-orphan archives after squash if needed (same class as #399/#400)"
+  "note": "tip-orphan archive after #419 squash (same class as #400 / #414 / #417 / #418)"
 }
