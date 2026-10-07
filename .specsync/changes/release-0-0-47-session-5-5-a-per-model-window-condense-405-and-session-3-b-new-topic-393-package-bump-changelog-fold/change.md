@@ -1,6 +1,6 @@
 ---
 id: release-0-0-47-session-5-5-a-per-model-window-condense-405-and-session-3-b-new-topic-393-package-bump-changelog-fold
-state: approved
+state: implementing
 type: operations
 base_commit: 27887fad35ec0f3b510d3ec5bea3ec623b1a6bdd
 ---
