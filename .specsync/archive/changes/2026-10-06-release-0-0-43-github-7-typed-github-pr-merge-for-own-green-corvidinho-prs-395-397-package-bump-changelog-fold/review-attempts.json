@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "release-0-0-43-github-7-typed-github-pr-merge-for-own-green-corvidinho-prs-395-397-package-bump-changelog-fold",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "524257c05f26a706314395e32ed4f4241ae6c933",
+      "contract_digest": "0499efb66b424ae687e881e2d47ab9f6c75184a529018fbd8da8d6bc8ded22da",
+      "execution_digest": "e02e12140402f1cb678c109ad2532ef8ead175fad38b65e361d7d0229784371d",
+      "workspace_digest": "deea6560f38ea076a2b308a4cb4e03370581b5e7a8e8972aa80040662423692e",
+      "timestamp": 1791332709
+    }
+  ]
+}

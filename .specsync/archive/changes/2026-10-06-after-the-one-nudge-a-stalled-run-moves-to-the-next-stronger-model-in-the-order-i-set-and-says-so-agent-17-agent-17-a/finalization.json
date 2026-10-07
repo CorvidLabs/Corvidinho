@@ -5,9 +5,9 @@
   "implementation_tree": "c4bcac9f8ec7b91faf6d9c3bfb0d600c11597960",
   "contract_digest": "17da04597271a5821e4da6e5eb193a3671160b57dde54b5ca1ed9895d1825644",
   "workspace_digest": "68e6bfc652de36d56e5ae872278167c78384b4b89e8af1290c855ff669fc6c49",
-  "closing_digest": "bafe7717099e1a1211a84c16e01766690dc794800183fe1261f3717f0d41f804",
-  "review_digest": "bafe7717099e1a1211a84c16e01766690dc794800183fe1261f3717f0d41f804",
-  "finalization_digest": "17da04597271a5821e4da6e5eb193a3671160b57dde54b5ca1ed9895d1825644",
+  "closing_digest": "186285cb319b490463822184939686d5229bc9ebf1667929358958602b520672",
+  "review_digest": "1d60acc767418fa1079e7188b691edbe66b066cc4bf0398a813e727d5f8b14df",
+  "finalization_digest": "a42ce855eb1f312475d66353ea292ea4b533e4d02eedc87b337722769cb2cea5",
   "timestamp": 1791303855,
-  "note": "tip-orphan after #370"
+  "note": "tip-orphan after #370; repaired delivery-input + closing digests (incomplete #384 evidence)"
 }

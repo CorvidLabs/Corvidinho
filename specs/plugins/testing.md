@@ -99,6 +99,12 @@ the owner's default files (`~/.kube/config`, `~/.aws/*`, `~/.config/gcloud/*`,
 `CLOUDSDK_CONFIG` / `AZURE_CONFIG_DIR` fresh dirs removed after the child, a
 "login" one child writes never reaches the next, and `AWS_REGION` /
 `GOOGLE_CLOUD_PROJECT` stay. All 7 tests fail with the base's sources.
+The `specsync-check` tool (the verify lane's `spec-check` step, follow-up to
+#373) is covered too: a child bun process with the owner's env runs it via a
+stand-in `fledge` and a `fledge.toml` `spec-check` task, and via a stand-in
+`specsync` with no such task; same assertions, and the owner's `GITHUB_TOKEN`
+value is absent from the output. It fails with main's (`86d68cd0`)
+`plugins/specsync/api.ts` (7 pass, 1 fail) and passes restored (8 of 8).
 
 ## Language runners (REQ-plugins-313..314)
 
@@ -790,3 +796,13 @@ with the base sources.
   WATCH session id gives `github:(unknown)`, with nothing `local` / `cli`.
 - Fail on base: main's `src/plugins/{run,roles}.ts` fail the checkout case;
   main's `src/audit/log.ts` fails both audit cases. Restored: they pass.
+## GITHUB-7 typed github-pr-merge (REQ-plugins-099)
+
+`tests/github.merge.plugin.test.ts` (12 tests, fake Octokit, no token):
+`isCorvidinhoRepoSlug`; `mergeOwnGreenPr` merges own green Corvidinho PR
+(squash, no admin field), dry-run skips `pulls.merge`, refuses outside
+Corvidinho, refuses other authors, refuses non-green CI, refuses
+draft/closed/not-mergeable, surfaces merge API errors; plugin listing is
+dangerous minTier 1, SAFE-1 denies without allowlist, outside-Corvidinho
+refusal before Octokit, usage error without a PR number.
+`tests/plugins.list.smoke.test.ts` expects `github-pr-merge` in `plugins list`.

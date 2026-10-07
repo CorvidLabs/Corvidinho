@@ -17,5 +17,6 @@
     "REQ-agent-088",
     "REQ-cli-009",
     "REQ-cli-262"
-  ]
+  ],
+  "acceptance_input_digest": "4789587e830c08f186fca5dfaa3f8cc2e34c6f4e0c9da8056a3213a3bd646e56"
 }

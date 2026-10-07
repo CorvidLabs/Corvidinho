@@ -7,10 +7,10 @@
 
 <!-- hi:index -->
 - [admin](hi/admin.md): ADMIN (7 criteria)
-- [agent](hi/agent.md): AGENT (28 criteria)
+- [agent](hi/agent.md): AGENT (30 criteria)
 - [allow](hi/allow.md): ALLOW, WALLET (9 criteria)
 - [autonomous](hi/autonomous.md): AUTONOMOUS (9 criteria)
-- [autonomy](hi/autonomy.md): AUTONOMY (15 criteria)
+- [autonomy](hi/autonomy.md): AUTONOMY (16 criteria)
 - [cli](hi/cli.md): CLI (5 criteria)
 - [discord](hi/discord.md): DISCORD (19 criteria)
 - [fledge](hi/fledge.md): FLEDGE (7 criteria)

@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "cover-github-7-incidental-paths-loop-guards-state-changing-tools-plugins-list-smoke-for-github-pr-merge",
+  "implementation_commit": "51fd45e8d3d28e9bc767e3600337c44c553806d3",
+  "implementation_tree": "4a58e12c10f52b3b3665fc492cabbb0f096f9879",
+  "contract_digest": "5312779e5025d4daf8863b4884ff004991a6006f440888ae723e0224980acb0c",
+  "workspace_digest": "a28df5b0a06740bff64715485834578494a3abe26f93504ef5c3d00e7a51f23d",
+  "closing_digest": "ad2455fb966b6ed61b35458f0bc07dae50afc8fb9ae12fb75e3b8205dd1cdc19",
+  "review_digest": "70757dc215f0e5fb4f9c26fb17837e7eab8a3a43bffbbae376de7045000063f5",
+  "finalization_digest": "1988a50aea4dce9dbb7870c97af2e328295c8a4f424849a802eec8f7fdaa75fb",
+  "timestamp": 1791332023
+}

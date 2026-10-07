@@ -75,6 +75,7 @@ export const STATE_CHANGING_TOOLS: ReadonlySet<string> = new Set([
   "github-issue-comment",
   "github-pr-create",
   "github-pr-review",
+  "github-pr-merge",
   "discord-post-message",
   "discord-send-file",
   "memory-forget",

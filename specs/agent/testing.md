@@ -1307,3 +1307,19 @@ child `bun` process because it reads PATH as its process started):
   is the whole feedback.
 
 All but the no-Trust case fail with the base sources swapped in.
+## The specsync-check tool starts without cloud credentials (REQ-agent-621, REQ-plugins-621 modified; SAFE-21.b follow-up to #373)
+
+`tests/agent.cloud-credentials.test.ts` — "specsync-check, the verify lane's
+spec-check step, starts without cloud credentials": a child bun process with
+the owner's env (cloud env set, then only the default files under a fake
+HOME, plus a `GITHUB_TOKEN` with no vendor shape) runs the tier-0
+`specsync-check` handler via a stand-in `fledge` and a `fledge.toml`
+`spec-check` task (`runSpecCheck`), and via a stand-in `specsync` with no
+such task (`spawnSpecsync`). Each child shows no cloud marker or dropped key,
+the stand-ins at `/dev/null`, `CLOUDSDK_CONFIG` / `AZURE_CONFIG_DIR` outside
+HOME and gone after the call, `AWS_REGION` / `GOOGLE_CLOUD_PROJECT` kept, and
+the token value is absent from the tool's output (SAFE-6 scrub).
+
+Fail-on-main: with main's (`86d68cd0`) `plugins/specsync/api.ts` swapped in,
+the file gave 7 pass, 1 fail (the owner's cloud markers and `GITHUB_TOKEN`
+came back through the tool); restored, 8 of 8 pass.
