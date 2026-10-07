@@ -25,13 +25,24 @@
  *                                         request and DM Approve/Deny card as
  *                                         their own ask; nothing is forgotten
  *                                         until the owner approves on the card
+ *   /admin deny add|remove                ADMIN-3.c (part 1) exactly one of
+ *        channel:<…> | user:@x | role:@r  [discord].deny_channels|deny_users|
+ *        | github_org:<org>               deny_roles, [github].deny_orgs|
+ *        | github_repo:<owner/repo>       deny_repos|deny_users
+ *        | github_user:<login or id>
+ *   /admin github add|remove              ADMIN-3.c (part 1) exactly one of
+ *        org:<org> | repo:<owner/repo>    [github].orgs|repos (the GitHub repo
+ *                                         allow lists; [github].users stays
+ *                                         file / env, shown read-only)
  *
  * Owner-only (IDENTITY-2): dispatch enforces minPermission ADMIN and this
  * handler re-checks ADMIN itself before anything else (ADMIN-4 / DISCORD-7);
  * no owner ⇒ nobody passes. Writes go to the allowlist file the bridge already
  * reads and to the live allowlist in place (no restart). Env values are
- * read-only at runtime. Empty stays deny-all: deny lists still win, and the
- * last live (non-denied) channel cannot be removed. Mutations leave SAFE-5 audit rows
+ * read-only at runtime. Empty stays deny-all: deny lists still win, the last
+ * live (non-denied) channel cannot be removed or denied, and the owner can
+ * never deny themselves (their Discord id, a role they hold here, or their
+ * GitHub login / id). Mutations leave SAFE-5 audit rows
  * (intent first; fail closed when the trail is unavailable). Replies are
  * ephemeral and never contain tokens or secrets.
  */
@@ -66,11 +77,14 @@ import {
   type PeopleAdminOp,
   type PeopleAdminPlan,
 } from "../admin-people.ts";
+import { hasGithubRepoAllowEntries } from "../../allowlist/github.ts";
 import {
   ADMIN_LIST_ENV,
-  ADMIN_SNOWFLAKE_RE,
+  ADMIN_LISTS,
   commitAdminListChange,
   envAdminList,
+  liveAdminList,
+  normalizeAdminListId,
   planAdminListChange,
   readAdminFileView,
   resolveAdminAllowlistPath,
@@ -95,6 +109,63 @@ type Mutation = {
   op: AdminListOp;
   option: "user" | "channel";
   usage: string;
+};
+
+/** One list option of `/admin deny|github add|remove` and the list it edits. */
+type ListOption = { option: string; key: AdminListKey; hint: string };
+
+/**
+ * ADMIN-3.c (part 1) — `/admin deny add|remove` and `/admin github
+ * add|remove` take exactly one of their options; each names one list.
+ */
+type ListRoute = {
+  action: string;
+  op: AdminListOp;
+  options: readonly ListOption[];
+  usage: string;
+};
+
+const DENY_OPTIONS: readonly ListOption[] = [
+  { option: "channel", key: "deny_channels", hint: "a channel (name or id)" },
+  { option: "user", key: "deny_users", hint: "a Discord user" },
+  { option: "role", key: "deny_roles", hint: "a Discord role" },
+  { option: "github_org", key: "github.deny_orgs", hint: "a GitHub org login" },
+  { option: "github_repo", key: "github.deny_repos", hint: "OWNER/REPO or OWNER/*" },
+  { option: "github_user", key: "github.deny_users", hint: "a GitHub login or numeric user id" },
+];
+
+const GITHUB_OPTIONS: readonly ListOption[] = [
+  { option: "org", key: "github.orgs", hint: "a GitHub org login" },
+  { option: "repo", key: "github.repos", hint: "OWNER/REPO or OWNER/*" },
+];
+
+const DENY_USAGE = (op: AdminListOp) =>
+  `usage: /admin deny ${op} with exactly one of channel:<name or id> user:@someone role:@role github_org:<org> github_repo:<owner/repo or owner/*> github_user:<login or numeric id>`;
+const GITHUB_USAGE = (op: AdminListOp) =>
+  `usage: /admin github ${op} with exactly one of org:<org> repo:<owner/repo or owner/*> — the GitHub repo allow lists ([github].users stays in the file / env)`;
+
+const LIST_ROUTES: Record<string, ListRoute> = {
+  "deny add": { action: "admin-deny-add", op: "add", options: DENY_OPTIONS, usage: DENY_USAGE("add") },
+  "deny remove": { action: "admin-deny-remove", op: "remove", options: DENY_OPTIONS, usage: DENY_USAGE("remove") },
+  "github add": { action: "admin-github-add", op: "add", options: GITHUB_OPTIONS, usage: GITHUB_USAGE("add") },
+  "github remove": {
+    action: "admin-github-remove",
+    op: "remove",
+    options: GITHUB_OPTIONS,
+    usage: GITHUB_USAGE("remove"),
+  },
+};
+
+/** One validated list change, ready to plan (shared by every list route). */
+type ListChange = {
+  action: string;
+  key: AdminListKey;
+  op: AdminListOp;
+  id: string;
+  /** Audit args: route, option and id (digest only). */
+  args: string[];
+  /** The slash command, for replies (e.g. `/admin deny add`). */
+  command: string;
 };
 
 const MUTATIONS: Record<string, Mutation> = {
@@ -160,8 +231,18 @@ function isAdmin(ctx: SlashContext, interaction: SlashInteraction): boolean {
   );
 }
 
+/** How a reply names one entry: a Discord mention, else the GitHub entry in code. */
 function mention(key: AdminListKey, id: string): string {
-  return key === "users" ? `<@${id}>` : `<#${id}>`;
+  if (key === "users" || key === "deny_users") return `<@${id}>`;
+  if (key === "channels" || key === "deny_channels") return `<#${id}>`;
+  if (key === "deny_roles") return `<@&${id}>`;
+  return `\`${id}\``;
+}
+
+/** `[section].key` of a list (canonical spelling). */
+function listName(key: AdminListKey): string {
+  const spec = ADMIN_LISTS[key];
+  return `[${spec.section}].${spec.key}`;
 }
 
 function auditEntry(
@@ -202,7 +283,7 @@ export async function handleAdminCommand(
   // ADMIN-4 / DISCORD-7: handler-time re-check; registration and the
   // dispatcher floor are never enough. No owner ⇒ nobody is ADMIN.
   if (!isAdmin(ctx, interaction)) {
-    const m = MUTATIONS[route];
+    const m = MUTATIONS[route] ?? LIST_ROUTES[route];
     const pop = PEOPLE_OPS[route];
     if (m) auditSoft(ctx, auditEntry(interaction, m.action, "denied", [group, sub]));
     else if (pop) auditSoft(ctx, auditEntry(interaction, `admin-people-${pop}`, "denied", [group, sub]));
@@ -234,6 +315,12 @@ export async function handleAdminCommand(
     return;
   }
 
+  const lr = LIST_ROUTES[route];
+  if (lr) {
+    await handleListRoute(ctx, interaction, lr, [group, sub]);
+    return;
+  }
+
   const m = MUTATIONS[route];
   if (!m) {
     await interaction.reply({
@@ -245,53 +332,180 @@ export async function handleAdminCommand(
   await handleMutation(ctx, interaction, m, [group, sub]);
 }
 
+/** The entry a list option holds (a channel option also takes `<#id>` / a picked name), or null. */
+function optionEntry(key: AdminListKey, raw: unknown): string | null {
+  const text = typeof raw === "string" ? raw : "";
+  if (key === "channels" || key === "deny_channels") {
+    const resolved = resolveChannelOption(text);
+    return resolved.ok ? normalizeAdminListId(key, resolved.id) : null;
+  }
+  return normalizeAdminListId(key, text);
+}
+
 async function handleMutation(
   ctx: SlashContext,
   interaction: SlashInteraction,
   m: Mutation,
   route: string[],
 ): Promise<void> {
-  const raw = interaction.options[m.option];
-  let id = "";
-  if (m.option === "channel") {
-    const resolved = resolveChannelOption(typeof raw === "string" ? raw : "");
-    if (!resolved.ok) {
-      await interaction.reply({ content: m.usage, ephemeral: true });
-      return;
-    }
-    id = resolved.id;
-  } else {
-    id = typeof raw === "string" ? raw.trim() : "";
-  }
-  if (!ADMIN_SNOWFLAKE_RE.test(id)) {
+  const id = optionEntry(m.key, interaction.options[m.option]);
+  if (id === null) {
     await interaction.reply({ content: m.usage, ephemeral: true });
     return;
   }
-  const args = [...route, id];
-  const env = ctx.env ?? process.env;
-  const d = ctx.allowlist.discord;
+  await applyListChange(ctx, interaction, {
+    action: m.action,
+    key: m.key,
+    op: m.op,
+    id,
+    args: [...route, id],
+    command: `/admin ${route.join(" ")}`,
+  });
+}
 
-  // Deny always wins — adding to the allow list would change nothing.
-  const denyList = m.key === "users" ? d.denyUsers : d.denyChannels;
-  if (m.op === "add" && denyList.includes(id)) {
-    auditSoft(ctx, auditEntry(interaction, m.action, "denied", args));
+/**
+ * ADMIN-3.c (part 1) — `/admin deny add|remove` and `/admin github
+ * add|remove`: exactly one option, validated for its list, then the same
+ * plan → audit intent → commit path as the ADMIN-1/2 mutations.
+ */
+async function handleListRoute(
+  ctx: SlashContext,
+  interaction: SlashInteraction,
+  r: ListRoute,
+  route: string[],
+): Promise<void> {
+  const given = r.options.filter((o) => {
+    const v = interaction.options[o.option];
+    return typeof v === "string" && v.trim() !== "";
+  });
+  if (given.length !== 1) {
+    await interaction.reply({ content: r.usage, ephemeral: true });
+    return;
+  }
+  const opt = given[0]!;
+  const id = optionEntry(opt.key, interaction.options[opt.option]);
+  if (id === null) {
     await interaction.reply({
-      content: `Refused: ${mention(m.key, id)} is on deny_${m.key} and deny always wins. Remove it from the deny list on the VM first (file [discord].deny_${m.key} or env), then retry.`,
+      content: `Refused: ${opt.option} must be ${opt.hint}. Nothing changed.\n${r.usage}`,
       ephemeral: true,
     });
     return;
   }
+  await applyListChange(ctx, interaction, {
+    action: r.action,
+    key: opt.key,
+    op: r.op,
+    id,
+    args: [...route, opt.option, id],
+    command: `/admin ${route.join(" ")}`,
+  });
+}
 
-  // Plan, audit intent, commit: all synchronous, so no interleaving.
+/** The owner's GitHub login and numeric ids: `[owner]` plus the owner's declared person. */
+function ownerGithubIds(ctx: SlashContext): Set<string> {
+  const out = new Set<string>();
+  const add = (v: string | undefined) => {
+    const t = v?.trim().toLowerCase();
+    if (t) out.add(t);
+  };
+  add(ctx.owner?.githubLogin);
+  add(ctx.owner?.githubId);
+  try {
+    const dir = loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner });
+    const me = dir.people.find((p) => p.id === dir.ownerPersonId);
+    for (const l of me?.githubLogins ?? []) add(l);
+    for (const i of me?.githubIds ?? []) add(i);
+  } catch {
+    /* [owner] alone still guards */
+  }
+  return out;
+}
+
+/**
+ * Refusals known before the file is read: deny always wins over an allow
+ * add, and a deny add that would lock the owner out (their Discord id, a
+ * role they hold here — @everyone included —, the last live non-denied
+ * channel, or their GitHub login / id) is never made.
+ */
+function preRefusal(
+  ctx: SlashContext,
+  interaction: SlashInteraction,
+  c: ListChange,
+): string | null {
+  const d = ctx.allowlist.discord;
+  const g = ctx.allowlist.github;
+  const target = mention(c.key, c.id);
+  if (c.op === "add") {
+    // Deny always wins — adding to an allow list would change nothing.
+    if (c.key === "users" || c.key === "channels") {
+      const denyList = c.key === "users" ? d.denyUsers : d.denyChannels;
+      if (denyList.includes(c.id)) {
+        return `Refused: ${target} is on deny_${c.key} and deny always wins. Remove it from the deny list first (/admin deny remove, or the VM file / env), then retry.`;
+      }
+    }
+    if (c.key === "github.orgs" && g.denyOrgs.includes(c.id)) {
+      return `Refused: ${target} is on [github].deny_orgs and deny always wins. Remove it first (/admin deny remove github_org:${c.id}, or the VM file / env), then retry.`;
+    }
+    if (c.key === "github.repos") {
+      const [owner] = c.id.split("/");
+      const denied =
+        g.denyOrgs.includes(owner!) ||
+        g.denyRepos.some((p) => p === c.id || p === `${owner}/*`);
+      if (denied) {
+        return `Refused: ${target} is covered by [github].deny_orgs / deny_repos and deny always wins. Remove that deny entry first (/admin deny remove, or the VM file / env), then retry.`;
+      }
+    }
+    const lockout = "you would lock yourself out";
+    if (c.key === "deny_users" && (c.id === interaction.userId.trim().toLowerCase() || c.id === ctx.owner?.discordId)) {
+      return `Refused: ${target} is you (the owner) — ${lockout} of every message and slash, /admin included. Nothing changed.`;
+    }
+    if (c.key === "deny_roles") {
+      const mine = (interaction.roleIds ?? []).map((r) => r.trim().toLowerCase());
+      if (mine.includes(c.id) || c.id === interaction.guildId?.trim().toLowerCase()) {
+        return `Refused: you hold ${target} here (every member holds @everyone) — ${lockout} of every message and slash, /admin included. Nothing changed.`;
+      }
+    }
+    if (c.key === "deny_channels" && d.channels.length > 0) {
+      const after = new Set([...d.denyChannels, c.id]);
+      if (d.channels.every((ch) => after.has(ch))) {
+        return `Refused: denying ${target} would leave no allowlisted channel that is not denied — every message and slash (including /admin) would be refused. Add another channel first. Nothing changed.`;
+      }
+    }
+    if (c.key === "github.deny_users" && ownerGithubIds(ctx).has(c.id)) {
+      return `Refused: ${target} is your GitHub login or id (the owner) — ${lockout} on GitHub (WATCH would refuse you). Nothing changed.`;
+    }
+  }
+  return null;
+}
+
+/**
+ * Plan, audit intent, commit, audit outcome — all synchronous, so two admin
+ * commands never interleave a read-modify-write. Shared by every list route.
+ */
+async function applyListChange(
+  ctx: SlashContext,
+  interaction: SlashInteraction,
+  c: ListChange,
+): Promise<void> {
+  const env = ctx.env ?? process.env;
+  const args = c.args;
+
+  const pre = preRefusal(ctx, interaction, c);
+  if (pre) {
+    auditSoft(ctx, auditEntry(interaction, c.action, "denied", args));
+    await interaction.reply({ content: pre, ephemeral: true });
+    return;
+  }
+
   const planned = planAdminListChange({
     allowlist: ctx.allowlist,
     env,
-    key: m.key,
-    op: m.op,
-    id,
+    key: c.key,
+    op: c.op,
+    id: c.id,
   });
   if (!planned.ok) {
-    auditSoft(ctx, auditEntry(interaction, m.action, "error", args));
+    auditSoft(ctx, auditEntry(interaction, c.action, "error", args));
     await interaction.reply({
       content: `Refused: ${planned.error}. File: \`${planned.path}\` — nothing changed.`,
       ephemeral: true,
@@ -300,9 +514,9 @@ async function handleMutation(
   }
   const plan = planned.plan;
 
-  const refusal = refusalFor(plan, m, d.denyChannels);
+  const refusal = refusalFor(plan, ctx.allowlist.discord.denyChannels);
   if (refusal) {
-    auditSoft(ctx, auditEntry(interaction, m.action, "denied", args));
+    auditSoft(ctx, auditEntry(interaction, c.action, "denied", args));
     await interaction.reply({ content: refusal, ephemeral: true });
     return;
   }
@@ -318,7 +532,7 @@ async function handleMutation(
   let startedSeq: number;
   try {
     if (!ctx.recordAudit) throw new Error("no audit database is wired to this bridge");
-    startedSeq = ctx.recordAudit(auditEntry(interaction, m.action, "started", args)).seq;
+    startedSeq = ctx.recordAudit(auditEntry(interaction, c.action, "started", args)).seq;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await interaction.reply({
@@ -335,16 +549,16 @@ async function handleMutation(
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    auditSoft(ctx, auditEntry(interaction, m.action, "error", args));
+    auditSoft(ctx, auditEntry(interaction, c.action, "error", args));
     await interaction.reply({
       content: `Error: could not write \`${plan.path}\`: ${msg}. Live allowlist unchanged.`,
       ephemeral: true,
     });
     return;
   }
-  const okSeq = auditSoft(ctx, auditEntry(interaction, m.action, "ok", args));
+  const okSeq = auditSoft(ctx, auditEntry(interaction, c.action, "ok", args));
   await interaction.reply({
-    content: formatApplied(ctx, interaction, plan, startedSeq, okSeq),
+    content: formatApplied(ctx, interaction, plan, c.command, startedSeq, okSeq),
     ephemeral: true,
   });
 }
@@ -692,12 +906,8 @@ export function formatPeopleList(ctx: SlashContext): string {
  * wins in the channel gate, so leaving only denied channels is the same
  * lockout as leaving none.
  */
-function refusalFor(
-  plan: AdminListPlan,
-  m: Mutation,
-  denyChannels: readonly string[],
-): string | null {
-  if (m.op !== "remove") return null;
+function refusalFor(plan: AdminListPlan, denyChannels: readonly string[]): string | null {
+  if (plan.op !== "remove") return null;
   const target = mention(plan.key, plan.id);
   if (!plan.inFileBefore && plan.inEnv) {
     return `Refused: ${target} comes from env (${ADMIN_LIST_ENV[plan.key]}); env values cannot be changed at runtime. Change the VM env and restart the bridge. Nothing changed.`;
@@ -713,40 +923,54 @@ function refusalFor(
   return null;
 }
 
+/** The list as replies count it: `users` / `channels` (ADMIN-1/2 wording), else `[section].key`. */
+function countName(plan: AdminListPlan): string {
+  return plan.key === "users" || plan.key === "channels" ? plan.key : `[${plan.section}].${plan.fileKey}`;
+}
+
 function formatNoChange(plan: AdminListPlan): string {
   const target = mention(plan.key, plan.id);
-  const where = `[discord].${plan.key}`;
+  const where = `[${plan.section}].${plan.fileKey}`;
   if (plan.op === "add") {
-    return `No change: ${target} is already in ${where} (\`${plan.path}\`). Live ${plan.key}: ${plan.liveAfter.length}.`;
+    return `No change: ${target} is already in ${where} (\`${plan.path}\`). Live ${countName(plan)}: ${plan.liveAfter.length}.`;
   }
-  return `No change: ${target} is not in ${where} (\`${plan.path}\`) or env. Live ${plan.key}: ${plan.liveAfter.length}.`;
+  return `No change: ${target} is not in ${where} (\`${plan.path}\`) or env. Live ${countName(plan)}: ${plan.liveAfter.length}.`;
 }
 
 function formatApplied(
   ctx: SlashContext,
   interaction: SlashInteraction,
   plan: AdminListPlan,
+  command: string,
   startedSeq: number,
   okSeq: number | undefined,
 ): string {
   const target = mention(plan.key, plan.id);
-  const where = `[discord].${plan.key}`;
+  const where = `[${plan.section}].${plan.fileKey}`;
+  const name = countName(plan);
+  const deny = ADMIN_LISTS[plan.key].key.startsWith("deny_");
   const verb =
     plan.op === "add"
       ? plan.key === "users"
         ? `approved ${target} (added to ${where})`
-        : `added ${target} to ${where}`
+        : deny
+          ? `denied ${target} (added to ${where})`
+          : `added ${target} to ${where}`
       : `removed ${target} from ${where}`;
   const lines = [
-    `✅ /admin ${plan.key} ${plan.op}: ${verb}.`,
-    `File \`${plan.path}\`${plan.exists ? "" : " (created)"}: ${plan.key} ${plan.fileBefore.length} → ${plan.fileAfter.length}${plan.fileChanged ? "" : " (unchanged)"}.`,
-    `Live ${plan.key} (file ∪ env): ${plan.liveBefore.length} → ${plan.liveAfter.length}. Takes effect now — no restart.`,
+    `✅ ${command}: ${verb}.`,
+    `File \`${plan.path}\`${plan.exists ? "" : " (created)"}: ${name} ${plan.fileBefore.length} → ${plan.fileAfter.length}${plan.fileChanged ? "" : " (unchanged)"}.`,
+    `Live ${name} (file ∪ env): ${plan.liveBefore.length} → ${plan.liveAfter.length}. Takes effect now — no restart.`,
   ];
+  if (plan.section === "github") {
+    lines.push("GitHub tools read the file on their next call, and `github watch` re-reads it on its next poll.");
+  }
+  const listed = plan.key === "users" || plan.key === "channels" ? "allowed" : "listed";
   if (plan.op === "add" && plan.inEnv) {
-    lines.push(`Note: ${target} was already allowed via env (${ADMIN_LIST_ENV[plan.key]}); it is now also in the file.`);
+    lines.push(`Note: ${target} was already ${listed} via env (${ADMIN_LIST_ENV[plan.key]}); it is now also in the file.`);
   }
   if (plan.op === "remove" && plan.inEnv) {
-    lines.push(`Note: ${target} is still allowed via env (${ADMIN_LIST_ENV[plan.key]}), which cannot change at runtime.`);
+    lines.push(`Note: ${target} is still ${listed} via env (${ADMIN_LIST_ENV[plan.key]}), which cannot change at runtime.`);
   }
   if (
     plan.key === "users" &&
@@ -759,27 +983,56 @@ function formatApplied(
       "⚠️ First user allowlist entry: while users and roles were both empty, every caller in an allowlisted channel resolved to STANDARD. From now on only listed users/roles (and the owner) do — everyone else resolves to BLOCKED.",
     );
   }
+  const here = interaction.channelId.trim().toLowerCase();
   if (
     plan.key === "channels" &&
     plan.op === "remove" &&
-    plan.id === interaction.channelId.trim().toLowerCase() &&
+    plan.id === here &&
     !plan.liveAfter.includes(plan.id)
   ) {
     lines.push("⚠️ You ran this in that channel: messages and slash here are now refused (you get the allowlist tip).");
+  }
+  if (plan.key === "deny_channels" && plan.op === "add" && plan.id === here) {
+    lines.push("⚠️ You ran this in that channel: messages and slash here are now refused (deny always wins).");
+  }
+  if (
+    plan.op === "remove" &&
+    (plan.key === "github.orgs" || plan.key === "github.repos") &&
+    !hasGithubRepoAllowEntries(ctx.allowlist.github)
+  ) {
+    lines.push(
+      "⚠️ The GitHub repo allow lists are now empty: GitHub repo actions are refused (default-deny) and `github watch` polls nothing until you add one (/admin github add).",
+    );
   }
   lines.push(`Audit: #${startedSeq} started${okSeq !== undefined ? ` · #${okSeq} ok` : " · ok row not recorded (see bridge log)"}.`);
   return lines.join("\n");
 }
 
-function idList(key: AdminListKey, ids: readonly string[]): string {
-  if (ids.length === 0) return "";
-  const shown = ids.slice(0, SHOW_MAX_IDS).map((id) => mention(key, id)).join(" ");
-  const more = ids.length > SHOW_MAX_IDS ? ` +${ids.length - SHOW_MAX_IDS} more` : "";
+function idList(key: AdminListKey, ids: readonly string[], max: number): string {
+  if (ids.length === 0 || max <= 0) return "";
+  const shown = ids.slice(0, max).map((id) => mention(key, id)).join(" ");
+  const more = ids.length > max ? ` +${ids.length - max} more` : "";
   return ` — ${shown}${more}`;
 }
 
-/** ADMIN-3: ephemeral, audit-friendly config view. Never prints tokens. */
+/** Discord's message cap is 2000; `config show` stays under it. */
+const CONFIG_SHOW_MAX_CHARS = 1990;
+
+/**
+ * ADMIN-3 / ADMIN-3.c: ephemeral, audit-friendly config view. Never prints
+ * tokens. Lists the allow and deny lists `/admin` edits (live, file and env
+ * counts with up to 10 entries each, fewer when the reply would pass
+ * Discord's 2000-character cap) and `[github].users` read-only.
+ */
 export function formatConfigShow(ctx: SlashContext): string {
+  for (const max of [SHOW_MAX_IDS, 3, 0]) {
+    const out = configShowText(ctx, max);
+    if (out.length <= CONFIG_SHOW_MAX_CHARS) return out;
+  }
+  return configShowText(ctx, 0).slice(0, CONFIG_SHOW_MAX_CHARS);
+}
+
+function configShowText(ctx: SlashContext, maxIds: number): string {
   const env = ctx.env ?? process.env;
   const d = ctx.allowlist.discord;
   const g = ctx.allowlist.github;
@@ -797,21 +1050,31 @@ export function formatConfigShow(ctx: SlashContext): string {
     fileCount = () => "?";
   }
 
-  const listLine = (k: AdminListKey) =>
-    `• ${k}: live ${d[k].length} (file ${fileCount(k)} · env ${envAdminList(env, k).length})${idList(k, d[k])}`;
+  const listLine = (k: AdminListKey) => {
+    const live = liveAdminList(ctx.allowlist, k);
+    return `• ${ADMIN_LISTS[k].key}: live ${live.length} (file ${fileCount(k)} · env ${envAdminList(env, k).length})${idList(k, live, maxIds)}`;
+  };
   lines.push("Discord (live = file ∪ env):");
   lines.push(listLine("channels"));
   lines.push(listLine("users"));
   lines.push(`• roles: live ${d.roles.length}`);
-  lines.push(
-    `• deny channels/users/roles: ${d.denyChannels.length}/${d.denyUsers.length}/${d.denyRoles.length}`,
-  );
+  lines.push(listLine("deny_channels"));
+  lines.push(listLine("deny_users"));
+  lines.push(listLine("deny_roles"));
   if (d.users.length === 0 && d.roles.length === 0) {
     lines.push("  users+roles empty: channel-gated callers resolve to STANDARD; the first user added narrows that.");
   }
-  lines.push(
-    `GitHub (live): orgs ${g.orgs.length} · repos ${g.repos.length} · users ${g.users.length} · deny orgs/repos/users ${g.denyOrgs.length}/${g.denyRepos.length}/${g.denyUsers.length}`,
-  );
+  lines.push("GitHub (live = file ∪ env):");
+  lines.push(listLine("github.orgs"));
+  lines.push(listLine("github.repos"));
+  lines.push(listLine("github.deny_orgs"));
+  lines.push(listLine("github.deny_repos"));
+  lines.push(listLine("github.deny_users"));
+  const ghUsers =
+    maxIds > 0 && g.users.length > 0
+      ? ` — ${g.users.slice(0, maxIds).map((u) => `\`${u}\``).join(" ")}${g.users.length > maxIds ? ` +${g.users.length - maxIds} more` : ""}`
+      : "";
+  lines.push(`• users: live ${g.users.length} (read-only here: file / CORVIDINHO_GITHUB_ALLOW_USERS)${ghUsers}`);
   lines.push(`${formatOwnerStatus(ctx.owner)} — the only ADMIN (IDENTITY-2)`);
   const people = loadDeclaredPeople({ allowlist: ctx.allowlist, owner: ctx.owner });
   const nPeople = people.people.filter((p) => p.id !== OWNER_PERSON_ID).length;
@@ -829,10 +1092,10 @@ export function formatConfigShow(ctx: SlashContext): string {
   const audit = ctx.auditLine?.();
   if (audit) lines.push(audit);
   lines.push(
-    "Updatable here: [discord].users (/admin users add), [discord].channels (/admin channels add|remove), declared people (/admin people add|link|unlink|remove) and their roles (/admin people role) — written to the file, live immediately.",
+    "Updatable here: [discord].users (/admin users add), [discord].channels (/admin channels add|remove), the deny lists [discord].deny_channels|deny_users|deny_roles and [github].deny_orgs|deny_repos|deny_users (/admin deny add|remove), the GitHub repo allow lists [github].orgs|repos (/admin github add|remove), declared people (/admin people add|link|unlink|remove) and their roles (/admin people role) — written to the file, live immediately.",
   );
   lines.push(
-    "Read-only at runtime: env values (CORVIDINHO_DISCORD_ALLOW_*, DISCORD_CHANNEL_IDS, CORVIDINHO_OWNER_*, rate limits) and every other file key — edit on the VM and restart.",
+    "Read-only at runtime: env values (CORVIDINHO_DISCORD_*, DISCORD_CHANNEL_IDS, CORVIDINHO_GITHUB_*, CORVIDINHO_OWNER_*, rate limits), [github].users, [discord].roles and every other file key — edit on the VM and restart.",
   );
   return lines.join("\n");
 }

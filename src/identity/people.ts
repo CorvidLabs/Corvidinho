@@ -62,7 +62,12 @@ export const PERSON_ID_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 export const OWNER_PERSON_ID = "owner";
 
 const SNOWFLAKE_RE = /^\d{1,25}$/;
-const GITHUB_LOGIN_RE = /^[a-z0-9](?:[a-z0-9-]{0,38})$/;
+/**
+ * A lowercased GitHub login (user or org): a letter or digit, then up to 38
+ * letters, digits or hyphens. Shared with `/admin deny|github` input checks
+ * (ADMIN-3.c), which also keeps their file edits injection-free.
+ */
+export const GITHUB_LOGIN_RE = /^[a-z0-9](?:[a-z0-9-]{0,38})$/;
 // Control characters (other than whitespace, which normalizeDisplay collapses).
 // eslint-disable-next-line no-control-regex
 const CONTROL_RE = /[\u0000-\u0008\u000e-\u001f\u007f]/g;

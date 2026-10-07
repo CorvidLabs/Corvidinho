@@ -117,6 +117,7 @@ files:
   - src/discord/admin-people.ts
   - src/discord/channel-autocomplete.ts
   - tests/discord.admin-slash.test.ts
+  - tests/discord.admin-lists.test.ts
   - tests/discord.admin-people.test.ts
   - tests/discord.channel-autocomplete.test.ts
   - src/discord/announce-store.ts
@@ -192,7 +193,9 @@ HEAR Discord bridge also auto-recalls MEMORY for the acting Discord user on
 spawn and prepends an inject block to the agent prompt (AGENT-7 / MEMORY-2/4 /
 REQ-discord-023) and `/announce` ops channel (DISCORD-ANNOUNCE-1..6 / REQ-discord-024), alongside image attachments, schedule, presence, and
 session worktrees. Owner-only `/admin` edits the Discord user/channel
-allowlists at runtime (ADMIN-1..4 / REQ-discord-043); channel options use
+allowlists at runtime (ADMIN-1..4 / REQ-discord-043) and the deny lists and
+GitHub repo allow lists (`/admin deny`, `/admin github`; ADMIN-3.c part 1,
+REQ-discord-043); channel options use
 STRING + autocomplete (searchable name/id) instead of the native CHANNEL picker.
 
 ## Public API
@@ -326,6 +329,16 @@ constants/types from `src/discord/memory-inject.ts` (also re-exported via
 `commitAdminListChange`, `resolveAdminAllowlistPath`, `setTomlDiscordList`,
 `setJsonDiscordList`, `writeFileAtomic`, `allowlistFileFormat` (the loader's
 `isJsonAllowlistPath` rule), `danglingSymlinkError` (`admin-allowlist.ts`);
+ADMIN-3.c (REQ-discord-043): `AdminListKey` (`users`, `channels`,
+`deny_channels`, `deny_users`, `deny_roles`, `github.orgs`, `github.repos`,
+`github.deny_orgs`, `github.deny_repos`, `github.deny_users`), `ADMIN_LISTS` /
+`ADMIN_LIST_KEYS` / `ADMIN_LIST_ENV` (file section, canonical key, the alias
+the loader reads, live field, env var), `normalizeAdminListId` (snowflake,
+GitHub login with `GITHUB_LOGIN_RE` from `src/identity/people.ts`, or
+`ADMIN_GITHUB_REPO_RE`), `liveAdminList`, `adminListFileKey` (the spelling
+the loader reads), `readFileAdminList`, `setTomlList` / `setJsonList` and
+`allowlistRewriteProblem` (the re-read guard) (`admin-allowlist.ts`);
+`OPT_ROLE` (`slash-commands.ts`);
 `parseJsonObject` (`admin-allowlist.ts`, shared with `/admin people`);
 `/admin people` (ADMIN-3.a, REQ-discord-036): `formatPeopleList`
 (`command-handlers/admin.ts`); `planPeopleChange`, `commitPeopleChange`,
@@ -1107,6 +1120,7 @@ SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/
 every Discord agent run (chat, button pick, `/session start`, `/work`) records the human's own words with its session as the run starts (so a run that throws or a bridge that dies mid-run keeps the request) and the posted answer or failure line when it ends (a button ask as its question and choices, a spend-cap stop with no answer turn), and a continued run gets those turns, scrubbed, oldest first, in one labelled block ahead of the new message; when that prompt reaches about 80% of the model's window (`CORVIDINHO_LLM_CONTEXT_TOKENS`, default 8192 tokens, never past 32000 chars) the oldest turns fold into the session's summary (extractive points, no model call) while the opening request, the newest human turn and the new message stay word for word, and the summary is stored with the session so a restart or a smaller window picks up from it (SESSION-5/6 / REQ-discord-472); the block is one `[Corvidinho …]` paragraph, so Planning module selection skips it (REQ-agent-004); live turns persist in `discord_session_turns` across a restart within the soft TTL and their rows go with their session (end or TTL) after its conversation is kept 30 days in `conversation_threads`, from which only its own user's reply to one of its answers or message in its thread starts a new session after the gates (SESSION-3.a / AGENT-6.a); turns never reach another user's session, and never feed SAFE-4 confirm tokens, which stay the current message's only (AGENT-6 / DISCORD-2 / SESSION-3 / SESSION-MULTI-1 / REQ-discord-072);
 channel autocomplete (`/admin channels add|remove`, `/announce channel`) lists channels only for ADMIN (the owner, not muted, not deny-listed) invoking from an allowlisted channel, re-checked on every request; anyone else, anywhere else, or a gateway with no gate wired gets an empty choice list, so no channel name, id or allowlist entry leaks (DISCORD-DENY-3 / ADMIN-4 / REQ-discord-431);
 `/admin` users add | channels add|remove | config show is owner-only with a dispatcher ADMIN floor plus a handler re-check, writes only `[discord].users` / `[discord].channels` of the allowlist file the bridge loaded (atomic temp+rename, other lines kept), updates the live allowlist in place without restart, never writes env values, refuses deny-listed ids, env-only removals and removing the last live channel (a channel also on `deny_channels` does not count as live), warns when the first user narrows STANDARD→BLOCKED, and appends SAFE-5 audit rows (fail closed) (ADMIN-1..4 / REQ-discord-043);
+`/admin deny add|remove` (exactly one of channel, user, role, github_org, github_repo, github_user) and `/admin github add|remove` (exactly one of org, repo) share that path: owner re-check, validated entry, env-only refusal on remove, deny-wins refusal on an allow add, never a lockout of the owner (own id, a role held here or `@everyone`, the last undenied channel, own GitHub login or id), SAFE-5 rows `admin-deny-*` / `admin-github-*` (`started` → `ok`/`error`, refusals `denied`, fail closed), the writer edits the loader's spelling of the key and keeps every other key (TOML guard unchanged; JSON guard compares every non-target key), and the live list is spliced in place; `[github].users` stays file / env (ADMIN-3.c part 1 / REQ-discord-043);
 memories in shared SQLite schema v3 scoped by `owner_user_id` — the acting Discord user id for anyone undeclared, `person:<id>` for a declared person's one profile (MEMORY-5), `project:<key>` for a repo's own memory (MEMORY-6) (src/memory/scope.ts); ADMIN-only forget/override incl. self-forget; empty admin deny-all; no `/memory` slash (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021); a person's memory is read only by them and the owner and private notes are never injected or recalled unless asked for by name (MEMORY-7 / REQ-plugins-101); anyone's forget request (`forget_requests`, schema v12, ids and times only; v14 adds the card's action hash) reaches the owner as a DM Approve/Deny card — the `forget` kind (destructive) of the card engine (`src/discord/approval-cards.ts`; `src/discord/forget-card.ts`) — on the engine's own poll (about every 5 s, with or without the scheduler), on scheduler ticks and after each chat message, and only the owner's Approve plus the one-time code typed back, on a pending, unexpired card whose targets and counts are still the ones it showed, forgets — the code used up first, SAFE-5 `started` next (fail closed), then one transaction deletes every memory row of that person and their session turns (and their kept conversations, REQ-discord-472) — telling both; Deny, no answer or a late press is a no (MEMORY-ACL-6 / REQ-discord-101); everything that needs the owner's OK goes through that one engine: a DM card with the exact action, target and amount one line each, a diff or text first as verbatim quoted-data DM parts split fence-safe and scrubbed, buttons last, nothing cut (a card that does not fit is not sent); destructive and money cards (and a kind with no class) also need a one-time code DMed apart from the card, typed only into the code form, valid once, only for that card and action hash, for at most 2 minutes, only a salted hash stored; the owner is re-checked on every press and submit; no answer, a late answer or a gone waiter is a no (SAFE-18..20 / REQ-discord-096); the gateway refuses (never cuts) a DM over 1900 characters and a component reply, code-form reply or message edit over 2000 (REQ-discord-096); a recall with a query is a ranked search (relevance, then recency; `src/memory/rank.ts`) and the chat / button-pick inject searches memory for the message (the owner's and team's `/work` project block for the description), relevant rows first then the newest (MEMORY-9 / REQ-discord-067); Discord agent spawn always overwrites `CORVIDINHO_ACTING_DISCORD_USER_ID` (empty when no actor) and `CORVIDINHO_ACTING_IS_ADMIN` so no run inherits an actor from the bridge env, and always clears the GitHub commenter keys (`CORVIDINHO_ACTING_GITHUB_*`, MEMORY-8); private notes, profile reads and the owner's view of someone's memory are shown only privately: a run's `privateReplies` (text the model never saw) go to whoever asked by direct message only (`src/discord/private-reply.ts`, scrubbed, split under the DM cap) on chat, a button pick or Answer form resume, `/session start` and `/work`, the channel answer gets a short "sent privately" note on top (or, when the DM did not go out, a "couldn't DM it" note) and never the text, and the session thread never records it (MEMORY-7.a / REQ-discord-710);
 `/schedule` list|create|pause|resume|delete with ADMIN mutations, 5m min cadence (a zero cron step — `*/0`, `a-b/0`, `n/0` in any field — is a `CadenceError` refused before any field is expanded, and a range is expanded only up to its field's maximum, so no cadence can hang `/schedule create`, the store's next-run computation or the bridge), schedules in shared SQLite, cooperative ~60s ticker that must not starve HEAR/WATCH ingress (DISCORD-SCHEDULE-1..5 / REQ-discord-020); `/schedule delete` (the schedule and its run history) appends SAFE-5 audit rows (`started` before the delete, then `ok`/`error`; `denied` for a non-ADMIN caller) and fails closed like `/admin` when the trail is unavailable or not wired (SAFE-5 / REQ-discord-020);
 a message reply or button-pick run keeps one `discord_inflight_replies` row (ids incl. the thread's parent channel for a message in a thread or a pick on a session a message started there + start time, no text) from before its progress embed is sent until it finishes, cleared on every exit path (including the moment the progress message is collapsed into the answer or Choose stub, DISCORD-ASK-6/7); the next bridge start edits each leftover row's own progress embed to the red failed status `interrupted: Corvidinho restarted before this reply finished — please send it again`, or replies to the recorded request message in the same channel when there is no embed id or the edit fails, then deletes the row — only while the row's channel or parent is still allowlisted and neither is deny-listed (DISCORD-5), sequential, best effort, never throws out of startup, nothing posted when no rows (DISCORD-3 / AGENT-3 / REQ-discord-311);
@@ -1402,6 +1416,19 @@ template (no model call, no model text).
   the live allowlist holds U without a restart, the ephemeral reply shows
   before/after counts and warns that unlisted callers now resolve to BLOCKED,
   and the audit chain gains `started` + `ok` rows
+
+### Scenario: The owner denies a GitHub repo and a Discord role at runtime (ADMIN-3.c)
+
+- **Given** an allowlist file with `[github] orgs = ["corvidlabs"]`, a
+  `[corvidinho.plugins]` table and the owner invoking from an allowlisted
+  channel
+- **When** the owner runs `/admin deny add github_repo:corvidlabs/secret`,
+  then `/admin deny add role:@R`, then `/admin deny add user:@<themselves>`
+- **Then** `[github].deny_repos` and `[discord].deny_roles` gain the entries
+  (every other line, `[corvidinho.plugins]` included, kept), the repo gate and
+  the actor gate refuse them at once without a restart, each change writes
+  `admin-deny-add` `started` + `ok` rows, and the last command is refused
+  (`denied`) because it would lock the owner out
 
 ### Scenario: A non-owner types into /admin channels remove
 

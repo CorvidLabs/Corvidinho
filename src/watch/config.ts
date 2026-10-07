@@ -1,6 +1,8 @@
 /**
  * WATCH poll config: token + mention username + allowlisted repos.
- * Empty github orgs+repos → fail start (default-deny).
+ * Empty github orgs+repos → fail start (default-deny). After start each poll
+ * cycle re-reads the allowlist (`reloadWatchAllowlist`, ADMIN-3.c /
+ * REQ-watch-043), so `/admin deny|github` edits apply without a restart.
  */
 
 import { resolve } from "node:path";
@@ -9,6 +11,7 @@ import {
 } from "../allowlist/github.ts";
 import {
   loadAllowlist,
+  tryLoadAllowlist,
   type LoadOptions,
 } from "../allowlist/load.ts";
 import type { AllowlistConfig } from "../allowlist/types.ts";
@@ -172,4 +175,38 @@ export async function loadWatchConfig(
       corvidinhoBin,
     },
   };
+}
+
+export type WatchAllowlistReload =
+  | { ok: false; error: string }
+  | {
+      ok: true;
+      /** The GitHub lists differ from the ones the cycle had. */
+      changed: boolean;
+      /** No GitHub repo/org allow entry: the cycle polls nothing. */
+      empty: boolean;
+    };
+
+/**
+ * ADMIN-3.c (REQ-watch-043): re-read the allowlist (file and env, resolved
+ * as at start) and splice it into `config` in place — `allowlist` keeps its
+ * identity (routing, the people list and the owner read it per event) and
+ * `repos` is the same array, re-expanded. A file that cannot be loaded
+ * changes nothing and is returned as an error (the caller skips the cycle:
+ * fail closed, its deny lists are never dropped).
+ */
+export async function reloadWatchAllowlist(
+  config: Pick<WatchConfig, "allowlist" | "repos">,
+  opts: Pick<LoadOptions, "env" | "filePath"> = {},
+): Promise<WatchAllowlistReload> {
+  const loaded = await tryLoadAllowlist({ env: opts.env, filePath: opts.filePath });
+  if (!loaded.ok) return { ok: false, error: loaded.error };
+  const next = loaded.config;
+  const live = config.allowlist;
+  const changed = JSON.stringify(live.github) !== JSON.stringify(next.github);
+  live.sourcePath = next.sourcePath;
+  live.github = next.github;
+  live.discord = next.discord;
+  config.repos.splice(0, config.repos.length, ...expandWatchRepos(live));
+  return { ok: true, changed, empty: !hasGithubRepoAllowEntries(live.github) };
 }

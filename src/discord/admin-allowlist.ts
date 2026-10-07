@@ -1,15 +1,25 @@
 /**
- * ADMIN-1 / ADMIN-2 — runtime edits of the Discord allowlist the bridge
- * already reads (ALLOW-4): `[discord].users` and `[discord].channels` in the
- * allowlist file (CORVIDINHO_ALLOWLIST_FILE, else ~/.config/corvidinho/
- * allowlist.toml|json). No second store.
+ * ADMIN-1 / ADMIN-2 / ADMIN-3.c — runtime edits of the allow and deny lists
+ * the loader already reads (ALLOW-4): `[discord]` users, channels,
+ * deny_channels, deny_users, deny_roles and `[github]` orgs, repos,
+ * deny_orgs, deny_repos, deny_users in the allowlist file
+ * (CORVIDINHO_ALLOWLIST_FILE, else ~/.config/corvidinho/allowlist.toml|json).
+ * No second store. `[github].users` and `[discord].roles` are not edited here.
  *
  * - The file is rewritten atomically (temp file in the same dir + rename),
- *   keeping its mode. TOML edits touch only the one key line inside
- *   `[discord]`; every other line (other sections such as `[owner]`,
- *   comments, blank lines) is kept verbatim.
- * - Env overlays (CORVIDINHO_DISCORD_ALLOW_*, DISCORD_CHANNEL_IDS) are never
- *   written to the file and cannot be changed at runtime.
+ *   keeping its mode. TOML edits touch only the one key's line(s) inside its
+ *   section; every other line (other sections such as `[owner]` or
+ *   `[corvidinho.plugins]`, comments, blank lines) is kept verbatim.
+ * - A key the loader also reads under another spelling (`organizations`,
+ *   `repositories`, `denyusers`, …) is written under the spelling the loader
+ *   reads: the canonical key when the file has it, else the alias when the
+ *   file has that, else the canonical key.
+ * - Before any write the new text is re-read as the loader will: TOML must
+ *   keep every other key of every section; JSON must keep every other key of
+ *   the whole document.
+ * - Env overlays (CORVIDINHO_DISCORD_ALLOW_* / _DENY_*, DISCORD_CHANNEL_IDS,
+ *   CORVIDINHO_GITHUB_ALLOW_* / _DENY_*) are never written to the file and
+ *   cannot be changed at runtime.
  * - The live list is recomputed exactly as a restart would load it
  *   (file ∪ env, lowercased, deduped) and spliced in place, so every holder
  *   of the bridge's allowlist object sees the change without a restart.
@@ -39,26 +49,173 @@ import { basename, dirname, join } from "node:path";
 import {
   defaultAllowlistPaths,
   discordFromEnv,
+  githubFromEnv,
   isJsonAllowlistPath,
   parseAllowlistText,
   parseSimpleToml,
   resolveAllowlistPath,
   scanSimpleToml,
 } from "../allowlist/load.ts";
-import type { AllowlistConfig } from "../allowlist/types.ts";
+import type {
+  AllowlistConfig,
+  DiscordAllowlists,
+  GithubAllowlists,
+} from "../allowlist/types.ts";
+import { GITHUB_LOGIN_RE } from "../identity/people.ts";
 
-/** Allowlist keys `/admin` may change (ADMIN-1 users, ADMIN-2 channels). */
-export type AdminListKey = "users" | "channels";
+/**
+ * Allowlist keys `/admin` may change: `[discord]` users (ADMIN-1), channels
+ * (ADMIN-2) and the deny lists, and the `[github]` repo allow lists and deny
+ * lists (ADMIN-3.c). Discord keys are bare (as before); GitHub keys carry a
+ * `github.` prefix.
+ */
+export type AdminListKey =
+  | "users"
+  | "channels"
+  | "deny_channels"
+  | "deny_users"
+  | "deny_roles"
+  | "github.orgs"
+  | "github.repos"
+  | "github.deny_orgs"
+  | "github.deny_repos"
+  | "github.deny_users";
 export type AdminListOp = "add" | "remove";
+export type AdminListSection = "discord" | "github";
+
+/** Where one `/admin` list lives in the file, the loaded config and env. */
+export type AdminListSpec =
+  | AdminListSpecOf<"discord", keyof DiscordAllowlists>
+  | AdminListSpecOf<"github", keyof GithubAllowlists>;
+
+type AdminListSpecOf<S extends AdminListSection, F extends string> = {
+  section: S;
+  /** Canonical file key (lowercase), written when the file has no other spelling. */
+  key: string;
+  /** The other spelling the loader reads when `key` is absent (lowercase). */
+  alias?: string;
+  /** Field of the loaded `AllowlistConfig[section]`. */
+  field: F;
+  /** Env var(s) that feed the live list (read-only at runtime). */
+  env: string;
+  /** What an entry is (Discord snowflake, GitHub login, OWNER/REPO pattern). */
+  kind: "snowflake" | "login" | "repo";
+};
+
+/** Every list `/admin` edits, with the spelling(s) `githubFromObj` / `discordFromObj` read. */
+export const ADMIN_LISTS: Readonly<Record<AdminListKey, AdminListSpec>> = {
+  users: { section: "discord", key: "users", field: "users", env: "CORVIDINHO_DISCORD_ALLOW_USERS", kind: "snowflake" },
+  channels: {
+    section: "discord",
+    key: "channels",
+    field: "channels",
+    env: "CORVIDINHO_DISCORD_ALLOW_CHANNELS / DISCORD_CHANNEL_IDS",
+    kind: "snowflake",
+  },
+  deny_channels: {
+    section: "discord",
+    key: "deny_channels",
+    alias: "denychannels",
+    field: "denyChannels",
+    env: "CORVIDINHO_DISCORD_DENY_CHANNELS",
+    kind: "snowflake",
+  },
+  deny_users: {
+    section: "discord",
+    key: "deny_users",
+    alias: "denyusers",
+    field: "denyUsers",
+    env: "CORVIDINHO_DISCORD_DENY_USERS",
+    kind: "snowflake",
+  },
+  deny_roles: {
+    section: "discord",
+    key: "deny_roles",
+    alias: "denyroles",
+    field: "denyRoles",
+    env: "CORVIDINHO_DISCORD_DENY_ROLES",
+    kind: "snowflake",
+  },
+  "github.orgs": {
+    section: "github",
+    key: "orgs",
+    alias: "organizations",
+    field: "orgs",
+    env: "CORVIDINHO_GITHUB_ALLOW_ORGS",
+    kind: "login",
+  },
+  "github.repos": {
+    section: "github",
+    key: "repos",
+    alias: "repositories",
+    field: "repos",
+    env: "CORVIDINHO_GITHUB_ALLOW_REPOS",
+    kind: "repo",
+  },
+  "github.deny_orgs": {
+    section: "github",
+    key: "deny_orgs",
+    alias: "denyorgs",
+    field: "denyOrgs",
+    env: "CORVIDINHO_GITHUB_DENY_ORGS",
+    kind: "login",
+  },
+  "github.deny_repos": {
+    section: "github",
+    key: "deny_repos",
+    alias: "denyrepos",
+    field: "denyRepos",
+    env: "CORVIDINHO_GITHUB_DENY_REPOS",
+    kind: "repo",
+  },
+  "github.deny_users": {
+    section: "github",
+    key: "deny_users",
+    alias: "denyusers",
+    field: "denyUsers",
+    env: "CORVIDINHO_GITHUB_DENY_USERS",
+    kind: "login",
+  },
+};
+
+export const ADMIN_LIST_KEYS = Object.keys(ADMIN_LISTS) as AdminListKey[];
 
 /** Discord snowflake: digits only (also keeps TOML/JSON output injection-free). */
 export const ADMIN_SNOWFLAKE_RE = /^\d{1,25}$/;
 
+/**
+ * GitHub repo entry: `owner/repo` or the `owner/*` pattern the gate reads,
+ * lowercased (owner is a GitHub login; a repo name is letters, digits, `.`,
+ * `_`, `-`, never `.` or `..`). Injection-free in TOML and JSON.
+ */
+export const ADMIN_GITHUB_REPO_RE = /^([a-z0-9](?:[a-z0-9-]{0,38}))\/(\*|[a-z0-9._-]{1,100})$/;
+
 /** Env vars that feed each live list (read-only at runtime). */
-export const ADMIN_LIST_ENV: Record<AdminListKey, string> = {
-  users: "CORVIDINHO_DISCORD_ALLOW_USERS",
-  channels: "CORVIDINHO_DISCORD_ALLOW_CHANNELS / DISCORD_CHANNEL_IDS",
-};
+export const ADMIN_LIST_ENV: Readonly<Record<AdminListKey, string>> = Object.fromEntries(
+  ADMIN_LIST_KEYS.map((k) => [k, ADMIN_LISTS[k].env]),
+) as Record<AdminListKey, string>;
+
+/**
+ * The entry `/admin` would store for `raw` on list `key` (trimmed,
+ * lowercased), or null when it is not a valid entry for that list: a Discord
+ * snowflake, a GitHub login (orgs, deny_orgs, deny_users) or `owner/repo` /
+ * `owner/*` (repos, deny_repos).
+ */
+export function normalizeAdminListId(key: AdminListKey, raw: string | null | undefined): string | null {
+  const id = String(raw ?? "").trim().toLowerCase();
+  const kind = ADMIN_LISTS[key].kind;
+  if (kind === "snowflake") return ADMIN_SNOWFLAKE_RE.test(id) ? id : null;
+  if (kind === "login") return GITHUB_LOGIN_RE.test(id) ? id : null;
+  const m = id.match(ADMIN_GITHUB_REPO_RE);
+  if (!m || m[2] === "." || m[2] === "..") return null;
+  return id;
+}
+
+/** The loaded (live) list for `key`: the array the gates read, spliced in place on commit. */
+export function liveAdminList(allowlist: AllowlistConfig, key: AdminListKey): string[] {
+  const spec = ADMIN_LISTS[key];
+  return spec.section === "discord" ? allowlist.discord[spec.field] : allowlist.github[spec.field];
+}
 
 export type AllowlistFileFormat = "toml" | "json";
 
@@ -68,6 +225,10 @@ export type AdminListPlan = {
   /** False when the file does not exist yet (commit creates it). */
   exists: boolean;
   key: AdminListKey;
+  /** `[section]` of the file key. */
+  section: AdminListSection;
+  /** The spelling written: the key the loader reads (canonical, or its alias). */
+  fileKey: string;
   op: AdminListOp;
   id: string;
   /** Raw file entries before/after (case kept). */
@@ -158,9 +319,10 @@ export function resolveAdminAllowlistPath(
 
 /** Env overlay entries for one key (lowercased), as loadBridgeConfig merges them. */
 export function envAdminList(env: NodeJS.ProcessEnv, key: AdminListKey): string[] {
-  const e = discordFromEnv(env);
-  if (key === "users") return lowerDedupe(e.users ?? []);
-  return lowerDedupe([...(e.channels ?? []), ...splitList(env.DISCORD_CHANNEL_IDS)]);
+  const spec = ADMIN_LISTS[key];
+  if (spec.section === "github") return lowerDedupe(githubFromEnv(env)[spec.field] ?? []);
+  const e = discordFromEnv(env)[spec.field] ?? [];
+  return lowerDedupe(key === "channels" ? [...e, ...splitList(env.DISCORD_CHANNEL_IDS)] : e);
 }
 
 /** Precision guard: JSON numbers above 2^53 cannot round-trip. */
@@ -189,10 +351,17 @@ export function parseJsonObject(text: string): Record<string, unknown> {
   return raw as Record<string, unknown>;
 }
 
-function jsonDiscordObject(
+/**
+ * The JSON section object the loader reads (`raw.github ?? raw.Github`,
+ * `raw.discord ?? raw.Discord`) and its key name. Throws when it is not an
+ * object (refused, never clobbered).
+ */
+function jsonSectionObject(
   raw: Record<string, unknown>,
+  section: AdminListSection,
 ): { name: string; obj: Record<string, unknown> | undefined } {
-  const name = raw.discord !== undefined ? "discord" : raw.Discord !== undefined ? "Discord" : "discord";
+  const cap = `${section[0]!.toUpperCase()}${section.slice(1)}`;
+  const name = raw[section] !== undefined ? section : raw[cap] !== undefined ? cap : section;
   const v = raw[name];
   if (v === undefined) return { name, obj: undefined };
   if (!v || typeof v !== "object" || Array.isArray(v)) {
@@ -201,24 +370,46 @@ function jsonDiscordObject(
   return { name, obj: v as Record<string, unknown> };
 }
 
-/** Raw entries of `[discord].<key>` in allowlist file text (case kept). */
+/** A JSON section's list values by lowercased key, exactly as the loader collects them (last case variant wins). */
+function jsonSectionLists(obj: Record<string, unknown> | undefined): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const [k, v] of Object.entries(obj ?? {})) {
+    if (Array.isArray(v)) out[k.toLowerCase()] = v.map((x) => String(x).trim()).filter(Boolean);
+    else if (typeof v === "string") out[k.toLowerCase()] = splitList(v);
+  }
+  return out;
+}
+
+/** The key the loader reads for `spec` among `present`: canonical, else alias, else canonical. */
+function effectiveKey(spec: AdminListSpec, present: Record<string, unknown> | undefined): string {
+  if (present && Object.hasOwn(present, spec.key)) return spec.key;
+  if (spec.alias && present && Object.hasOwn(present, spec.alias)) return spec.alias;
+  return spec.key;
+}
+
+/**
+ * The file key `/admin` reads and writes for `key` (lowercase): the spelling
+ * the loader reads (`githubFromObj` / `discordFromObj`).
+ */
+export function adminListFileKey(text: string, format: AllowlistFileFormat, key: AdminListKey): string {
+  const spec = ADMIN_LISTS[key];
+  if (format === "toml") return effectiveKey(spec, parseSimpleToml(text)[spec.section]);
+  return effectiveKey(spec, jsonSectionLists(jsonSectionObject(parseJsonObject(text), spec.section).obj));
+}
+
+/** Raw entries of `key` in allowlist file text (case kept), under the spelling the loader reads. */
 export function readFileAdminList(
   text: string,
   format: AllowlistFileFormat,
   key: AdminListKey,
 ): string[] {
+  const spec = ADMIN_LISTS[key];
   if (format === "toml") {
-    return (parseSimpleToml(text).discord?.[key] ?? []).map((s) => s.trim()).filter(Boolean);
+    const sec = parseSimpleToml(text)[spec.section];
+    return (sec?.[effectiveKey(spec, sec)] ?? []).map((s) => s.trim()).filter(Boolean);
   }
-  const { obj } = jsonDiscordObject(parseJsonObject(text));
-  if (!obj) return [];
-  let value: unknown;
-  for (const [k, v] of Object.entries(obj)) {
-    if (k.toLowerCase() === key) value = v;
-  }
-  if (Array.isArray(value)) return value.map((x) => String(x).trim()).filter(Boolean);
-  if (typeof value === "string") return splitList(value);
-  return [];
+  const lists = jsonSectionLists(jsonSectionObject(parseJsonObject(text), spec.section).obj);
+  return lists[effectiveKey(spec, lists)] ?? [];
 }
 
 function tomlString(v: string): string {
@@ -246,25 +437,27 @@ function commentColumn(line: string): number {
 }
 
 /**
- * Set `[discord].<key>` in TOML text. Lines are located with the loader's own
- * reader (`scanSimpleToml`), so a multi-line array — the key's own or any
- * other — is always handled whole. Every `<key> = …` inside `[discord]`
- * (single- or multi-line) becomes one line; indentation and the comment on
- * its first line are kept (comments on the lines of a collapsed multi-line
- * array are not). A missing key goes after the last value in the first
- * `[discord]` (after its closing `]`), or a `[discord]` section is appended.
- * Every other line is kept verbatim. Throws on text the loader would refuse.
+ * Set `[<section>].<key>` in TOML text (`key` lowercase, as the loader reads
+ * it). Lines are located with the loader's own reader (`scanSimpleToml`), so
+ * a multi-line array — the key's own or any other — is always handled whole.
+ * Every `<key> = …` inside `[<section>]` (single- or multi-line) becomes one
+ * line; its spelling, indentation and the comment on its first line are kept
+ * (comments on the lines of a collapsed multi-line array are not). A missing
+ * key goes after the last value in the first `[<section>]` (after its closing
+ * `]`), or a `[<section>]` section is appended. Every other line is kept
+ * verbatim. Throws on text the loader would refuse.
  */
-export function setTomlDiscordList(
+export function setTomlList(
   text: string,
-  key: AdminListKey,
+  section: AdminListSection,
+  key: string,
   values: readonly string[],
 ): string {
   const eol = text.includes("\r\n") ? "\r\n" : "\n";
   const lines = text.length > 0 ? text.split(/\r?\n/) : [];
   const scan = scanSimpleToml(text);
   const list = formatTomlList(values);
-  const targets = scan.entries.filter((e) => e.section === "discord" && e.key === key);
+  const targets = scan.entries.filter((e) => e.section === section && e.key === key);
 
   if (targets.length > 0) {
     const out: string[] = [];
@@ -288,13 +481,13 @@ export function setTomlDiscordList(
   }
 
   const line = `${key} = ${list}`;
-  const discord = scan.headers.find((h) => h.section === "discord");
-  if (discord) {
-    const end = scan.headers.find((h) => h.row > discord.row)?.row ?? lines.length;
+  const header = scan.headers.find((h) => h.section === section);
+  if (header) {
+    const end = scan.headers.find((h) => h.row > header.row)?.row ?? lines.length;
     const inBlock = scan.entries.filter(
-      (e) => e.section === "discord" && e.row > discord.row && e.row < end,
+      (e) => e.section === section && e.row > header.row && e.row < end,
     );
-    const after = inBlock.length > 0 ? inBlock[inBlock.length - 1]!.endRow : discord.row;
+    const after = inBlock.length > 0 ? inBlock[inBlock.length - 1]!.endRow : header.row;
     const out = [...lines];
     out.splice(after + 1, 0, line);
     return out.join(eol);
@@ -303,21 +496,28 @@ export function setTomlDiscordList(
   const trailing = out.length > 0 && out[out.length - 1] === "";
   if (trailing) out.pop();
   if (out.length > 0) out.push("");
-  out.push("[discord]", line, "");
+  out.push(`[${section}]`, line, "");
   return out.join(eol);
 }
 
+/** `setTomlList` for `[discord]` (kept for callers of the ADMIN-1/2 writer). */
+export function setTomlDiscordList(text: string, key: string, values: readonly string[]): string {
+  return setTomlList(text, "discord", key, values);
+}
+
 /**
- * Set `discord.<key>` in JSON text; keeps every other key (e.g. `owner`).
- * Case-variant duplicates of the key collapse onto the first one.
+ * Set `<section>.<key>` in JSON text (`key` lowercase); keeps every other key
+ * (e.g. `owner`, `corvidinho`). Case-variant duplicates of the key collapse
+ * onto the first one, whose spelling is kept.
  */
-export function setJsonDiscordList(
+export function setJsonList(
   text: string,
-  key: AdminListKey,
+  section: AdminListSection,
+  key: string,
   values: readonly string[],
 ): string {
   const raw = parseJsonObject(text);
-  const { name, obj } = jsonDiscordObject(raw);
+  const { name, obj } = jsonSectionObject(raw, section);
   const target: Record<string, unknown> = obj ?? {};
   const matches = Object.keys(target).filter((k) => k.toLowerCase() === key);
   const keep = matches[0] ?? key;
@@ -327,21 +527,54 @@ export function setJsonDiscordList(
   return `${JSON.stringify(raw, null, 2)}\n`;
 }
 
+/** `setJsonList` for `discord` (kept for callers of the ADMIN-1/2 writer). */
+export function setJsonDiscordList(text: string, key: string, values: readonly string[]): string {
+  return setJsonList(text, "discord", key, values);
+}
+
+/** JSON with object keys sorted, so two documents compare by content. */
+function canonicalJson(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonicalJson).join(",")}]`;
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    return `{${Object.keys(o)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${canonicalJson(o[k])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(v) ?? "null";
+}
+
+/** The JSON document without the target key (every case variant); a section left empty counts as absent. */
+function jsonWithoutTarget(text: string, section: AdminListSection, key: string): string {
+  const raw = parseJsonObject(text);
+  const { name, obj } = jsonSectionObject(raw, section);
+  if (obj) {
+    const rest = Object.fromEntries(Object.entries(obj).filter(([k]) => k.toLowerCase() !== key));
+    if (Object.keys(rest).length > 0) raw[name] = rest;
+    else delete raw[name];
+  }
+  return canonicalJson(raw);
+}
+
 /**
  * Safety net before any write: re-read the new text exactly as the loader
- * will after a restart. It must load; `[discord].<key>` must read back as
+ * will after a restart. It must load; the target list must read back as
  * `fileAfter`; every other allow/deny list the loader reads must be
- * unchanged, and (TOML) so must every other key of every section, `[owner]`
- * included. Returns what is wrong, or null.
+ * unchanged; and (TOML) so must every other key of every section, `[owner]`
+ * and `[corvidinho.plugins]` included, and (JSON) every other key of the
+ * whole document. Returns what is wrong, or null.
  */
-function rewriteProblem(o: {
+export function allowlistRewriteProblem(o: {
   path: string;
   format: AllowlistFileFormat;
   key: AdminListKey;
+  fileKey: string;
   before: string;
   after: string;
   fileAfter: readonly string[];
 }): string | null {
+  const spec = ADMIN_LISTS[o.key];
   let after: ReturnType<typeof parseAllowlistText>;
   try {
     after = parseAllowlistText(o.after, o.path);
@@ -352,14 +585,18 @@ function rewriteProblem(o: {
     ? parseAllowlistText(o.before, o.path)
     : parseAllowlistText(o.format === "json" ? "{}" : "", o.path);
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-  if (!same(after.discord[o.key], o.fileAfter.map((x) => x.trim().toLowerCase()).filter(Boolean))) {
-    return `[discord].${o.key} would not read back as intended`;
+  const want = o.fileAfter.map((x) => x.trim().toLowerCase()).filter(Boolean);
+  const got = spec.section === "discord" ? after.discord[spec.field] : after.github[spec.field];
+  if (!same(got, want)) {
+    return `[${spec.section}].${o.fileKey} would not read back as intended`;
   }
   for (const k of Object.keys(before.github) as Array<keyof typeof before.github>) {
+    if (spec.section === "github" && k === spec.field) continue;
     if (!same(before.github[k], after.github[k])) return `it would change [github] ${k}`;
   }
   for (const k of Object.keys(before.discord) as Array<keyof typeof before.discord>) {
-    if (k !== o.key && !same(before.discord[k], after.discord[k])) return `it would change [discord] ${k}`;
+    if (spec.section === "discord" && k === spec.field) continue;
+    if (!same(before.discord[k], after.discord[k])) return `it would change [discord] ${k}`;
   }
   if (o.format === "toml") {
     const b = parseSimpleToml(o.before);
@@ -367,10 +604,12 @@ function rewriteProblem(o: {
     for (const sec of new Set([...Object.keys(b), ...Object.keys(a)])) {
       const keys = new Set([...Object.keys(b[sec] ?? {}), ...Object.keys(a[sec] ?? {})]);
       for (const k of keys) {
-        if (sec === "discord" && k === o.key) continue;
+        if (sec === spec.section && k === o.fileKey) continue;
         if (!same(b[sec]?.[k], a[sec]?.[k])) return `it would change [${sec}] ${k}`;
       }
     }
+  } else if (jsonWithoutTarget(o.before, spec.section, o.fileKey) !== jsonWithoutTarget(o.after, spec.section, o.fileKey)) {
+    return `it would change a JSON key other than ${spec.section}.${o.fileKey}`;
   }
   return null;
 }
@@ -380,7 +619,8 @@ const NEW_TOML_HEADER =
 
 /**
  * Read the file and compute the change for one id (no writes).
- * Unreadable / unparsable files refuse instead of being clobbered.
+ * Unreadable / unparsable files refuse instead of being clobbered, and so
+ * does an id that is not a valid entry for the list.
  */
 export function planAdminListChange(opts: {
   allowlist: AllowlistConfig;
@@ -391,9 +631,13 @@ export function planAdminListChange(opts: {
   id: string;
 }): AdminListPlanResult {
   const env = opts.env ?? process.env;
+  const spec = ADMIN_LISTS[opts.key];
   const path = resolveAdminAllowlistPath(opts.allowlist, env, opts.home);
   const format = allowlistFileFormat(path);
-  const id = opts.id.trim().toLowerCase();
+  const id = normalizeAdminListId(opts.key, opts.id);
+  if (id === null) {
+    return { ok: false, path, error: `not a valid [${spec.section}].${spec.key} entry` };
+  }
   const dangling = danglingSymlinkError(path);
   if (dangling) return { ok: false, path, error: dangling };
   let exists = false;
@@ -407,6 +651,7 @@ export function planAdminListChange(opts: {
   }
 
   try {
+    const fileKey = adminListFileKey(text, format, opts.key);
     const fileBefore = readFileAdminList(text, format, opts.key);
     const inFileBefore = fileBefore.some((x) => x.toLowerCase() === id);
     let fileAfter = fileBefore;
@@ -415,16 +660,24 @@ export function planAdminListChange(opts: {
       fileAfter = fileBefore.filter((x) => x.toLowerCase() !== id);
     }
     const envList = envAdminList(env, opts.key);
-    const liveBefore = [...opts.allowlist.discord[opts.key]];
+    const liveBefore = [...liveAdminList(opts.allowlist, opts.key)];
     const liveAfter = lowerDedupe([...fileAfter, ...envList]);
     const fileChanged = fileAfter !== fileBefore;
     let newText: string | undefined;
     if (fileChanged) {
       newText =
         format === "json"
-          ? setJsonDiscordList(text, opts.key, fileAfter)
-          : setTomlDiscordList(exists ? text : NEW_TOML_HEADER, opts.key, fileAfter);
-      const problem = rewriteProblem({ path, format, key: opts.key, before: text, after: newText, fileAfter });
+          ? setJsonList(text, spec.section, fileKey, fileAfter)
+          : setTomlList(exists ? text : NEW_TOML_HEADER, spec.section, fileKey, fileAfter);
+      const problem = allowlistRewriteProblem({
+        path,
+        format,
+        key: opts.key,
+        fileKey,
+        before: text,
+        after: newText,
+        fileAfter,
+      });
       if (problem) {
         return { ok: false, path, error: `refusing to write the allowlist file: ${problem}` };
       }
@@ -436,6 +689,8 @@ export function planAdminListChange(opts: {
         format,
         exists,
         key: opts.key,
+        section: spec.section,
+        fileKey,
         op: opts.op,
         id,
         fileBefore,
@@ -513,14 +768,14 @@ export function commitAdminListChange(
   if (plan.fileChanged && plan.newText !== undefined) {
     writeFileAtomic(plan.path, plan.newText);
   }
-  const arr = live.allowlist.discord[plan.key];
+  const arr = liveAdminList(live.allowlist, plan.key);
   arr.splice(0, arr.length, ...plan.liveAfter);
   if (plan.key === "channels" && live.channelIds && live.channelIds !== arr) {
     live.channelIds.splice(0, live.channelIds.length, ...plan.liveAfter);
   }
 }
 
-/** Per-key file/env counts for `/admin config show` (read-only). */
+/** Per-key file entries for `/admin config show` (read-only). */
 export function readAdminFileView(
   allowlist: AllowlistConfig,
   env: NodeJS.ProcessEnv = process.env,
@@ -535,16 +790,10 @@ export function readAdminFileView(
   try {
     const exists = existsSync(path);
     const text = exists ? readFileSync(path, "utf8") : "";
-    return {
-      ok: true,
-      path,
-      format,
-      exists,
-      file: {
-        users: readFileAdminList(text, format, "users"),
-        channels: readFileAdminList(text, format, "channels"),
-      },
-    };
+    const file = Object.fromEntries(
+      ADMIN_LIST_KEYS.map((k) => [k, readFileAdminList(text, format, k)]),
+    ) as Record<AdminListKey, string[]>;
+    return { ok: true, path, format, exists, file };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { ok: false, path, error: msg };

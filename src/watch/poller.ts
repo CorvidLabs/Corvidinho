@@ -29,6 +29,12 @@
  * its summary comment and its kept conversation turn are that one plain
  * reason line without the provider's host (`watchPublicFailureLine`), never
  * the run's summary (a provider's reply body).
+ * ADMIN-3.c (REQ-watch-043): each cycle re-reads the allowlist (file and
+ * env) like the schedule daemon's tick, so `/admin deny|github` edits apply
+ * without a restart: a file that cannot be loaded skips the cycle (fail
+ * closed, nothing polled), an empty repo/org allowlist polls nothing, and a
+ * change to the GitHub lists forgets the in-memory denied ids so they are
+ * gated again under the new lists.
  */
 
 import type { Database } from "bun:sqlite";
@@ -67,6 +73,7 @@ import {
 import {
   goLiveChecklist,
   loadWatchConfig,
+  reloadWatchAllowlist,
   type ConfigResult,
 } from "./config.ts";
 import { dedupeByIssue, ProcessedIdStore } from "./dedup.ts";
@@ -185,6 +192,12 @@ export type PollCycleResult = {
   /** True when this cycle hit a GitHub rate-limit and scheduled backoff. */
   rateLimited?: boolean;
   backoffMs?: number;
+  /**
+   * ADMIN-3.c (REQ-watch-043): set when the cycle's allowlist re-read
+   * polled nothing — the file could not be loaded (`unreadable`), or the
+   * GitHub repo/org allowlist is empty (`empty`).
+   */
+  allowlistSkip?: "unreadable" | "empty";
 };
 
 export type StartWatchOptions = {
@@ -289,7 +302,8 @@ export async function startWatchPoller(
   const summarized = new SummarizedIdStore({ db });
   // Denied ids stay apart and in-memory: a stranger's flood can only evict
   // other denied ids (refused again, quietly), never a handled trusted id.
-  const deniedIds = new ProcessedIdStore();
+  // Replaced (emptied) when the GitHub lists change (REQ-watch-043).
+  let deniedIds = new ProcessedIdStore();
   const successfulAcks = new SuccessfulAckStore();
   const searchClient =
     opts.searchClient ?? createOctokitSearchClient(config.token);
@@ -375,6 +389,27 @@ export async function startWatchPoller(
   };
 
   /**
+   * ADMIN-3.c (REQ-watch-043): the allowlist as it is now (file and env,
+   * read like at start), spliced into `config` in place. Returns why this
+   * cycle polls nothing, or null. A change to the GitHub lists empties the
+   * in-memory denied ids: they are gated again under the new lists.
+   */
+  const reloadAllowlist = async (): Promise<{ skip: "unreadable" | "empty"; message: string } | null> => {
+    const r = await reloadWatchAllowlist(config, { env, filePath: opts.filePath });
+    if (!r.ok) return { skip: "unreadable", message: `allowlist could not be loaded (${r.error})` };
+    if (r.changed) {
+      deniedIds = new ProcessedIdStore();
+      const g = config.allowlist.github;
+      log(
+        `[watch] allowlist changed: orgs=${g.orgs.length} repos=${g.repos.length} users=${g.users.length} ` +
+          `deny orgs/repos/users=${g.denyOrgs.length}/${g.denyRepos.length}/${g.denyUsers.length}`,
+      );
+    }
+    if (r.empty) return { skip: "empty", message: "GitHub repo allowlist empty (default-deny); nothing polled" };
+    return null;
+  };
+
+  /**
    * SAFE-13 / SAFE-5: one `injection-suspected` row (`denied`) for an event
    * WATCH will not run. Best effort: the event is refused either way.
    */
@@ -428,6 +463,17 @@ export async function startWatchPoller(
       log(
         `[watch] poll skip rate-limit backoff remaining_ms=${Math.ceil(waitLeft)}`,
       );
+      return result;
+    }
+
+    // ADMIN-3.c (REQ-watch-043): poll against the allowlist as it is now.
+    // A file that cannot be loaded skips the cycle (fail closed: its deny
+    // lists would be lost); an empty repo/org allowlist polls nothing.
+    const skip = await reloadAllowlist();
+    if (skip) {
+      result.allowlistSkip = skip.skip;
+      if (skip.skip === "unreadable") logError(`[watch] poll skip: ${skip.message}`);
+      else log(`[watch] poll skip: ${skip.message}`);
       return result;
     }
 

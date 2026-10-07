@@ -1784,3 +1784,40 @@ Fail on base: with the stacked base's (387dada) sources swapped in, both
 `tests/work.pr.test.ts` GITHUB-9 cases fail (the base commits and pushes
 before `github-pr-create` refuses, and drops the frame's `review`);
 `tests/work.review.test.ts` cannot load. Restored, all pass.
+
+## /admin deny and /admin github (REQ-discord-043 modified, ADMIN-3.c part 1)
+
+- `tests/discord.admin-lists.test.ts` — temp allowlist files (TOML with
+  `[owner]` and `[corvidinho.plugins]`, JSON with `owner`, `corvidinho` and
+  `people`), in-memory SQLite audit, the real `/admin` handler and slash
+  dispatcher; no token, no network.
+  - Body: `deny add|remove` takes `channel` (STRING + autocomplete), `user`
+    (USER), `role` (ROLE, type 8), `github_org`, `github_repo`, `github_user`;
+    `github add|remove` takes `org`, `repo`; all optional; names ≤ 32 and
+    descriptions ≤ 100 characters.
+  - Writer: the ten list keys each add and remove through the loader with one
+    line changed, `[corvidinho.plugins]` read the same, the live array
+    spliced in place; TOML aliases (`organizations`, `denyUsers`) are written
+    where the loader reads them and the canonical key wins when both exist;
+    JSON aliases (`Repositories`, `DenyRoles`) kept and every other key of the
+    document kept; `allowlistRewriteProblem` refuses a TOML rewrite that
+    changes `[corvidinho.plugins]` and a JSON rewrite that changes any
+    non-target key; invalid entries are never planned.
+  - Handler: deny add / remove of a user, role, channel, GitHub org, repo and
+    user (gates refuse at once; `admin-deny-*` `started` / `ok`); exactly one
+    option and validation (usage / refusal, no write, no row); lockouts
+    (owner id, a role held, `@everyone`, the last undenied channel, the
+    owner's GitHub login and id → `denied`); env-only removal refused and
+    file + env noted; no trail or a throwing trail fails closed; non-owner
+    refused at dispatch and at the handler (`denied` there); `github add`
+    org / repo, deny-wins refusals, last entry removable with the WATCH
+    warning; `config show` lists entries, `[github].users` read-only, under
+    2000 characters with 60 entries per list.
+- `tests/discord.admin-slash.test.ts` (updated): the `/admin` body now ends
+  with the `deny` and `github` groups (`add`, `remove`).
+- Fail on base (`origin/main` 54d6a6c): with its
+  `src/discord/{admin-allowlist,command-handlers/admin,slash-commands}.ts`,
+  `src/identity/people.ts` and `src/watch/{config,poller}.ts` swapped in, all
+  28 cases of `tests/discord.admin-lists.test.ts` fail; restored, 28 of 28
+  pass.
+

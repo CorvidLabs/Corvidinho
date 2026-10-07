@@ -309,3 +309,25 @@ with an org name and a request id in its body; no network, no real key):
   regression guards (a Discord run ignores the GitHub keys; team and
   community never reach a card; no shell and community workers on WATCH).
   Restored: 12 of 12 pass.
+
+## github watch re-reads the allowlist every poll (REQ-watch-043 added, ADMIN-3.c part 1)
+
+- `tests/watch.allowlist-reload.test.ts` — temp allowlist file, in-memory
+  DB, a real `startWatchPoller` (dry run, `runLoop: false`) with injected
+  events and a capturing agent; `/admin` changes are made the way the bridge
+  makes them (`planAdminListChange` + `commitAdminListChange` on its own
+  loaded allowlist); no token, no network.
+  - `/admin github add repo:` → the next cycle polls the new repo (same
+    `repos` array, same `allowlist` object) and runs its event; `/admin deny
+    add github_user:` → that user's next event is refused.
+  - A file that fails to load → `allowlistSkip: "unreadable"`, no fetch, no
+    run, lists unchanged; fixed → polls again with the file's deny list.
+  - The last repo removed → `allowlistSkip: "empty"`, nothing fetched; an org
+    added → polls `corvidlabs/*` again.
+  - A sender not on `[github].users` stays refused quietly while the lists
+    are unchanged and runs after the file adds them (denied ids forgotten).
+  - IDENTITY-12.a after a reload: the owner's comment runs as `owner`, a
+    stranger's as `community`.
+- Fail on base (`origin/main` 54d6a6c, same sources swapped in as the
+  discord evidence): 5 of 5 fail; restored, 5 of 5 pass.
+

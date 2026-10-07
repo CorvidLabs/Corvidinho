@@ -27,6 +27,7 @@ files:
   - tests/watch.github-numeric-id.test.ts
   - tests/watch.failed-comment.test.ts
   - tests/watch.github-roles.test.ts
+  - tests/watch.allowlist-reload.test.ts
 
 db_tables: []
 depends_on:
@@ -74,7 +75,9 @@ Discord run and re-resolved by the tool layer at every call.
 
 ## Public API
 
-loadWatchConfig, startWatchPoller, routeEvent, SessionStore, goLiveChecklist,
+loadWatchConfig, reloadWatchAllowlist (ADMIN-3.c, REQ-watch-043: re-read the
+allowlist and splice it into the poller's config in place; `WatchAllowlistReload`),
+`PollCycleResult.allowlistSkip` (`unreadable` / `empty`), startWatchPoller, routeEvent, SessionStore, goLiveChecklist,
 NOT_AUTHORIZED, filterNewEvents, containsMention, DetectedEvent types,
 SessionStore options (`db`, `ttlMs`, `now`; `durable`), startWatchPoller
 `db` / `sessionStore` / `sessionTtlMs` injection; outside a dry run
@@ -187,7 +190,11 @@ The spawn client runs `task run --here --task <prompt> --output ndjson`
 (REQ-watch-006 / REQ-watch-073): the run works in the watcher's cwd and never
 makes a worktree of its own (SESSION-WORKTREE-1.a, REQ-cli-122).
 
-Empty github orgs+repos fail-start; empty users = deny-all for triggers;
+Empty github orgs+repos fail-start; after start every poll cycle re-reads the
+allowlist (file and env) and splices it into the config in place, skips the
+cycle when the file fails to load (fail closed, last good lists kept), polls
+nothing while the repo/org allowlist is empty and forgets its in-memory denied
+ids when the GitHub lists change (ADMIN-3.c, REQ-watch-043); empty users = deny-all for triggers;
 allowlist BEFORE session spawn; assignment / review_request also gate the
 user who assigned / requested (actor; missing actor refused, deny wins) in the
 router and before the poller's per-issue dedupe; denied refuse quietly (no
@@ -299,6 +306,12 @@ comment's line (no host); only the operator-only spawn JSONL keeps the
 scrubbed summary (REQ-watch-009).
 
 ## Behavioral Examples
+
+The owner runs `/admin github add repo:octo-org/tool` on Discord; the running
+watch's next poll includes `octo-org/tool` and runs an allowlisted mention
+there, no restart. `/admin deny add github_user:x` → x's next comment is
+refused. A broken allowlist file → `[watch] poll skip: allowlist could not be
+loaded (…)`, nothing fetched, until it loads again (REQ-watch-043).
 
 Allowlisted mention or assignment→start_session; same repo#number→continue_session;
 non-allowlisted user/repo→refuse quiet; duplicate id→skip; missing token /

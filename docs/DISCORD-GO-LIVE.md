@@ -77,7 +77,8 @@ channels came from (`file`, `env` or `file + env`) and how many, never the ids. 
 usable (`[warn] llm: No model provider is configured …`, AGENT-10) and checks the data dir
 is writable (`data-dir`). Its
 `allowlist-file` check fails when the file exists but cannot be parsed, with the line and key
-(never the values); the bridge, `github watch` and `daemon` refuse to start until it is fixed.
+(never the values); the bridge, `github watch` and `daemon` refuse to start until it is fixed
+(a running `github watch` skips each poll, and the daemon each tick, until it loads again).
 
 ## D. Run
 
@@ -663,7 +664,10 @@ Who is who in an allowlisted channel:
   `/admin people role` change or a VM edit applies to the next call, no restart.
 - `[discord].users` / `.roles` / `deny_users` / `deny_roles` gate every @mention, reply-to-bot,
   thread continuation and slash command, after the channel gate. A user on `deny_users` or
-  holding a `deny_roles` role is refused (deny always wins). Once `users` or `roles` has
+  holding a `deny_roles` role is refused (deny always wins). The owner changes the deny lists
+  (Discord and GitHub) with `/admin deny add|remove` and the GitHub repo allow lists
+  (`[github].orgs` / `repos`) with `/admin github add|remove` — owner-only, SAFE-5 audited,
+  live without a restart, never denying the owner (ADMIN-3.c). Once `users` or `roles` has
   entries, only listed users, holders of a listed role and the owner pass (`/admin users add`
   warns when it adds the first user); with both empty, anyone in an allowlisted channel may
   chat. A refused chat message gets no reply, session or run; a refused slash command gets only

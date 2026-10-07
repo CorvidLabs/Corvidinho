@@ -5,7 +5,8 @@
  * Steal shape from corvid-agent session/status/agents/work + mute/unmute ADMIN
  * + /schedule list|create|pause|resume|delete (single-project; skip templates)
  * + /admin users|channels|config (corvid-agent admin-commands.ts, trimmed to
- * the captured ADMIN-1..3 surface) + /admin people (ADMIN-3.a, #36; role ADMIN-3.b, #65; forget MEMORY-ACL-6.a, #101). Channel options use STRING + autocomplete
+ * the captured ADMIN-1..3 surface) + /admin people (ADMIN-3.a, #36; role ADMIN-3.b, #65; forget MEMORY-ACL-6.a, #101)
+ * + /admin deny|github add|remove (ADMIN-3.c part 1: deny lists and the GitHub repo allow lists). Channel options use STRING + autocomplete
  * (searchable names/ids) instead of the limited native CHANNEL picker.
  */
 
@@ -21,6 +22,8 @@ export const OPT_USER = 6;
 export const OPT_CHANNEL = 7;
 /** Discord Application Command option type: BOOLEAN */
 export const OPT_BOOLEAN = 5;
+/** Discord Application Command option type: ROLE (role picker; the value is the role id) */
+export const OPT_ROLE = 8;
 /** Guild text channel type for CHANNEL option channel_types filter */
 export const CHANNEL_TYPE_GUILD_TEXT = 0;
 
@@ -50,7 +53,8 @@ export type SlashCommandBody = {
  * (DISCORD-SCHEDULE), /announce channel|show (DISCORD-ANNOUNCE),
  * /admin users add | channels add|remove | config show (ADMIN-1..3)
  * | people list|add|link|unlink|remove (ADMIN-3.a / IDENTITY-13) | people role
- * (ADMIN-3.b / IDENTITY-8) | people forget (MEMORY-ACL-6.a).
+ * (ADMIN-3.b / IDENTITY-8) | people forget (MEMORY-ACL-6.a) | deny add|remove
+ * and github add|remove (ADMIN-3.c part 1).
  */
 export function buildSlashCommandBodies(): SlashCommandBody[] {
   return [
@@ -478,8 +482,72 @@ export function buildSlashCommandBodies(): SlashCommandBody[] {
             },
           ],
         },
+        {
+          type: OPT_SUB_COMMAND_GROUP,
+          name: "deny",
+          description: "Deny lists: Discord channels, users, roles; GitHub orgs, repos, users (ADMIN-3.c)",
+          options: [
+            {
+              type: OPT_SUB_COMMAND,
+              name: "add",
+              description: "Deny exactly one channel, user, role or GitHub org, repo or user (owner only)",
+              options: denyListOptions(),
+            },
+            {
+              type: OPT_SUB_COMMAND,
+              name: "remove",
+              description: "Remove exactly one entry from a deny list (owner only)",
+              options: denyListOptions(),
+            },
+          ],
+        },
+        {
+          type: OPT_SUB_COMMAND_GROUP,
+          name: "github",
+          description: "GitHub repo allow lists: [github].orgs and [github].repos (ADMIN-3.c)",
+          options: [
+            {
+              type: OPT_SUB_COMMAND,
+              name: "add",
+              description: "Allow exactly one GitHub org or repo (owner only)",
+              options: githubListOptions(),
+            },
+            {
+              type: OPT_SUB_COMMAND,
+              name: "remove",
+              description: "Remove exactly one GitHub org or repo from the allow lists (owner only)",
+              options: githubListOptions(),
+            },
+          ],
+        },
       ],
     },
+  ];
+}
+
+/** `/admin deny add|remove` options: give exactly one (the handler re-checks). */
+function denyListOptions(): SlashOptionDef[] {
+  return [
+    {
+      type: OPT_STRING,
+      name: "channel",
+      description: "Discord channel: search by name or paste a snowflake id",
+      required: false,
+      autocomplete: true,
+    },
+    { type: OPT_USER, name: "user", description: "Discord user", required: false },
+    { type: OPT_ROLE, name: "role", description: "Discord role", required: false },
+    { type: OPT_STRING, name: "github_org", description: "GitHub org login", required: false },
+    { type: OPT_STRING, name: "github_repo", description: "GitHub repo: OWNER/REPO or OWNER/*", required: false },
+    { type: OPT_STRING, name: "github_user", description: "GitHub login or numeric user id", required: false },
+  ];
+}
+
+/** `/admin github add|remove` options: give exactly one (the handler re-checks). */
+function githubListOptions(): SlashOptionDef[] {
+  return [
+    { type: OPT_STRING, name: "org", description: "GitHub org login (allows every repo it owns)", required: false },
+    { type: OPT_STRING, name: "repo", description: "GitHub repo: OWNER/REPO or OWNER/*", required: false },
   ];
 }
 
