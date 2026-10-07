@@ -18,6 +18,7 @@ Sessions stay short-lived by default. Soft TTL keeps an active conversation; idl
   - **SESSION-3.a**  A reply to it, or a message in its thread, after the session has expired starts a new session that begins from the old one's summary, instead of getting no answer.
 - **SESSION-4**  Cross-session continuity comes from MEMORY, not from a long-lived process.
 - **SESSION-5**  At about 80% of the model's window, older turns are condensed into a summary; the current task and its latest instructions stay pinned word for word.
+  - **SESSION-5.a**  Each model I configure has its own context window; at about 80% of it, a model writes the summary of older turns, and the current task and my latest instructions stay word for word.
 - **SESSION-6**  The summary is saved with the session, so after a restart or on a different model it picks up from the summary instead of replaying the whole history.
 
 - **SESSION-WORKTREE-1**  A Discord (or CLI) talk that does repo work runs in its own git worktree (or project-scoped directory) so edits and branch state do not bleed into other concurrent talks.

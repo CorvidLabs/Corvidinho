@@ -1,21 +1,27 @@
 /**
- * Condensed conversations (SESSION-5 / SESSION-6 / SESSION-3.a / AGENT-6.a;
- * REQ-discord-472, REQ-watch-472).
+ * Condensed conversations (SESSION-5 / SESSION-5.a / SESSION-6 / SESSION-3.a
+ * / AGENT-6.a; REQ-discord-472, REQ-watch-472, REQ-agent-473).
  *
  * A conversation is a condensed `summary` plus its recent `turns`, oldest
- * first. When the prompt a run would get (the replayed conversation and the
- * new message) reaches about 80% of the model's context window, the oldest
- * turns are folded into the summary one at a time until it fits again. The
- * current task (the conversation's opening human turn) and its latest
- * instruction (the newest human turn) are never folded, so they stay word for
- * word (secret-scrubbed, SAFE-6). The fold is extractive and deterministic:
- * each folded turn becomes one short point of its own words; no model call.
+ * first. A bridge replays it, whole, in a labelled block ahead of the new
+ * message and hands the run the same conversation ({@link ConversationReplay}).
+ * The run (`src/agent/condense.ts`) measures the whole prompt its model will
+ * see; when that reaches about 80% of the model's own context window, the
+ * oldest turns are folded ({@link condenseConversation}) and a model writes
+ * their summary. The current task (the conversation's opening human turn) and
+ * its latest instruction (the newest human turn) are never folded, so they
+ * stay word for word (secret-scrubbed, SAFE-6). The run reports the new
+ * summary and the folded turns ({@link CondenseReport}); the bridge keeps
+ * them with the session. The extractive fold (each folded turn becomes one
+ * short point of its own words, no model call) stands in when the summary
+ * call fails, and still bounds a session's turn cap and a retained record.
  *
- * The window comes from `CORVIDINHO_LLM_CONTEXT_TOKENS` (tokens), else
- * {@link CONTEXT_WINDOW_DEFAULT_TOKENS}; tokens use the chars/4 estimate
- * Corvidinho uses elsewhere (PLUGIN-6). The prompt reaches the agent as one
- * process argument, which Linux caps at 128 KiB, so the conversation part is
- * never allowed past {@link CONVERSATION_PROMPT_MAX_CHARS} whatever the window.
+ * Each configured model has its own window (`kind:model=TOKENS`, AGENT-13
+ * entries, src/agent/providers.ts); `CORVIDINHO_LLM_CONTEXT_TOKENS` (tokens),
+ * else {@link CONTEXT_WINDOW_DEFAULT_TOKENS}, is the window of a model with
+ * none. Tokens use the chars/4 estimate Corvidinho uses elsewhere (PLUGIN-6).
+ * A conversation run gets its task on stdin (`task run --task-stdin`), so no
+ * process-argument ceiling caps the budget below the model's window.
  *
  * `ConversationStore` keeps each thread's summary and last
  * {@link CONVERSATION_KEEP_TURNS} turns (scrubbed) in `conversation_threads`
@@ -55,10 +61,13 @@ export type Conversation = {
   turns: ConversationTurn[];
 };
 
-/** Env key for the model's context window, in tokens (optional). */
+/**
+ * Env key for the context window, in tokens, of a configured model whose
+ * entry sets none (optional; SESSION-5.a: `kind:model=TOKENS` sets one).
+ */
 export const CONTEXT_WINDOW_ENV = "CORVIDINHO_LLM_CONTEXT_TOKENS";
 
-/** Window used when `CORVIDINHO_LLM_CONTEXT_TOKENS` is unset or not a positive integer. */
+/** Window used when neither the model's entry nor `CORVIDINHO_LLM_CONTEXT_TOKENS` sets one. */
 export const CONTEXT_WINDOW_DEFAULT_TOKENS = 8192;
 
 /** A configured window below this is raised to it. */
@@ -69,14 +78,6 @@ export const CONDENSE_AT_FRACTION = 0.8;
 
 /** Rough token estimate: chars / 4, as `approxTokens` (PLUGIN-6). */
 export const CHARS_PER_TOKEN = 4;
-
-/**
- * Transport ceiling for the conversation part of the prompt (replayed block
- * plus the new message): the prompt is one `--task` argument, and Linux caps
- * one argument at 128 KiB. 32,000 UTF-16 chars stay under 96 KB of UTF-8,
- * leaving room for the identity and memory blocks.
- */
-export const CONVERSATION_PROMPT_MAX_CHARS = 32_000;
 
 /** AGENT-6.a: a thread's summary and recent turns are kept this long after its last update. */
 export const CONVERSATION_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -104,10 +105,18 @@ export const SUMMARY_POINT_MAX_CHARS = 160;
 /** Over the summary cap, older points are shortened to this before any is left out. */
 export const SUMMARY_POINT_MIN_CHARS = 80;
 
-/** The summary never grows past this (and never past a quarter of the budget). */
+/** The summary never grows past this (and never past a third of the budget). */
 export const SUMMARY_MAX_CHARS = 6000;
 
-const SUMMARY_FLOOR_CHARS = 500;
+/** The smallest summary cap, whatever the budget. */
+export const SUMMARY_FLOOR_CHARS = 500;
+
+/**
+ * SESSION-5.a: start of the one line a model-written summary is kept as. It
+ * leads the summary, and later extractive points go after it; bounding the
+ * summary shortens or leaves out those points first, never this line.
+ */
+export const MODEL_SUMMARY_LABEL = "- Summary: ";
 
 /** First line of the summary once its oldest points were left out to stay bounded. */
 const SUMMARY_DROPPED_RE = /^\((\d+) earlier points? left out\)$/;
@@ -118,9 +127,9 @@ export const ROLE_LABEL: Record<ConversationRole, string> = {
 };
 
 /**
- * The model's context window in tokens: `CORVIDINHO_LLM_CONTEXT_TOKENS` when it
- * is a positive integer (raised to {@link CONTEXT_WINDOW_MIN_TOKENS}), else
- * {@link CONTEXT_WINDOW_DEFAULT_TOKENS}.
+ * The fallback context window in tokens, for a model whose entry sets none:
+ * `CORVIDINHO_LLM_CONTEXT_TOKENS` when it is a positive integer (raised to
+ * {@link CONTEXT_WINDOW_MIN_TOKENS}), else {@link CONTEXT_WINDOW_DEFAULT_TOKENS}.
  */
 export function resolveContextWindowTokens(
   env: NodeJS.ProcessEnv = process.env,
@@ -133,14 +142,15 @@ export function resolveContextWindowTokens(
 }
 
 /**
- * Chars the conversation part of the prompt may take before it is condensed:
- * 80% of the window (chars/4 tokens), never past the transport ceiling.
+ * Chars the whole prompt a model sees may take before its conversation is
+ * condensed: 80% of that model's window (chars/4 tokens). Nothing else caps
+ * it (SESSION-5.a).
  */
 export function condenseBudgetChars(windowTokens: number): number {
   const tokens = Math.floor(
     Math.max(CONTEXT_WINDOW_MIN_TOKENS, windowTokens) * CONDENSE_AT_FRACTION,
   );
-  return Math.min(CONVERSATION_PROMPT_MAX_CHARS, tokens * CHARS_PER_TOKEN);
+  return tokens * CHARS_PER_TOKEN;
 }
 
 /** Tokens for `text` by the chars/4 estimate. */
@@ -183,6 +193,11 @@ const UNTRUSTED_FENCE_RE =
 /** A summary point that carries a fenced excerpt (never shortened mid-fence). */
 const FENCE_OPEN_RE = /<<<[A-Z][A-Z0-9_]{0,63} id=[^\s<>]{1,64} source=/;
 
+/** True when `text` holds an untrusted-data fence's open marker (SAFE-12). */
+export function holdsUntrustedFence(text: string): boolean {
+  return FENCE_OPEN_RE.test(text);
+}
+
 /**
  * `text` with the end marker of every fence a clip cut off put back, so the
  * rest of a replayed block never reads as inside it and its text never reads
@@ -205,7 +220,8 @@ function quoteAsData(text: string): string {
   return defangContextMarkers(stripInvisible(text)).replace(TURN_LABEL_LINE_RE, "$1(quoted) $2");
 }
 
-function turnLine(turn: Pick<ConversationTurn, "role" | "content">): string {
+/** One turn as a replayed line (`Human: …`), quoted as data (SAFE-12). */
+export function turnLine(turn: Pick<ConversationTurn, "role" | "content">): string {
   const text = quoteAsData(closeOpenFences(clipTurnForRole(turn.role, turn.content))).replace(
     BLANK_LINES_RE,
     "\n",
@@ -289,7 +305,7 @@ export function withConversationBlock(
 }
 
 /** The summary's points, one per line, blank lines dropped. */
-function summaryPoints(summary: string): string[] {
+export function summaryPoints(summary: string): string[] {
   return summary
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -341,11 +357,14 @@ export function summaryCapChars(budgetChars: number): number {
 /**
  * `summary` with `points` appended, bounded to `capChars`: past the cap the
  * oldest points are first shortened to {@link SUMMARY_POINT_MIN_CHARS}, then
- * left out, one `(N earlier points left out)` line counting them. Scrubbed
- * (SAFE-6).
+ * left out, one `(N earlier points left out)` line counting them. A leading
+ * model-written summary line ({@link MODEL_SUMMARY_LABEL}, SESSION-5.a) is
+ * kept ahead of them and is never shortened or left out for a point; only a
+ * cap smaller than that line alone clips it. Scrubbed (SAFE-6).
  */
 export function appendSummary(summary: string, points: readonly string[], capChars: number): string {
   let lines = summaryPoints(summary);
+  const lead = lines[0]?.startsWith(MODEL_SUMMARY_LABEL) ? lines.shift() : undefined;
   let dropped = 0;
   const m = lines[0]?.match(SUMMARY_DROPPED_RE);
   if (m) {
@@ -354,7 +373,11 @@ export function appendSummary(summary: string, points: readonly string[], capCha
   }
   lines.push(...points.map((p) => p.replace(/\s+/g, " ").trim()).filter(Boolean));
   const render = () =>
-    [...(dropped > 0 ? [`(${dropped} earlier point${dropped === 1 ? "" : "s"} left out)`] : []), ...lines].join("\n");
+    [
+      ...(lead ? [lead] : []),
+      ...(dropped > 0 ? [`(${dropped} earlier point${dropped === 1 ? "" : "s"} left out)`] : []),
+      ...lines,
+    ].join("\n");
   for (let i = 0; i < lines.length - 1 && render().length > capChars; i += 1) {
     // A point with a fenced excerpt is kept whole or left out, never cut
     // inside its fence (SAFE-12).
@@ -362,9 +385,17 @@ export function appendSummary(summary: string, points: readonly string[], capCha
       lines[i] = clipTurnText(lines[i]!.replace(/…$/, ""), SUMMARY_POINT_MIN_CHARS);
     }
   }
-  while (lines.length > 1 && render().length > capChars) {
+  while (lines.length > (lead ? 0 : 1) && render().length > capChars) {
     lines.shift();
     dropped += 1;
+  }
+  if (lead && render().length > capChars) {
+    // Only the model's line is left: the count of what was left out goes,
+    // then the line itself is clipped to the cap (never inside a fence).
+    dropped = 0;
+    if (lead.length > capChars && !FENCE_OPEN_RE.test(lead)) {
+      return scrubSecrets(clipTurnText(lead, Math.max(MODEL_SUMMARY_LABEL.length + 1, capChars)));
+    }
   }
   return scrubSecrets(render());
 }
@@ -388,22 +419,27 @@ export function pinnedTurnIndexes(turns: ReadonlyArray<Pick<ConversationTurn, "r
 /**
  * Fold the oldest unpinned turns of `conversation` into its summary while the
  * prompt (`render(conversation)` plus a blank line plus `incoming`, the new
- * message, which is never touched) is at or over `budgetChars`. Pure: returns
- * the new conversation and the turns folded (empty when it already fits).
+ * message, which is never touched, plus `fixedChars`, the rest of the prompt
+ * the model sees: system prompt, tools, persona, memory and identity blocks)
+ * is at or over `budgetChars`. The summary is extractive (one point per
+ * folded turn). Pure: returns the new conversation and the turns folded
+ * (empty when it already fits).
  */
 export function condenseConversation(input: {
   conversation: Conversation;
   incoming: string;
   budgetChars: number;
   render: (c: Conversation) => string;
+  fixedChars?: number;
 }): Conversation & { folded: ConversationTurn[] } {
   let summary = input.conversation.summary;
   const turns = [...input.conversation.turns];
   const folded: ConversationTurn[] = [];
   const cap = summaryCapChars(input.budgetChars);
+  const fixed = Math.max(0, input.fixedChars ?? 0);
   const size = () => {
     const block = input.render({ summary, turns });
-    return (block ? block.length + 2 : 0) + input.incoming.length;
+    return (block ? block.length + 2 : 0) + input.incoming.length + fixed;
   };
   while (size() >= input.budgetChars) {
     const pinned = pinnedTurnIndexes(turns);
@@ -439,6 +475,106 @@ export function boundConversation(
   const folded = turns.splice(pinOpening, drop);
   const summary = appendSummary(conversation.summary, folded.map(summaryPoint), capChars);
   return { summary, turns, folded };
+}
+
+// ---------------------------------------------------------------------------
+// A conversation handed to a run, and what the run's condensing did
+// (SESSION-5.a; src/agent/condense.ts)
+// ---------------------------------------------------------------------------
+
+/**
+ * The conversation a bridge replayed into a run's task, as the run gets it
+ * (`task run --task-stdin`): the block's header and footer, the summary and
+ * the turns, oldest first. `formatConversationBlock` of it is exactly the
+ * block in the task, which is how the run finds it there.
+ */
+export type ConversationReplay = {
+  header: string;
+  footer: string;
+  summary: string;
+  turns: Array<Pick<ConversationTurn, "role" | "content">>;
+};
+
+/**
+ * What a run's condensing did (SESSION-5.a), on its result for the bridge to
+ * keep with the session (SESSION-6): the new summary, which replay turns it
+ * folded (indexes, ascending; never the task or the latest instruction), who
+ * wrote the summary — the model, or the extractive fallback when the summary
+ * call failed (`reason`, fixed harness text) — and the model and window the
+ * 80% was measured against.
+ */
+export type CondenseReport = {
+  summary: string;
+  folded: number[];
+  by: "model" | "extractive";
+  model: string;
+  windowTokens: number;
+  reason?: string;
+};
+
+/** Longest summary a report may carry back (the cap, a fence's markers, slack). */
+export const CONDENSE_REPORT_SUMMARY_MAX_CHARS = SUMMARY_MAX_CHARS + 1000;
+
+/**
+ * A run's {@link CondenseReport} read back from its result frame, checked
+ * against the `turnCount` turns the bridge replayed: the summary scrubbed
+ * (SAFE-6) and bounded, folded indexes whole numbers inside the replay, each
+ * once, never a pinned turn (`pinned`), ascending. Undefined when it is not
+ * one, has an empty summary or folds nothing.
+ */
+export function condenseReportFromUnknown(
+  v: unknown,
+  replay: { turns: ReadonlyArray<Pick<ConversationTurn, "role">> },
+): CondenseReport | undefined {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
+  const r = v as Record<string, unknown>;
+  // A report with no summary would drop its folded turns for nothing.
+  if (typeof r.summary !== "string" || !scrubSecrets(r.summary).trim() || !Array.isArray(r.folded)) return undefined;
+  if (r.by !== "model" && r.by !== "extractive") return undefined;
+  const pinned = pinnedTurnIndexes(replay.turns);
+  const folded = [
+    ...new Set(
+      r.folded.filter(
+        (i): i is number =>
+          typeof i === "number" && Number.isInteger(i) && i >= 0 && i < replay.turns.length && !pinned.has(i),
+      ),
+    ),
+  ].sort((a, b) => a - b);
+  if (folded.length === 0) return undefined;
+  const line = (x: unknown, max: number) =>
+    typeof x === "string" ? scrubSecrets(x).replace(/\s+/g, " ").trim().slice(0, max) : "";
+  const windowTokens =
+    typeof r.windowTokens === "number" && Number.isSafeInteger(r.windowTokens) && r.windowTokens > 0
+      ? r.windowTokens
+      : 0;
+  const reason = line(r.reason, 200);
+  return {
+    summary: clipTurnText(scrubSecrets(r.summary), CONDENSE_REPORT_SUMMARY_MAX_CHARS),
+    folded,
+    by: r.by,
+    model: line(r.model, 200),
+    windowTokens,
+    ...(reason ? { reason } : {}),
+  };
+}
+
+/** `turns` without the ones at the report's folded indexes. */
+export function withoutFolded<T>(turns: readonly T[], folded: readonly number[]): T[] {
+  const gone = new Set(folded);
+  return turns.filter((_, i) => !gone.has(i));
+}
+
+/**
+ * The log line a bridge writes when a run's summary is the extractive one
+ * because the model's summary call failed (SESSION-5.a).
+ */
+export function extractiveFallbackLogLine(report: CondenseReport): string {
+  const n = report.folded.length;
+  return (
+    `SESSION-5.a: ${report.model || "the model"} did not write the summary` +
+    `${report.reason ? ` (${report.reason})` : ""}; kept the extractive summary of ` +
+    `${n} condensed turn${n === 1 ? "" : "s"}`
+  );
 }
 
 // ---------------------------------------------------------------------------

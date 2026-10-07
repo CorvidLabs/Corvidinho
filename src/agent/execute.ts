@@ -30,6 +30,7 @@ import {
   isScheduleRunEnv,
   isWatchRunEnv,
   resolveActingRole,
+  actingRoleCap,
   roleAllowsPlugin,
   roleSessionActive,
 } from "../plugins/roles.ts";
@@ -166,6 +167,7 @@ import {
   failOver,
   mergeModelFallbacks,
   modelChain,
+  modelFailureReason,
   modelFallbackEventText,
   modelCallFailedLine,
   modelFallbackFromUnknown,
@@ -186,6 +188,8 @@ import {
   type StrongerMove,
 } from "./providers.ts";
 import { maxTurnsFromEnv, whileIdlePaused } from "./limits.ts";
+import { createConversationCondenser, modelWindowTokens, type Condense } from "./condense.ts";
+import type { CondenseReport, ConversationReplay } from "../store/conversation.ts";
 import { renderRepoWaysBlock, type RepoWays } from "./repo-ways.ts";
 import { HI_DRAFT_TOOL, HI_DRAFT_TOOL_RESULT_DETAIL, handleHiDraftCall, hiDraftGate, withHiDraftTool, type HiDraftMode } from "./hi-drafts.ts";
 import { shellToolsGate, shellToolsRefusedLine } from "./shell-gate.ts";
@@ -485,6 +489,16 @@ export type CreateTaskExecuteOpts = {
    * the bridge to send by direct message.
    */
   onPrivateReply?: (text: string) => void;
+  /**
+   * SESSION-5.a (REQ-agent-473): the conversation a bridge replayed into
+   * `taskText` (`task run --task-stdin`). Before an attempt's first model
+   * call the run measures the whole prompt; at about 80% of the current
+   * model's window it folds the oldest turns and that model writes their
+   * summary (src/agent/condense.ts). Unset = nothing to condense.
+   */
+  conversation?: ConversationReplay;
+  /** SESSION-5.a: what condensing did, for the result (`TaskResult.conversation`). */
+  onCondensed?: (report: CondenseReport) => void;
 };
 
 /** One part of a multi-part user message (OpenAI-compatible chat). */
@@ -955,6 +969,39 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
         : { ok: false, error: reply.error, failure: reply.failure };
     },
   };
+  // SESSION-5.a (REQ-agent-473): a replayed conversation is condensed at
+  // about 80% of the current model's window of the whole prompt, and that
+  // model writes the summary: one no-tools call through this run's call path
+  // and SAFE-8 spend guard (it counts toward every cap, its usage in the
+  // footer), never failed over. A model failure keeps the extractive
+  // summary; a cap stop or the run's own stop ends the attempt.
+  const condense: Condense | undefined = opts.conversation
+    ? createConversationCondenser({
+        replay: opts.conversation,
+        model: () => {
+          const p = chain.entries[chain.index];
+          return p ? { label: entryLabel(p.entry), windowTokens: modelWindowTokens(p.entry, env) } : null;
+        },
+        // SAFE-12: a non-owner's turns (a role session whose acting role is
+        // not the owner's) are data, so the model's summary of them is fenced.
+        untrusted: roleSessionActive(env) && actingRoleCap(env) !== "owner",
+        summarize: async (messages, signal) => {
+          const p = chain.entries[chain.index];
+          if (!p) return { ok: false, stop: false, reason: "no model is configured" };
+          if (!p.usable) return { ok: false, stop: false, reason: `${p.keyEnv ?? "its key"} is not set` };
+          const reply = await whileIdlePaused(() =>
+            chatCompletions({ provider: p, fetchImpl, messages, tools: [], signal, timeoutMs, onUsage }),
+          );
+          if (reply.ok) return { ok: true, text: reply.message.content ?? "" };
+          if (reply.failure === null) {
+            return { ok: false, stop: true, error: reply.error, reason: modelCallFailedLine(null, p) };
+          }
+          return { ok: false, stop: false, reason: modelFailureReason(reply.failure) };
+        },
+        note: (text) => emit(onEvent, { type: "Text", text }),
+        onReport: (report) => opts.onCondensed?.(report),
+      })
+    : undefined;
   // GITHUB-9.a: each model that changed this run's checkout is recorded for
   // it (pr_change_authors, keyed by its top level and branch), so a later run
   // that opens the PR — the next message, a resumed run — never picks one of
@@ -1233,6 +1280,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
         projectBlock,
         personaBlock,
         specBriefing,
+        ...(condense ? { condense } : {}),
       });
     }
 
@@ -1332,6 +1380,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
       specBriefing,
       repoWays,
       ...(hiDraft ? { hiDraft } : {}),
+      ...(condense ? { condense } : {}),
       roleEnv: env,
       onRoleRefusal: () => {
         roleRefused = true;
@@ -1499,13 +1548,49 @@ type LoopArgs = {
   capabilityFacts?: CapabilityFacts;
   /** Extra system sentence when a named capability is only partly available. */
   capabilityNote?: string;
+  /** SESSION-5.a: condense the replayed conversation against the whole prompt (REQ-agent-473). */
+  condense?: Condense;
 };
+
+/** Chars of the whole prompt a model gets: system and user text and the tool schemas (SESSION-5.a). */
+function promptChars(system: string, user: string, tools: readonly unknown[]): number {
+  return system.length + user.length + (tools.length > 0 ? JSON.stringify(tools).length : 0);
+}
+
+/**
+ * SESSION-5.a: `taskText` condensed by `condense` for a prompt of `system`,
+ * the user text `userFor` builds from a task, and `tools` — or the result an
+ * attempt ends with (a spend-cap stop or the run's own stop during the
+ * summary call).
+ */
+async function condensedTask(
+  condense: Condense | undefined,
+  taskText: string,
+  parts: { system: string; userFor: (task: string) => string; tools: readonly unknown[] },
+  signal: AbortSignal,
+): Promise<{ ok: true; taskText: string } | { ok: false; result: ExecuteResult }> {
+  if (!condense || !taskText) return { ok: true, taskText };
+  const out = await condense(
+    taskText,
+    (t) => promptChars(parts.system, parts.userFor(t), parts.tools),
+    signal,
+  );
+  if (out.ok) return { ok: true, taskText: out.taskText };
+  return {
+    ok: false,
+    result: {
+      summary: out.error,
+      filesChanged: [],
+      error: true,
+      ...(out.failureReason ? { failureReason: out.failureReason } : {}),
+    },
+  };
+}
 
 /** A tool-loop result; `cliHandover` (AGENT-13.a) never leaves `createTaskExecute`. */
 type LoopResult = ExecuteResult & { cliHandover?: true };
 
-async function runToolLoop(args: LoopArgs): Promise<LoopResult> {
-  const {
+async function runToolLoop(args: LoopArgs): Promise<LoopResult> {  const {
     llm,
     models,
     fetchImpl,
@@ -1582,18 +1667,24 @@ async function runToolLoop(args: LoopArgs): Promise<LoopResult> {
     projectBlock,
   );
 
-  const userParts = [
-    taskText ? `Task:\n${taskText}` : "Task: (none provided)",
-    renderSpecBriefing(specBriefing),
-    verifyFeedback
-      ? `\n\nPrevious verification feedback:\n${verifyFeedbackExcerpt(verifyFeedback)}`
-      : "",
-    `\n\nAttempt ${attempt}. Capability tier: ${llm.tier}. Tools available: ${tools.length}.`,
-  ];
+  const userFor = (task: string) =>
+    [
+      task ? `Task:\n${task}` : "Task: (none provided)",
+      renderSpecBriefing(specBriefing),
+      verifyFeedback
+        ? `\n\nPrevious verification feedback:\n${verifyFeedbackExcerpt(verifyFeedback)}`
+        : "",
+      `\n\nAttempt ${attempt}. Capability tier: ${llm.tier}. Tools available: ${tools.length}.`,
+    ].join("");
+
+  // SESSION-5.a: at about 80% of the model's window, counting the whole
+  // prompt, the replayed conversation is condensed first (REQ-agent-473).
+  const task = await condensedTask(args.condense, taskText, { system, userFor, tools }, signal);
+  if (!task.ok) return task.result;
 
   const messages: ChatMessage[] = [
     { role: "system", content: system },
-    { role: "user", content: userParts.join("") },
+    { role: "user", content: userFor(task.taskText) },
   ];
   // DISCORD-9 (REQ-agent-428): each user message holding image parts, with
   // the tool results that opened them, so a refusal can take the parts out.
@@ -2200,32 +2291,41 @@ async function singleChatCompletion(opts: {
   projectBlock: string;
   personaBlock: string;
   specBriefing?: string;
+  /** SESSION-5.a: condense the replayed conversation against the whole prompt. */
+  condense?: Condense;
 }): Promise<ExecuteResult> {
-  const userParts = [
-    opts.taskText ? `Task:\n${opts.taskText}` : "Task: (none provided)",
-    renderSpecBriefing(opts.specBriefing),
-    opts.verifyFeedback
-      ? `\n\nPrevious verification feedback:\n${verifyFeedbackExcerpt(opts.verifyFeedback)}`
-      : "",
-    `\n\nAttempt ${opts.attempt}. Reply with a concise status summary. Do not claim files were edited.`,
-  ];
+  const userFor = (task: string) =>
+    [
+      task ? `Task:\n${task}` : "Task: (none provided)",
+      renderSpecBriefing(opts.specBriefing),
+      opts.verifyFeedback
+        ? `\n\nPrevious verification feedback:\n${verifyFeedbackExcerpt(opts.verifyFeedback)}`
+        : "",
+      `\n\nAttempt ${opts.attempt}. Reply with a concise status summary. Do not claim files were edited.`,
+    ].join("");
+  // PERSONA-3: the persona comes first; the rules after it win.
+  const system = withProjectInstructions(
+    withPersona(
+      "You are Corvidinho on the read tier (no tools). " +
+      "Reply with one short plain-text message only, in the persona's voice — never a flat changelog (PERSONA-1). " +
+      MISSING_CAPABILITY_INSTRUCTIONS +
+      PERSONA_RULES_SYSTEM_INSTRUCTIONS +
+        UNTRUSTED_CONTENT_AGENT_SYSTEM_INSTRUCTIONS.trimEnd(),
+      opts.personaBlock,
+    ),
+    opts.projectBlock,
+  );
+  // SESSION-5.a: the whole prompt counts toward the 80% (REQ-agent-473).
+  const task = await condensedTask(
+    opts.condense,
+    opts.taskText,
+    { system, userFor, tools: opts.tools },
+    opts.signal,
+  );
+  if (!task.ok) return task.result;
   const messages: ChatMessage[] = [
-    {
-      role: "system",
-      // PERSONA-3: the persona comes first; the rules after it win.
-      content: withProjectInstructions(
-        withPersona(
-          "You are Corvidinho on the read tier (no tools). " +
-          "Reply with one short plain-text message only, in the persona's voice — never a flat changelog (PERSONA-1). " +
-          MISSING_CAPABILITY_INSTRUCTIONS +
-          PERSONA_RULES_SYSTEM_INSTRUCTIONS +
-            UNTRUSTED_CONTENT_AGENT_SYSTEM_INSTRUCTIONS.trimEnd(),
-          opts.personaBlock,
-        ),
-        opts.projectBlock,
-      ),
-    },
-    { role: "user", content: userParts.join("") },
+    { role: "system", content: system },
+    { role: "user", content: userFor(task.taskText) },
   ];
   const completion = await callModels(opts.models, (provider) =>
     chatCompletions({

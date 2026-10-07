@@ -4,6 +4,7 @@
 
 import type { HumanAsk, TaskStopReason } from "../agent/types.ts";
 import type { InjectionNotice } from "../agent/untrusted.ts";
+import type { CondenseReport } from "../store/conversation.ts";
 
 export const NOT_AUTHORIZED = "not authorized";
 
@@ -109,6 +110,12 @@ export type AgentSpawnResult = {
    * fallback for its reason (`watchFailureReason`); never posted as is.
    */
   stderrTail?: string;
+  /**
+   * SESSION-5.a (REQ-watch-472): what the run's condensing did to the
+   * thread's replayed conversation (validated against it); the poller keeps
+   * that summary and drops the folded turns when it saves the thread.
+   */
+  conversation?: CondenseReport;
 };
 
 export type WatchConfig = {

@@ -17,10 +17,12 @@
  * `watchActingGithub`; an assignment or review request acts for its actor's
  * login, an edited text for nobody). Edit and rename lookups are made only
  * for events not yet handled (`needsLookup`).
- * REQ-watch-472 (AGENT-6.a / SESSION-5): each run on an issue or PR is kept
- * with that thread's condensed conversation (30 days, scrubbed), and a
- * follow-up on the same issue or PR gets it replayed ahead of the new event,
- * condensed at about 80% of the model's window.
+ * REQ-watch-472 (AGENT-6.a / SESSION-5 / SESSION-5.a): each run on an issue
+ * or PR is kept with that thread's condensed conversation (30 days,
+ * scrubbed), and a follow-up on the same issue or PR gets it replayed ahead
+ * of the new event and handed to the run, which condenses it at about 80% of
+ * its model's window with a model-written summary; the poller keeps that
+ * summary when it saves the thread.
  * MEMORY-ACL-6.a (REQ-watch-1016): a clear "forget me" to the watch user
  * never starts a run — the poller records it for the owner's Approve/Deny
  * card and replies on the thread (src/watch/forget-me.ts), and each cycle
@@ -47,16 +49,15 @@ import { loadOwnerConfig } from "../identity/owner.ts";
 import { loadDeclaredPeople } from "../identity/people.ts";
 import { MemoryStore } from "../memory/store.ts";
 import {
-  condenseBudgetChars,
-  condenseConversation,
   type Conversation,
+  type ConversationReplay,
   ConversationStore,
-  formatConversationBlock,
+  extractiveFallbackLogLine,
   githubIdParticipant,
   githubParticipant,
-  resolveContextWindowTokens,
   watchThreadKey,
   withConversationBlock,
+  withoutFolded,
 } from "../store/conversation.ts";
 import { openCorvidinhoDb, resolveSessionTtlMs } from "../store/index.ts";
 import { formatErrorLine, scrubSecrets } from "../store/scrub.ts";
@@ -304,7 +305,6 @@ export async function startWatchPoller(
   // REQ-watch-472 (AGENT-6.a): each issue/PR thread's condensed conversation,
   // kept 30 days in the same DB; replayed into follow-ups on that thread.
   const conversations = db ? new ConversationStore({ db, now: () => now() }) : undefined;
-  const windowTokens = resolveContextWindowTokens(env);
   // REQ-watch-247: handled ids live in the same DB as the sessions, so a
   // restart never re-runs, re-acks or re-summarizes an event id.
   const processed = new ProcessedIdStore({ db });
@@ -685,10 +685,11 @@ export async function startWatchPoller(
           }),
         );
 
-        // REQ-watch-472 (AGENT-6.a / SESSION-5): this issue/PR thread's
-        // retained conversation goes ahead of the new event, condensed at
-        // about 80% of the model's window (the thread's opening request and
-        // latest request word for word). A DB failure only drops the replay.
+        // REQ-watch-472 (AGENT-6.a / SESSION-5 / SESSION-5.a): this issue/PR
+        // thread's retained conversation goes ahead of the new event, whole,
+        // and to the run, which condenses it at about 80% of its model's
+        // window (the thread's opening request and latest request word for
+        // word, a model-written summary). A DB failure only drops the replay.
         const threadKey = watchThreadKey(event.repo, event.number);
         let retained: ReturnType<ConversationStore["latestForThread"]>;
         try {
@@ -701,15 +702,10 @@ export async function startWatchPoller(
           turns: retained?.turns ?? [],
         };
         const blockOpts = { header: WATCH_THREAD_HEADER, footer: WATCH_THREAD_FOOTER };
-        if (retained) {
-          const condensed = condenseConversation({
-            conversation,
-            incoming: action.prompt,
-            budgetChars: condenseBudgetChars(windowTokens),
-            render: (c) => formatConversationBlock(c, blockOpts),
-          });
-          conversation = { summary: condensed.summary, turns: condensed.turns };
-        }
+        const replay: ConversationReplay | undefined =
+          conversation.summary || conversation.turns.length > 0
+            ? { ...blockOpts, summary: conversation.summary, turns: conversation.turns }
+            : undefined;
         let prompt = withConversationBlock(action.prompt, conversation, blockOpts);
 
         // REQ-watch-1202 (MEMORY-8 / SAFE-5): who the run acts for — the
@@ -765,7 +761,20 @@ export async function startWatchPoller(
             // (by GitHub numeric id; an assignment or review request is
             // community), re-checked by the tool layer at every call.
             actingRole: watchTriggerRole(event, people),
+            // SESSION-5.a: the replayed conversation, for the run to condense.
+            ...(replay ? { conversation: replay } : {}),
           });
+          // SESSION-5.a: what the run's condensing did is what the thread
+          // keeps (its summary; the folded turns leave the kept ones).
+          if (replay && spawn.conversation) {
+            conversation = {
+              summary: spawn.conversation.summary,
+              turns: withoutFolded(conversation.turns, spawn.conversation.folded),
+            };
+            if (spawn.conversation.by === "extractive") {
+              log(`[watch] ${extractiveFallbackLogLine(spawn.conversation)} (${event.repo}#${event.number})`);
+            }
+          }
           spawnOk = spawn.ok;
           spawnExit = spawn.exitCode;
           spawnSummary = spawn.summary;

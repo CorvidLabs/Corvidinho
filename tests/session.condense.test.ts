@@ -1,10 +1,14 @@
 /**
- * SESSION-5 / SESSION-6 (REQ-discord-472) — a long conversation is condensed
- * at about 80% of the model's window: the oldest turns fold into a summary,
- * the current task (the opening request) and its latest instruction stay word
- * for word, the summary is stored with the session (scrubbed, SAFE-6), and a
- * restart or a different model picks up from the summary instead of the
- * whole history. Pure functions plus `SessionStore` on a temp / in-memory DB.
+ * SESSION-5 / SESSION-5.a / SESSION-6 (REQ-discord-472, REQ-agent-473) — a
+ * long conversation is condensed at about 80% of the model's window: the
+ * oldest turns fold into a summary (written by a model in the run,
+ * tests/agent.condense.test.ts; the extractive fold below is its fallback and
+ * the bound of a session's turn cap), the current task (the opening request)
+ * and its latest instruction stay word for word, the summary is stored with
+ * the session (scrubbed, SAFE-6), and a restart or a different model picks
+ * up from the summary instead of the whole history. Each configured model
+ * has its own window (`kind:model=TOKENS`). Pure functions plus
+ * `SessionStore` on a temp / in-memory DB.
  */
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -22,19 +26,24 @@ import type { SessionStub } from "../src/discord/types.ts";
 import {
   CONTEXT_WINDOW_DEFAULT_TOKENS,
   CONTEXT_WINDOW_MIN_TOKENS,
-  CONVERSATION_PROMPT_MAX_CHARS,
   condenseBudgetChars,
   condenseConversation,
+  condenseReportFromUnknown,
+  type CondenseReport,
   formatConversationBlock,
   appendSummary,
+  MODEL_SUMMARY_LABEL,
   pinnedTurnIndexes,
   resolveContextWindowTokens,
   SUMMARY_LABEL,
   SUMMARY_POINT_MAX_CHARS,
   summaryCapChars,
   summaryPoint,
+  withoutFolded,
 } from "../src/store/conversation.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
+import { modelWindowTokens, parseTaskPayload, taskPayloadJson } from "../src/agent/condense.ts";
+import { entryLabel, parseModelChain, parseModelEntry } from "../src/agent/providers.ts";
 
 const TTL_MS = 45 * 60 * 1000;
 const cleanups: Array<() => void> = [];
@@ -97,10 +106,64 @@ describe("the model's window (SESSION-5)", () => {
     );
   });
 
-  test("the condense budget is 80% of the window (chars/4 tokens), never past the transport ceiling", () => {
+  test("the condense budget is 80% of the window (chars/4 tokens), and no transport ceiling caps it (SESSION-5.a)", () => {
     expect(condenseBudgetChars(8192)).toBe(Math.floor(8192 * 0.8) * 4);
     expect(condenseBudgetChars(4096)).toBe(Math.floor(4096 * 0.8) * 4);
-    expect(condenseBudgetChars(1_000_000)).toBe(CONVERSATION_PROMPT_MAX_CHARS);
+    // A 128k or 1M window is no longer cut to 32,000 characters.
+    expect(condenseBudgetChars(128_000)).toBe(Math.floor(128_000 * 0.8) * 4);
+    expect(condenseBudgetChars(1_000_000)).toBe(Math.floor(1_000_000 * 0.8) * 4);
+  });
+
+  test("each configured model's own window: `kind:model=TOKENS` on its entry, never part of the model id (SESSION-5.a)", () => {
+    expect(parseModelEntry("openai:gpt-4o-mini=128000")).toEqual({
+      kind: "openai",
+      model: "gpt-4o-mini",
+      windowTokens: 128000,
+    });
+    expect(parseModelEntry("ollama:qwen3:30b = 32768")).toEqual({
+      kind: "ollama",
+      model: "qwen3:30b",
+      windowTokens: 32768,
+    });
+    expect(parseModelEntry("fake-model=4096")).toEqual({ kind: "openai", model: "fake-model", windowTokens: 4096 });
+    // No suffix: no window of its own, the entry as before.
+    expect(parseModelEntry("anthropic:claude-sonnet-5")).toEqual({ kind: "anthropic", model: "claude-sonnet-5" });
+    // `=0` is no window; the suffix still never reaches the model id.
+    expect(parseModelEntry("ollama:qwen3:30b=0")).toEqual({ kind: "ollama", model: "qwen3:30b" });
+    expect(parseModelEntry("=4096")).toBeNull();
+    // Labels (fallback notes, the AGENT-17.a order, the reviewer) never carry it.
+    const chain = parseModelChain("openai:gpt-4o-mini=128000, ollama:qwen3:30b=32768,anthropic:claude-sonnet-5");
+    expect(chain.map(entryLabel)).toEqual(["gpt-4o-mini", "ollama:qwen3:30b", "anthropic:claude-sonnet-5"]);
+
+    // The entry's window wins; else CORVIDINHO_LLM_CONTEXT_TOKENS; else 8192.
+    const env = { CORVIDINHO_LLM_CONTEXT_TOKENS: "32768" };
+    expect(modelWindowTokens(chain[0]!, env)).toBe(128000);
+    expect(modelWindowTokens(chain[2]!, env)).toBe(32768);
+    expect(modelWindowTokens(chain[2]!, {})).toBe(CONTEXT_WINDOW_DEFAULT_TOKENS);
+    expect(modelWindowTokens(parseModelEntry("tiny=100")!, {})).toBe(CONTEXT_WINDOW_MIN_TOKENS);
+
+    // One window per model, wherever it is set: an entry naming the same
+    // model in another key (another tier's list, the order) gives it.
+    const gpt = parseModelEntry("openai:gpt-4o-mini")!;
+    expect(
+      modelWindowTokens(gpt, {
+        CORVIDINHO_LLM_MODEL: "openai:gpt-4o-mini",
+        CORVIDINHO_LLM_MODEL_ORDER: "ollama:qwen3:30b=32768,openai:gpt-4o-mini=128000",
+      }),
+    ).toBe(128000);
+    expect(
+      modelWindowTokens(gpt, { CORVIDINHO_LLM_MODEL_READ: "gpt-4o-mini", CORVIDINHO_LLM_MODEL_CODE: "gpt-4o-mini=64000" }),
+    ).toBe(64000);
+    // Its own entry wins; another model's window (or the same id of another kind) never counts.
+    expect(
+      modelWindowTokens(parseModelEntry("gpt-4o-mini=16000")!, { CORVIDINHO_LLM_MODEL_ORDER: "gpt-4o-mini=128000" }),
+    ).toBe(16000);
+    expect(
+      modelWindowTokens(gpt, {
+        CORVIDINHO_LLM_MODEL_ORDER: "ollama:gpt-4o-mini=128000,gpt-4o=64000",
+        CORVIDINHO_LLM_CONTEXT_TOKENS: "4096",
+      }),
+    ).toBe(4096);
   });
 });
 
@@ -233,7 +296,7 @@ describe("condensing a conversation (SESSION-5)", () => {
   });
 });
 
-describe("SessionStore condenses and keeps the summary with the session (SESSION-5/6)", () => {
+describe("SessionStore hands the run its conversation and keeps what condensing did (SESSION-5.a/6)", () => {
   const OPENING = `Task: ${words("OPENING", 1200)}`;
   const LATEST = `Latest: ${words("NEWEST", 900)}`;
 
@@ -243,94 +306,129 @@ describe("SessionStore condenses and keeps the summary with the session (SESSION
     record(store, s, LATEST, words("ANSLAST", 400));
   }
 
-  test("a prompt under 80% of the window replays every turn; at 80% it is condensed, task and latest instruction word for word", () => {
+  /** What a run's condensing reports: these turns folded, a model's summary. */
+  function report(folded: number[], summary = `${MODEL_SUMMARY_LABEL}MODEL wrote this about REQ1 and REQ2`): CondenseReport {
+    return { summary, folded, by: "model", model: "fake-model", windowTokens: 2048 };
+  }
+
+  test("the prompt replays every turn whole — nothing is folded in the bridge — and the run gets the same conversation", () => {
     const db = openCorvidinhoDb({ memory: true });
     cleanups.push(() => db.close());
-    const store = new SessionStore({ db, ttlMs: TTL_MS, contextWindowTokens: 1_000_000 });
+    // A tiny fallback window: the bridge still folds nothing (the run decides).
+    const store = new SessionStore({ db, ttlMs: TTL_MS, contextWindowTokens: 1024 });
     const s = store.create({ channelId: "c", userId: "u1" });
     fill(store, s);
-    const roomy = store.threadPrompt(s, "the new message");
-    expect(roomy).toContain("REQ5:");
-    expect(roomy).not.toContain(SUMMARY_LABEL);
+    const prompt = store.threadPrompt(s, "the new message");
+    expect(prompt.length).toBeGreaterThan(condenseBudgetChars(1024));
+    expect(prompt).toContain(words("REQ1", 600));
+    expect(prompt).not.toContain(SUMMARY_LABEL);
     expect(store.summaryFor(s)).toBe("");
+    expect(store.threadFor(s)).toHaveLength(24);
 
-    const window = 2048; // budget 1638 tokens ≈ 6552 chars; the thread is ~14k
-    const budget = condenseBudgetChars(window);
-    const prompt = store.threadPrompt(s, "the new message", { windowTokens: window });
-    expect(prompt.length).toBeLessThan(budget);
-    expect(prompt).toContain(SUMMARY_LABEL);
-    expect(prompt).toContain(OPENING);
-    expect(prompt).toContain(LATEST);
-    expect(prompt.endsWith("\n\nthe new message")).toBe(true);
-    expect(prompt).not.toContain(words("REQ1", 600));
-    expect(prompt).toContain("- Human: REQ1:");
-    expect(store.summaryFor(s)).toContain("- Human: REQ1:");
+    const replay = store.replayFor(s)!;
+    expect(replay.turns).toEqual(store.threadFor(s));
+    expect(prompt).toBe(
+      `${formatConversationBlock(replay, { header: replay.header, footer: replay.footer })}\n\nthe new message`,
+    );
+    expect(store.replayFor(store.create({ channelId: "c", userId: "u2" }))).toBeUndefined();
   });
 
-  test("the summary is stored with the session, scrubbed, and folded turns leave the live thread (SESSION-6 / SAFE-6)", () => {
+  test("applyCondensed: the folded turns leave the thread and its rows; the model's summary is stored with the session, scrubbed (SESSION-6 / SAFE-6)", () => {
     const token = `ghp_${"A1b2C3d4E5".repeat(4)}`;
     const db = openCorvidinhoDb({ memory: true });
     cleanups.push(() => db.close());
-    const store = new SessionStore({ db, ttlMs: TTL_MS, contextWindowTokens: 2048 });
+    const store = new SessionStore({ db, ttlMs: TTL_MS });
     const s = store.create({ channelId: "c", userId: "u1" });
-    record(store, s, OPENING, `early answer with ${token}`);
-    for (let n = 1; n <= 10; n += 1) record(store, s, words(`REQ${n}`, 600), words(`ANS${n}`, 600));
-    record(store, s, LATEST, "ok");
-    store.threadPrompt(s, "next");
+    fill(store, s);
+    const replay = store.replayFor(s)!;
+    // The run's turn joins the thread while it runs.
+    store.recordTurn(s, "human", "the new message");
+    store.applyCondensed(s, replay, report([1, 2, 3, 4, 5], `${MODEL_SUMMARY_LABEL}MODEL summary with ${token}`));
     const summary = storedSummary(db, s.id)!;
-    expect(summary).toContain("- You (Corvidinho): early answer with [redacted:github-token]");
-    expect(summary).not.toContain(token);
+    expect(summary).toBe(`${MODEL_SUMMARY_LABEL}MODEL summary with [redacted:github-token]`);
+    expect(store.summaryFor(s)).toBe(summary);
     const rows = turnRows(db, s.id);
     expect(rows).toEqual(store.threadFor(s).map((t) => t.content));
     expect(rows[0]).toBe(OPENING);
     expect(rows).toContain(LATEST);
-    expect(rows.some((r) => r.startsWith("REQ1:"))).toBe(false);
+    expect(rows.at(-1)).toBe("the new message");
+    expect(rows.some((r) => r.startsWith("REQ1:") || r.startsWith("ANS0:") || r.startsWith("REQ2:"))).toBe(false);
+    expect(rows.some((r) => r.startsWith("ANS2:"))).toBe(false);
+    expect(rows.some((r) => r.startsWith("REQ3:"))).toBe(true);
+    // The next prompt picks up from the model's summary, task and latest instruction word for word.
+    const next = store.threadPrompt(s, "next");
+    expect(next).toContain(`${MODEL_SUMMARY_LABEL}MODEL summary with [redacted:github-token]`);
+    expect(next).toContain(`Human: ${OPENING}\n`);
+    expect(next).toContain(`Human: ${LATEST}\n`);
+    expect(next).not.toContain(words("REQ1", 600));
   });
 
-  test("after a restart the prompt picks up from the summary, not the whole history (SESSION-6)", () => {
+  test("after a restart the prompt picks up from the stored summary, not the whole history (SESSION-6)", () => {
     const path = tempDbPath();
     const db1 = openCorvidinhoDb({ path });
-    const s1 = new SessionStore({ db: db1, ttlMs: TTL_MS, contextWindowTokens: 2048 });
+    const s1 = new SessionStore({ db: db1, ttlMs: TTL_MS });
     const s = s1.create({ channelId: "c", userId: "u1" });
     fill(s1, s);
+    s1.applyCondensed(s, s1.replayFor(s)!, report([1, 2, 3, 4, 5, 6, 7, 8]));
     const before = s1.threadPrompt(s, "next");
-    const summary = s1.summaryFor(s);
-    expect(summary).not.toBe("");
     db1.close();
 
     const db2 = openCorvidinhoDb({ path });
     cleanups.push(() => db2.close());
-    const s2 = new SessionStore({ db: db2, ttlMs: TTL_MS, contextWindowTokens: 2048 });
+    const s2 = new SessionStore({ db: db2, ttlMs: TTL_MS });
     const again = s2.get(s.id)!;
-    expect(s2.summaryFor(again)).toBe(summary);
+    expect(s2.summaryFor(again)).toBe(`${MODEL_SUMMARY_LABEL}MODEL wrote this about REQ1 and REQ2`);
     const after = s2.threadPrompt(again, "next");
     expect(after).toBe(before);
     expect(after).not.toContain(words("REQ1", 600));
     expect(after).toContain(OPENING);
   });
 
-  test("a smaller model picks up from the summary and condenses further to 80% of its own window (SESSION-6)", () => {
+  test("a point the store added while the run ran (a turn past the cap) stays after the model's summary", () => {
     const db = openCorvidinhoDb({ memory: true });
     cleanups.push(() => db.close());
-    const store = new SessionStore({ db, ttlMs: TTL_MS, contextWindowTokens: 3072 });
+    const store = new SessionStore({ db, ttlMs: TTL_MS });
+    const s = store.create({ channelId: "c", userId: "u1" });
+    for (let n = 1; n <= SESSION_THREAD_MAX_TURNS / 2; n += 1) record(store, s, `request number ${n}`, `answer number ${n}`);
+    const replay = store.replayFor(s)!;
+    // The run's human turn goes past the per-session cap: turn 1 folds here.
+    store.recordTurn(s, "human", "one more");
+    expect(store.summaryFor(s)).toContain("- You (Corvidinho): answer number 1");
+    store.applyCondensed(s, replay, report([1, 2, 3]));
+    const summary = store.summaryFor(s).split("\n");
+    expect(summary[0]).toBe(`${MODEL_SUMMARY_LABEL}MODEL wrote this about REQ1 and REQ2`);
+    expect(summary).toContain("- You (Corvidinho): answer number 1");
+    expect(store.threadFor(s)[0]!.content).toBe("request number 1");
+  });
+
+  test("a session that ended while its run ran is left alone", () => {
+    const db = openCorvidinhoDb({ memory: true });
+    cleanups.push(() => db.close());
+    const store = new SessionStore({ db, ttlMs: TTL_MS });
     const s = store.create({ channelId: "c", userId: "u1" });
     fill(store, s);
-    store.threadPrompt(s, "next");
-    const bigger = store.summaryFor(s);
-    const keptBefore = store.threadFor(s).length;
+    const replay = store.replayFor(s)!;
+    store.bySessionId.delete(s.id);
+    store.applyCondensed(s, replay, report([1, 2]));
+    expect(store.summaryFor(s)).toBe("");
+  });
 
-    const small = 1024;
-    const prompt = store.threadPrompt(s, "next", { windowTokens: small });
-    expect(prompt.length).toBeLessThan(condenseBudgetChars(small));
-    expect(store.threadFor(s).length).toBeLessThan(keptBefore);
-    expect(prompt).toContain(OPENING);
-    expect(prompt).toContain(LATEST);
-    // It picks up from the earlier summary: its newest point is still there
-    // (shortened), ahead of the points folded for the smaller window.
-    const lastPoint = bigger.split("\n").filter((l) => l.startsWith("- ")).at(-1)!;
-    const smaller = store.summaryFor(s);
-    expect(smaller).toContain(lastPoint.slice(0, 40));
-    expect(smaller.length).toBeLessThan(bigger.length + 1);
+  test("MEMORY-ACL-6: a thread forgotten while its run ran gets no summary of the forgotten turns back", () => {
+    const db = openCorvidinhoDb({ memory: true });
+    cleanups.push(() => db.close());
+    const store = new SessionStore({ db, ttlMs: TTL_MS });
+    const s = store.create({ channelId: "c", userId: "u1" });
+    fill(store, s);
+    const replay = store.replayFor(s)!;
+    store.recordTurn(s, "human", "the new message");
+    // The owner approves the forget-me while the run is going.
+    store.forgetTurnsOfUsers(["u1"]);
+    store.applyCondensed(s, replay, report([1, 2, 3]));
+    expect(store.summaryFor(s)).toBe("");
+    expect(storedSummary(db, s.id)).toBeNull();
+    expect(store.threadFor(s)).toEqual([]);
+    expect(turnRows(db, s.id)).toEqual([]);
+    expect(store.threadPrompt(s, "next")).toBe("next");
   });
 
   test("a turn past the per-session cap is folded into the summary, not lost", () => {
@@ -346,6 +444,57 @@ describe("SessionStore condenses and keeps the summary with the session (SESSION
     expect(store.summaryFor(s)).toContain("- You (Corvidinho): answer number 1");
     expect(store.summaryFor(s)).toContain("- Human: request number 2");
     expect(storedSummary(db, s.id)).toBe(store.summaryFor(s));
+  });
+});
+
+describe("a model-written summary and a run's report (SESSION-5.a)", () => {
+  test("the model's line leads the summary; later extractive points are bounded around it, never it", () => {
+    const lead = `${MODEL_SUMMARY_LABEL}${words("MODELWORDS", 400)}`;
+    const points = Array.from({ length: 12 }, (_, i) => summaryPoint({ role: "agent", content: words(`P${i}`, 160) }));
+    const out = appendSummary(lead, points, 900).split("\n");
+    expect(out[0]).toBe(lead);
+    expect(out.join("\n").length).toBeLessThanOrEqual(900);
+    expect(out[1]).toMatch(/^\(\d+ earlier points? left out\)$/);
+    expect(out.at(-1)).toContain("P11:");
+    // Only a cap below the line alone clips it.
+    const clipped = appendSummary(lead, points, 200);
+    expect(clipped.startsWith(MODEL_SUMMARY_LABEL)).toBe(true);
+    expect(clipped.length).toBeLessThanOrEqual(200);
+    expect(clipped).not.toContain("\n");
+  });
+
+  test("a report read back from a run is checked against the replay: pinned and unknown turns never fold, the summary is scrubbed", () => {
+    const turns = [
+      { role: "human" as const, content: "task" },
+      { role: "agent" as const, content: "a1" },
+      { role: "human" as const, content: "h2" },
+      { role: "agent" as const, content: "a2" },
+      { role: "human" as const, content: "latest" },
+      { role: "agent" as const, content: "a3" },
+    ];
+    const token = `ghp_${"A1b2C3d4E5".repeat(4)}`;
+    const r = condenseReportFromUnknown(
+      { summary: `- Summary: x ${token}`, folded: [3, 0, 4, 1, 1, 9, -1, 1.5, "2"], by: "model", model: "m", windowTokens: 5000 },
+      { turns },
+    );
+    expect(r).toEqual({ summary: "- Summary: x [redacted:github-token]", folded: [1, 3], by: "model", model: "m", windowTokens: 5000 });
+    expect(withoutFolded(turns, r!.folded).map((t) => t.content)).toEqual(["task", "h2", "latest", "a3"]);
+    expect(condenseReportFromUnknown({ summary: "x", folded: [0, 4], by: "model" }, { turns })).toBeUndefined();
+    expect(condenseReportFromUnknown({ summary: "x", folded: [1], by: "someone" }, { turns })).toBeUndefined();
+    // A report with no summary would drop its folded turns for nothing.
+    expect(condenseReportFromUnknown({ summary: "  ", folded: [1], by: "model" }, { turns })).toBeUndefined();
+    expect(condenseReportFromUnknown("nope", { turns })).toBeUndefined();
+  });
+
+  test("the stdin payload round-trips the task and conversation; anything else is refused", () => {
+    const conversation = { header: "[Corvidinho h]", footer: "[End]", summary: "- Human: p", turns: [{ role: "human" as const, content: "t" }] };
+    expect(parseTaskPayload(taskPayloadJson("the task", conversation))).toEqual({ task: "the task", conversation });
+    expect(parseTaskPayload(taskPayloadJson("only a task"))).toEqual({ task: "only a task" });
+    expect(parseTaskPayload("nope")).toEqual({ error: "the task on stdin is not JSON" });
+    expect(parseTaskPayload("{}")).toEqual({ error: "the task on stdin has no task text" });
+    expect(parseTaskPayload(JSON.stringify({ task: "t", conversation: { turns: [{ role: "x" }] } }))).toEqual({
+      error: "the conversation on stdin is malformed",
+    });
   });
 });
 

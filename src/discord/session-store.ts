@@ -2,10 +2,11 @@
  * Discord session stub maps (DISCORD-1 / 2 / 2.a) with optional SQLite
  * durability + soft TTL (SESSION-1..4 / REQ-discord-019), per-talk
  * worktree isolation (SESSION-WORKTREE-1..5 / REQ-discord-022) and the
- * session's thread of turns (AGENT-6 / REQ-discord-072), condensed at about
- * 80% of the model's window and kept 30 days per thread after the session
- * ends, so a later reply starts a new session from it (SESSION-5/6,
- * SESSION-3.a, AGENT-6.a / REQ-discord-472).
+ * session's thread of turns (AGENT-6 / REQ-discord-072), replayed whole to
+ * the run, which condenses it at about 80% of its model's window with a
+ * model-written summary that is kept here, and kept 30 days per thread after
+ * the session ends, so a later reply starts a new session from it
+ * (SESSION-5/5.a/6, SESSION-3.a, AGENT-6.a / REQ-discord-472).
  * No ProcessManager.
  */
 
@@ -16,14 +17,16 @@ import type { AllowlistConfig } from "../allowlist/types.ts";
 import {
   appendSummary,
   condenseBudgetChars,
-  condenseConversation,
+  type CondenseReport,
   type ConversationRecord,
+  type ConversationReplay,
   ConversationStore,
   discordParticipant,
   discordThreadKey,
   resolveContextWindowTokens,
   summaryCapChars,
   summaryPoint,
+  summaryPoints,
 } from "../store/conversation.ts";
 import { formatErrorLine, scrubOpt, scrubSecrets } from "../store/scrub.ts";
 import {
@@ -45,7 +48,8 @@ import type { HumanAsk } from "../agent/types.ts";
 import { isAskExpired, type PendingAsk } from "./ask-buttons.ts";
 import {
   ensureSessionTurns,
-  formatSessionThread,
+  SESSION_THREAD_FOOTER,
+  SESSION_THREAD_HEADER,
   SESSION_THREAD_MAX_TURNS,
   type SessionTurn,
   type SessionTurnRole,
@@ -212,12 +216,20 @@ export type SessionStoreOptions = {
    */
   ensureWorktree?: boolean;
   /**
-   * The model's context window in tokens (SESSION-5): a session's replayed
-   * conversation is condensed when the prompt reaches about 80% of it.
-   * Default `resolveContextWindowTokens()` (`CORVIDINHO_LLM_CONTEXT_TOKENS`).
+   * The fallback context window in tokens (`CORVIDINHO_LLM_CONTEXT_TOKENS`):
+   * it sizes the summary cap when a turn past the per-session cap is folded
+   * here. The 80% trigger itself is the run's, against its own model's window
+   * (SESSION-5.a). Default `resolveContextWindowTokens()`.
    */
   contextWindowTokens?: number;
 };
+
+/**
+ * SESSION-5.a — a session's conversation as a run gets it (`replayFor`): its
+ * turns are the session's own turn objects, so `applyCondensed` drops exactly
+ * the ones the run folded.
+ */
+export type SessionReplay = ConversationReplay & { turns: SessionTurn[] };
 
 /** Same directory by realpath (lexically when either no longer resolves). */
 function sameDir(a: string, b: string): boolean {
@@ -271,7 +283,7 @@ export class SessionStore {
   private readonly conversationIds = new Map<string, string>();
   /** Retained conversations (SESSION-6 / AGENT-6.a); only with a DB. */
   private readonly conversations: ConversationStore | undefined;
-  /** Model context window in tokens (SESSION-5). */
+  /** Fallback context window in tokens (sizes the turn-cap summary cap). */
   readonly contextWindowTokens: number;
 
   constructor(opts: SessionStoreOptions = {}) {
@@ -1129,32 +1141,63 @@ export class SessionStore {
   }
 
   /**
-   * SESSION-5/6 — `prompt` (the new message, pending-ask block included) with
-   * the session's condensed summary and earlier turns ahead of it. When that
-   * prompt reaches about 80% of the model's window (`windowTokens`, default
-   * the store's), the oldest turns are folded into the summary until it
-   * fits; the opening request and the newest human turn are never folded, and
-   * `prompt` is never touched. A fold is stored with the session (summary in
-   * its retained record, turn rows rewritten), so a restart or another model
-   * picks up from the summary instead of the whole history.
+   * SESSION-5/5.a/6 — `prompt` (the new message, pending-ask block included)
+   * with the session's condensed summary and its earlier turns, whole,
+   * ahead of it. Nothing is folded here: the run gets the same conversation
+   * ({@link replayFor}), measures the whole prompt its model sees and, at
+   * about 80% of that model's own window, folds the oldest turns and has the
+   * model write their summary (src/agent/condense.ts); the opening request
+   * and the newest human turn are never folded, and `prompt` is never
+   * touched. {@link applyCondensed} keeps what it did with the session.
    */
-  threadPrompt(session: SessionStub, prompt: string, opts: { windowTokens?: number } = {}): string {
-    const budgetChars = condenseBudgetChars(opts.windowTokens ?? this.contextWindowTokens);
-    const out = condenseConversation({
-      conversation: { summary: this.summaryFor(session), turns: this.threadFor(session) },
-      incoming: prompt,
-      budgetChars,
-      render: (c) =>
-        formatSessionThread(c.turns, { summary: c.summary, budgetChars: Number.POSITIVE_INFINITY }),
-    });
-    if (out.folded.length > 0 && this.bySessionId.get(session.id) === session) {
-      this.turns.set(session.id, out.turns);
-      // Summary first: a crash between the two writes leaves a turn both in
-      // the summary and in the rows (folded again next time), never in neither.
-      this.setSummary(session, out.summary);
-      this.rewriteTurns(session.id, out.turns);
-    }
-    return withSessionThread(prompt, out.turns, { summary: out.summary });
+  threadPrompt(session: SessionStub, prompt: string): string {
+    return withSessionThread(prompt, this.threadFor(session), { summary: this.summaryFor(session) });
+  }
+
+  /**
+   * SESSION-5.a — the conversation {@link threadPrompt} replays, for the run
+   * to condense (`AgentRunChatOpts.conversation`); undefined when the session
+   * has no summary and no turns. Its turns are the session's own, so
+   * {@link applyCondensed} can tell which were folded.
+   */
+  replayFor(session: SessionStub): SessionReplay | undefined {
+    const turns = this.threadFor(session);
+    const summary = this.summaryFor(session);
+    if (turns.length === 0 && !summary) return undefined;
+    return { header: SESSION_THREAD_HEADER, footer: SESSION_THREAD_FOOTER, summary, turns };
+  }
+
+  /**
+   * SESSION-5.a / SESSION-6 — keep what a run's condensing did: the folded
+   * turns of `replay` leave the live thread and the report's summary (the
+   * model's, or the extractive one when its call failed) becomes the
+   * session's, stored with it (scrubbed; its retained record holds it, so a
+   * restart, a resume after the TTL or another model picks up from it). A
+   * point the store added meanwhile (a turn past the per-session cap) stays
+   * after it. A session that ended meanwhile is left alone, and so is one
+   * whose thread was cleared meanwhile (an approved forget-me, MEMORY-ACL-6:
+   * its opening turn is gone), so a summary of forgotten turns is never
+   * stored again.
+   */
+  applyCondensed(session: SessionStub, replay: SessionReplay, report: CondenseReport): void {
+    if (this.bySessionId.get(session.id) !== session) return;
+    // The opening turn stays in a live thread (the turn cap folds the one
+    // after it; a fold never takes a pinned turn): gone means cleared.
+    const live = this.turns.get(session.id);
+    if (!live || replay.turns.length === 0 || live[0] !== replay.turns[0]) return;
+    const gone = new Set(report.folded.map((i) => replay.turns[i]).filter((t) => t !== undefined));
+    const kept = (this.turns.get(session.id) ?? []).filter((t) => !gone.has(t));
+    const before = new Set(summaryPoints(replay.summary));
+    const added = summaryPoints(this.summaryFor(session)).filter((p) => !before.has(p));
+    const summary =
+      added.length > 0
+        ? appendSummary(report.summary, added, summaryCapChars(condenseBudgetChars(this.contextWindowTokens)))
+        : report.summary;
+    this.turns.set(session.id, kept);
+    // Summary first: a crash between the two writes leaves a turn both in
+    // the summary and in the rows (folded again next time), never in neither.
+    this.setSummary(session, summary);
+    this.rewriteTurns(session.id, kept);
   }
 
   /**

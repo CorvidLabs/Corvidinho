@@ -539,25 +539,33 @@ one block opened by `WATCH_THREAD_HEADER`
 (`[Corvidinho earlier conversation on this GitHub issue or PR — …]`) and
 closed by `[End of earlier conversation]`, ahead of the new event's prompt,
 with no blank line inside, so Planning module selection leaves it out
-(REQ-agent-004). At about 80% of the model's window
-(`CORVIDINHO_LLM_CONTEXT_TOKENS`, same budget as REQ-discord-472) the
-oldest turns SHALL be folded into the summary, the thread's opening request
-and its newest request kept word for word (a human turn is kept up to the
-8000-char WATCH event prompt, so a whole event prompt is never clipped; its
-own fence header is marked `(quoted)` like any block-like line, its fence
-markers and fenced words unchanged, SAFE-12). The commenter's and project
+(REQ-agent-004), whole (the poller folds nothing), and SHALL hand the run
+the same conversation (`AgentRunChatOpts.conversation`, sent with the task
+on stdin, `task run --task-stdin`, REQ-cli-473). The run SHALL condense it at
+about 80% of its model's own window, the whole prompt counted, and that
+model SHALL write the summary (REQ-agent-473; same window rules as
+REQ-discord-472), the thread's opening request and its newest request kept
+word for word (a human turn is kept up to the 8000-char WATCH event prompt,
+so a whole event prompt is never clipped; its own fence header is marked
+`(quoted)` like any block-like line, its fence markers and fenced words
+unchanged, SAFE-12). The run's checked report (`AgentSpawnResult.conversation`)
+SHALL be what the thread keeps: its summary, and its kept turns without the
+folded ones (`withoutFolded`), before the new event and answer are added; an
+extractive report (the model's summary call failed) is kept the same way and
+logged `[watch] SESSION-5.a: <model> did not write the summary (<reason>);
+kept the extractive summary of N condensed turns (<owner/repo>#<n>)`. The commenter's and project
 memory blocks (REQ-watch-067) go ahead of this block. Another issue or PR never gets
 it. A record SHALL be purged 30 days after its last update (every read and
 write purges first, and every poll cycle purges), and forgetting a person
 (`forgetConversations(db, { githubLogins })`, case-insensitive; an approved
 forget-me of a declared person uses their linked GitHub logins,
 REQ-discord-472) SHALL delete every thread they started or commented on. No GitHub-visible surface, env
-var beyond the window, config key or CLI flag is added.
+var beyond the windows, config key or CLI flag is added.
 
 Acceptance Criteria
 - A follow-up on the same issue gets the earlier event and answer replayed, oldest first, ahead of the new event; the first event and another issue get no block; `planningSelectionText` leaves the block out.
 - Two hours later (past the session's TTL) the follow-up still gets it; 30 days after the last update it is purged and the next event gets no block.
-- With a 1024-token window a long thread's prompt stays under the budget with the summary, the opening request and the latest request word for word.
+- The run gets the thread's whole conversation (exactly the block in its prompt); the summary it reports replaces the folded turns in the next prompt and in the stored record, with the opening request and the latest request word for word; an extractive report is kept and logged (`tests/watch.conversation.test.ts`).
 - An opening event prompt of over 7000 chars replays whole (word for word, its fence header marked `(quoted)`) in the follow-up's block.
 - The stored turns hold `[redacted:github-token]`, never the token; participants are the lowercased senders; forgetting a login that only commented deletes the thread.
 - A failed run's kept agent turn is the reason line its comment shows (`The model call failed (429 Too Many Requests)`, no host), never the provider's reply body; a successful run's is its summary (`tests/watch.failed-comment.test.ts`).

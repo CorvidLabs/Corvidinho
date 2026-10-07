@@ -1,17 +1,19 @@
 /**
- * AGENT-6.a / SESSION-5 (REQ-watch-472) — WATCH follow-ups pick up the issue
- * or PR thread's summary: each run is kept with its thread's condensed
- * conversation (scrubbed, 30 days, also past the session's soft TTL) and a
- * follow-up on the same issue or PR gets it replayed ahead of the new event;
- * forgetting the person deletes it. Fixture only: in-memory DB, fake
+ * AGENT-6.a / SESSION-5 / SESSION-5.a (REQ-watch-472) — WATCH follow-ups
+ * pick up the issue or PR thread's summary: each run is kept with its
+ * thread's condensed conversation (scrubbed, 30 days, also past the
+ * session's soft TTL) and a follow-up on the same issue or PR gets it
+ * replayed ahead of the new event and handed to the run, which condenses it
+ * (tests/agent.condense.test.ts); the thread keeps the summary the run
+ * reports. Forgetting the person deletes it. Fixture only: in-memory DB, fake
  * events and agent, no network.
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import { planningSelectionText } from "../src/agent/specLoader.ts";
 import {
   CONVERSATION_RETENTION_MS,
-  condenseBudgetChars,
   forgetConversations,
+  formatConversationBlock,
   SUMMARY_LABEL,
 } from "../src/store/conversation.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
@@ -56,11 +58,25 @@ async function watcher(env: Record<string, string> = {}) {
   cleanups.push(() => db.close());
   const clock = { now: 1_000_000_000 };
   const prompts: string[] = [];
+  const logs: string[] = [];
+  /** SESSION-5.a: the conversation each run was handed (undefined when none). */
+  const conversations: Array<Replay | undefined> = [];
   let reply = (n: number) => `answer ${n}`;
+  let condense: ((n: number, c: Replay) => Report | undefined) | undefined;
   const agent: AgentClient = {
-    async runChat({ prompt, sessionId }) {
+    async runChat(o) {
+      const { prompt, sessionId } = o;
+      const conversation = (o as { conversation?: Replay }).conversation;
       prompts.push(prompt);
-      return { ok: true, sessionId, summary: reply(prompts.length), exitCode: 0 };
+      conversations.push(conversation);
+      const report = conversation ? condense?.(prompts.length, conversation) : undefined;
+      return {
+        ok: true,
+        sessionId,
+        summary: reply(prompts.length),
+        exitCode: 0,
+        ...(report ? { conversation: report } : {}),
+      };
     },
   };
   let batch: DetectedEvent[] = [];
@@ -70,7 +86,9 @@ async function watcher(env: Record<string, string> = {}) {
     runLoop: false,
     agent,
     ackClient: createEchoAckClient(),
-    log: () => {},
+    log: (line: string) => {
+      logs.push(line);
+    },
     db,
     now: () => clock.now,
     fetchEvents: async () => batch,
@@ -85,12 +103,29 @@ async function watcher(env: Record<string, string> = {}) {
     db,
     clock,
     prompts,
+    conversations,
+    logs,
     poll,
     setReply: (f: (n: number) => string) => {
       reply = f;
     },
+    setCondense: (f: ((n: number, c: Replay) => Report | undefined) | undefined) => {
+      condense = f;
+    },
   };
 }
+
+type Replay = { header: string; footer: string; summary: string; turns: Array<{ role: "human" | "agent"; content: string }> };
+
+/** What a run's condensing reports back (SESSION-5.a). */
+type Report = {
+  summary: string;
+  folded: number[];
+  by: "model" | "extractive";
+  model: string;
+  windowTokens: number;
+  reason?: string;
+};
 
 describe("WATCH follow-ups pick up the thread's conversation (REQ-watch-472)", () => {
   test("a follow-up on the same issue replays the earlier event and answer; another issue does not", async () => {
@@ -123,22 +158,62 @@ describe("WATCH follow-ups pick up the thread's conversation (REQ-watch-472)", (
     expect(w.prompts[2]).not.toContain("PELICAN");
   });
 
-  test("a long issue thread is condensed at about 80% of the window, opening and latest request word for word", async () => {
-    const w = await watcher({ CORVIDINHO_LLM_CONTEXT_TOKENS: "1024" });
+  test("the run gets the thread's conversation and condenses it; the thread keeps the model's summary, opening and latest request word for word (SESSION-5.a)", async () => {
+    const w = await watcher();
     w.setReply((n) => `answer ${n} ${"a".repeat(500)}`);
     await w.poll(ev({ id: "c1", body: "@corvid-agent OPENING keep the release notes short" }));
     for (let i = 2; i <= 6; i += 1) {
       await w.poll(ev({ id: `c${i}`, body: `@corvid-agent step ${i} ${"d".repeat(300)}` }));
     }
+    const MODEL_LINE = "- Summary: MODEL steps 2 to 4 trimmed the release notes";
+    // The seventh run's model folded the first answers and steps 2-4.
+    w.setCondense((n) =>
+      n === 7 ? { summary: MODEL_LINE, folded: [1, 2, 3, 4, 5, 6, 7], by: "model", model: "fake-model", windowTokens: 1024 } : undefined,
+    );
     await w.poll(ev({ id: "c7", body: "@corvid-agent LATEST only the changelog" }));
     await w.poll(ev({ id: "c8", body: "@corvid-agent go" }));
+    // Nothing is folded in the poller: the run got every earlier turn, and
+    // its conversation is exactly the block in its prompt.
+    const sent = w.conversations[6]!;
+    expect(sent.turns).toHaveLength(12);
+    expect(w.prompts[6]).toContain(formatConversationBlock(sent, { header: sent.header, footer: sent.footer }));
+    expect(w.conversations[0]).toBeUndefined();
+
     const last = w.prompts.at(-1)!;
     const block = last.slice(0, last.indexOf("[End of earlier conversation]"));
-    expect(last.length).toBeLessThan(condenseBudgetChars(1024));
     expect(block).toContain(SUMMARY_LABEL);
+    expect(block).toContain(MODEL_LINE);
     expect(block).toContain("OPENING keep the release notes short");
     expect(block).toContain("LATEST only the changelog");
-    expect(block).toContain("- Human: [WATCH issue_comment]");
+    expect(block).not.toContain("step 2 ");
+    expect(block).toContain("step 5 ");
+    const kept = w.db.query("SELECT summary FROM conversation_threads").get() as { summary: string };
+    expect(kept.summary.split("\n")[0]).toBe(MODEL_LINE);
+  });
+
+  test("an extractive summary (the model's call failed) is kept too, and said in the watcher log", async () => {
+    const w = await watcher();
+    await w.poll(ev({ id: "c1", body: "@corvid-agent OPENING keep the release notes short" }));
+    await w.poll(ev({ id: "c2", body: "@corvid-agent step two" }));
+    w.setCondense(() => ({
+      summary: "- You (Corvidinho): answer 1",
+      folded: [1],
+      by: "extractive",
+      model: "fake-model",
+      windowTokens: 1024,
+      reason: "timed out",
+    }));
+    await w.poll(ev({ id: "c3", body: "@corvid-agent step three" }));
+    w.setCondense(undefined);
+    await w.poll(ev({ id: "c4", body: "@corvid-agent go" }));
+    expect(w.prompts.at(-1)).toContain("- You (Corvidinho): answer 1");
+    expect(
+      w.logs.some(
+        (l) =>
+          l.includes("[watch] SESSION-5.a: fake-model did not write the summary (timed out)") &&
+          l.includes("CorvidLabs/Corvidinho#7"),
+      ),
+    ).toBe(true);
   });
 
   test("a long opening issue comment replays whole: the task is pinned word for word (SESSION-5)", async () => {

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Each model gets its own window; at about 80% a model writes the summary and the task stays pinned word for word** — SESSION-5 / SESSION-5.a (in flight).
+
 ## 0.0.46
 
 ### Daemon / Discord

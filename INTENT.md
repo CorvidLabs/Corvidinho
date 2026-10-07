@@ -23,7 +23,7 @@
 - [plugin](hi/plugin.md): PLUGIN (10 criteria)
 - [roles](hi/roles.md): ROLES (0 criteria)
 - [safe](hi/safe.md): SAFE (29 criteria)
-- [session](hi/session.md): SESSION (7 criteria)
+- [session](hi/session.md): SESSION (8 criteria)
 - [specsync](hi/specsync.md): SPECSYNC (7 criteria)
 - [watch](hi/watch.md): WATCH (0 criteria)
 <!-- /hi:index -->

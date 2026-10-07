@@ -16,7 +16,6 @@ import {
   clipTurnText,
   formatSessionThread,
   formatSessionThreadOmitted,
-  SESSION_THREAD_BUDGET_CHARS,
   SESSION_THREAD_FOOTER,
   SESSION_THREAD_HEADER,
   SESSION_THREAD_HUMAN_TURN_MAX_CHARS,
@@ -89,12 +88,21 @@ describe("session thread block (REQ-discord-072)", () => {
     expect(out).not.toContain("omitted");
   });
 
-  test("a long thread keeps the opening request and newest turns within budget, eliding the middle with a count marker", () => {
-    // Past the block ceiling (condensation normally keeps it well inside).
+  test("whole by default: no transport ceiling cuts a long thread (SESSION-5.a)", () => {
     const turns: SessionTurn[] = [];
     for (let n = 1; n <= 60; n += 1) turns.push(...exchange(n, 400));
     const block = formatSessionThread(turns);
-    expect(block.length).toBeLessThanOrEqual(SESSION_THREAD_BUDGET_CHARS);
+    expect(block.length).toBeGreaterThan(32_000);
+    expect(block).not.toContain("omitted");
+    expect(block).toContain("request number 2 ");
+  });
+
+  test("past an explicit budget it keeps the opening request and newest turns, eliding the middle with a count marker", () => {
+    const BUDGET = 32_000;
+    const turns: SessionTurn[] = [];
+    for (let n = 1; n <= 60; n += 1) turns.push(...exchange(n, 400));
+    const block = formatSessionThread(turns, { budgetChars: BUDGET });
+    expect(block.length).toBeLessThanOrEqual(BUDGET);
     expect(block.startsWith(SESSION_THREAD_HEADER)).toBe(true);
     expect(block.endsWith(SESSION_THREAD_FOOTER)).toBe(true);
 
