@@ -587,16 +587,19 @@ memories SHALL be refused without leaking the other user’s content
 (MEMORY-ACL-2). Soft-delete MAY retain audit fields (`deleted_at`,
 `deleted_by_user_id`). The one other forget path is a person's own forget
 request, carried out only once the owner approves it on a card
-(MEMORY-ACL-6, REQ-discord-101).
+(MEMORY-ACL-6, REQ-discord-101). The owner's own forget and override by id
+ask on the owner's `memory` DM card with the one-time code (SAFE-18.a,
+REQ-discord-183 / REQ-plugins-183).
 
 The Discord agent spawn SHALL always overwrite `CORVIDINHO_ACTING_DISCORD_USER_ID`
 (empty when the run has no acting user) and `CORVIDINHO_ACTING_IS_ADMIN`, so a
 value in the bridge's own environment never leaks into a spawned run. Memory
 plugins SHALL read identity only from that env, never from argv
 (REQ-plugins-011). The spawn SHALL run non-interactive
-(`CORVIDINHO_NON_INTERACTIVE=1`, SAFE-1 / CLI-3) and pass only the confirm
-tokens found in the human's message as `CORVIDINHO_ACTING_CONFIRM_TOKENS`
-(SAFE-4). Re-storing an existing memory key SHALL keep the prior content as a
+(`CORVIDINHO_NON_INTERACTIVE=1`, SAFE-1 / CLI-3) and always clear
+`CORVIDINHO_ACTING_CONFIRM_TOKENS`, like the WATCH spawn: since SAFE-18.a a
+typed confirm token counts for nothing, even when the human's message holds
+one. Re-storing an existing memory key SHALL keep the prior content as a
 soft-deleted row (retrievable by ADMIN) rather than overwrite it, so an update
 is never a non-admin forget path (MEMORY-ACL-4).
 
@@ -615,11 +618,12 @@ Acceptance Criteria
 - Admin forget soft-deletes with audit fields; refuse path leaks no content.
 - No on-chain memory; no new slash command; no ProcessManager.
 - Bridge opens MemoryStore on shared DB; package version bumped for ship.
-- Discord spawn env carries the dispatching actor, or an empty actor, never an inherited one; it is non-interactive and carries only human-typed confirm tokens.
+- Discord spawn env carries the dispatching actor, or an empty actor, never an inherited one; it is non-interactive and carries no confirm token, even one the human typed (SAFE-18.a).
 - Re-storing a key soft-deletes the prior row instead of overwriting it.
 - Fixture tests + SpecSync + fledge verify green.
 - The profile and private-note categories are accepted; a default recall leaves private notes out.
 - A declared person's rows use the `person:<id>` scope and a project's the `project:<key>` scope (REQ-discord-101).
+- The owner's forget / override by id asks on the `memory` DM card (REQ-discord-183).
 
 ### REQ-discord-022
 
@@ -4547,4 +4551,38 @@ Acceptance Criteria
 - With `schedule = false` in the allowlist file, the bridge's 20 ms ticker leaves a due schedule unclaimed; rewriting the file lets it fire.
 - `SchedulerService` with `schedulesEnabled` false: two ticks return `{ started: [], skipped: [] }` with no run row while `onTick`, `backup.tick` and `spendDm.deliver` each ran twice; true 5 h later fires the overdue schedule once; a throwing switch claims nothing; a pending stuck ask a daemon ticker left is posted by a tick with schedules off; a run in flight when it goes off completes.
 - Fixture: `tests/plugins.extras-toggle.test.ts`; the docs gate-order check in `tests/docs.operator-facts.test.ts`.
+
+### REQ-discord-183
+
+My own memory forget and override by id ask me on a DM card with Approve and
+a one-time code, and an override shows the new text word for word
+(SAFE-18.a, captured in this change's PR from Leif's 2026-09-28 interview,
+round 17, under SAFE-18; SAFE-19 / SAFE-20 binding).
+
+- `src/discord/approval-cards.ts` SHALL export `memoryApprovalKind(opts)`:
+  the `memory` kind (`MEMORY_CARD_KIND`, `cvok:memory:…`) over
+  `approval_requests` via `storedApprovalKind`, class `destructive`
+  (`MEMORY_CARD_CLASS`; Approve also needs the one-time code), audit prefix
+  `memory` (`memory-card`, `memory-approve`, `memory-deny`,
+  `memory-expire`), nothing-done line "nothing was forgotten or changed",
+  outcome "Approved by you — the waiting run makes exactly this change.".
+  Approve only records the decision; the waiting memory-plugin run uses it
+  once (REQ-plugins-183). A request whose waiting run is gone SHALL close as
+  a no on the next pass.
+- The bridge SHALL register it with its other kinds, so the engine's 5 s
+  poll, the pass after each chat run and the scheduler ticks DM the owner the
+  card: the override's new text first, verbatim inside one code block headed
+  as quoted data (SAFE-6 scrubbed, fence-safe, never cut — a text that does
+  not fit is not sent and lapses as a no), then the card with the exact
+  action, target and amount one line each and its buttons. Only the owner's
+  press and code count (re-checked on every press and submit).
+- `src/memory/card.ts` SHALL export `askMemoryCard`, `memoryCardFields`,
+  `setMemoryCardTestHooks` and the `MEMORY_CARD_*` constants (re-exported
+  from `src/memory/index.ts`); `src/memory/confirm.ts` and its exports are
+  removed.
+
+Acceptance Criteria
+- The card goes to the owner by DM with `cvok:memory:approve|deny` buttons, the asking surface in its title, the exact action / target / amount and the one-time-code line.
+- An override's text part comes first as quoted data, verbatim, fence-safe and scrubbed.
+- Approve + the right code records `approved` and the waiting run uses it once; Deny, a lapse, a late press or a gone waiter is a no.
 
