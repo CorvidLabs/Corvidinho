@@ -1,6 +1,6 @@
 ---
 id: my-own-memory-forget-and-override-by-id-ask-me-on-a-dm-card-with-approve-and-a-one-time-code-and-an-override-shows-the
-state: implementing
+state: verifying
 type: feature
 base_commit: 2856f4efae009e9d663d05c0acde0021ac577e3e
 ---

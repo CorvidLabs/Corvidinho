@@ -26,5 +26,10 @@ artifact: requirements
   kind, bridge registration, `src/memory/card.ts`), REQ-agent-183 (the memory
   tools' argv hint names the card, not `--confirm`). Modified: REQ-plugins-011
   (two-phase is now the card; `--confirm` refused), REQ-discord-021 (the
-  spawn clears `CORVIDINHO_ACTING_CONFIRM_TOKENS`).
+  spawn clears `CORVIDINHO_ACTING_CONFIRM_TOKENS`), REQ-plugins-010 (forget /
+  override need the owner's card, not a token) and REQ-discord-128
+  (`humanText` is still passed, but no confirm token reaches a run). Left
+  as is to avoid clashing with #405's active change of the same requirement:
+  REQ-discord-072's aside that `humanText` is "the only source of SAFE-4
+  confirm tokens".
 - No new env var, config key, slash command, table or schema version.

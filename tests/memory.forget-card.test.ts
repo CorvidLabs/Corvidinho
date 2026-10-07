@@ -439,6 +439,25 @@ describe("SAFE-18.a: no card, no change — where the card can't reach me, and f
     expect(requests()).toHaveLength(0);
   });
 
+  test("SAFE-6: a card that can't be raised or read refuses with a scrubbed reason and changes nothing", async () => {
+    const id = remember("u1", "home", "lives in Oslo");
+    chatAs(OWNER, true);
+    const secret = "ghp_" + "Z9y8X7w6V5u4T3s2R1q0P9o8N7m6L5k4J3i2";
+    setMemoryCardTestHooks({
+      ttlMs: 60_000,
+      pollMs: 5,
+      onRequest: () => {
+        throw new Error(`approvals store unreadable (token ${secret})`);
+      },
+    });
+    const r = await runPlugin({ name: "memory-forget", args: ["--id", id], nonInteractive: true, allowlist: ["memory-forget"] });
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("the owner's DM card could not be raised or read");
+    expect(r.error).not.toContain(secret);
+    expect((r.data as { outcome: string }).outcome).toBe("unavailable");
+    expect(memory(id)!.deletedAt).toBeUndefined();
+  });
+
   test("anyone else is unchanged: refused as before, no card raised; their own forget-me still asks me on its own card", async () => {
     const id = remember("u1", "home", "lives in Oslo");
     chatAs(MEMBER, false);

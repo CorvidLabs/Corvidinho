@@ -1785,7 +1785,7 @@ Fail on base: with the stacked base's (387dada) sources swapped in, both
 before `github-pr-create` refuses, and drops the frame's `review`);
 `tests/work.review.test.ts` cannot load. Restored, all pass.
 
-## The `memory` card and the spawn without typed tokens (REQ-discord-183 added, REQ-discord-021 modified; SAFE-18.a)
+## The `memory` card and the spawn without typed tokens (REQ-discord-183 added, REQ-discord-021 and REQ-discord-128 modified; SAFE-18.a)
 
 `tests/memory.forget-card.test.ts` drives the card engine with
 `memoryApprovalKind` (recording DMs, the owner's presses and code-form
@@ -1798,6 +1798,7 @@ Deny, a lapse, a late press and a gone waiter close it as a no.
 `tests/memory.spawn-env.test.ts` ("SAFE-18.a: a confirm token the human typed
 is not passed to the run"): the Discord spawn clears
 `CORVIDINHO_ACTING_CONFIRM_TOKENS` even when the human's message holds a
-token (fails on main, which passed it). `tests/discord.session-thread.test.ts`
+token (fails on main, which passed it), and a token only in the enriched
+prompt is not passed either (REQ-discord-128). `tests/discord.session-thread.test.ts`
 keeps the `humanText` check without the removed token helper.
 

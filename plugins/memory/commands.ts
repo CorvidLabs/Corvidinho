@@ -82,6 +82,7 @@ import {
 } from "../../src/plugins/roles.ts";
 import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
 import { openCorvidinhoDb } from "../../src/store/db.ts";
+import { scrubSecrets } from "../../src/store/scrub.ts";
 
 /** Identity, privilege, and storage are never taken from argv (MEMORY-ACL-1..4). */
 const REFUSED_FLAGS = ["--user", "--admin", "--db"] as const;
@@ -508,7 +509,7 @@ async function ownerCard(opts: {
         opts.op,
         row.id,
         "unavailable",
-        `refused (SAFE-18.a): the owner's DM card could not be raised or read (${err instanceof Error ? err.message : String(err)}), so ${MEMORY_CARD_NOTHING_DONE}`,
+        `refused (SAFE-18.a): the owner's DM card could not be raised or read (${scrubSecrets(err instanceof Error ? err.message : String(err))}), so ${MEMORY_CARD_NOTHING_DONE}`,
       );
     }
     const what = `memory-${opts.op} of memory ${row.id}`;

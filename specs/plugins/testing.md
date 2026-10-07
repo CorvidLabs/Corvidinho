@@ -790,7 +790,7 @@ refusal before Octokit, usage error without a PR number.
 
 ## My memory forget / override by id on a DM card (REQ-plugins-183 added, REQ-plugins-011 modified; SAFE-18.a, SAFE-4/19/20)
 
-`tests/memory.forget-card.test.ts` (16 tests; the real card engine with
+`tests/memory.forget-card.test.ts` (17 tests; the real card engine with
 `memoryApprovalKind` and recording DMs, a temp data dir, no token, no
 network): the owner's `memory-forget` in a Discord conversation raises one
 `memory` card (destructive) DMed to the owner with the exact action, the
@@ -805,8 +805,9 @@ stores exactly it; backticks can't end the block; a secret is scrubbed on the
 card exactly as stored; Deny keeps the old text. No card and no change: the
 local CLI (also with `--confirm` and a token in the env) and the owner's
 schedule run refuse with the bridge line; a typed token in the owner's chat is
-refused; a non-owner (also with a forged ADMIN bit) is refused as before with
-no card, and their `memory-forget-me` still records a forget request. A card
+refused; a card that can't be raised or read refuses with a SAFE-6 scrubbed
+reason and changes nothing; a non-owner (also with a forged ADMIN bit) is
+refused as before with no card, and their `memory-forget-me` still records a forget request. A card
 whose waiting run is gone closes as a no. The fake model's `memory-forget`
 call through `createTaskExecute` waits for the card and succeeds once
 approved with the code. The argv hint and descriptions name the card and no
@@ -822,9 +823,11 @@ deny-listed / muted owner, admin lists, the bridge bit, SAFE-1) are unchanged.
 
 Fail on base: with main's (`85871fa4`) `plugins/memory/commands.ts`,
 `src/discord/agent-client.ts` and `src/agent/tools.ts` swapped in (the new
-card module kept loadable), 20 of the 42 tests in
+card module kept loadable), 21 of the 43 tests in
 `tests/memory.forget-card.test.ts`, `tests/memory.plugins.test.ts` and
 `tests/memory.spawn-env.test.ts` fail (no card is raised, the first call
 returns a token, `--confirm` is accepted, the spawn passes the typed token,
 the hint names `--confirm`); with every touched source swapped back to main
-the two card files cannot load. Restored: 42 of 42 pass.
+the two card files cannot load. Restored: 43 of 43 pass. REQ-plugins-010
+(modified): the forget / override ACL fixtures in `tests/memory.plugins.test.ts`
+now refuse without the owner's approved card instead of a token.
