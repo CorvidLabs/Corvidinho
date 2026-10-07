@@ -19,9 +19,13 @@ artifact: design
     and as a path (whole word, the pieces after `=` / `:`, and the
     path-like tokens of code), expanded loosely (`~`, any env variable) and
     walked with `physicalPath` so a worktree symlink lands in the store.
-    Read-only looks are skipped; shells, `eval` and `trap` are read through
-    the code the walker hands over. A SQL client naming the store refuses
-    for reads too (stated in the spec).
+    Read-only looks are skipped (`rg` only without `--pre`; `xxd`, `tree`
+    and `less`, which can write a file, are not looks); shells, `eval` and
+    `trap` are read through the code the walker hands over. An assignment
+    (prefix, or an `export` / `declare` / `typeset` / `local` / `readonly`
+    word) is also checked with its value as code, so code naming
+    `CORVIDINHO_DATA_DIR` carried to `python3 -c "$CODE"` refuses. A SQL
+    client naming the store refuses for reads too (stated in the spec).
   - fail closed: SQL-client words and input, and write-command targets
     (`truncate`, `fallocate`, `cp` / `install` / `rsync` destination,
     `dd of=`, `tar -x` / `unzip` directory), expanded strictly: only `~`,

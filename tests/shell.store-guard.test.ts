@@ -227,6 +227,22 @@ describe("SAFE-4: shell-exec refuses raw-SQL wipes and overwrites of the store (
     }
   }, 60_000);
 
+  test("a look that writes or runs a command, and code put in a variable, are refused", async () => {
+    for (const f of [
+      // xxd's second operand, tree -o and less -o are output files.
+      `xxd /dev/null ${db}`,
+      `tree -o ${db} .`,
+      `less -o ${db} fixture.db`,
+      // rg --pre runs its command on every file it searches.
+      `rg --pre rm x ${db}`,
+      // Code that names the data dir, carried in a variable to the interpreter.
+      `CODE='import os, sqlite3; c = sqlite3.connect(os.environ["CORVIDINHO_DATA_DIR"] + "/corvidinho.db"); c.execute("DELETE FROM memories"); c.commit()'; python3 -c "$CODE"`,
+      `export CODE='import os, sqlite3; c = sqlite3.connect(os.environ["CORVIDINHO_DATA_DIR"] + "/corvidinho.db"); c.execute("DELETE FROM memories"); c.commit()'; python3 -c "$CODE"`,
+    ]) {
+      await expectStoreRefused(f);
+    }
+  }, 60_000);
+
   test("the -wal / -shm / -journal siblings are the store too", async () => {
     for (const sib of ["-wal", "-shm", "-journal"]) {
       await expectStoreRefused(`cp /dev/null ${db}${sib}`);
@@ -389,6 +405,9 @@ describe("firstStoreHit (REQ-plugins-404)", () => {
       "cat ~/.local/share/corvidinho/corvidinho.db > /dev/null",
       "du -sh ~/.local/share/corvidinho",
       "truncate -s 0 ~/.local/share/corvidinho-old.db",
+      "rg -n memories store/",
+      "grep -rn memories store/",
+      "export CORVIDINHO_DATA_DIR=/tmp/elsewhere",
     ]) {
       expect({ ok, hit: hit(ok) }).toEqual({ ok, hit: null });
     }

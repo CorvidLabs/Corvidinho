@@ -25,10 +25,11 @@
  *   variable set in the env, or through a symlink: a worktree link to the
  *   data dir included), text that spells it, an assignment or redirection
  *   pointing into it (in-root scripts included), and code handed to a SQL
- *   client or an interpreter that names `CORVIDINHO_DATA_DIR`. Read-only
- *   looks (`ls`, `stat`, `du`, `cat`, `sha256sum` …) are let through. A SQL
- *   client (`sqlite3` …) on the store refuses for reads too: the check can't
- *   tell its reads from its writes.
+ *   client or an interpreter, or put in a variable, that names
+ *   `CORVIDINHO_DATA_DIR`. Read-only looks (`ls`, `stat`, `du`, `cat`,
+ *   `sha256sum`, `rg` without `--pre` …) are let through. A SQL client
+ *   (`sqlite3` …) on the store refuses for reads too: the check can't tell
+ *   its reads from its writes.
  * - fail closed: a SQL client's words and input (its here-docs and
  *   here-strings, the files it reads, the commands piped into it), and a
  *   write command's target (`truncate`, `fallocate`, the `cp` / `install` /
@@ -46,7 +47,8 @@
  * (a command substitution or a variable filled from program output, handed
  * to a command outside the SQL-client and write families; code that joins
  * it), code that reaches the store without naming it (a script file handed
- * to an interpreter, a module it imports), and an in-root script's output
+ * to an interpreter, a module it imports, a package script or `make` /
+ * `just` recipe the command runs), and an in-root script's output
  * redirection to an expanded path (as for the SAFE-21 edit family).
  */
 
@@ -123,14 +125,21 @@ const WALKED = new Set([
   "sh", "bash", "dash", "zsh", "ksh", "mksh", "ash", "yash", "posh", "eval", "trap",
 ]);
 
-/** Read-only looks: they may name the store. */
+/**
+ * Read-only looks: they may name the store. Not `xxd` (its second operand is
+ * an output file), `tree -o` or `less -o` / `--log-file` (they write one), and
+ * `rg` only without `--pre` (which runs a command on every file it searches).
+ */
 const READERS = new Set([
-  "ls", "stat", "du", "df", "file", "wc", "head", "tail", "cat", "tac", "less", "more",
-  "od", "xxd", "hexdump", "strings", "cmp", "diff", "md5sum", "sha1sum", "sha224sum",
+  "ls", "stat", "du", "df", "file", "wc", "head", "tail", "cat", "tac", "more",
+  "od", "hexdump", "strings", "cmp", "diff", "md5sum", "sha1sum", "sha224sum",
   "sha256sum", "sha384sum", "sha512sum", "b2sum", "cksum", "sum", "readlink", "realpath",
   "basename", "dirname", "echo", "printf", "test", "[", "[[", "true", "false", "cd",
-  "pushd", "popd", "pwd", "printenv", "type", "which", "grep", "egrep", "fgrep", "rg", "tree",
+  "pushd", "popd", "pwd", "printenv", "type", "which", "grep", "egrep", "fgrep", "rg",
 ]);
+
+/** Declaration builtins: their `NAME=value` words assign like a prefix assignment. */
+const DECLARE = new Set(["export", "declare", "typeset", "local", "readonly"]);
 
 /** `find` actions that write or run something: without them `find` only looks. */
 const FIND_ACTIONS = new Set([
@@ -324,8 +333,19 @@ function linkWords(cmd: SimpleCommand, chain: readonly ChainLink[], n: number): 
 }
 
 function isReader(name: string, words: readonly Word[]): boolean {
+  if (name === "rg") return !words.some((w) => w.value === "--pre" || w.value.startsWith("--pre="));
   if (READERS.has(name)) return true;
   return name === "find" && !words.some((w) => FIND_ACTIONS.has(w.value));
+}
+
+/**
+ * True when assignment `w` (`NAME=value`) points into the store, or its value
+ * is code that names it (`CODE='…CORVIDINHO_DATA_DIR…'; python3 -c "$CODE"`).
+ */
+function assignmentNames(w: Word, cwds: readonly string[], c: Ctx): boolean {
+  if (wordNames(w, cwds, c, false)) return true;
+  const value = w.value.slice(w.value.indexOf("=") + 1);
+  return wordNames({ ...w, value }, cwds, c, true);
 }
 
 /** `find`'s start paths (before its expression) and whether it follows symlinks. */
@@ -651,7 +671,7 @@ function commandWhy(cmd: SimpleCommand, c: Ctx): string | null {
   // Assignments (`DB=…`, `X=… cmd`) pointing at the store.
   for (let i = 0; i < Math.min(cmd.start, words.length); i++) {
     const w = words[i]!;
-    if (ASSIGNMENT.test(w.value) && wordNames(w, cmd.cwds, c, false)) {
+    if (ASSIGNMENT.test(w.value) && assignmentNames(w, cmd.cwds, c)) {
       return `${show(w.value)} points a variable at Corvidinho's store (${s.dir})`;
     }
   }
@@ -668,6 +688,10 @@ function commandWhy(cmd: SimpleCommand, c: Ctx): string | null {
     const lw = linkWords(cmd, chain, n);
     const name = baseName(lw[0]!.value);
     if (isReader(name, lw)) continue;
+    if (DECLARE.has(name)) {
+      const a = lw.slice(1).find((w) => ASSIGNMENT.test(w.value) && assignmentNames(w, cmd.cwds, c));
+      if (a) return `${show(a.value)} points a variable at Corvidinho's store (${s.dir})`;
+    }
     const sql = SQL_CLIENTS.has(name);
     const walked = WALKED.has(name);
     const code = sql || walked || INTERPRETER.test(name);

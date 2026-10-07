@@ -823,9 +823,12 @@ a worktree link to the data dir), text spelling it (its path, `~/…`,
 `$HOME/…`, its path below home), an assignment or output redirection into it
 (an in-root script's included), input naming it, and code for a SQL client
 or interpreter (words, here-docs, here-strings, what is piped in) naming it
-or `CORVIDINHO_DATA_DIR` — read-only looks (`ls`, `stat`, `du`, `cat`, the
-checksum tools, `echo`, `test`, `grep`, `cd`, a `find` with no action …)
-still run, and a SQL client (`sqlite3` and kin) on the store is refused for
+or `CORVIDINHO_DATA_DIR`, or an assignment (prefix, or an `export` /
+`declare` / `typeset` / `local` / `readonly` word) whose value is such code
+— read-only looks (`ls`, `stat`, `du`, `cat`, the checksum tools, `echo`,
+`test`, `grep`, `rg` without `--pre`, `cd`, a `find` with no action …)
+still run (`xxd`, `tree` and `less` can write a file and `rg --pre` runs a
+command, so they are not looks), and a SQL client (`sqlite3` and kin) on the store is refused for
 reads too, because the check cannot tell its reads from its writes; and (b),
 fail-closed, a SQL client's words and input (SQL files it reads are scanned)
 or a write target (`truncate`, `fallocate`, the `cp` / `install` / `rsync`
@@ -845,8 +848,9 @@ SAFE-4 residuals: a store path a program builds at runtime (a command
 substitution or a variable filled from program output, handed to a command
 outside the SQL-client and write families; code that joins the path), code
 that reaches the store without naming it (a script file handed to an
-interpreter, a module it imports), and an in-root script's output
-redirection to an expanded path (as for the SAFE-21 edit family).
+interpreter, a module it imports, a package script or `make` / `just`
+recipe the command runs), and an in-root script's output redirection to an
+expanded path (as for the SAFE-21 edit family).
 
 SAFE-21.a (REQ-plugins-495): the child env is the runners' env
 (`runnerChildEnv`): the verify lane's scrub, no `CDPATH` / `OLDPWD`, and no
@@ -1438,7 +1442,7 @@ command line.
 | shell-exec deletes or moves outside the worktree (`rm`, `rmdir`, `unlink`, `shred`, `mv`, `find -delete` / `-exec rm`, `ln -f`, `git worktree remove` / `prune`), deletes the worktree itself, or names an expanded / input-fed / dot-matching target, in the command or an in-root script | Refuse (exit 2, SAFE-21 delete); no spawn (REQ-plugins-494) |
 | shell-exec reads a secret (secret path, host credential store, Corvidinho env / allowlist file or config dir, `/proc/<pid>/environ`, credential env var, `gh auth token`, `git credential`, ssh family) or re-points git / gh at credentials, in the command or an in-root script | Refuse (exit 2, SAFE-21 secret); no spawn (REQ-plugins-494) |
 | shell-exec runs `specsync change approve` / `review` / `finalize` / `ship` (any repo; behind a wrapper, package runner, path or link, in `-c` / `eval` / `$(…)`, or in an in-root script it runs), or a `change` step that expands or that `xargs` supplies | Refuse (exit 2, AGENT-18.a with `HUMAN_LIFECYCLE_LINE`); no spawn, no Approve card (REQ-plugins-1818) |
-| shell-exec runs a SQL client on Corvidinho's store (reads too), or names the store or its data dir in a non-read-only command, assignment, redirection or code (through `~`, `$HOME`, `$CORVIDINHO_DATA_DIR`, an env variable or a symlink), in the command or an in-root script | Refuse (exit 2, SAFE-4 naming the two-phase memory-forget / memory-override); no spawn, no Approve card (REQ-plugins-404) |
+| shell-exec runs a SQL client on Corvidinho's store (reads too), or names the store or its data dir in a non-read-only command (`xxd`, `tree`, `less` and `rg --pre` included), assignment, redirection or code (code put in a variable included; through `~`, `$HOME`, `$CORVIDINHO_DATA_DIR`, an env variable or a symlink), in the command or an in-root script | Refuse (exit 2, SAFE-4 naming the two-phase memory-forget / memory-override); no spawn, no Approve card (REQ-plugins-404) |
 | shell-exec gives a SQL client, or a `truncate` / `fallocate` / `cp` / `install` / `rsync` / `dd of=` / `tar -x` / `unzip` target, an expansion other than `~` / `$HOME` / `$CORVIDINHO_DATA_DIR`, `xargs` input, a pattern or `find` that can reach the store, or a tree destination holding it | Refuse fail-closed (exit 2, SAFE-4); no spawn (REQ-plugins-404) |
 | node-exec / python-exec / cargo-exec argv names Corvidinho's store or its data dir (text, `CORVIDINHO_DATA_DIR`, or a path leading into it) | Refuse (exit 2, `<runner> refused (SAFE-4)`); no spawn, no Approve card (REQ-plugins-404) |
 | shell-exec or a runner child looks for GitHub / git credentials | None: tokens, askpass, ssh agent dropped; git reads no global / system config, repo helper reset, no prompt, key-less ssh; gh config dir empty (SAFE-21.a, REQ-plugins-495) |

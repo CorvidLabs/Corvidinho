@@ -763,6 +763,10 @@ marker and the rows unchanged:
   a variable the command sets, and `xargs truncate` ("can't be shown to stay
   off Corvidinho's store");
 - `cp /dev/null` onto the `-wal`, `-shm` and `-journal` siblings;
+- looks that write or run a command (`xxd /dev/null <db>`, `tree -o <db>`,
+  `less -o <db>`, `rg --pre rm x <db>`) and code naming
+  `CORVIDINHO_DATA_DIR` carried to `python3 -c "$CODE"` in a prefix or
+  `export` assignment;
 - `sh wipe.sh` (an in-root script running `sqlite3` on the store, named in
   the message) and `sqlite3 :memory: < wipe.sql` (an `ATTACH` of the store).
 `sqlite3 ./fixture.db 'DELETE FROM t'` runs and empties the fixture; `ls`,
@@ -785,15 +789,19 @@ link, a tree copy / `tar -x -C` into a directory holding the store, `find ~
 don't name the store (`sqlite3 ./fixture.db`, a literal here-doc,
 `find . … -exec truncate`, `cp -r src/ dist/`, `tar -xf a.tar`,
 `CORVIDINHO_DATA_DIR=$(mktemp -d) bun test`, `git grep CORVIDINHO_DATA_DIR`,
-`cat <db> > /dev/null`, `du -sh`, a look-alike name) run; a root inside the
+`cat <db> > /dev/null`, `du -sh`, a look-alike name, `rg -n` / `grep -rn`
+through the link, `export CORVIDINHO_DATA_DIR=/tmp/elsewhere`) run; a root inside the
 data dir counts only the DB file family; the residual (`python3 x.py` whose
 file names the DB, a path built with `pathlib`) is not refused.
 - Fail on base (86d68cd0's `plugins/shell/commands.ts`, `must-ask.ts`,
   `footguns.ts` and `plugins/runners/commands.ts` swapped in,
-  `store-guard.ts` removed): 8 of 11 fail (every refusal case, both
+  `store-guard.ts` removed): 9 of 12 fail (every refusal case, both
   no-Approve-card cases and the unit test); on base each wipe form ran and
   left 0 memories rows or no `memories` table. The still-runs, SAFE-21-first
-  and two-phase cases pass on both. Restored: 11 of 11 pass.
+  and two-phase cases pass on both. Restored: 12 of 12 pass. With the
+  first draft's `store-guard.ts` (which let `xxd`, `tree`, `less`,
+  `rg --pre` and code in a variable through) the look-that-writes case
+  fails.
 - `tests/shell.*.test.ts`, `tests/runners.plugins.test.ts`,
   `tests/*safe3a*.test.ts`, `tests/must-ask.*.test.ts` and
   `tests/memory.plugins.test.ts` pass unchanged.
