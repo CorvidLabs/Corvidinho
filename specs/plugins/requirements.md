@@ -2620,6 +2620,7 @@ Acceptance Criteria
 - Through `shell-exec`, from a folder holding files named `specsync`, `change` and `approve`: `spec*ync` / `specsyn?` / `[s]pecsync` / `env spec*` / `bunx spec*` with a lifecycle step, `specsync c?ange approve c1`, `specsync change appr*ve|appro?e|[a]pprove c1`, and `bash -c` with `{approve,}` or `{specsync,}` return exit 2 naming AGENT-18.a with nothing spawned (follow-up to #372).
 - Through `shell-exec`: a function forwarding `"$@"`, `set --` then `"$@"`, `change${IFS}approve`, `specsync $S c1`, `… | xargs specsync`, `xargs -n3 specsync` and `xargs -I X specsync X approve c1` return exit 2 with step null and nothing spawned (follow-up to #372).
 - `firstLifecycleStep` returns null for quoted pattern characters, `cp * "$dest"`, `ls * specsync`, `git ls-files | xargs grep -l specsync`, `grep -rn specsync "$f"`, `specsync change status "$ID"`, `xargs specsync change status` / `check` and `$X "$Y"`; the three new tests fail on the base sources and pass after (follow-up to #372).
+
 ### REQ-plugins-525
 
 `.trust.toml` is SAFE-2 protected like `fledge.toml` (AGENT-18 Trust clause,

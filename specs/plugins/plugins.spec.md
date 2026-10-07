@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 67
+version: 68
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -1577,3 +1577,4 @@ and current rows for plugins host evolution.
 | 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
 | 2026-10-05 | in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2: In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause) |
 | 2026-10-06 | github-7-typed-github-pr-merge-merges-the-bot-s-own-green-corvidinho-pr-only-when-ci-is-green-and-branch-protection: GITHUB-7: typed github-pr-merge merges the bot's own green Corvidinho PR only when CI is green and branch protection allows; never others or outside Corvidinho |
+| 2026-10-07 | shell-exec-refuses-a-specsync-lifecycle-step-written-as-a-glob-or-brace-pattern-or-reached-through-an-expanding: Shell-exec refuses a SpecSync lifecycle step written as a glob or brace pattern, or reached through an expanding subcommand or xargs input (AGENT-18.a follow-up to #372) |
