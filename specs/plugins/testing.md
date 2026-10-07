@@ -99,6 +99,12 @@ the owner's default files (`~/.kube/config`, `~/.aws/*`, `~/.config/gcloud/*`,
 `CLOUDSDK_CONFIG` / `AZURE_CONFIG_DIR` fresh dirs removed after the child, a
 "login" one child writes never reaches the next, and `AWS_REGION` /
 `GOOGLE_CLOUD_PROJECT` stay. All 7 tests fail with the base's sources.
+The `specsync-check` tool (the verify lane's `spec-check` step, follow-up to
+#373) is covered too: a child bun process with the owner's env runs it via a
+stand-in `fledge` and a `fledge.toml` `spec-check` task, and via a stand-in
+`specsync` with no such task; same assertions, and the owner's `GITHUB_TOKEN`
+value is absent from the output. It fails with main's (`86d68cd0`)
+`plugins/specsync/api.ts` (7 pass, 1 fail) and passes restored (8 of 8).
 
 ## Language runners (REQ-plugins-313..314)
 
