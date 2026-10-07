@@ -1985,7 +1985,7 @@ minutes after its run fails both schedule cases. Restored: 9 of 9 pass.
   `tests/discord.admin-mutes.test.ts` fail; restored, 12 of 12 pass. With
   the first pushed head's (c0cae98) `admin.ts` swapped in, the handler-time
   re-check case and the seed-note case fail; restored, they pass.
-## With only the daemon running, a schedule's question reaches the owner by DM (REQ-discord-707, REQ-discord-347 modified; AUTONOMOUS-7.a)
+## With only the daemon running, a schedule's question reaches the owner by DM (REQ-discord-707, REQ-discord-347 / REQ-discord-353 modified; AUTONOMOUS-7.a)
 
 `tests/daemon.owner-dm.test.ts` "the daemon's owner DM pass (SchedulerService
 ownerDm, …)": a daemon-wired scheduler (no outbound) with `ownerDm` on an
@@ -2003,7 +2003,11 @@ sent once after it; a channel `/admin` dropped gets no DM until it is back;
 a secret and `@here` / `@everyone` are redacted and defanged; a spend-cap stop
 DMs its details once per cap episode and a second schedule's stop only the
 headline; a stop that outlasts a DM in flight hands the ask back and the DM
-going out takes it again.
+going out takes it again. REQ-discord-353: a daemon-claimed stuck or pause
+ask is still posted by the bridge's next delivery pass when no owner DM took
+it (the existing `tests/scheduler.ask-outbox.test.ts` daemon cases, no
+`ownerDm`); one the owner DM pass took is not posted again, only its wait
+note (the daemon + bridge case above).
 
 `tests/discord.rest-dm.test.ts`: `createRestSendDm` with a fake REST client —
 the two routes and bodies (`recipient_id`; defanged content,

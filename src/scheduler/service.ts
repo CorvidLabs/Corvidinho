@@ -1798,7 +1798,8 @@ export class SchedulerService {
    * (`injectedScheduleQuestion`), the schedule paused so no later tick runs
    * it or posts again, and that ask posted through the usual ask path — the
    * owner pinged once, handed back for the next delivery pass when the post
-   * does not go out (a daemon's run leaves it pending for a bridge).
+   * does not go out (a daemon's run leaves it pending for a bridge, or with
+   * no bridge running its owner DM pass DMs it, AUTONOMOUS-7.a).
    */
   private async refuseInjectedRun(
     schedule: Schedule,
@@ -1868,7 +1869,11 @@ export class SchedulerService {
       ok: boolean;
       summary?: string;
       error?: string;
-      /** Recorded on the run row until a bridge posts it (REQ-discord-347). */
+      /**
+       * Recorded on the run row until a bridge posts it (REQ-discord-347) or,
+       * with no bridge running, the daemon's owner DM pass takes it
+       * (REQ-discord-707).
+       */
       ask?: HumanAsk;
       spendWarning?: SpendWarning;
       /**

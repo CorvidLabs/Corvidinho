@@ -22,7 +22,7 @@ artifact: docs
 - Specs: `specs/discord/discord.spec.md` (files, Public API, invariant,
   scenario, change log), `specs/cli/cli.spec.md` (files, types row, invariant,
   change log), both `testing.md` evidence sections; REQ-discord-707 and
-  REQ-cli-707 added, REQ-discord-347 and REQ-cli-098 modified through the
+  REQ-cli-707 added, REQ-discord-347, REQ-discord-353 and REQ-cli-098 modified through the
   deltas.
 - `hi/autonomous.md` and `INTENT.md` from the `hi` capture.
 - No CHANGELOG, STATUS or package.json edit (the release PR writes them).

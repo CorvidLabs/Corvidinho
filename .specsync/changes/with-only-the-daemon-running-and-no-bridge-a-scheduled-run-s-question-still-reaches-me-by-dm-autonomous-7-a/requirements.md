@@ -19,7 +19,9 @@ artifact: requirements
 - Added: REQ-discord-707 (the scheduler's owner DM pass and the REST DM
   sender), REQ-cli-707 (the daemon wires it).
 - Modified: REQ-discord-347 (the daemon takes an ask only through the owner DM
-  pass; a DMed ask is never posted by a bridge), REQ-cli-098 (the daemon DMs
-  the ask to the owner while no bridge runs).
+  pass; a DMed ask is never posted by a bridge), REQ-discord-353 (a daemon's
+  stuck ask is posted by the bridge's next delivery pass unless the owner DM
+  pass took it first), REQ-cli-098 (the daemon DMs the ask to the owner while
+  no bridge runs).
 - No env var, config key, flag, slash command, CLI command, table, schema or
   package version change.
