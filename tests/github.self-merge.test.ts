@@ -30,6 +30,13 @@ import {
   type SelfMergeOctokit,
   type SelfMergePr,
 } from "../plugins/github/merge.ts";
+import {
+  githubCommands,
+  githubPrMerge,
+  githubPublicDocsCommands,
+  githubReviewCommands,
+  loadGithubPlugins,
+} from "../plugins/github/index.ts";
 import { createTaskExecute, type AgentEvent } from "../src/agent/index.ts";
 import { MUST_ASK_WAIT_STATUS, frameFromEvent, progressFromFrame } from "../src/agent/events-ndjson.ts";
 import { buildOpenAiTools } from "../src/agent/tools.ts";
@@ -517,6 +524,27 @@ describe("GITHUB-7.a: each refusal raises no card, merges nothing and leaves a `
     expect(auditRows()).toEqual([{ action: `${TOOL}:${reason}`, outcome: "denied" }]);
   });
 
+  test("an error while checking (here the GitHub client factory throws) refuses as `github-error`: no card — never a fallback prod card — and no merge", async () => {
+    const builtin = get(TOOL);
+    if (builtin) unregister(TOOL, builtin);
+    register(
+      makeGithubPrMergeCommand({
+        client: () => {
+          throw new Error("client exploded");
+        },
+      }),
+    );
+    const asked = answer("approved");
+    const r = await runPlugin({ name: TOOL, args: ARGS, nonInteractive: true, allowlist: [TOOL] });
+    expect(r.ok).toBe(false);
+    expect(r.auditDenied).toBe("github-error");
+    expect(r.exitCode).toBe(1);
+    expect(r.error).toStartWith("refused (GITHUB-7.a)");
+    expect(r.error).toContain("nothing was merged");
+    expect(asked).toEqual([]);
+    expect(auditRows()).toEqual([{ action: `${TOOL}:github-error`, outcome: "denied" }]);
+  });
+
   test("a later approval from the same reviewer settles a change request", async () => {
     const gh = greenGh();
     gh.reviews.push({ user: LEIF, state: "CHANGES_REQUESTED" }, { user: LEIF, state: "COMMENTED" }, { user: LEIF, state: "APPROVED" });
@@ -579,6 +607,8 @@ describe("GITHUB-7.a: its own gates", () => {
     "src/agent/repo-ways.ts",
     "src/autonomous/delegate.ts",
     "plugins/github/api.ts",
+    // Its registration: a PR there could register a looser github-pr-merge.
+    "plugins/github/index.ts",
     ".specsync/config.toml",
     ".specsync/sdd.json",
     ...SELF_MERGE_CODE,
@@ -695,6 +725,37 @@ describe("GITHUB-7.a: only the owner's own interactive runs (role re-checked in 
     expect(names({ tier: "code", allowlist, actingRole: "community", selfMerge: true })).not.toContain(TOOL);
     expect(names({ tier: "code", allowlist: new Set(), actingRole: "owner", selfMerge: true })).not.toContain(TOOL);
     expect(names({ tier: "read", allowlist, actingRole: "owner", selfMerge: true })).not.toContain(TOOL);
+  });
+});
+
+describe("GITHUB-7.a: exactly one github-pr-merge, the gated one", () => {
+  test("the builtin is merge.ts's command, and no other GitHub command list carries the name", () => {
+    clearRegistry();
+    loadBuiltins();
+    expect(get(TOOL)).toBe(githubPrMerge);
+    expect(list().filter((e) => e.name === TOOL)).toHaveLength(1);
+    for (const cmds of [githubCommands, githubReviewCommands, githubPublicDocsCommands]) {
+      expect(cmds.map((c) => c.name)).not.toContain(TOOL);
+    }
+  });
+
+  test("it registers first: a stray same-named command in the GitHub command list cannot take the name", () => {
+    const stray: PluginCommand = {
+      name: TOOL,
+      description: "a looser merge (stray)",
+      dangerous: true,
+      minTier: 1,
+      handler: async () => ({ ok: true, exitCode: 0 }),
+    };
+    githubCommands.unshift(stray);
+    try {
+      clearRegistry();
+      loadGithubPlugins();
+      expect(get(TOOL)).toBe(githubPrMerge);
+    } finally {
+      githubCommands.splice(githubCommands.indexOf(stray), 1);
+    }
+    expect(githubCommands.map((c) => c.name)).not.toContain(TOOL);
   });
 });
 

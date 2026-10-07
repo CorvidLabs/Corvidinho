@@ -793,7 +793,7 @@ squash` is accepted while `merge` / `rebase` are usage errors.
 
 ## It merges its own Corvidinho PR only when the owner asks (REQ-plugins-099 / REQ-plugins-097 / REQ-plugins-095 modified; GITHUB-7, GITHUB-7.a)
 
-`tests/github.self-merge.test.ts` (120 tests, #395's carried-over block
+`tests/github.self-merge.test.ts` (125 tests, #395's carried-over block
 above included): a fake GitHub client
 (`makeGithubPrMergeCommand({ client })`, no network or token), a temp data
 dir and allowlist file, the real must-ask gate, card store and SAFE-5 chain.
@@ -812,7 +812,12 @@ dir and allowlist file, the real must-ask gate, card store and SAFE-5 chain.
   `card-denied`; a PR turned draft while the card waits is refused after
   `started`; a run stopped after the Approve, while the gate re-runs, merges
   nothing (`started`, then `aborted`); a GitHub 405 is `github-refused`; a
-  dry run asks and merges nothing.
+  dry run asks and merges nothing; an error while checking (a client factory
+  that throws) is `github-error` with no card (never a fallback prod card).
+- `loadBuiltins` registers merge.ts's `githubPrMerge` as the one
+  `github-pr-merge` and no other GitHub command list carries the name; a
+  stray same-named command put first in `githubCommands` cannot take it
+  (`loadGithubPlugins` registers the gated one first).
 - The caller check refuses WATCH (a WATCH session id, a `watch` stamp, and
   the owner's own GitHub-triggered run as #374's WATCH spawn stamps it), the
   owner's own schedule, a worker, a missing surface stamp, a muted owner,
@@ -822,7 +827,8 @@ dir and allowlist file, the real must-ask gate, card store and SAFE-5 chain.
   `github-pr-merge:watch` row and no card.
 - Gate paths (`.trust.toml` in any folder and case, `CLAUDE.md` and
   `tsconfig.json` in any folder, and every `SELF_MERGE_CODE` file —
-  `repo-ways.ts`, `delegate.ts` and `api.ts` included; ordinary paths such as
+  `repo-ways.ts`, `delegate.ts`, `api.ts` and the registration `index.ts`
+  included; ordinary paths such as
   `trust.toml`, `package.json` and `src/agent/tools.ts` are not gates), talk-branch names
   against `generateTalkBranchName`, and the required check names against
   `.github/workflows/ci.yml` / `spec-sync.yml`.

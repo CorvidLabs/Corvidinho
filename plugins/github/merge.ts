@@ -110,14 +110,16 @@ export const TALK_BRANCH_RE = /^talk\/[A-Za-z0-9_-]{1,16}-[0-9a-f]{16}$/;
 
 /**
  * The files that hold the self-merge gate (a PR changing one waits for a
- * human): this tool, the CI verdict it reads, its GitHub client and
- * owner/repo split, the repo it merges in (`CORVIDINHO_REPO`), the repo gate,
- * the caller and role checks (roles, surfaces, worker depth), the must-ask
- * gate and its audit rows, and the Approve card's store, one-time code and
- * engine.
+ * human): this tool, its registration (`plugins/github/index.ts` registers
+ * it before every other GitHub command, so nothing else can take the name),
+ * the CI verdict it reads, its GitHub client and owner/repo split, the repo
+ * it merges in (`CORVIDINHO_REPO`), the repo gate, the caller and role
+ * checks (roles, surfaces, worker depth), the must-ask gate and its audit
+ * rows, and the Approve card's store, one-time code and engine.
  */
 export const SELF_MERGE_CODE: readonly string[] = [
   "plugins/github/merge.ts",
+  "plugins/github/index.ts",
   "plugins/github/ciStatus.ts",
   "plugins/github/api.ts",
   "src/agent/repo-ways.ts",
@@ -466,12 +468,29 @@ async function requiredCheckProblem(
 /**
  * GITHUB-7 / GITHUB-7.a: may it merge PR `args` now? Re-reads the caller,
  * the repo gate and every PR fact from GitHub on each call. Never throws: a
- * GitHub error refuses.
+ * GitHub error, or any other error while checking (the repo gate, the
+ * client), refuses (`github-error`, exit 1) — so the must-ask classifier
+ * never falls back to raising a card for a merge it could not check.
  */
 export async function checkSelfMerge(
   rawArgs: readonly string[],
   env: NodeJS.ProcessEnv,
   deps: SelfMergeDeps = {},
+): Promise<SelfMergeVerdict> {
+  try {
+    return await checkSelfMergeOnce(rawArgs, env, deps);
+  } catch (e) {
+    return {
+      ok: false,
+      result: refused("github-error", `could not run the self-merge checks (${errText(e)}); nothing was merged`, {}, 1),
+    };
+  }
+}
+
+async function checkSelfMergeOnce(
+  rawArgs: readonly string[],
+  env: NodeJS.ProcessEnv,
+  deps: SelfMergeDeps,
 ): Promise<SelfMergeVerdict> {
   const parsed = parseArgs(rawArgs);
   if (typeof parsed === "string") {

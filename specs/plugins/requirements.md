@@ -2639,7 +2639,8 @@ from Leif's 2026-09-28 interview record, round 16 of 2026-10-06).
 
 `github-pr-merge` SHALL be a dangerous, minTier 1, mutating typed plugin
 behind SAFE-1 and GITHUB-6, registered once (`plugins/github/merge.ts`,
-`githubPrMerge`). Before the repo gate it SHALL refuse any `--repo`
+`githubPrMerge`), first in `loadGithubPlugins` (`plugins/github/index.ts`),
+so no other GitHub command list can take its name. Before the repo gate it SHALL refuse any `--repo`
 other than `CorvidLabs/Corvidinho` (`isCorvidinhoRepoSlug` /
 `CORVIDINHO_REPO`) with exit 2 and a clear line that outside Corvidinho a
 human still merges. It SHALL require the PR author login (and id) to match
@@ -2655,7 +2656,9 @@ On top of that, for GITHUB-7.a, `github-pr-merge` SHALL take `<number>
 --repo OWNER/REPO --sha <40-hex head sha>` and optionally `--method squash`
 (the only method: `merge` or `rebase` is a usage error) and nothing else (no
 draft-ready, admin or bypass option; a usage error is exit 1). `checkSelfMerge(args, env, deps)` SHALL be its gate, re-read in
-full on every call, never throwing (a GitHub error refuses, exit 1), and SHALL
+full on every call, never throwing (a GitHub error, or any other error while
+checking — the repo gate, the client — refuses as `github-error`, exit 1, so
+the classifier never falls back to a card), and SHALL
 refuse with exit 2, `refused (GITHUB-7.a): <why>`, `data.reason` and
 `auditDenied` set to the reason code unless every one holds, in this order:
 - the caller is the owner's own interactive run (`selfMergeCallerRefusal`):
@@ -2691,7 +2694,8 @@ refuse with exit 2, `refused (GITHUB-7.a): <why>`, `data.reason` and
   `CODEOWNERS`, any `.trust.toml`, any `bunfig.toml`, any `tsconfig.json`
   (the verify lane's and CI's typecheck config), `.specsync/` outside
   `changes/` and `archive/`, and `SELF_MERGE_CODE`:
-  `plugins/github/merge.ts`, `plugins/github/ciStatus.ts`,
+  `plugins/github/merge.ts`, `plugins/github/index.ts` (its registration),
+  `plugins/github/ciStatus.ts`,
   `plugins/github/api.ts`, `src/agent/repo-ways.ts` (it holds
   `CORVIDINHO_REPO`, the repo it merges in), `src/autonomous/delegate.ts`
   (the worker check), `src/plugins/githubPublic.ts`, `src/plugins/must-ask.ts`,
@@ -2749,9 +2753,11 @@ Acceptance Criteria
 - Each refusal — draft, foreign author, non-talk branch, fork head, closed, head moved, self-marked ready, opened ready with no person marking it ready, marked ready only by an app, a gate path (and a rename away from one), a short file list, changes requested, smoke or spec-sync missing, failed, pending, at another commit or from another app, another check failing, blocked, unknown or conflicting mergeability, an unreadable token user — raises no card, merges nothing and leaves one `github-pr-merge:<reason>` `denied` row.
 - A non-Corvidinho repo and a bad usage are refused before any GitHub call; WATCH (a WATCH session id, a `watch` stamp, and the owner's own GitHub-triggered run as the WATCH spawn stamps it), a schedule (the owner's own), a worker, a missing surface stamp, a muted owner, team and a spawned local run are refused before any GitHub call; the owner's chat, `/session start`, `/work`, ask answers and the local CLI pass.
 - Through `runPlugin`, the owner's own GitHub-triggered WATCH run passes the role gate but is refused with no card, no GitHub call and one `github-pr-merge:watch` `denied` row.
-- `.trust.toml` in any folder (any case), `CLAUDE.md` and `tsconfig.json` in any folder, and every `SELF_MERGE_CODE` file (`src/agent/repo-ways.ts`, `src/autonomous/delegate.ts` and `plugins/github/api.ts` included) are gate paths; `trust.toml`, `docs/trust.md`, `package.json` and `src/agent/tools.ts` are not.
+- `.trust.toml` in any folder (any case), `CLAUDE.md` and `tsconfig.json` in any folder, and every `SELF_MERGE_CODE` file (`src/agent/repo-ways.ts`, `src/autonomous/delegate.ts`, `plugins/github/api.ts` and `plugins/github/index.ts` included) are gate paths; `trust.toml`, `docs/trust.md`, `package.json` and `src/agent/tools.ts` are not.
 - A person's ready, then a draft again and an app's ready last, is `not-marked-ready`; a person's ready after an app's merges.
 - A run stopped after the Approve, while the gate re-runs, merges nothing and leaves `started` then `github-pr-merge:aborted`.
 - A PR turned back into a draft while the card waits is refused after the approval (`started`, then `github-pr-merge:draft`), and a denied card leaves `github-pr-merge:card-denied`.
+- `loadBuiltins` registers merge.ts's `githubPrMerge` as the one `github-pr-merge`, and no other GitHub command list carries the name; a stray same-named command put first in `githubCommands` still cannot take it.
+- An error while checking (a client factory that throws) is refused as `github-pr-merge:github-error` (exit 1) with no card and no merge.
 - `tests/github.self-merge.test.ts` fails on the base sources and passes after.
 
