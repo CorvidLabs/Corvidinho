@@ -111,12 +111,16 @@ declared commenter's prompt opens with a `[Corvidinho acting GitHub user …]`
 paragraph (IDENTITY-14 / IDENTITY-7). `watchTriggerRole(event, people)`
 (`router.ts`) and `AgentRunChatOpts.actingRole` (`agent-client.ts`): the
 trigger's declared role the poller passes to the spawn (IDENTITY-12.a,
-REQ-watch-1201). `DetectedEvent.textEditorIds` / `threadAuthorId`,
-`SearchClient.findTextEditors(nodeId)`, `TEXT_EDITORS_QUERY` and
-`textEditorIdsFromNode(node)` (`searcher.ts`), `textUneditedByOthers(event)`
-(`router.ts`), and fixture `updated_at` / `editor_ids` (comments) and
-`body_editor_ids` (items): who edited the triggering text after it was posted
-(REQ-watch-1202).
+REQ-watch-1201). `DetectedEvent.textEditorIds` / `threadAuthorId` /
+`titleEditorIds`, `SearchClient.findTextEditors(nodeId)` /
+`findTitleEditors(nodeId)`, `TEXT_EDITORS_QUERY` / `TITLE_EDITORS_QUERY`,
+`textEditorIdsFromNode(node)` / `titleEditorIdsFromNode(node)` and
+`fetchWatchEvents`' `needsLookup` (`searcher.ts`),
+`textUneditedByOthers(event)`, `titleUnrenamedByOthers(event)` and
+`watchActingGithub(event)` (`router.ts`), the `edited` forget-me outcome
+(`forget-me.ts`), and fixture `editor_ids` (comments) and `body_editor_ids` /
+`title_editor_ids` (items): who edited the triggering text or renamed the
+title after it was posted, and whom the run acts for (REQ-watch-1202).
 Untrusted text (SAFE-12 / SAFE-13, #71, REQ-watch-071): `router.ts` exports
 `watchEventText(event)`, `watchInjectionVerdict(event, people)`,
 `WATCH_BODY_FENCE_HEADER` and `WATCH_PROMPT_MAX_CHARS` (8000); `ack.ts`

@@ -39,6 +39,13 @@ export type DetectedEvent = {
    */
   threadAuthorId?: number;
   /**
+   * SAFE-13 (REQ-watch-1202): the GitHub numeric user ids of everyone who
+   * renamed the thread's title — `[]` when never renamed; absent when that
+   * could not be read. The title is the thread author's own only when every
+   * renamer is `threadAuthorId`.
+   */
+  titleEditorIds?: number[];
+  /**
    * assignment / review_request only: the user who assigned the watch user or
    * requested its review. Both `sender` and `actor` must pass the user
    * allowlist, and a missing actor is refused (REQ-watch-302).

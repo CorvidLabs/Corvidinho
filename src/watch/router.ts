@@ -29,7 +29,13 @@
  * always survives the prompt cap); `watchInjectionVerdict` is the detector's
  * verdict on that text, which the poller acts on before any run. Only text
  * the owner wrote is exempt (REQ-watch-1202): the body when the owner sent
- * it and nobody else edited it, the title when the owner opened the thread.
+ * it and nobody else edited it, the title when the owner opened the thread
+ * and nobody else renamed it.
+ *
+ * MEMORY-8 / SAFE-5 (REQ-watch-1202): the run acts for — and is audited
+ * as — the person who triggered it (`watchActingGithub`): a comment's or
+ * body's sender only when nobody else edited that text, an assignment's or
+ * review request's `actor` (login only), else nobody.
  */
 
 import {
@@ -110,6 +116,41 @@ export function textUneditedByOthers(
 ): boolean {
   if (event.senderId === undefined || !Array.isArray(event.textEditorIds)) return false;
   return event.textEditorIds.every((id) => id === event.senderId);
+}
+
+/**
+ * REQ-watch-1202 (SAFE-13): true when nobody but the thread's author renamed
+ * its title — the renamers are known (`titleEditorIds`) and every one is
+ * `threadAuthorId`. No author id, or renames that could not be read ⇒ false.
+ */
+export function titleUnrenamedByOthers(
+  event: Partial<Pick<DetectedEvent, "threadAuthorId" | "titleEditorIds">>,
+): boolean {
+  if (event.threadAuthorId === undefined || !Array.isArray(event.titleEditorIds)) return false;
+  return event.titleEditorIds.every((id) => id === event.threadAuthorId);
+}
+
+/**
+ * REQ-watch-1202 (MEMORY-8 / MEMORY-ACL-1, SAFE-5): the GitHub account a
+ * WATCH run acts for — its memory, its audit rows and must-ask requester —
+ * which is who triggered it, as the API reports them:
+ * - a comment or body mention: its sender's login and numeric id, but only
+ *   when nobody else edited that text (`textUneditedByOthers`);
+ * - an assignment or review request: its `actor`, by login only (the event
+ *   carries no id for it, so no person's memory, IDENTITY-7.a);
+ * - anything else (a text someone else edited, or edits that could not be
+ *   read): nobody — `{}`.
+ */
+export function watchActingGithub(
+  event: Pick<DetectedEvent, "type" | "sender" | "senderId"> &
+    Partial<Pick<DetectedEvent, "textEditorIds" | "actor">>,
+): { login?: string; id?: number } {
+  if (ACTOR_GATED_TYPES.has(event.type)) {
+    const login = event.actor?.trim();
+    return login ? { login } : {};
+  }
+  if (!textUneditedByOthers(event)) return {};
+  return { login: event.sender, ...(event.senderId !== undefined ? { id: event.senderId } : {}) };
 }
 
 export const WATCH_IDENTITY_HEADER =
@@ -227,12 +268,13 @@ function buildPrompt(event: DetectedEvent, people?: PeopleDirectory | null): str
  * list (IDENTITY-7.a — never by a login or a name; no id ⇒ not the owner):
  * the body when the owner sent it and nobody else edited it
  * (`textUneditedByOthers`), the title when the owner opened the thread
- * (`threadAuthorId`). Everything else is scanned, the owner's comment on a
- * thread someone else opened included.
+ * (`threadAuthorId`) and nobody else renamed it (`titleUnrenamedByOthers`).
+ * Everything else is scanned, the owner's comment on a thread someone else
+ * opened (or renamed) included.
  */
 export function watchInjectionVerdict(
   event: Pick<DetectedEvent, "title" | "body" | "sender" | "senderId"> &
-    Partial<Pick<DetectedEvent, "textEditorIds" | "threadAuthorId">>,
+    Partial<Pick<DetectedEvent, "textEditorIds" | "threadAuthorId" | "titleEditorIds">>,
   people: PeopleDirectory | null | undefined,
 ): InjectionVerdict | null {
   const isOwner = (githubId: number | undefined): boolean =>
@@ -240,7 +282,7 @@ export function watchInjectionVerdict(
     githubId !== undefined &&
     resolvePerson(people!, { githubId })?.personId === people!.ownerPersonId;
   const ownerBody = isOwner(event.senderId) && textUneditedByOthers(event);
-  const ownerTitle = isOwner(event.threadAuthorId);
+  const ownerTitle = isOwner(event.threadAuthorId) && titleUnrenamedByOthers(event);
   const verdict = detectInjection(
     watchEventText({ title: ownerTitle ? "" : event.title, body: ownerBody ? "" : event.body }),
   );

@@ -11,10 +11,13 @@
  * user or requested its review, read from the issue's events (REQ-watch-302).
  * IDENTITY-12.a / SAFE-13 (REQ-watch-1202): comment and issue-body events
  * carry who edited the triggering text after it was posted
- * (`textEditorIds`: a comment whose `updated_at` is its `created_at` was
- * never edited; otherwise, and for every body, its GraphQL edit history is
- * read; unreadable ⇒ absent) and the thread author's numeric id
- * (`threadAuthorId`).
+ * (`textEditorIds`, read from its GraphQL edit history for every comment and
+ * body — REST `updated_at` is to the second, so an edit made in the second
+ * the text was posted would look unedited; unreadable ⇒ absent); every event
+ * carries the thread author's numeric id (`threadAuthorId`) and who renamed
+ * the thread's title (`titleEditorIds`, its GraphQL rename events;
+ * unreadable ⇒ absent). The lookups are made only for events the caller has
+ * not handled yet (`needsLookup`), so each is one GraphQL call, once.
  */
 
 import { Octokit } from "@octokit/rest";
@@ -66,7 +69,7 @@ export type SearchClient = {
     nodeId?: string;
     htmlUrl: string;
     createdAt: string;
-    /** When the comment was last updated; its `createdAt` ⇒ never edited (REQ-watch-1202). */
+    /** When the comment was last updated (edits are read from GraphQL, never from this; REQ-watch-1202). */
     updatedAt?: string;
   }>>;
   listReviewRequests(
@@ -92,6 +95,12 @@ export type SearchClient = {
    * — or null when that cannot be read (REQ-watch-1202). Absent ⇒ unknown.
    */
   findTextEditors?(nodeId: string): Promise<number[] | null>;
+  /**
+   * GitHub numeric user ids of everyone who renamed this issue's or PR's
+   * title (GraphQL `nodeId` of the thread) — `[]` when never renamed — or
+   * null when that cannot be read (SAFE-13, REQ-watch-1202). Absent ⇒ unknown.
+   */
+  findTitleEditors?(nodeId: string): Promise<number[] | null>;
 };
 
 /**
@@ -160,12 +169,53 @@ export function textEditorIdsFromNode(node: unknown): number[] | null {
   return [...ids];
 }
 
-/** True when `updatedAt` names the same instant as `createdAt` (never edited). */
-function sameInstant(createdAt: string, updatedAt: string | undefined): boolean {
-  if (!updatedAt) return false;
-  const a = Date.parse(createdAt);
-  const b = Date.parse(updatedAt);
-  return Number.isFinite(a) && a === b;
+/**
+ * GraphQL for who renamed an issue's or PR's title (SAFE-13, REQ-watch-1202):
+ * every `RenamedTitleEvent`'s actor.
+ */
+export const TITLE_EDITORS_QUERY = `query($id: ID!) {
+  node(id: $id) {
+    ... on Issue {
+      issueRenames: timelineItems(itemTypes: [RENAMED_TITLE_EVENT], first: 100) {
+        totalCount
+        nodes { ... on RenamedTitleEvent { actor { ...EditorId } } }
+      }
+    }
+    ... on PullRequest {
+      prRenames: timelineItems(itemTypes: [RENAMED_TITLE_EVENT], first: 100) {
+        totalCount
+        nodes { ... on RenamedTitleEvent { actor { ...EditorId } } }
+      }
+    }
+  }
+}
+fragment EditorId on Actor {
+  ... on User { databaseId }
+  ... on Bot { databaseId }
+  ... on Mannequin { databaseId }
+}`;
+
+/**
+ * The renamers' GitHub numeric ids from a {@link TITLE_EDITORS_QUERY} `node`
+ * (SAFE-13, REQ-watch-1202): `[]` when the title was never renamed; null
+ * (unknown) when the node is missing or neither an issue nor a PR, a rename's
+ * actor has no numeric id, or there are more renames than were read.
+ */
+export function titleEditorIdsFromNode(node: unknown): number[] | null {
+  if (!node || typeof node !== "object") return null;
+  const n = node as { issueRenames?: unknown; prRenames?: unknown };
+  const renames = (n.issueRenames ?? n.prRenames) as { totalCount?: unknown; nodes?: unknown } | null | undefined;
+  if (!renames || typeof renames !== "object") return null;
+  const nodes = Array.isArray(renames.nodes) ? renames.nodes : null;
+  if (!nodes || typeof renames.totalCount !== "number" || renames.totalCount > nodes.length) return null;
+  const ids = new Set<number>();
+  for (const e of nodes) {
+    if (!e || typeof e !== "object") return null;
+    const id = actorDatabaseId((e as { actor?: unknown }).actor);
+    if (id === null) return null;
+    ids.add(id);
+  }
+  return [...ids];
 }
 
 /** Issue event kinds whose actor gates an assignment / review_request event. */
@@ -224,6 +274,8 @@ export type FixtureBundle = {
     assignees?: string[];
     /** Who edited the body after it was posted (REQ-watch-1202); default never edited. */
     body_editor_ids?: number[];
+    /** Who renamed the title (REQ-watch-1202); default never renamed. */
+    title_editor_ids?: number[];
   }>;
   comments?: Record<
     string,
@@ -307,6 +359,12 @@ export function createFixtureSearchClient(bundle: FixtureBundle): SearchClient {
         for (const c of list) {
           if (fixtureCommentNodeId(c.id) === nodeId) return c.editor_ids ?? [];
         }
+      }
+      return null;
+    },
+    async findTitleEditors(nodeId) {
+      for (const it of bundle.involving ?? []) {
+        if (fixtureIssueNodeId(it.repo, it.number) === nodeId) return it.title_editor_ids ?? [];
       }
       return null;
     },
@@ -506,6 +564,20 @@ export function createOctokitSearchClient(token: string): SearchClient {
         return null;
       }
     },
+    async findTitleEditors(nodeId) {
+      try {
+        return await withRateLimitRethrow(async () => {
+          const res = await octokit.graphql<{ node?: unknown }>(TITLE_EDITORS_QUERY, { id: nodeId });
+          return titleEditorIdsFromNode(res?.node);
+        });
+      } catch (err) {
+        // Rate-limit bubbles; any other failure means "renamers unknown", so
+        // the title is scanned (SAFE-13, fail closed, REQ-watch-1202).
+        const rl = asGithubRateLimitError(err);
+        if (rl) throw rl;
+        return null;
+      }
+    },
   };
 }
 
@@ -513,6 +585,12 @@ export function createOctokitSearchClient(token: string): SearchClient {
 async function editorsOf(client: SearchClient, nodeId: string | undefined): Promise<number[] | null> {
   if (!nodeId || !client.findTextEditors) return null;
   return client.findTextEditors(nodeId);
+}
+
+/** Who renamed a thread's title by its GraphQL node id; null when unknown (REQ-watch-1202). */
+async function titleEditorsOf(client: SearchClient, nodeId: string | undefined): Promise<number[] | null> {
+  if (!nodeId || !client.findTitleEditors) return null;
+  return client.findTitleEditors(nodeId);
 }
 
 function splitRepo(repo: string): { owner: string; name: string } | null {
@@ -523,42 +601,58 @@ function splitRepo(repo: string): { owner: string; name: string } | null {
 
 /**
  * Fetch + normalize mention/review events for configured repo qualifiers.
+ * `needsLookup(eventId)` (default: every event) says which events still need
+ * their edit and rename lookups (REQ-watch-1202): the poller skips the ids it
+ * already handled, so the lookups are made once per new event, not every
+ * poll; a skipped event carries neither (unknown, which only lowers a role).
  */
 export async function fetchWatchEvents(opts: {
   client: SearchClient;
   repos: string[];
   mentionUsername: string;
   sinceIso?: string;
+  needsLookup?: (eventId: string) => boolean;
 }): Promise<DetectedEvent[]> {
   const since =
     opts.sinceIso ??
     new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
   const events: DetectedEvent[] = [];
   const username = opts.mentionUsername;
+  const needsLookup = opts.needsLookup ?? (() => true);
 
   for (const repoQ of opts.repos) {
     const items = await opts.client.searchInvolving(repoQ, username, since);
     for (const item of items) {
       const parts = splitRepo(item.repo);
       if (!parts) continue;
-      // SAFE-13 (REQ-watch-1202): who wrote the thread's title.
+      // SAFE-13 (REQ-watch-1202): who wrote the thread's title, and who
+      // renamed it (read once per thread, only for an event still to handle).
       const threadAuthor = item.userId !== undefined ? { threadAuthorId: item.userId } : {};
+      let renamers: Promise<number[] | null> | undefined;
+      const titleEditors = async (eventId: string): Promise<{ titleEditorIds?: number[] }> => {
+        if (!needsLookup(eventId)) return {};
+        renamers ??= titleEditorsOf(opts.client, item.nodeId);
+        const ids = await renamers;
+        return ids ? { titleEditorIds: ids } : {};
+      };
 
       // Issue/PR body mention (skip own watch-username — REQ-watch-007)
       if (
         containsMention(item.body, username) &&
         item.user.toLowerCase() !== username.toLowerCase()
       ) {
+        const id = `issue-${item.repo}#${item.number}`;
         // IDENTITY-12.a (REQ-watch-1202): who edited the body after it was posted.
-        const bodyEditors = await editorsOf(opts.client, item.nodeId);
+        const bodyEditors = needsLookup(id) ? await editorsOf(opts.client, item.nodeId) : null;
         events.push({
-          id: `issue-${item.repo}#${item.number}`,
+          id,
           type: "issues",
           body: item.body,
           sender: item.user,
           ...(item.userId !== undefined ? { senderId: item.userId } : {}),
           ...(bodyEditors ? { textEditorIds: bodyEditors } : {}),
           ...threadAuthor,
+          ...(await titleEditors(id)),
           repo: item.repo,
           number: item.number,
           title: item.title,
@@ -582,13 +676,15 @@ export async function fetchWatchEvents(opts: {
           "assigned",
           username,
         );
+        const id = `assign-${item.repo}#${item.number}`;
         events.push({
-          id: `assign-${item.repo}#${item.number}`,
+          id,
           type: "assignment",
           body: item.body || `assigned to @${username}`,
           sender: item.user,
           ...(item.userId !== undefined ? { senderId: item.userId } : {}),
           ...threadAuthor,
+          ...(await titleEditors(id)),
           ...(actor ? { actor } : {}),
           repo: item.repo,
           number: item.number,
@@ -610,19 +706,20 @@ export async function fetchWatchEvents(opts: {
         if (!containsMention(c.body, username)) continue;
         // Skip own comments (no self-loop on acks / chatter) — REQ-watch-007
         if (c.user.toLowerCase() === username.toLowerCase()) continue;
-        // IDENTITY-12.a (REQ-watch-1202): `updated_at` = `created_at` ⇒ never
-        // edited; otherwise who edited it is read (unknown ⇒ absent).
-        const commentEditors = sameInstant(c.createdAt, c.updatedAt)
-          ? []
-          : await editorsOf(opts.client, c.nodeId);
+        const id = `comment-${c.id}`;
+        // IDENTITY-12.a (REQ-watch-1202): who edited it after it was posted,
+        // always from its edit history — never from `updated_at`, which is to
+        // the second (unknown ⇒ absent).
+        const commentEditors = needsLookup(id) ? await editorsOf(opts.client, c.nodeId) : null;
         events.push({
-          id: `comment-${c.id}`,
+          id,
           type: "issue_comment",
           body: c.body,
           sender: c.user,
           ...(c.userId !== undefined ? { senderId: c.userId } : {}),
           ...(commentEditors ? { textEditorIds: commentEditors } : {}),
           ...threadAuthor,
+          ...(await titleEditors(id)),
           repo: item.repo,
           number: item.number,
           title: item.title,
@@ -649,13 +746,15 @@ export async function fetchWatchEvents(opts: {
             "review_requested",
             username,
           );
+          const id = `reviewreq-${item.repo}#${item.number}`;
           events.push({
-            id: `reviewreq-${item.repo}#${item.number}`,
+            id,
             type: "review_request",
             body: `review requested of @${username}`,
             sender: item.user,
             ...(item.userId !== undefined ? { senderId: item.userId } : {}),
             ...threadAuthor,
+            ...(await titleEditors(id)),
             ...(actor ? { actor } : {}),
             repo: item.repo,
             number: item.number,
