@@ -54,6 +54,24 @@
       "requirement_ids": [
         "REQ-plugins-404"
       ]
+    },
+    {
+      "timestamp": 1791331513,
+      "commit": "a044412259c4ed2f60e27124032a956184f2dfc1",
+      "contract_digest": "3a174379565fca696f9caeb43861613cc448075af0be44f0e4ca50774f66146d",
+      "execution_digest": "ef49a9af23786b22de68a6e307e507dc51ebaaebd3b08805e526dbccc0945e2b",
+      "workspace_digest": "a3bac2c85481d2c5d437c6924e3b827c8cab11828611f0eabd2b895a17e5e4d5",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-404"
+      ]
     }
   ]
 }
