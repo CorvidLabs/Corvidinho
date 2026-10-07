@@ -369,7 +369,7 @@ function programName(value: string): string {
  * `@scope/specsync@1`, and an option's value (`--bin=specsync`); for a
  * pattern (`spec*ync`, `./spec{sync,}`), how it may stand for one of them.
  * A word that expands only before its last `/` (`"$HOME"/.cargo/bin/specsync`,
- * `"$D/spec*ync"`) names it by the literal basename after that `/`.
+ * `"$D"/spec*ync`) names it by the literal basename after that `/`.
  */
 function namesSpecsync(w: Word): PatternMatch {
   if (w.expands) {
@@ -538,8 +538,7 @@ function filledScriptStep(w: Word, fed: Feed, root: string, depth: number): Verd
 function commandStep(cmd: SimpleCommand, root: string, depth: number): LifecycleStep | null {
   if (cmd.start >= cmd.words.length) return null;
   const words = braceSplitWords(cmd.words, cmd.start);
-  const chain = commandChain(words, cmd.start).map((l) => l.k);
-  const links = new Set(chain);
+  const links = new Set(commandChain(words, cmd.start).map((l) => l.k));
   // An `xargs` in front: it appends words from its input, or fills in the
   // words holding its replace strings.
   let fed = null as Feed;
@@ -556,7 +555,7 @@ function commandStep(cmd: SimpleCommand, root: string, depth: number): Lifecycle
       const literalOnly = unknown || (name === "wild" && !link);
       // An argument of a command that never runs its arguments
       // (`grep -l specsync "$f"`) is only read for a literal `change` step.
-      const owner = link ? undefined : words[chain.filter((j) => j < k).at(-1) ?? -1];
+      const owner = link ? undefined : words[Math.max(-1, ...[...links].filter((j) => j < k))];
       const asText =
         owner != null &&
         !owner.expands &&
