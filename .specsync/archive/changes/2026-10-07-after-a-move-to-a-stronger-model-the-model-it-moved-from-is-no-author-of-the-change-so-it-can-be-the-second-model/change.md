@@ -1,9 +1,8 @@
 ---
 id: after-a-move-to-a-stronger-model-the-model-it-moved-from-is-no-author-of-the-change-so-it-can-be-the-second-model
-state: verifying
+state: accepted
 type: bug_fix
-base_commit: 54d6a6c777f51b4fa430511a5d7f049a8ba42083
----
+base_commit: 54d6a6c777f51b4fa430511a5d7f049a8ba42083---
 
 # After a move to a stronger model, the model it moved from is no author of the change, so it can be the second-model reviewer (AGENT-17.a, GITHUB-9.a)
 
