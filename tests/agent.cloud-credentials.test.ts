@@ -372,6 +372,59 @@ echo "planted"
   });
 });
 
+describe("SAFE-21.b: specsync-check, the verify lane's spec-check step, starts without cloud credentials (REQ-plugins-621)", () => {
+  const commands = join(import.meta.dir, "..", "plugins", "specsync", "commands.ts");
+  /** A GitHub token with no vendor shape: only the by-name env redaction catches it. */
+  const GH = "OWNER-GH-TOKEN-NO-VENDOR-SHAPE-0001";
+
+  /**
+   * The tier-0 `specsync-check` tool run by a process with the owner's env
+   * (a child process: Bun.which reads PATH as the process started).
+   */
+  async function specCheckAsOwner(f: Fixture, scenario: Scenario): Promise<{ ok: boolean; out: string }> {
+    const script =
+      `const { specsyncCommands } = await import(${JSON.stringify(commands)});` +
+      `const cmd = specsyncCommands.find((c) => c.name === "specsync-check");` +
+      `const r = await cmd.handler({ args: [], cwd: ${JSON.stringify(f.project)}, json: false, nonInteractive: true, allowlist: new Set() });` +
+      `process.stdout.write(JSON.stringify({ ok: r.ok, out: String(r.message ?? r.error ?? "") }));`;
+    const base: Record<string, string> = {};
+    for (const [k, v] of Object.entries(process.env)) {
+      if (typeof v === "string" && !(k in credentialEnv(f.home))) base[k] = v;
+    }
+    const proc = Bun.spawn([process.execPath, "--no-env-file", "-e", script], {
+      cwd: f.project,
+      env: { ...base, ...ownerEnv(f, scenario), GITHUB_TOKEN: GH, PATH: `${f.bin}:${process.env.PATH ?? ""}` },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    expect(code, stderr).toBe(0);
+    return JSON.parse(stdout) as { ok: boolean; out: string };
+  }
+
+  test("its fledge spec-check task and its plain specsync check see no cloud env or default file; output is scrubbed", async () => {
+    for (const viaFledge of [true, false]) {
+      for (const scenario of SCENARIOS) {
+        const f = makeFixture();
+        writeFileSync(join(f.bin, "specsync"), PROBE);
+        chmodSync(join(f.bin, "specsync"), 0o755);
+        // With a spec-check task the tool runs `fledge run spec-check`; without one, `specsync check`.
+        if (viaFledge) writeFileSync(join(f.project, "fledge.toml"), `[tasks.spec-check]\ncmd = "probe"\n`);
+        const r = await specCheckAsOwner(f, scenario);
+        const where = `${viaFledge ? "fledge" : "specsync"} ${scenario}: ${r.out}`;
+        expect(r.ok, where).toBe(true);
+        expectReleased(expectCloudFree(r.out, f, scenario));
+        // SAFE-6: the owner's GitHub token never comes back in the tool's output.
+        expect(r.out, where).not.toContain(GH);
+      }
+    }
+  });
+});
+
 describe("SAFE-21.b: the cloud credential family and its stand-ins (REQ-agent-621)", () => {
   test("isCloudCredentialEnvKey names the documented family and keeps ordinary settings", async () => {
     const mod = (await import("../src/agent/verify.ts")) as Record<string, unknown>;

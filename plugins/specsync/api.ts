@@ -11,6 +11,12 @@ import {
   statSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
+import {
+  buildVerifyEnv,
+  releaseCloudStandIns,
+  withoutCloudCredentials,
+} from "../../src/agent/verify.ts";
+import { redactSecretEnvValues, scrubSecrets } from "../../src/store/scrub.ts";
 import { isInsideRoot } from "../files/resolvePath.ts";
 
 const COMPANIONS = [
@@ -308,16 +314,35 @@ export async function spawnSpecsync(
       code: 127,
     };
   }
-  const proc = Bun.spawn([bin, ...args], {
-    cwd,
-    stdout: "pipe",
-    stderr: "pipe",
-    signal,
-  });
-  const code = await proc.exited;
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
-  return { success: code === 0, output: `${stdout}${stderr}`, code: code ?? 1 };
+  // SAFE-21.b: process.env now (CLI-5), without the owner's cloud credentials.
+  const env: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (typeof v === "string") env[k] = v;
+  }
+  return spawnWithoutCloud([bin, ...args], cwd, withoutCloudCredentials(env), signal);
+}
+
+/**
+ * Run a SpecSync / Fledge child with `env` (built by `withoutCloudCredentials`,
+ * SAFE-21.b) and collect its output, secret-scrubbed (SAFE-6) like
+ * `shell-exec`'s. The stand-in config dirs are released once it has exited.
+ */
+async function spawnWithoutCloud(
+  argv: string[],
+  cwd: string,
+  env: Record<string, string>,
+  signal?: AbortSignal,
+): Promise<SpawnResult> {
+  try {
+    const proc = Bun.spawn(argv, { cwd, env, stdout: "pipe", stderr: "pipe", signal });
+    const code = await proc.exited;
+    const stdout = await new Response(proc.stdout).text();
+    const stderr = await new Response(proc.stderr).text();
+    const output = scrubSecrets(redactSecretEnvValues(`${stdout}${stderr}`));
+    return { success: code === 0, output, code: code ?? 1 };
+  } finally {
+    releaseCloudStandIns(env);
+  }
 }
 
 /**
@@ -348,7 +373,9 @@ export function projectDefinesSpecCheckTask(cwd: string): boolean {
  * Merlin: `fledge run spec-check` when fledge is on PATH and the project
  * defines that task (Corvidinho's carries the CI Spec Sync strictness,
  * SPECSYNC-2/7); otherwise the local `specsync check` under the project's own
- * `.specsync` config.
+ * `.specsync` config. The Fledge task gets the verify lane's env
+ * (`buildVerifyEnv`), and either child starts without the owner's cloud
+ * credentials (SAFE-21.b); the output is secret-scrubbed (SAFE-6).
  */
 export async function runSpecCheck(
   cwd: string,
@@ -356,16 +383,9 @@ export async function runSpecCheck(
 ): Promise<SpawnResult> {
   const fledge = Bun.which("fledge");
   if (fledge && projectDefinesSpecCheckTask(cwd)) {
-    const proc = Bun.spawn([fledge, "run", "spec-check"], {
-      cwd,
-      stdout: "pipe",
-      stderr: "pipe",
-      signal,
-    });
-    const code = await proc.exited;
-    const stdout = await new Response(proc.stdout).text();
-    const stderr = await new Response(proc.stderr).text();
-    return { success: code === 0, output: `${stdout}${stderr}`, code: code ?? 1 };
+    // The verify lane's spec-check step: the lane's env (SAFE-6, SAFE-21.b).
+    const env = withoutCloudCredentials(buildVerifyEnv());
+    return spawnWithoutCloud([fledge, "run", "spec-check"], cwd, env, signal);
   }
   return spawnSpecsync(cwd, ["check"], signal);
 }
