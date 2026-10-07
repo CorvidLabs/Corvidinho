@@ -973,7 +973,7 @@ function globRegex(component: string): RegExp | null {
  * expands it (no leading-dot match without a literal `.`), at most
  * MAX_GLOB_MATCHES of them.
  */
-function globMatches(pattern: string, base: string): string[] {
+export function globMatches(pattern: string, base: string): string[] {
   const abs = isAbsolute(pattern);
   let paths = [abs ? "/" : base];
   for (const part of pattern.split("/")) {

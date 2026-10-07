@@ -745,6 +745,75 @@ the `bun -e` residual.
   read-only and settle cases pass on both. Restored: 11 of 11 pass.
 - `tests/agent.repo-ways.test.ts` (the `runTask` settle cases, REQ-agent-519)
   passes unchanged.
+## The shell and the runners never wipe or overwrite Corvidinho's store (REQ-plugins-404, SAFE-4)
+
+`tests/shell.store-guard.test.ts` through `runPlugin` (`shell-exec`
+allowlisted) and `runRunner`: temp dirs only; `HOME` is a temp home and
+`CORVIDINHO_DATA_DIR` its `~/.local/share/corvidinho`, seeded with two
+memories through `memory-store`; the worktree holds `store -> <data dir>`
+and a `fixture.db`; a fake `sqlite3` on PATH (bun:sqlite: database, then SQL
+from argv or stdin) stands in for the CLI, so a wipe that is not refused
+really happens. Every refused shell command starts with `touch spawned`, and
+each case reads the memories rows back. Each refusal is exit 2,
+`shell-exec refused (SAFE-4): …` naming `memory-forget or memory-override`
+and the owner's "DM card with Approve and a one-time code (SAFE-18.a" (no
+token), `data.rule` `SAFE-4` with its `script`, no
+marker and the rows unchanged:
+- `sqlite3` `DELETE` / `DROP TABLE` / `ATTACH … DELETE` on `corvidinho.db`
+  through `~`, the absolute path, `$CORVIDINHO_DATA_DIR`, `${HOME}`, the
+  worktree link and SQL piped in; `truncate -s 0` (path and link),
+  `cp /dev/null`, `dd of=$HOME/…`, `cp fixture.db` over it; `python3 -c`
+  with `sqlite3` (by `os.environ['CORVIDINHO_DATA_DIR']` and by path);
+  `sh -c '…'` and `timeout 30 truncate …`;
+- fail-closed: `$(cat where.txt)` targets for `sqlite3`, `truncate`, `cp`,
+  a variable the command sets, and `xargs truncate` ("can't be shown to stay
+  off Corvidinho's store");
+- `cp /dev/null` onto the `-wal`, `-shm` and `-journal` siblings;
+- looks that write or run a command (`xxd /dev/null <db>`, `tree -o <db>`,
+  `less -o <db>`, `rg --pre rm x <db>`) and code naming
+  `CORVIDINHO_DATA_DIR` carried to `python3 -c "$CODE"` in a prefix or
+  `export` assignment;
+- `sh wipe.sh` (an in-root script running `sqlite3` on the store, named in
+  the message) and `sqlite3 :memory: < wipe.sql` (an `ATTACH` of the store).
+`sqlite3 ./fixture.db 'DELETE FROM t'` runs and empties the fixture; `ls`,
+`stat`, `sha256sum` of the store, `cp` / `truncate` of worktree files,
+`python3 -c "print(1)"` and `echo` run. `rm <db>` and `echo > <db>` still
+refuse with SAFE-21 (`delete`, `edit`). `shellProdWhy` raises no Approve
+card for `kubectl get pods; sqlite3 <db> …` (`kubectl get pods` alone
+asks); `runnerProdWhy` likewise for `python -c` code with `kubectl` that
+also opens the DB. `python-exec` / `node-exec` refuse pre-spawn
+(`<runner> refused (SAFE-4): …`) the DB path, `CORVIDINHO_DATA_DIR` and the
+worktree link in their code, and the rows stay; `python-exec -c
+"print(40 + 2)"` runs. `memory-forget` / `memory-override` as the owner
+from the local CLI refuse with the bridge line ("only the running Discord
+bridge delivers it", "no typed-token fallback") and raise no card; in the
+owner's chat each raises one `destructive` DM card and, unanswered, expires
+with nothing changed; the rows stay (REQ-plugins-183). A unit test of `firstStoreHit` / `runnerStoreHit` with the
+default data dir (no `CORVIDINHO_DATA_DIR`): a SQL read on the store is
+refused too, `HOME` re-assigned and `~user` fail closed, a glob through the
+link, a tree copy / `tar -x -C` into a directory holding the store, `find ~
+… -exec truncate`, `find -L`, an expanding here-doc, an assignment or
+`export` of the store path, `gzip` of the DB; the worktree commands that
+don't name the store (`sqlite3 ./fixture.db`, a literal here-doc,
+`find . … -exec truncate`, `cp -r src/ dist/`, `tar -xf a.tar`,
+`CORVIDINHO_DATA_DIR=$(mktemp -d) bun test`, `git grep CORVIDINHO_DATA_DIR`,
+`cat <db> > /dev/null`, `du -sh`, a look-alike name, `rg -n` / `grep -rn`
+through the link, `export CORVIDINHO_DATA_DIR=/tmp/elsewhere`) run; a root inside the
+data dir counts only the DB file family; the residual (`python3 x.py` whose
+file names the DB, a path built with `pathlib`) is not refused.
+- Fail on base (86d68cd0's `plugins/shell/commands.ts`, `must-ask.ts`,
+  `footguns.ts` and `plugins/runners/commands.ts` swapped in,
+  `store-guard.ts` removed): 9 of 12 fail (every refusal case, both
+  no-Approve-card cases and the unit test); on base each wipe form ran and
+  left 0 memories rows or no `memories` table. The still-runs, SAFE-21-first
+  and memory-tool cases pass on both. Restored: 12 of 12 pass. With the
+  first draft's `store-guard.ts` (which let `xxd`, `tree`, `less`,
+  `rg --pre` and code in a variable through) the look-that-writes case
+  fails.
+- `tests/shell.*.test.ts`, `tests/runners.plugins.test.ts`,
+  `tests/*safe3a*.test.ts`, `tests/must-ask.*.test.ts` and
+  `tests/memory.plugins.test.ts` pass unchanged.
+
 - Follow-up to #372 (REQ-plugins-1818 modified), same file, "glob / brace
   patterns and an expanding or xargs-fed subcommand refuse too" (3 tests):
   through `shell-exec`, from a repo holding files named `specsync`,

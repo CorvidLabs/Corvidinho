@@ -13,6 +13,9 @@
  * (code), like `shell-exec`. The spawn cwd is pinned to the plugin cwd
  * (project root / task worktree); there is no cwd option.
  *
+ * Argv that names Corvidinho's own store or data dir is refused before the
+ * spawn (SAFE-4, `runnerStoreRefusal` in plugins/shell/store-guard.ts).
+ *
  * The child gets the verify lane's scrubbed env (no Discord config, GitHub
  * tokens, audit key, acting identity or LLM keys; src/agent/verify.ts),
  * without CDPATH / OLDPWD, like `shell-exec`, without the owner's GitHub
@@ -36,6 +39,7 @@ import { redactSecretEnvValues, scrubSecrets } from "../../src/store/scrub.ts";
 import type { PluginCommand, PluginHandlerResult } from "../../src/plugins/types.ts";
 import { spawnCapped } from "../fledge/spawn.ts";
 import { runnerProdWhy } from "../shell/must-ask.ts";
+import { runnerStoreRefusal } from "../shell/store-guard.ts";
 
 /** One language runner: command name, toolchain label, binaries tried in order. */
 export type RunnerSpec = {
@@ -186,6 +190,11 @@ export async function runRunner(opts: RunRunnerOptions): Promise<PluginHandlerRe
     };
   }
   const root = resolve(opts.cwd);
+  // SAFE-4: argv naming Corvidinho's own store is refused before the spawn;
+  // memory-forget / memory-override, behind the owner's DM card with a
+  // one-time code (SAFE-18.a), change it.
+  const store = runnerStoreRefusal(spec.name, opts.args, root, { env: opts.env ?? process.env });
+  if (store != null) return store;
   const timeoutMs = opts.timeoutMs ?? RUNNER_TIMEOUT_MS;
   const maxBytes = opts.maxOutputBytes ?? RUNNER_MAX_OUTPUT_BYTES;
   const argv = [bin, ...opts.args.map((a) => String(a))];
