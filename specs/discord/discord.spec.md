@@ -54,7 +54,6 @@ files:
   - src/memory/forget.ts
   - src/memory/rank.ts
   - src/memory/card.ts
-  - src/memory/confirm.ts
   - src/discord/approve-card.ts
   - src/discord/approval-cards.ts
   - src/approvals/store.ts
