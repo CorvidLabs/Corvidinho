@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "after-a-move-to-a-stronger-model-the-model-it-moved-from-is-no-author-of-the-change-so-it-can-be-the-second-model",
+  "slug": "after-a-move-to-a-stronger-model-the-model-it-moved-from-is-no-author-of-the-change-so-it-can-be-the-second-model",
+  "title": "After a move to a stronger model, the model it moved from is no author of the change, so it can be the second-model reviewer (AGENT-17.a, GITHUB-9.a)",
+  "description": "After a move to a stronger model, the model it moved from is no author of the change, so it can be the second-model reviewer (AGENT-17.a, GITHUB-9.a)",
+  "kind": "bug_fix",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "54d6a6c777f51b4fa430511a5d7f049a8ba42083",
+  "created_at": 1791332152,
+  "updated_at": 1791390088,
+  "affected_specs": [
+    "agent"
+  ],
+  "affected_paths": [
+    "src/agent/execute.ts",
+    "tests/agent.stall-escalate.test.ts"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "With CORVIDINHO_LLM_MODEL=fake-weak,fake-strong and the order fake-weak,fake-strong, a code-tier run whose weak model says Done. twice moves to fake-strong, which changes README.md; the run's review authors() is [fake-strong] only and resolveReviewer picks fake-weak (on main authors() is [fake-weak, fake-strong] and resolveReviewer is null, so no PR); in a worker whose lead's authors name fake-weak it stays an author after the move; tests/agent.stall-escalate.test.ts, the full suite and verify pass"
+  ],
+  "selected_artifacts": [
+    "context",
+    "testing",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

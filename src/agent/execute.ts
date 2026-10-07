@@ -846,10 +846,17 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
   // over), its delegate workers' and, in a worker, its lead's — so the
   // second-model reviewer of a PR it opens is none of them.
   const authors = new Set<string>(delegateDepthFromEnv(env) > 0 ? delegateAuthorsFromEnv(env) : []);
+  // AGENT-17 / GITHUB-9.a: authors a move to a stronger model never drops —
+  // the lead's, its workers' and each failover's (only a reply counts less).
+  const keptAuthors = new Set<string>(authors);
   const noteFallback = (hop: ModelFallback) => {
     fallbacks.push(hop);
     authors.add(hop.from);
-    if (hop.via) authors.add(hop.to);
+    keptAuthors.add(hop.from);
+    if (hop.via) {
+      authors.add(hop.to);
+      keptAuthors.add(hop.to);
+    }
     emit(opts.onEvent, { type: "Text", text: modelFallbackEventText(hop) });
     opts.onModelFallback?.(hop);
   };
@@ -862,7 +869,14 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
     onFallback: noteFallback,
     escalate: (kind) => {
       const next = moveToStronger(chain, order);
-      if (next.ok) movedTo = { from: next.from, to: next.to, kind };
+      if (next.ok) {
+        movedTo = { from: next.from, to: next.to, kind };
+        // GITHUB-9.a: a move only follows a run that changed nothing, so the
+        // stalled model wrote none of the change (and none was recorded yet):
+        // it is no author, and may be the second-model reviewer. A later
+        // reply from it makes it one again (`onModel`).
+        if (!keptAuthors.has(next.from)) authors.delete(next.from);
+      }
       return next;
     },
     onModel: (model) => {
@@ -876,7 +890,10 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
       }
     },
     onWorkerModels: (labels) => {
-      for (const m of labels) authors.add(m);
+      for (const m of labels) {
+        authors.add(m);
+        keptAuthors.add(m);
+      }
     },
   };
   // GITHUB-9: what github-pr-create gets for the second-model review — the
@@ -1762,14 +1779,25 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
           );
         }
       }
-      // GITHUB-9.a: a call that changed (or may have changed) the checkout —
-      // a state-changing result, a tool whose edits no result reports, a
-      // worker — makes the run's models its authors beyond this run.
-      if (
-        onStateChange &&
+      // A call whose edits no result reports: a tool that edits files
+      // unreported, or a worker that ran (a refusal carries no data) and may
+      // have run an allowlisted Fledge command, or left no result frame (a
+      // frame always carries `verified`), so no file it edited was reported
+      // (REQ-agent-502).
+      const editsUnreported =
         offered.has(name) &&
-        (changedState(name, result) || editsFilesUnreported(name) || name === DELEGATE_COMMAND_NAME)
-      ) {
+        (editsFilesUnreported(name) ||
+          (name === DELEGATE_COMMAND_NAME &&
+            result.data !== undefined &&
+            (workerEditsUnreported ||
+              typeof (result.data as { verified?: unknown }).verified !== "boolean")));
+      // GITHUB-9.a: a call that changed (or may have changed) the checkout —
+      // a state-changing result (a finished worker, or one that reported a
+      // changed file) or one whose edits no result reports — makes the run's
+      // models its authors beyond this run. AGENT-17 counts each of these as
+      // a change, so a run that moves to a stronger model has recorded none
+      // (a refused `delegate` ran no worker and records nothing).
+      if (onStateChange && offered.has(name) && (changedState(name, result) || editsUnreported)) {
         await onStateChange();
       }
       // SAFE-8 (REQ-agent-098): a flat-priced tool call (`web-search`, or
@@ -1806,18 +1834,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       for (const f of filesChangedFromToolData(result.data)) {
         filesChanged.add(f);
       }
-      if (
-        offered.has(name) &&
-        (editsFilesUnreported(name) ||
-          // A worker ran (a refusal carries no data) and may have run an
-          // allowlisted Fledge command, or it left no result frame (a frame
-          // always carries `verified`), so no file it edited was reported
-          // (REQ-agent-502).
-          (name === DELEGATE_COMMAND_NAME &&
-            result.data !== undefined &&
-            (workerEditsUnreported ||
-              typeof (result.data as { verified?: unknown }).verified !== "boolean")))
-      ) {
+      if (editsUnreported) {
         unreportedEditTools.add(name);
         // AGENT-17: remembered for every attempt of the run.
         stallGuard.changed();
