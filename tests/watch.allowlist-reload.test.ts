@@ -71,6 +71,9 @@ function ev(over: Partial<DetectedEvent> = {}): DetectedEvent {
     htmlUrl: `https://github.com/${REPO}/issues/7`,
     createdAt: "2026-10-06T12:00:00Z",
     isPullRequest: false,
+    // IDENTITY-12.a / REQ-watch-1202: [] = never edited; absent = unknown
+    // editors (community, no acting GitHub). Fixtures default to unedited.
+    textEditorIds: [],
     ...over,
   };
 }
