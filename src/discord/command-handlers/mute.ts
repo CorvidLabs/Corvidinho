@@ -1,70 +1,31 @@
 /**
- * Admin-shaped /mute /unmute (DISCORD-7).
- * Permission floor enforced in slash-dispatch via minPermission ADMIN.
+ * Admin-shaped /mute /unmute (DISCORD-7): aliases of `/admin mutes add` /
+ * `/admin mutes remove` (ADMIN-3.c part 2), served by the same audited helper
+ * (`applyMuteChange` in ./admin.ts — SAFE-5 rows `admin-mutes-add|remove`,
+ * fail closed without a trail).
+ * Permission floor enforced in slash-dispatch via minPermission ADMIN, and
+ * re-checked at handler time by the helper (ADMIN-4: a caller who is not
+ * ADMIN gets `not authorized` and an `admin-mutes-*` `denied` row).
  * DISCORD-6 / IDENTITY-2: /mute never targets the invoker or the configured
  * owner — a muted owner is not ADMIN, so /unmute would be refused until the
  * bridge restarts.
  */
 
-import { isOwnerDiscord } from "../../identity/owner.ts";
-import { muteUser, unmuteUser } from "../permissions.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
+import { applyMuteChange, MUTE_SELF_OR_OWNER_REFUSED } from "./admin.ts";
 
-/** Ephemeral refusal for /mute of yourself or the configured owner. */
-export const MUTE_SELF_OR_OWNER_REFUSED =
-  "You can't mute yourself or the owner — the owner would lose /unmute until the bridge restarts.";
-
-function targetUserId(interaction: SlashInteraction): string | null {
-  const raw = interaction.options.user;
-  if (typeof raw === "string" && raw.trim()) return raw.trim();
-  return null;
-}
+export { MUTE_SELF_OR_OWNER_REFUSED };
 
 export async function handleMuteCommand(
   ctx: SlashContext,
   interaction: SlashInteraction,
 ): Promise<void> {
-  const target = targetUserId(interaction);
-  if (!target) {
-    await interaction.reply({
-      content: "usage: /mute user:@someone",
-      ephemeral: true,
-    });
-    return;
-  }
-  if (target === interaction.userId || isOwnerDiscord(ctx.owner, target)) {
-    await interaction.reply({
-      content: MUTE_SELF_OR_OWNER_REFUSED,
-      ephemeral: true,
-    });
-    return;
-  }
-  const set = ctx.mutedUsers ?? new Set<string>();
-  muteUser(set, target);
-  ctx.mutedUsers = set;
-  await interaction.reply({
-    content: `Muted <@${target}> from bot interactions.`,
-    ephemeral: true,
-  });
+  await applyMuteChange(ctx, interaction, "add", "/mute");
 }
 
 export async function handleUnmuteCommand(
   ctx: SlashContext,
   interaction: SlashInteraction,
 ): Promise<void> {
-  const target = targetUserId(interaction);
-  if (!target) {
-    await interaction.reply({
-      content: "usage: /unmute user:@someone",
-      ephemeral: true,
-    });
-    return;
-  }
-  const set = ctx.mutedUsers ?? new Set<string>();
-  unmuteUser(set, target);
-  ctx.mutedUsers = set;
-  await interaction.reply({
-    content: `Unmuted <@${target}>.`,
-    ephemeral: true,
-  });
+  await applyMuteChange(ctx, interaction, "remove", "/unmute");
 }

@@ -59,6 +59,12 @@ function memoryInteraction(
   };
 }
 
+/** An in-memory SAFE-5 trail: hands out increasing seq numbers. */
+function stubAudit(): NonNullable<SlashContext["recordAudit"]> {
+  let seq = 0;
+  return () => ({ seq: ++seq });
+}
+
 function makeCtx(over: Partial<SlashContext> = {}): SlashContext {
   return {
     store: over.store ?? new SessionStore(),
@@ -73,6 +79,9 @@ function makeCtx(over: Partial<SlashContext> = {}): SlashContext {
     adminUserIds: over.adminUserIds,
     adminRoleIds: over.adminRoleIds,
     owner: over.owner,
+    // SAFE-5: /mute and /unmute are audited and fail closed without a trail
+    // (ADMIN-3.c part 2), so the fixture wires one.
+    recordAudit: over.recordAudit ?? stubAudit(),
     thinkingDebounceMs: 0,
     thinkingTickMs: 60_000,
   };

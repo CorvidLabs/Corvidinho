@@ -147,7 +147,8 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   (E.11) turns them off with the scheduler. See [`discord.md`](discord.md) "Daily briefings".
 - No owner, or a Discord id that is not a snowflake ⇒ **nobody is ADMIN** (IDENTITY-3).
   `doctor` shows `owner: configured: no`.
-- An owner who is muted (`/mute`, `DISCORD_MUTED_USER_IDS`) or on `[discord].deny_users` is not ADMIN.
+- An owner who is muted (`DISCORD_MUTED_USER_IDS`; `/admin mutes add` and `/mute` refuse the owner)
+  or on `[discord].deny_users` is not ADMIN.
 - `CORVIDINHO_DISCORD_ADMIN_USERS` / `_ROLES` grant nothing. The bridge logs a warning and
   `doctor` shows an `admin-lists` warning when they are set.
 - Owner-only today: `/mute`, `/unmute`, `/admin …`, `/announce channel`, `/schedule create|pause|resume|delete`,
@@ -685,7 +686,10 @@ Who is who in an allowlisted channel:
   holding a `deny_roles` role is refused (deny always wins). The owner changes the deny lists
   (Discord and GitHub) with `/admin deny add|remove` and the GitHub repo allow lists
   (`[github].orgs` / `repos`) with `/admin github add|remove` — owner-only, SAFE-5 audited,
-  live without a restart, never denying the owner (ADMIN-3.c). Once `users` or `roles` has
+  live without a restart, never denying the owner (ADMIN-3.c). Mutes: `/admin mutes add|remove`
+  (aliases `/mute` / `/unmute`, the same SAFE-5 audited helper; never the owner or yourself)
+  change the live mute set, which is in memory until the bridge restarts — a lasting block is
+  `/admin deny add user:`. Once `users` or `roles` has
   entries, only listed users, holders of a listed role and the owner pass (`/admin users add`
   warns when it adds the first user); with both empty, anyone in an allowlisted channel may
   chat. A refused chat message gets no reply, session or run; a refused slash command gets only

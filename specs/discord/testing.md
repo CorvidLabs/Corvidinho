@@ -1941,3 +1941,47 @@ main: this records Leif's round-17 decision (keep as built). Mutation checks:
 skipping the expired-ask clear in the bridge's continue path fails the five
 session cases; letting `ScheduleStore.openAsk` / `openRunAsk` drop an ask 30
 minutes after its run fails both schedule cases. Restored: 9 of 9 pass.
+## /admin mutes and the /mute /unmute aliases (REQ-discord-010/011 modified, ADMIN-3.c part 2)
+
+- `tests/discord.admin-mutes.test.ts` (12 cases; in-memory SQLite audit, the
+  real `/admin` handler, slash dispatcher and a dry-run bridge with a fake
+  gateway; no token, no network):
+  - Body: `/admin mutes add|remove` each take one required USER `user`;
+    `/mute` / `/unmute` stay; descriptions ≤ 100 characters.
+  - The owner's `/admin mutes add` mutes in the live set (the member's
+    `/status` gets `MUTED`), the ephemeral reply says until restart and points
+    to `/admin deny add user:`, rows `admin-mutes-add` `started` → `ok`
+    (surface `discord:admin`); `remove` unmutes with `admin-mutes-remove`
+    rows.
+  - `/mute` / `/unmute` write the same actions, outcomes and args digest as
+    `/admin mutes add|remove` for the same target.
+  - A mute of the owner (both spellings, a padded id included) or of the
+    caller (no owner configured) is refused with `MUTE_SELF_OR_OWNER_REFUSED`
+    and one `denied` row; the set is unchanged.
+  - Fail closed: a throwing trail and no trail refuse add, remove and both
+    aliases with `audit log unavailable (SAFE-5)`; the set is unchanged.
+  - Non-owner: refused at dispatch (`not authorized`, no row) and at the
+    `/admin` handler re-check (`denied` row).
+  - The `/mute` / `/unmute` handlers re-check ADMIN themselves: a non-owner
+    who reaches them (and anyone with no owner configured) gets
+    `not authorized` and one `denied` row with the `/admin` re-check's
+    digest, even for a target already muted; the set is unchanged.
+  - No change (already muted, not muted) and a missing user write no row.
+  - Unmuting a `DISCORD_MUTED_USER_IDS` seed says a restart mutes them again
+    and that the tool layer still gives their runs community tools until then.
+  - `/admin config show` counts mutes and lists `/admin mutes add|remove` as
+    updatable, in memory until restart.
+  - Bridge: an owner's `/admin mutes add` refuses the member's next @mention
+    (one `MUTED` notice, no run); `remove` serves it again; the bridge DB holds
+    the four `admin-mutes-*` rows.
+- `tests/discord.admin-reauth.test.ts` and `tests/discord.owner.test.ts`
+  (updated): their slash fixtures wire a `recordAudit` stub, since `/mute` and
+  `/unmute` now fail closed without a trail.
+- `tests/discord.admin-slash.test.ts` (updated): the `/admin` body now ends
+  with the `mutes` group (`add`, `remove`).
+- Fail on base (`origin/claude/m4-admin-lists-a2` 8aa502a, admin-lists-a):
+  with its `src/discord/command-handlers/{admin,mute}.ts` and
+  `src/discord/slash-commands.ts` swapped in, all 12 cases of
+  `tests/discord.admin-mutes.test.ts` fail; restored, 12 of 12 pass. With
+  the first pushed head's (c0cae98) `admin.ts` swapped in, the handler-time
+  re-check case and the seed-note case fail; restored, they pass.
