@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-44-admin-3-c-p1-404-safe-4-396-agent-18-a-follow-up-403-safe-18-a-409-personas-410-cos-briefing-412-package",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "38bbd2ed2fd5c2545d675af92fff260eac777863",
+  "contract_digest": "01c7303dec8707ce9dd967105c91ff81fc1bbf3febed14ab0babbecf12468406",
+  "execution_digest": "c611feaf778007ddd4f559bc41afc9d2b5dfaa70e18cff6e254ebb102a29f185",
+  "workspace_digest": "e8fde82e05327cbcda663ff4692f6fb3fb662fad7ca7baad66c20126e36c0b43",
+  "timestamp": 1791388660
+}

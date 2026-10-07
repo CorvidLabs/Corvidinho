@@ -1,6 +1,6 @@
 ---
 id: release-0-0-44-admin-3-c-p1-404-safe-4-396-agent-18-a-follow-up-403-safe-18-a-409-personas-410-cos-briefing-412-package
-state: implementing
+state: accepted
 type: operations
 base_commit: 9b1d0a5b2129c3daa8ce8ae0176a89855794b67d
 ---
