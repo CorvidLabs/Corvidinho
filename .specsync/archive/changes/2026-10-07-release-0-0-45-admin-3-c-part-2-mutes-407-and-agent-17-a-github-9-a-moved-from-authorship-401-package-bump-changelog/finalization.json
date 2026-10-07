@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-45-admin-3-c-part-2-mutes-407-and-agent-17-a-github-9-a-moved-from-authorship-401-package-bump-changelog",
+  "implementation_commit": "cd002a741b4d58386e7415b307cdc9618f155d77",
+  "implementation_tree": "9cb15db5d354efade6432be40727e9fae1bdad85",
+  "contract_digest": "fb46da91485c68964d81c21da73e207fa6f42850e9f034ff454f2c3f66387ade",
+  "workspace_digest": "ae7e5d15b1e293ae633d04e734214670834e56afa73c252eff73bb9958e604ce",
+  "closing_digest": null,
+  "review_digest": "ae7e5d15b1e293ae633d04e734214670834e56afa73c252eff73bb9958e604ce",
+  "finalization_digest": "tip-orphan-manual",
+  "timestamp": 1791390997,
+  "note": "tip-orphan archive after #423 squash (same class as #420/#421/#422)"
+}
