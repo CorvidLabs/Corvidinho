@@ -9,7 +9,8 @@ SAFE-4 is captured on main (`hi/safe.md`): "Destructive data ops (raw SQL
 wipes, memory deletes) need a two-phase confirm so a single confused tool
 call cannot erase the store." Nothing new is captured here. Memories already
 change only through `memory-forget` / `memory-override`, which take a
-two-phase confirm (REQ-plugins-011). Leif's SAFE-3 decision (2026-09-28
+two-phase confirm (REQ-plugins-011) — since SAFE-18.a (#409) the owner's DM
+card with Approve and a one-time code (REQ-plugins-183), no typed token. Leif's SAFE-3 decision (2026-09-28
 interview, round 2) offers the shell and the language runners to the owner's
 own talks, inside the talk's worktree, "with #233's clamp + SAFE-21 foot-gun
 refusals".

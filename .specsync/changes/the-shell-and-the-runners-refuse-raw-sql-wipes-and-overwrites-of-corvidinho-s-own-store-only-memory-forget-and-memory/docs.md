@@ -11,7 +11,9 @@ artifact: docs
   `shell-exec` / runner rows a merge left behind (SAFE-21.b and AGENT-18.a
   each added one) are folded into one row each, keeping every fact.
 - `docs/discord.md` Memory: the shell and runners never wipe or overwrite
-  the store; only the two-phase `memory-forget` / `memory-override` do.
+  the store; only `memory-forget` / `memory-override`, behind the owner's DM
+  card with Approve and a one-time code (SAFE-18.a), do. The SAFE-4 refusal
+  (`STORE_INSTEAD`) says the same.
 - `specs/plugins/plugins.spec.md`: purpose, public API, the SAFE-4 shell and
   runner paragraph with its residual, AUTONOMY-9 note, scenario, error
   rows, files list. README, STATUS and CHANGELOG are not made false by this

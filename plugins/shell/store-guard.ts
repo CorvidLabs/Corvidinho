@@ -4,10 +4,11 @@
  *
  * SAFE-4 ("Destructive data ops (raw SQL wipes, memory deletes) need a
  * two-phase confirm so a single confused tool call cannot erase the store")
- * is met for memories by `memory-forget` / `memory-override` and their
- * two-phase confirm (REQ-plugins-011). A shell or runner call has no second
- * phase, so a call on the store is refused before anything is spawned, with
- * those tools named instead.
+ * is met for memories by `memory-forget` / `memory-override`, which ask the
+ * owner on a DM card with Approve and a one-time code (SAFE-18.a, their
+ * two-phase confirm; REQ-plugins-011 / REQ-plugins-183). A shell or runner
+ * call has no second phase, so a call on the store is refused before anything
+ * is spawned, with those tools named instead.
  *
  * The store is the data dir `resolveDataDir` names (`CORVIDINHO_DATA_DIR`,
  * else `~/.local/share/corvidinho`) and everything in it — `corvidinho.db`
@@ -77,11 +78,11 @@ export type StoreGuardOptions = {
 /** One refusal: why, and the in-root script it was found in (null for the typed command). */
 export type StoreHit = { why: string; script: string | null };
 
-/** What to do instead: the two-phase memory tools. */
+/** What to do instead: the memory tools, which ask the owner on a DM card (SAFE-18.a). */
 export const STORE_INSTEAD =
-  "change or forget stored memories only with memory-forget or memory-override, whose " +
-  "two-phase confirm (a token the owner sends back in a new message) keeps a single call " +
-  "from erasing the store";
+  "change or forget stored memories only with memory-forget or memory-override, which ask " +
+  "the owner on a DM card with Approve and a one-time code (SAFE-18.a, the SAFE-4 two-phase " +
+  "confirm), so a single call cannot erase the store";
 
 /** The DB file and the siblings SQLite keeps beside it. */
 const DB_SUFFIXES = ["", "-wal", "-shm", "-journal"];

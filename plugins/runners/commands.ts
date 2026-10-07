@@ -191,7 +191,8 @@ export async function runRunner(opts: RunRunnerOptions): Promise<PluginHandlerRe
   }
   const root = resolve(opts.cwd);
   // SAFE-4: argv naming Corvidinho's own store is refused before the spawn;
-  // memory-forget / memory-override, with their two-phase confirm, change it.
+  // memory-forget / memory-override, behind the owner's DM card with a
+  // one-time code (SAFE-18.a), change it.
   const store = runnerStoreRefusal(spec.name, opts.args, root, { env: opts.env ?? process.env });
   if (store != null) return store;
   const timeoutMs = opts.timeoutMs ?? RUNNER_TIMEOUT_MS;

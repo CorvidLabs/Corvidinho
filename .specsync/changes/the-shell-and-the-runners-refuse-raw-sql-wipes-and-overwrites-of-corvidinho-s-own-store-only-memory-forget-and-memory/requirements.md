@@ -10,8 +10,10 @@ artifact: requirements
   cannot erase the store." Built here: the shell and runner half — a shell
   or runner call has no second phase, so it never wipes or overwrites the
   store; the only delete path stays the two-phase `memory-forget` /
-  `memory-override`.
-- Kept: REQ-plugins-011 (two-phase forget / override, unchanged),
+  `memory-override`, since SAFE-18.a (#409) the owner's DM card with Approve
+  and a one-time code.
+- Kept: REQ-plugins-011 / REQ-plugins-183 (forget / override by id ask the
+  owner on a DM card with a one-time code, unchanged here),
   SAFE-3 / SAFE-3.a (the clamp, owner-only shell and runners), SAFE-21 /
   SAFE-21.a / SAFE-21.b (foot-guns with their families, order and messages;
   credential-free env), AGENT-18.a (lifecycle refusal first), AUTONOMY-9

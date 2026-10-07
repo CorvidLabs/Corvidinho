@@ -2718,8 +2718,9 @@ SAFE-4 in the shell and the language runners (captured on main,
 `hi/safe.md`: "Destructive data ops (raw SQL wipes, memory deletes) need a
 two-phase confirm so a single confused tool call cannot erase the store.").
 Memories change only through `memory-forget` / `memory-override` and their
-two-phase confirm (REQ-plugins-011); a shell or runner call has no second
-phase, so it SHALL NOT wipe or overwrite the store.
+two-phase confirm, since SAFE-18.a the owner's DM card with Approve and a
+one-time code (REQ-plugins-011 / REQ-plugins-183); a shell or runner call has
+no second phase, so it SHALL NOT wipe or overwrite the store.
 
 `shell-exec` SHALL refuse a command that may wipe or overwrite Corvidinho's
 own store after the SAFE-21 check (REQ-plugins-494) and before the SAFE-3
@@ -2728,7 +2729,8 @@ clamp and any spawn: ok=false, exit 2, `data.refused` true with
 typed command), and the message
 `shell-exec refused (SAFE-4): <why>[ (in SCRIPT)]; <STORE_INSTEAD>`, where
 `STORE_INSTEAD` says to change or forget memories only with
-`memory-forget` or `memory-override` and their two-phase confirm. The store
+`memory-forget` or `memory-override`, which ask the owner on a DM card with
+Approve and a one-time code (SAFE-18.a, the SAFE-4 two-phase confirm). The store
 SHALL be the data dir `resolveDataDir` names (`CORVIDINHO_DATA_DIR`, else
 `~/.local/share/corvidinho`) and everything in it — `corvidinho.db` and its
 `-wal` / `-shm` / `-journal` siblings included — as written and with
@@ -2793,13 +2795,13 @@ expanded path (as for the SAFE-21 edit family). No new command, slash
 command, env var, must-ask class, config key or schema.
 
 Acceptance Criteria
-- With `CORVIDINHO_DATA_DIR` a temp store seeded through `memory-store`, `shell-exec` refuses with exit 2, `shell-exec refused (SAFE-4): …`, `data.rule` `SAFE-4` and the two-phase `memory-forget` / `memory-override` named instead, spawning nothing, and the memories rows read back unchanged: `sqlite3` `DELETE` / `DROP TABLE` / `ATTACH` on `corvidinho.db` through `~`, `$HOME`, `${HOME}`, `$CORVIDINHO_DATA_DIR`, the absolute path or a worktree symlink to the data dir (SQL as an argument or piped in), `truncate -s 0`, `cp /dev/null`, `cp fixture.db` over it, `dd of=`, `python3 -c` with `sqlite3`, `sh -c`, `timeout`, and an in-root script run with `sh wipe.sh` (named in the message) or SQL read from `< wipe.sql`.
+- With `CORVIDINHO_DATA_DIR` a temp store seeded through `memory-store`, `shell-exec` refuses with exit 2, `shell-exec refused (SAFE-4): …`, `data.rule` `SAFE-4` and `memory-forget` / `memory-override` with the owner's DM card and one-time code named instead, spawning nothing, and the memories rows read back unchanged: `sqlite3` `DELETE` / `DROP TABLE` / `ATTACH` on `corvidinho.db` through `~`, `$HOME`, `${HOME}`, `$CORVIDINHO_DATA_DIR`, the absolute path or a worktree symlink to the data dir (SQL as an argument or piped in), `truncate -s 0`, `cp /dev/null`, `cp fixture.db` over it, `dd of=`, `python3 -c` with `sqlite3`, `sh -c`, `timeout`, and an in-root script run with `sh wipe.sh` (named in the message) or SQL read from `< wipe.sql`.
 - A target only the running shell can resolve (`$(cat where.txt)`, a variable the command sets, `xargs` input) is refused fail-closed; the `-wal` / `-shm` / `-journal` siblings are refused like the DB.
 - `xxd /dev/null <db>`, `tree -o <db>`, `less -o <db>`, `rg --pre rm x <db>`, and `CODE='…CORVIDINHO_DATA_DIR…'; python3 -c "$CODE"` (also with `export CODE=…`) are refused and the rows stay; `rg -n` / `grep -rn` of the store and `export CORVIDINHO_DATA_DIR=<elsewhere>` are not.
 - `python-exec` and `node-exec` refuse pre-spawn with `<runner> refused (SAFE-4): …` argv that names the DB path, `CORVIDINHO_DATA_DIR` or a worktree link to the data dir, and the rows stay; `python-exec ["-c","print(40 + 2)"]` runs.
 - `sqlite3 ./fixture.db 'DELETE FROM t'` in the worktree changes the fixture; `ls`, `stat`, `sha256sum` of the store, `cp` / `truncate` of worktree files and `python3 -c "print(1)"` run; `rm <store db>` and `echo > <store db>` still refuse under SAFE-21 (delete, edit).
 - `shellProdWhy` / `runnerProdWhy` return null for a refused call that also names `kubectl` (non-null without the store part).
-- `memory-forget` / `memory-override` phase 1 still only issues a confirm token and the row stays (REQ-plugins-011).
+- `memory-forget` / `memory-override` still change nothing without the owner's Approve + one-time code: the local CLI raises no card, and in the owner's chat an unanswered card changes nothing; the rows stay (REQ-plugins-183).
 - `tests/shell.store-guard.test.ts` fails on the base sources and passes after.
 
 ### REQ-plugins-183

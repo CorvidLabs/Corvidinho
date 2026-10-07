@@ -48,7 +48,8 @@ artifact: design
 - Alternatives ruled out: dropping `HOME` / `CORVIDINHO_DATA_DIR` from the
   child env (an absolute path still reaches the store, and tools need
   `HOME`); a must-ask card (no new must-ask class; SAFE-4 asks for a
-  two-phase confirm, which the memory tools already have); telling SQL reads
+  two-phase confirm, which the memory tools already have: the owner's DM
+  card with a one-time code, SAFE-18.a); telling SQL reads
   from writes (refused for both instead, stated in the spec); reading
   interpreter script files (Corvidinho's own sources and tests name the data
   dir, so `bun test` would be refused; stated residual).

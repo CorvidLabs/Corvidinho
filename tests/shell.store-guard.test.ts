@@ -2,8 +2,9 @@
  * SAFE-4 (REQ-plugins-404): the shell and the language runners never wipe or
  * overwrite Corvidinho's own store. A shell or runner call has no second
  * phase, so a raw-SQL wipe, an overwrite or a truncate of the store is
- * refused before anything is spawned; memory-forget / memory-override keep
- * their two-phase confirm (REQ-plugins-011).
+ * refused before anything is spawned; memory-forget / memory-override stay
+ * the way to change memories, behind the owner's DM card with Approve and a
+ * one-time code (SAFE-18.a, the SAFE-4 two-phase confirm; REQ-plugins-183).
  *
  * Temp dirs only: HOME is a temp home and CORVIDINHO_DATA_DIR its
  * `~/.local/share/corvidinho`, seeded with memories through memory-store;
@@ -27,7 +28,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { setConfirmTurnForTests } from "../src/memory/index.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { clearRegistry } from "../src/plugins/registry.ts";
 import { runPlugin } from "../src/plugins/run.ts";
@@ -41,6 +41,10 @@ const ENV_KEYS = [
   "CORVIDINHO_ACTING_DISCORD_USER_ID",
   "CORVIDINHO_ACTING_IS_ADMIN",
   "CORVIDINHO_ACTING_CONFIRM_TOKENS",
+  "CORVIDINHO_ACTING_ROLE",
+  "CORVIDINHO_ACTING_SURFACE",
+  "CORVIDINHO_DISCORD_SESSION_ID",
+  "CORVIDINHO_DISCORD_REPLY_CHANNEL_ID",
   "CORVIDINHO_OWNER_DISCORD_ID",
   "CORVIDINHO_MEMORY_INMEM",
 ] as const;
@@ -128,7 +132,10 @@ beforeEach(async () => {
   delete process.env.CORVIDINHO_OWNER_DISCORD_ID;
   delete process.env.CORVIDINHO_MEMORY_INMEM;
   delete process.env.CORVIDINHO_ACTING_CONFIRM_TOKENS;
-  setConfirmTurnForTests(() => "turn-1");
+  delete process.env.CORVIDINHO_ACTING_ROLE;
+  delete process.env.CORVIDINHO_ACTING_SURFACE;
+  delete process.env.CORVIDINHO_DISCORD_SESSION_ID;
+  delete process.env.CORVIDINHO_DISCORD_REPLY_CHANNEL_ID;
   clearRegistry();
   loadBuiltins();
   for (const [user, key, content] of [
@@ -150,7 +157,6 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-  setConfirmTurnForTests(null);
   for (const k of ENV_KEYS) {
     if (saved[k] === undefined) delete process.env[k];
     else process.env[k] = saved[k];
@@ -175,7 +181,8 @@ async function expectStoreRefused(command: string, script: string | null = null)
   expect({ command, ok: result.ok, exitCode: result.exitCode }).toEqual({ command, ok: false, exitCode: 2 });
   expect(msg).toStartWith("shell-exec refused (SAFE-4): ");
   expect(msg).toContain("memory-forget or memory-override");
-  expect(msg).toContain("two-phase confirm");
+  expect(msg).toContain("ask the owner on a DM card with Approve and a one-time code (SAFE-18.a");
+  expect(msg).not.toContain("token");
   const d = result.data as Refused | undefined;
   expect(d?.refused).toBe(true);
   expect(d?.rule).toBe("SAFE-4");
@@ -356,18 +363,43 @@ describe("SAFE-4: the language runners refuse argv naming the store (REQ-plugins
   });
 });
 
-describe("SAFE-4: memory-forget / memory-override keep their two-phase confirm (REQ-plugins-011)", () => {
-  test("phase 1 only issues a token; the row stays until a later turn confirms", async () => {
+describe("SAFE-4: memory-forget / memory-override ask the owner on a DM card (SAFE-18.a / REQ-plugins-183)", () => {
+  test("no Approve + one-time code, no change: the local CLI raises no card; the owner's chat only raises the card", async () => {
+    const { setMemoryCardTestHooks } = await import("../src/memory/card.ts");
     process.env.CORVIDINHO_OWNER_DISCORD_ID = OWNER;
     const id = (seeded[0] as { id: string }).id;
+    const call = (name: string) =>
+      runPlugin({
+        name,
+        args: name === "memory-forget" ? ["--id", id] : ["--id", id, "rewritten"],
+        nonInteractive: true,
+        allowlist: [name],
+      });
+    // The local CLI (no conversation for the bridge to deliver a card to): refused, no card.
     actAs(OWNER, true);
     for (const name of ["memory-forget", "memory-override"]) {
-      const args = name === "memory-forget" ? ["--id", id] : ["--id", id, "rewritten"];
-      const phase1 = await runPlugin({ name, args, nonInteractive: true, allowlist: [name] });
-      expect({ name, ok: phase1.ok }).toEqual({ name, ok: true });
-      expect((phase1.data as { pending?: boolean }).pending).toBe(true);
-      expect(typeof (phase1.data as { confirmToken?: string }).confirmToken).toBe("string");
+      const r = await call(name);
+      expect({ name, ok: r.ok }).toEqual({ name, ok: false });
+      expect(r.error).toContain("only the running Discord bridge delivers it");
+      expect(r.error).toContain("no typed-token fallback");
     }
+    // The owner's chat: the call raises one destructive DM card and waits; unanswered, nothing changes.
+    process.env.CORVIDINHO_ACTING_ROLE = "owner";
+    process.env.CORVIDINHO_ACTING_SURFACE = "chat";
+    process.env.CORVIDINHO_DISCORD_SESSION_ID = "sess_storeguard0001";
+    process.env.CORVIDINHO_DISCORD_REPLY_CHANNEL_ID = "100000000000000001";
+    const cards: { kind: string; class: string }[] = [];
+    setMemoryCardTestHooks({ ttlMs: 50, pollMs: 5, onRequest: (req) => cards.push({ kind: req.kind, class: req.class }) });
+    try {
+      for (const name of ["memory-forget", "memory-override"]) {
+        const r = await call(name);
+        expect({ name, ok: r.ok }).toEqual({ name, ok: false });
+        expect((r.data as { outcome?: string }).outcome).toBe("expired");
+      }
+    } finally {
+      setMemoryCardTestHooks({});
+    }
+    expect(cards.map((c) => c.class)).toEqual(["destructive", "destructive"]);
     actAs(undefined);
     expect(rows()).toEqual(seeded);
   });

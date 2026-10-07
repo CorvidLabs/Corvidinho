@@ -13,7 +13,7 @@ artifact: plan
    `runRunner`, `shellProdWhy` and `runnerProdWhy`.
 4. `tests/shell.store-guard.test.ts`: each form against a temp store with
    the rows read back; fail-closed, siblings, scripts, still-runs, SAFE-21
-   first, no Approve card, runners, two-phase memory tools, unit cases and
+   first, no Approve card, runners, memory tools behind the owner's DM card, unit cases and
    the residual. Prove it fails on the base sources.
 5. Spec prose, delta, module testing evidence, docs (DISCORD-GO-LIVE.md
    shell and runner rows, discord.md memory section).

@@ -818,14 +818,15 @@ aliases (which AUTONOMY-9 does read), nor a copy of the binary under another
 name or a link made by the same command.
 
 SAFE-4 (REQ-plugins-404): memories change only through `memory-forget` /
-`memory-override` and their two-phase confirm (REQ-plugins-011); a shell or
+`memory-override` and their two-phase confirm, the owner's DM card with
+Approve and a one-time code (SAFE-18.a, REQ-plugins-183); a shell or
 runner call has no second phase, so after the SAFE-21 check and before the
 clamp `shell-exec` asks `storeRefusal` (`plugins/shell/store-guard.ts`) and
 refuses a command that may wipe or overwrite Corvidinho's own store: exit 2,
 nothing spawned, `shell-exec refused (SAFE-4): <why>[ (in SCRIPT)];
 <STORE_INSTEAD>` (change or forget memories only with `memory-forget` or
-`memory-override`, whose two-phase confirm keeps a single call from erasing
-the store), `data.rule` `SAFE-4`, `data.script`. The store is the data dir
+`memory-override`, which ask the owner on a DM card with Approve and a
+one-time code, so a single call cannot erase the store), `data.rule` `SAFE-4`, `data.script`. The store is the data dir
 `resolveDataDir` names (`CORVIDINHO_DATA_DIR`, else
 `~/.local/share/corvidinho`) and everything in it, `corvidinho.db` and its
 `-wal` / `-shm` / `-journal` siblings included, as written and with symlinks
@@ -1248,7 +1249,7 @@ command line.
 
 - **Given** builtins loaded, `shell-exec` and the runners allowlisted, and the store (`CORVIDINHO_DATA_DIR`, else `~/.local/share/corvidinho`) holding memories
 - **When** the agent runs `shell-exec` with `sqlite3 ~/.local/share/corvidinho/corvidinho.db "DELETE FROM memories"`, `sqlite3 store/corvidinho.db 'DROP TABLE memories'` through a worktree link to the data dir, `truncate -s 0 "$CORVIDINHO_DATA_DIR/corvidinho.db"`, `cp /dev/null <db>`, `dd of=<db>` or `python3 -c` with `sqlite3` on it, or `node-exec` / `python-exec` with argv naming the DB or `CORVIDINHO_DATA_DIR`
-- **Then** each fails with exit 2 and `… refused (SAFE-4): …; change or forget stored memories only with memory-forget or memory-override, whose two-phase confirm …`; nothing is spawned and the memories rows are unchanged; `sqlite3 ./fixture.db 'DELETE FROM t'` in the worktree and `ls` of the data dir still run, and `rm <db>` is still a SAFE-21 delete
+- **Then** each fails with exit 2 and `… refused (SAFE-4): …; change or forget stored memories only with memory-forget or memory-override, which ask the owner on a DM card with Approve and a one-time code …`; nothing is spawned and the memories rows are unchanged; `sqlite3 ./fixture.db 'DELETE FROM t'` in the worktree and `ls` of the data dir still run, and `rm <db>` is still a SAFE-21 delete
 
 ### Scenario: shell-exec starts without GitHub or git credentials (SAFE-21.a)
 
@@ -1462,7 +1463,7 @@ command line.
 | shell-exec deletes or moves outside the worktree (`rm`, `rmdir`, `unlink`, `shred`, `mv`, `find -delete` / `-exec rm`, `ln -f`, `git worktree remove` / `prune`), deletes the worktree itself, or names an expanded / input-fed / dot-matching target, in the command or an in-root script | Refuse (exit 2, SAFE-21 delete); no spawn (REQ-plugins-494) |
 | shell-exec reads a secret (secret path, host credential store, Corvidinho env / allowlist file or config dir, `/proc/<pid>/environ`, credential env var, `gh auth token`, `git credential`, ssh family) or re-points git / gh at credentials, in the command or an in-root script | Refuse (exit 2, SAFE-21 secret); no spawn (REQ-plugins-494) |
 | shell-exec runs `specsync change approve` / `review` / `finalize` / `ship` (any repo; behind a wrapper, package runner, path or link, in `-c` / `eval` / `$(…)`, or in an in-root script it runs), or a `change` step that expands or that `xargs` supplies | Refuse (exit 2, AGENT-18.a with `HUMAN_LIFECYCLE_LINE`); no spawn, no Approve card (REQ-plugins-1818) |
-| shell-exec runs a SQL client on Corvidinho's store (reads too), or names the store or its data dir in a non-read-only command (`xxd`, `tree`, `less` and `rg --pre` included), assignment, redirection or code (code put in a variable included; through `~`, `$HOME`, `$CORVIDINHO_DATA_DIR`, an env variable or a symlink), in the command or an in-root script | Refuse (exit 2, SAFE-4 naming the two-phase memory-forget / memory-override); no spawn, no Approve card (REQ-plugins-404) |
+| shell-exec runs a SQL client on Corvidinho's store (reads too), or names the store or its data dir in a non-read-only command (`xxd`, `tree`, `less` and `rg --pre` included), assignment, redirection or code (code put in a variable included; through `~`, `$HOME`, `$CORVIDINHO_DATA_DIR`, an env variable or a symlink), in the command or an in-root script | Refuse (exit 2, SAFE-4 naming memory-forget / memory-override and the owner's DM card with a one-time code); no spawn, no Approve card (REQ-plugins-404) |
 | shell-exec gives a SQL client, or a `truncate` / `fallocate` / `cp` / `install` / `rsync` / `dd of=` / `tar -x` / `unzip` target, an expansion other than `~` / `$HOME` / `$CORVIDINHO_DATA_DIR`, `xargs` input, a pattern or `find` that can reach the store, or a tree destination holding it | Refuse fail-closed (exit 2, SAFE-4); no spawn (REQ-plugins-404) |
 | node-exec / python-exec / cargo-exec argv names Corvidinho's store or its data dir (text, `CORVIDINHO_DATA_DIR`, or a path leading into it) | Refuse (exit 2, `<runner> refused (SAFE-4)`); no spawn, no Approve card (REQ-plugins-404) |
 | shell-exec or a runner child looks for GitHub / git credentials | None: tokens, askpass, ssh agent dropped; git reads no global / system config, repo helper reset, no prompt, key-less ssh; gh config dir empty (SAFE-21.a, REQ-plugins-495) |

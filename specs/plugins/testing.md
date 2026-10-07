@@ -757,7 +757,8 @@ from argv or stdin) stands in for the CLI, so a wipe that is not refused
 really happens. Every refused shell command starts with `touch spawned`, and
 each case reads the memories rows back. Each refusal is exit 2,
 `shell-exec refused (SAFE-4): …` naming `memory-forget or memory-override`
-and their "two-phase confirm", `data.rule` `SAFE-4` with its `script`, no
+and the owner's "DM card with Approve and a one-time code (SAFE-18.a" (no
+token), `data.rule` `SAFE-4` with its `script`, no
 marker and the rows unchanged:
 - `sqlite3` `DELETE` / `DROP TABLE` / `ATTACH … DELETE` on `corvidinho.db`
   through `~`, the absolute path, `$CORVIDINHO_DATA_DIR`, `${HOME}`, the
@@ -784,9 +785,11 @@ asks); `runnerProdWhy` likewise for `python -c` code with `kubectl` that
 also opens the DB. `python-exec` / `node-exec` refuse pre-spawn
 (`<runner> refused (SAFE-4): …`) the DB path, `CORVIDINHO_DATA_DIR` and the
 worktree link in their code, and the rows stay; `python-exec -c
-"print(40 + 2)"` runs. `memory-forget` / `memory-override` phase 1 as the
-owner still only returns a pending confirm token, and the row stays
-(REQ-plugins-011). A unit test of `firstStoreHit` / `runnerStoreHit` with the
+"print(40 + 2)"` runs. `memory-forget` / `memory-override` as the owner
+from the local CLI refuse with the bridge line ("only the running Discord
+bridge delivers it", "no typed-token fallback") and raise no card; in the
+owner's chat each raises one `destructive` DM card and, unanswered, expires
+with nothing changed; the rows stay (REQ-plugins-183). A unit test of `firstStoreHit` / `runnerStoreHit` with the
 default data dir (no `CORVIDINHO_DATA_DIR`): a SQL read on the store is
 refused too, `HOME` re-assigned and `~user` fail closed, a glob through the
 link, a tree copy / `tar -x -C` into a directory holding the store, `find ~
@@ -804,7 +807,7 @@ file names the DB, a path built with `pathlib`) is not refused.
   `store-guard.ts` removed): 9 of 12 fail (every refusal case, both
   no-Approve-card cases and the unit test); on base each wipe form ran and
   left 0 memories rows or no `memories` table. The still-runs, SAFE-21-first
-  and two-phase cases pass on both. Restored: 12 of 12 pass. With the
+  and memory-tool cases pass on both. Restored: 12 of 12 pass. With the
   first draft's `store-guard.ts` (which let `xxd`, `tree`, `less`,
   `rg --pre` and code in a variable through) the look-that-writes case
   fails.
