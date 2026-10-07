@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 104
+version: 105
 status: draft
 files:
   - src/discord/types.ts
@@ -77,6 +77,8 @@ files:
   - tests/memory.private-view.test.ts
   - src/discord/work-store.ts
   - src/discord/message-router.ts
+  - src/discord/new-topic.ts
+  - tests/discord.new-topic.test.ts
   - tests/discord.actor-gate.test.ts
   - tests/discord.forward-channel.test.ts
   - tests/discord.thread-deny.test.ts
