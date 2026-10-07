@@ -587,16 +587,19 @@ memories SHALL be refused without leaking the other user’s content
 (MEMORY-ACL-2). Soft-delete MAY retain audit fields (`deleted_at`,
 `deleted_by_user_id`). The one other forget path is a person's own forget
 request, carried out only once the owner approves it on a card
-(MEMORY-ACL-6, REQ-discord-101).
+(MEMORY-ACL-6, REQ-discord-101). The owner's own forget and override by id
+ask on the owner's `memory` DM card with the one-time code (SAFE-18.a,
+REQ-discord-183 / REQ-plugins-183).
 
 The Discord agent spawn SHALL always overwrite `CORVIDINHO_ACTING_DISCORD_USER_ID`
 (empty when the run has no acting user) and `CORVIDINHO_ACTING_IS_ADMIN`, so a
 value in the bridge's own environment never leaks into a spawned run. Memory
 plugins SHALL read identity only from that env, never from argv
 (REQ-plugins-011). The spawn SHALL run non-interactive
-(`CORVIDINHO_NON_INTERACTIVE=1`, SAFE-1 / CLI-3) and pass only the confirm
-tokens found in the human's message as `CORVIDINHO_ACTING_CONFIRM_TOKENS`
-(SAFE-4). Re-storing an existing memory key SHALL keep the prior content as a
+(`CORVIDINHO_NON_INTERACTIVE=1`, SAFE-1 / CLI-3) and always clear
+`CORVIDINHO_ACTING_CONFIRM_TOKENS`, like the WATCH spawn: since SAFE-18.a a
+typed confirm token counts for nothing, even when the human's message holds
+one. Re-storing an existing memory key SHALL keep the prior content as a
 soft-deleted row (retrievable by ADMIN) rather than overwrite it, so an update
 is never a non-admin forget path (MEMORY-ACL-4).
 
@@ -615,11 +618,12 @@ Acceptance Criteria
 - Admin forget soft-deletes with audit fields; refuse path leaks no content.
 - No on-chain memory; no new slash command; no ProcessManager.
 - Bridge opens MemoryStore on shared DB; package version bumped for ship.
-- Discord spawn env carries the dispatching actor, or an empty actor, never an inherited one; it is non-interactive and carries only human-typed confirm tokens.
+- Discord spawn env carries the dispatching actor, or an empty actor, never an inherited one; it is non-interactive and carries no confirm token, even one the human typed (SAFE-18.a).
 - Re-storing a key soft-deletes the prior row instead of overwriting it.
 - Fixture tests + SpecSync + fledge verify green.
 - The profile and private-note categories are accepted; a default recall leaves private notes out.
 - A declared person's rows use the `person:<id>` scope and a project's the `project:<key>` scope (REQ-discord-101).
+- The owner's forget / override by id asks on the `memory` DM card (REQ-discord-183).
 
 ### REQ-discord-022
 
@@ -826,11 +830,14 @@ Acceptance Criteria
 
 Discord call sites that spawn an agent run on behalf of a human (message
 path, `/session start`, `/work`) SHALL pass the human's own words as
-`humanText`, separate from the memory/image-enriched prompt. SAFE-4 memory
-confirm tokens SHALL be taken only from `humanText`; scheduler runs pass none.
+`humanText`, separate from the memory/image-enriched prompt. No confirm
+token SHALL reach a run from either: since SAFE-18.a the owner's memory
+forget and override by id ask on a DM card (REQ-discord-183), and the spawn
+always clears `CORVIDINHO_ACTING_CONFIRM_TOKENS` (REQ-discord-021);
+scheduler runs pass no `humanText`.
 
 Acceptance Criteria
-- A confirm token present only in the enriched prompt (e.g. recalled memory) is not passed as human-supplied.
+- A confirm token in the human's message, or only in the enriched prompt (e.g. recalled memory), is not passed to the run.
 - Bridge, `/session start` and `/work` pass `humanText`.
 
 ### REQ-discord-087
@@ -1348,6 +1355,25 @@ stub or its Choose button (DISCORD-ASK-5). A substantive continue then runs
 the agent as before, and an explicit cancel still clears every open ask with
 the short ack and no agent run.
 
+"Once a session question's buttons expire, the session stops waiting and my
+next message runs normally; a schedule's questions still wait until answered"
+(AUTONOMY-6.b, captured with `hi` in this change from Leif's 2026-09-28
+interview, round 17: keep as built). Past its ~30 minutes
+(`ASK_BUTTON_TTL_MS` from when the ask is stored, DISCORD-ASK-5), a session's
+button ask (chat, `/work`, `/session start` and their resumes) SHALL NOT keep
+the session waiting: by the rule above it is dropped before the thin-reply
+gate, so the requester's next message that is not an explicit cancel, a thin
+reply included, SHALL run the agent as ordinary chat with no prior-question
+block; only a thin reply, and only while an earlier button ask of the session
+is still live, restates that earlier ask instead (SESSION-MULTI-3). The ask
+is stored with its `expiresAt`, so this holds across a bridge restart. Inside
+the window a thin reply SHALL still restate the live ask (AUTONOMY-5/6). A
+free-text ask is unchanged (its question stays open for a reply after its
+Answer button stops, DISCORD-ASK-4.a), and so is a cancel sent after the
+expiry (the short ack, no run). Schedule asks never take this path
+(REQ-discord-045, REQ-discord-606). No new env var, config key, slash
+command, table or column.
+
 While a run of the session is in flight, a continue whose whole text is
 'cancel' (or 'stop') SHALL instead stop that run (AGENT-3.a, REQ-discord-302)
 and SHALL leave the session's open asks as they are; the cancel above applies
@@ -1389,6 +1415,9 @@ Acceptance Criteria
 - A substantive reply after the button ask timed out runs the agent and leaves no pending ask, so a later thin reply runs the agent too.
 - `cancel` after the button ask timed out still gets the short ack, runs no agent and leaves no pending ask.
 - While a run of the session is in flight, 'cancel' stops that run with the short stop ack and leaves every open ask of the session open; with nothing running it clears them with `ASK_CANCELLED_ACK` as above (REQ-discord-302).
+- AUTONOMY-6.b on the real window: the ask's `expiresAt` is its ask time plus `ASK_BUTTON_TTL_MS`; with the clock one minute inside it a thin reply restates the Choose ask with its Choose button and runs nothing; one minute past it a thin reply, or a new request, runs the agent with no prior-question block, posts no stub or Choose button for that ask and leaves no pending or open ask; a late press on it gets `ASK_CHOICE_EXPIRED`, and a later thin reply runs too.
+- AUTONOMY-6.b on the slash path: a reply `ok` to a `/session start` or `/work` Choose answer restates it one minute inside the window, and one minute past it runs the agent with no prior-question block and leaves no pending or open ask.
+- AUTONOMY-6.b across a restart: a bridge restarted on the same DB loads the session's ask with its `expiresAt`; one minute inside the window a thin reply restates it and runs nothing, and one minute past it a thin reply runs the agent with no prior-question block, leaves no pending ask, and a late press on it gets `ASK_CHOICE_EXPIRED`.
 
 ### REQ-discord-045
 
@@ -1404,6 +1433,13 @@ cancelled, so its Choose, Answer and Cancel controls work until then (the
 ask is kept in SQLite, `schedule_runs`, and survives restarts); the
 ~30-minute expiry of DISCORD-ASK-5 stays for session asks only.
 Free-text clarify SHALL be used only when options cannot be listed.
+
+AUTONOMY-6.b states both halves of that split: once a session question's
+buttons expire (~30 minutes) the session stops waiting on it and the next
+message runs normally (REQ-discord-044), while a schedule's question still
+waits until it is answered or cancelled: one minute past that same window,
+and a day later, its controls still take presses and its schedule's due runs
+are still skipped with one wait note (AUTONOMY-6.a, REQ-discord-606).
 
 A late press SHALL include the requester's Choose or option press on an ask
 that is no longer open because it timed out and was dropped, not promoted,
@@ -1443,6 +1479,8 @@ Acceptance Criteria
 - In a talk inside a thread under an allowlisted channel, the requester's press in that thread on a dropped ask or on an ask of the TTL-purged session gets `ASK_CHOICE_EXPIRED` with no run; another user's press there gets the not-for-you reply; a press from another thread or a non-allowlisted channel, or once the talk's channel has left the allowlist, gets the zero-width ack.
 - `SessionStore.findClosedAsk` returns `{ askId, userId, expiresAt, channelId, threadId? }` (no question or option text) for an earlier ask dropped when the newest is cleared, an ask cleared past its timeout, every open ask of a TTL-purged session and every ask of a session row purged on load; never for a pick of a live ask, a cancel or an askId stored again; past `CLOSED_ASKS_MAX` the oldest is forgotten.
 - A schedule ask recorded three days before the press still takes a pick from the owner (no "that choice expired"); session asks keep their ~30-minute expiry.
+- AUTONOMY-6.b: with a session ask and a schedule ask of the same age, one minute past `ASK_BUTTON_TTL_MS` the requester's press on the session ask gets `ASK_CHOICE_EXPIRED`, the schedule creator's chat message runs and leaves the schedule ask open, and the schedule ask's Choose opens its choices and a pick closes it (`picked`).
+- AUTONOMY-6.b: a schedule whose run asked stays blocked one minute past `ASK_BUTTON_TTL_MS` and a day later (each due run skipped, no run, one wait note, the ask still open) until the ask is answered; the next due run then starts with the answer in its prompt.
 
 ### REQ-discord-046
 
@@ -4674,4 +4712,63 @@ Acceptance Criteria
 - A failed model call is retried 30 minutes later and then sent; the claim allows at most 3 attempts and never reclaims a sent day; the next day starts where the last one looked.
 - No DM path: nothing claimed or written. No owner: nobody. Deny-listed, muted, community and clashing ids: nobody.
 - `SchedulerService.tick` hands the briefings its clock on every tick, also with `schedulesEnabled` false (the ticker reads the switch itself); through `startBridge` (dry run with seams, file DB, owner + team in the allowlist file) the DM goes out once through the gateway's `sendDm` and nothing is posted to a channel.
+### REQ-discord-225
+
+`/session start` SHALL have an optional STRING option `persona` (after
+`topic` and `project`; no new command name) to run that session's start run
+as a named persona (AUTONOMOUS-2 / AUTONOMOUS-5.a, REQ-agent-225). After the
+SAFE-13 topic check and before any session, worktree or run, the handler
+SHALL refuse a non-empty `persona` with one ephemeral line and start
+nothing: `PERSONA_OWNER_ONLY_LINE` when the actor's role is not owner (team
+members and the community can't pick personas); for the owner, the
+`findPersona` line for an unknown persona or refused file, or the
+`personaModelRefusal` line when its model is not configured (scrubbed),
+reading `personas/` from Corvidinho's checkout (`SlashContext.personaRoot` is
+a test seam). Otherwise the run SHALL get `persona: <name>`, the progress
+status SHALL show the persona's model, and the answer head SHALL add
+`Persona: <name>`. The pick covers that run only; later replies in the
+session run in `persona.md`'s voice. `createSpawnAgentClient` SHALL pass
+`AgentRunChatOpts.persona` as `task run --persona <name>` before `--task`
+(REQ-cli-225 re-checks the owner), and nothing when unset.
+
+Acceptance Criteria
+- `buildSlashCommandBodies()`: `/session start` options are `topic`, `project`, `persona`, the last an optional STRING (`tests/discord.session-persona.test.ts`).
+- A team member and a community user with `persona` get exactly `PERSONA_OWNER_ONLY_LINE` ephemerally; no run, no session.
+- The owner with an unknown persona or one with an unconfigured model gets that one line ephemerally; no run, no session.
+- The owner's pick reaches `runChat` as the persona name and the answer says `Persona: reviewer`; without one, `persona` is unset and there is no such line.
+- The spawn client's argv carries `--persona reviewer` before `--task` when set and no `--persona` otherwise.
+- Fails on main's sources and passes on the branch.
+### REQ-discord-183
+
+My own memory forget and override by id ask me on a DM card with Approve and
+a one-time code, and an override shows the new text word for word
+(SAFE-18.a, captured in this change's PR from Leif's 2026-09-28 interview,
+round 17, under SAFE-18; SAFE-19 / SAFE-20 binding).
+
+- `src/discord/approval-cards.ts` SHALL export `memoryApprovalKind(opts)`:
+  the `memory` kind (`MEMORY_CARD_KIND`, `cvok:memory:…`) over
+  `approval_requests` via `storedApprovalKind`, class `destructive`
+  (`MEMORY_CARD_CLASS`; Approve also needs the one-time code), audit prefix
+  `memory` (`memory-card`, `memory-approve`, `memory-deny`,
+  `memory-expire`), nothing-done line "nothing was forgotten or changed",
+  outcome "Approved by you — the waiting run makes exactly this change.".
+  Approve only records the decision; the waiting memory-plugin run uses it
+  once (REQ-plugins-183). A request whose waiting run is gone SHALL close as
+  a no on the next pass.
+- The bridge SHALL register it with its other kinds, so the engine's 5 s
+  poll, the pass after each chat run and the scheduler ticks DM the owner the
+  card: the override's new text first, verbatim inside one code block headed
+  as quoted data (SAFE-6 scrubbed, fence-safe, never cut — a text that does
+  not fit is not sent and lapses as a no), then the card with the exact
+  action, target and amount one line each and its buttons. Only the owner's
+  press and code count (re-checked on every press and submit).
+- `src/memory/card.ts` SHALL export `askMemoryCard`, `memoryCardFields`,
+  `setMemoryCardTestHooks` and the `MEMORY_CARD_*` constants (re-exported
+  from `src/memory/index.ts`); `src/memory/confirm.ts` and its exports are
+  removed.
+
+Acceptance Criteria
+- The card goes to the owner by DM with `cvok:memory:approve|deny` buttons, the asking surface in its title, the exact action / target / amount and the one-time-code line.
+- An override's text part comes first as quoted data, verbatim, fence-safe and scrubbed.
+- Approve + the right code records `approved` and the waiting run uses it once; Deny, a lapse, a late press or a gone waiter is a no.
 

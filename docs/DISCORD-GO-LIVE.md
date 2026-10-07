@@ -203,7 +203,9 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   **Cancel**; after Continue the next due run's calls past a cap, or at an unknown price, ask on
   the spend card first) that the schedule's creator or the owner presses; a reply does not
   answer it, and the buttons do not expire while it is open. Until then the schedule's due runs are skipped (not made up) and one note says it
-  is waiting. A schedule with no channel sends its question and buttons to the owner by **direct
+  is waiting. A chat or slash question is different (AUTONOMY-6.b): its **Choose** buttons expire
+  after ~30 minutes, and then that session stops waiting on it and your next message runs normally;
+  a schedule's questions still wait until answered. A schedule with no channel sends its question and buttons to the owner by **direct
   message** (same DM rule as above). See [`discord.md`](discord.md) "Scheduled questions wait for
   an answer".
 - A scheduled run the bridge started can be stopped from Discord by the owner or the schedule's
@@ -309,8 +311,8 @@ inside that talk's own worktree, and in a local `corvidinho task run` inside the
 | `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere) without GitHub or git credentials (SAFE-21.a) or cloud credentials (SAFE-21.b), and `plugins list` names any that are not loaded; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
 | `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, `env -C` and symlinks included, SAFE-3; refuses `sed -i` / `>` edits, downloads piped into a shell, deletes outside the worktree and secret reads, saying why, SAFE-21; refuses `specsync change approve` / `review` / `finalize` / `ship` in every repo, also behind a wrapper, `bunx` / `npx`, a path, `sh -c` or an in-root script (`shell-exec refused (AGENT-18.a): …`): a human approves, reviews and finalizes, and on Corvidinho only the run's own settle step after a green lane does, never the shell, AGENT-18.a; starts without GitHub or git credentials, so pushes, PRs and merges go only through the typed GitHub tools, SAFE-21.a; 10 minute timeout, 64 KiB output cap, output scrubbed); the model gets it only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
 | `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere) without GitHub or git credentials (SAFE-21.a), and `plugins list` names any that are not loaded; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
-| `memory-forget` | true | 1 | true | the owner's chat should forget memories on request, or an operator runs `corvidinho plugins run memory-forget` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
-| `memory-override` | true | 1 | true | the owner's chat should correct memories on request, or an operator runs `corvidinho plugins run memory-override` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
+| `memory-forget` | true | 1 | true | the owner's chat should forget memories on request; each forget asks the owner on a DM Approve card with a one-time code (SAFE-18.a, the SAFE-4 two-phase confirm) and only the running bridge delivers it, so `corvidinho plugins run memory-forget` on the box refuses — see [`discord.md`](discord.md) Memory |
+| `memory-override` | true | 1 | true | the owner's chat should correct memories on request; each override asks the owner on a DM Approve card with a one-time code that shows the new text word for word (SAFE-18.a), and only the running bridge delivers it — see [`discord.md`](discord.md) Memory |
 | `files-delete` | true | 2 | true | an operator runs `corvidinho plugins run files-delete` non-interactively (SAFE-2 protected paths always refused; in a repo that uses hi, everything under `hi/` too, AGENT-18) |
 | `github-issue-create` / `github-issue-comment` / `github-pr-review` | true | 1 | true | the owner's runs should open issues, comment or review PRs (GITHUB-1/3), or an operator runs `corvidinho plugins run <name>` non-interactively; team members' Discord runs get `github-issue-comment` and `github-pr-review` too, on GITHUB-6-allowlisted repos only (IDENTITY-10, E.6) |
 | `discord-post-message` | true | 1 | true | an operator runs `corvidinho plugins run discord-post-message` non-interactively to post to an allowlisted channel (DISCORD-5/8); in the owner's runs the model can post too, and only where the owner could post themselves (the DISCORD-8 check is for the acting user; needs Server Members Intent). Every post, the operator's included, first waits for the owner's OK on a DM Approve card (AUTONOMY-10.a; needs the bridge running and an owner configured) |
@@ -636,6 +638,10 @@ counts; a missing file, section or key, or any other value, means off.
   ADMIN, so they never get `delegate` or `council`. A schedule the owner created, and a WATCH
   run the owner's own comment triggered (IDENTITY-12.a), are ADMIN, so with the gate on and the
   tier `code` they may get them; their workers are community like any worker.
+- `delegate --skill <tag>` runs its worker as the named persona whose skill tags hold that tag
+  (first by name), with that persona's model and voice (AUTONOMOUS-5.a, E.8); no match runs a
+  plain worker as before. The tool's description lists each persona the lead can pick with its
+  skill tags (never its voice or model). `council` voices keep the default voice.
 - `ask-human` (AUTONOMY-1) is not behind this gate.
 
 ### E.6 Roles: owner, team, community (IDENTITY-8..12, ROLES-CHAT)
@@ -663,10 +669,12 @@ Who is who in an allowlisted channel:
 - On GitHub (IDENTITY-12.a) a WATCH run gets the role of the person who triggered it, matched
   by their GitHub numeric user id in the people list (never a login): the owner's tools for the
   owner, the team's for a team member (not `/work` file edits), behind the same must-ask gate;
-  community for anyone else and for every assignment or review request. It never gets the
-  shell, runners, Fledge runs or a discovered Fledge plugin command, and secret-looking
-  paths stay hidden there for every role
-  ([`WATCH.md`](WATCH.md) "Roles on GitHub").
+  community for anyone else, for every assignment or review request, and for a comment or body
+  someone else edited (REQ-watch-1202). It never gets the shell, runners, Fledge runs or a
+  discovered Fledge plugin command, never writes the watcher's own checkout (file writes,
+  git branch / commit / push, SpecSync change steps, REQ-plugins-1202), and secret-looking
+  paths stay hidden there for every role; its audit rows and cards name `github:<id>`
+  (REQ-plugins-1203) ([`WATCH.md`](WATCH.md) "Roles on GitHub").
 - Schedules anyone but the owner created and `delegate` / `council` workers are
   community whoever triggered them. A schedule the owner created runs as the owner
   (DISCORD-SCHEDULE-1.a): their allowlisted tools and must-ask cards, never the shell,
@@ -778,13 +786,14 @@ Free-text columns in `corvidinho.db` and every string value in the daemon's log 
 scrubbed for secrets before they are written (SAFE-6). The audit chain stores an args digest,
 never the args.
 
-### E.8 Persona file (PERSONA-1..3)
+### E.8 Persona file (PERSONA-1..3) and named personas (AUTONOMOUS-2.a / 5.a)
 
 Corvidinho's voice is `persona.md` at the root of the corvidinho checkout whose `src/cli.ts`
 runs the task (`CORVIDINHO_BIN`; by default the checkout the bridge, WATCH and daemon run from),
 never the project a run works in. Every run reads it again (chat, slash commands, `/work`,
 schedules, WATCH, `task run`, delegate and council workers), so the next turn after an update
-uses the new text; no restart and no setting. It goes into the system prompt first, and
+uses the new text; no restart and no setting. A run as a named persona (below) uses that
+persona's file instead. It goes into the system prompt first, and
 Corvidinho's rules follow it and win (one message per turn, no spam, no unchecked claims).
 Fixed-text bot posts (the bridge-live note, `/status`, error and spend lines) do not go through
 the model and keep their text. The bridge-live note in the `/announce` channel is written in the
@@ -801,6 +810,28 @@ changelog bullet list (PERSONA-1.a); editing `persona.md` does not change it.
   file, for example "working-tree changes not loaded". It is a `Text` event in the run's output:
   `bun src/cli.ts task run` prints it on stderr and `--json` / NDJSON carry it; the bridges and
   WATCH do not post it to Discord or GitHub.
+
+**Named personas (AUTONOMOUS-2.a, AUTONOMOUS-5.a).** `persona.md` stays the default voice. Each
+named persona is its own file in `personas/` next to it (same checkout, same rules: committed
+copy only, 8 KiB, scrubbed, read again every run), with front matter `name`, `model` (one
+`kind:model` entry you configured in `CORVIDINHO_LLM_MODEL` or a per-tier key) and `skills`
+(tags), then its voice. No setting or restart.
+
+- Run as one: `bun src/cli.ts task run --persona <name> --task "…"`, or `/session start` with
+  the optional `persona` option (that one run). Owner only: a team member or community user who
+  sets it gets one private line and nothing starts; a role-session `task run --persona` from
+  anyone else is refused the same way.
+- The run uses the persona's voice instead of `persona.md` and calls its model first, then the
+  tier's other configured models (AGENT-11 fallback with its note). Spend caps and the
+  no-provider notice apply per model; an unpriced persona model's spend card names
+  `the model in personas/<file>.md`.
+- `delegate --skill <tag>` (E.5) runs the worker as the first persona by name whose `skills`
+  hold that tag exactly; no match runs a plain worker. The worker keeps its limits (tier, depth,
+  community role, no tokens).
+- An unknown persona, a refused file or a model you did not configure: one plain line naming
+  the persona, file and model label (never a key value), nothing called.
+- The agent's file tools refuse to write, edit or delete in Corvidinho's own `personas/`
+  folder (SAFE-2); a project's own `personas/` directory is unaffected.
 
 ### E.9 Models: you configure them; there is no default (AGENT-13, AGENT-10)
 

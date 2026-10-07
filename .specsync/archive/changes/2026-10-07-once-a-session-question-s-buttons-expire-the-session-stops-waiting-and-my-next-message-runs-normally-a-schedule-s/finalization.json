@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "once-a-session-question-s-buttons-expire-the-session-stops-waiting-and-my-next-message-runs-normally-a-schedule-s",
+  "implementation_commit": "b4c6dacbc92109d3bb0714a2adfb90634f356482",
+  "implementation_tree": "a992caf7bb8dfd9c26af9a5a8a7199abf1b8d779",
+  "contract_digest": "c1582eddc8fba5edd513fba2b5e1159946e20c39216dc9b2b51bd84072d52e7a",
+  "workspace_digest": "717af758dfa8982ea7fc3eb1552c5d0173e72702af57e1332c6051ca9e4a1c3a",
+  "closing_digest": "0ac2a583a1e37c5ae2ca71045821e273a9278b654a75a4da178e1d0911aa8fc7",
+  "review_digest": "3669b2e9621278f508f9640f173ba699cf9bffd62015c7ae2d6ec1ed21598d0d",
+  "finalization_digest": "7aeb52f24b0431a380cb86439835619482558a6e0d92ebea80ab36b4a3d86868",
+  "timestamp": 1791358068,
+  "note": "tip-orphan archive after #408 squash (same class as #414)"
+}

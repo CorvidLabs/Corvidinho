@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 68
+version: 69
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -61,11 +61,10 @@ files:
   - tests/plugins.nongit-project-dir.test.ts
   - plugins/search/index.ts
   - plugins/search/commands.ts
-  - src/memory/confirm.ts
   - tests/memory.plugins.test.ts
+  - tests/memory.forget-card.test.ts
   - tests/memory.profiles.test.ts
   - tests/memory.recall-github.test.ts
-  - tests/memory.confirm.test.ts
   - tests/files.plugins.test.ts
   - tests/files.dangling-symlink.test.ts
   - tests/search.plugins.test.ts
@@ -252,7 +251,11 @@ imports) exports `GIPHY_MEDIA_HOSTS` and `hasGiphyMediaLink`, which
 put in an embed (REQ-discord-075), `src/plugins/roles.ts` exports
 `TEAM_SEARCH_TOOLS` (PLUGIN-9: `web-search` and `gif-search`) and
 `isWatchRunEnv(env)` (IDENTITY-12.a: the surface stamp is `watch`;
-REQ-plugins-1201), and `PluginHandlerResult.spendAsk` carries a
+REQ-plugins-1201), `WATCH_CHECKOUT_WRITE_TOOLS`,
+`watchCheckoutWriteRefused(env, name)` and `watchCheckoutWriteRefusal(name)`
+(a WATCH run never writes the watcher's own checkout; REQ-plugins-1202),
+`auditContextFromEnv` gives a WATCH run's GitHub trigger as its actor
+(`github:<id>`, never `local`; REQ-plugins-1203), and `PluginHandlerResult.spendAsk` carries a
 flat-priced call's SAFE-8 ask (REQ-agent-098),
 `plugins/github/merge.ts` exports `mergeOwnGreenPr`, `isCorvidinhoRepoSlug`, `MERGE_OUTSIDE_CORVIDINHO`, `MERGE_NOT_OWN`, `MERGE_CI_NOT_GREEN`, `MERGE_NOT_MERGEABLE` and the `MergeOctokit` / `MergeResult` types (GITHUB-7, REQ-plugins-099). `githubRepoOfUrl(url)` says whether a URL is on a GitHub host and which
 `OWNER/REPO` it names (DISCORD-SCHEDULE-3.a),
@@ -260,7 +263,7 @@ flat-priced call's SAFE-8 ask (REQ-agent-098),
 HTTP/1.1 socket transport. Autonomous plugins
 register via `loadAutonomousPlugins` (`plugins/autonomous/index.ts`);
 `createDelegateCommand(deps)` builds `delegate` with an injectable env, bin,
-limiter and timeout; `createCouncilCommand(deps)` builds `council` with an
+limiter, timeout and persona root (`personaRoot`, a test seam); `createCouncilCommand(deps)` builds `council` with an
 injectable env, bin, limiter, council timeout and per-voice timeout.
 `PluginCommand.autonomous?: boolean`; `PluginCommand.agentTool?: boolean`
 (false: never in the agent's tool catalog, the agent loop runs it itself;
@@ -406,8 +409,15 @@ REQ-plugins-520). Memory plugins take the acting user and ADMIN
 only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID` /
 `CORVIDINHO_ACTING_IS_ADMIN`), never argv — `--user` / `--admin` / `--db` are
 refused; ADMIN is re-checked in the handler (empty admin lists ⇒ nobody);
-`memory-forget` / `memory-override` are two-phase with an HMAC confirm token
-confirmed from a different turn (SAFE-4 / REQ-plugins-011).
+`memory-forget` / `memory-override` by id ask the owner on a DM Approve
+card with a one-time code — their SAFE-4 two-phase confirm, no typed token —
+and wait for the answer: the `memory` card (`askMemoryCard`,
+`src/memory/card.ts`) shows the exact action, target and amount and, for an
+override, the new text word for word; only an approval used once changes the
+memory, and only while it is still what the card showed; Deny, no answer or
+a stopped run changes nothing; `--confirm` is refused; with no bridge
+conversation to deliver the card (the local CLI, a schedule) they refuse
+(SAFE-18.a / REQ-plugins-183 / REQ-plugins-011).
 Whose memory a call reads and writes is the acting Discord id matched in the
 owner's people list re-read at the call (MEMORY-5 / REQ-plugins-101): a
 declared person's one `person:<id>` profile (plus rows under their Discord
@@ -635,6 +645,21 @@ time, in order, usage (exit 1), the
 AUTONOMOUS-1 project switch, the depth cap, a code-tier lead, and the
 concurrency / per-run budget (exit 2, nothing spawned). It returns the
 worker's skill, tier, depth, state, summary and filesChanged.
+AUTONOMOUS-5.a (REQ-plugins-225): a `--skill` that a named persona's skill
+tags hold exactly (`personaForSkill` over `loadPersonas`, the first by name)
+runs the worker as that persona — its model and voice, through
+`CORVIDINHO_DELEGATE_PERSONA` on that worker's spawn only — and the data adds
+`persona` (null when none); a match whose model the owner did not configure
+is refused (exit 2, nothing spawned). With no skill or no match the worker
+runs as before. The `delegate` description ends with `personaSkillsHint`
+(the personas the lead can pick and their skill tags, re-read at most every
+5 s). `council` is unchanged.
+
+SAFE-2 / AUTONOMOUS-2.a (REQ-plugins-225): `files-write`, `files-edit` and
+`files-delete` refuse (exit 2) any target inside Corvidinho's own
+`personas/` folder (`isLivePersonaPath`: `realpath(CORVIDINHO_ROOT)/personas`;
+`livePersonaRefuseMessage`), the named persona files the owner edits; a
+project's own `personas/` directory is unaffected and reads are allowed.
 
 Fledge commands (REQ-plugins-112/113) run `fledge plugins run <command> --
 <argv...>`, are bound to the project root they were discovered for (another
@@ -862,7 +887,12 @@ owner's person; `team` the team (or owner) stamp and a team person; a GitHub
 deny-listed, is community. A WATCH run is never a `/work` task
 (`actingWorkTask` false whatever its stamp), and every must-ask call the owner's
 WATCH run makes raises the owner's Approve card like any other run
-(REQ-plugins-097). Refusals are "not allowed for your role" (ROLES-CHAT-3/6).
+(REQ-plugins-097). A WATCH run (surface `watch` or a WATCH session id) never
+runs the tools that write the watcher's own checkout — it has no worktree of
+its own — so `runPlugin` refuses `WATCH_CHECKOUT_WRITE_TOOLS` there before
+the role gate, for every role (REQ-plugins-1202); its SAFE-5 rows and must-ask
+card requester are `github:<id>` (else `github:<login>`), never `local`
+(REQ-plugins-1203). Refusals are "not allowed for your role" (ROLES-CHAT-3/6).
 `files-edit`, `specsync-change-new`, `specsync-change-answer`,
 `specsync-change-approve`, `specsync-change-finalize`); `community` (everyone else: undeclared, declared community,
 WATCH runs no declared owner or team member triggered, schedules, workers,
@@ -1417,6 +1447,8 @@ command line.
 | delegate while autonomous off / depth cap / below code tier / budget spent | Refuse (exit 2); nothing spawned |
 | delegate from a non-ADMIN role session (ROLES-CHAT-3) | Refuse (exit 2, not allowed for your role); nothing spawned |
 | delegate worker fails or times out | ok=false with worker exit / state and scrubbed summary |
+| delegate --skill matches a named persona whose model is not configured | Refuse (exit 2, the persona / file / model line); nothing spawned |
+| files-write / files-edit / files-delete in Corvidinho's own `personas/` folder | Refuse (exit 2, SAFE-2); nothing written |
 | council while autonomous off / depth cap / below code tier / council budget spent | Refuse (exit 2); nothing spawned |
 | council from a non-ADMIN role session (ROLES-CHAT-3) | Refuse (exit 2, not allowed for your role); nothing spawned |
 | council chair fails / fewer than 2 proposals | ok=false (exit 1) with the transcript |
@@ -1563,5 +1595,8 @@ and current rows for plugins host evolution.
 | 2026-10-05 | where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts: Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts) |
 | 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
 | 2026-10-05 | in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2: In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause) |
+| 2026-10-07 | on-github-a-text-someone-else-edited-never-gets-its-author-s-role-the-safe-13-owner-exemption-covers-only-text-the: On GitHub, a text someone else edited never gets its author's role, the SAFE-13 owner exemption covers only text the owner wrote, a WATCH run never writes the watcher's own checkout, and its audit rows name its GitHub trigger (IDENTITY-12.a follow-up to #374) |
 | 2026-10-06 | github-7-typed-github-pr-merge-merges-the-bot-s-own-green-corvidinho-pr-only-when-ci-is-green-and-branch-protection: GITHUB-7: typed github-pr-merge merges the bot's own green Corvidinho PR only when CI is green and branch protection allows; never others or outside Corvidinho |
 | 2026-10-06 | the-specsync-check-tool-the-verify-lane-s-spec-check-step-starts-without-my-cloud-credentials-and-its-output-is: The specsync-check tool (the verify lane's spec-check step) starts without my cloud credentials and its output is scrubbed (SAFE-21.b follow-up to #373) |
+| 2026-10-07 | named-personas-are-their-own-files-in-personas-with-name-model-and-skill-tags-the-owner-can-run-a-task-as-one-and-a: Named personas are their own files in personas/ with name, model and skill tags; the owner can run a task as one and a lead's delegate picks one by skill tag; team and community can't pick one (AUTONOMOUS-2.a, AUTONOMOUS-5.a) |
+| 2026-10-07 | my-own-memory-forget-and-override-by-id-ask-me-on-a-dm-card-with-approve-and-a-one-time-code-and-an-override-shows-the: My own memory forget and override by id ask me on a DM card with Approve and a one-time code, and an override shows the new text word for word (SAFE-18.a) |

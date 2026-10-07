@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "on-github-a-text-someone-else-edited-never-gets-its-author-s-role-the-safe-13-owner-exemption-covers-only-text-the",
+  "implementation_commit": "7ff86e504986c5a77bfeb47b87b64c915b6a4cee",
+  "implementation_tree": "989cb4e56f7336b0cac80b067b267dc7b44dfc47",
+  "contract_digest": "bd0e919b73220caa2ee7879ca78a67c423802b0c2dd8ac22786474061379f8f2",
+  "workspace_digest": "e4b7a9e42fd9769c73de4cebacf91a053b78a3c65eb731958c2263560992eb2a",
+  "closing_digest": "607f2600806a29ee1a10cb9742845f0d2ae25c44cc4c6e1b14469dc2f09a4f2f",
+  "review_digest": "b8ad2f7265e034cd89d9ff9472d5290f5361ca9015c03c5b23f18cf849f788c4",
+  "finalization_digest": "b21d3b3a9312b5c0834d3e0ece61900b7fe143a8763357f581bf19544c96de4d",
+  "timestamp": 1791356914,
+  "note": "tip-orphan archive after #398 squash (same class as #414)"
+}

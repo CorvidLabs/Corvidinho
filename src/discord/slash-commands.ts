@@ -80,6 +80,13 @@ export function buildSlashCommandBodies(): SlashCommandBody[] {
               description: "Target project path (optional; default bridge root)",
               required: false,
             },
+            {
+              // AUTONOMOUS-2 / 5.a: owner only; the handler refuses anyone else.
+              type: OPT_STRING,
+              name: "persona",
+              description: "Run as a named persona from personas/ (optional; owner only)",
+              required: false,
+            },
           ],
         },
       ],

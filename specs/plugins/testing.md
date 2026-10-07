@@ -777,6 +777,25 @@ unchanged; `files-read .trust.toml` and `files-write trust.toml` work;
 refuses to stage the deletion of a tracked `.trust.toml`. Both tests fail
 with the base sources.
 
+## A WATCH run never writes the watcher's checkout; its audit actor is its GitHub trigger (REQ-plugins-1202 / REQ-plugins-1203 added, REQ-plugins-1201 modified; IDENTITY-12.a follow-up to #374)
+
+- `tests/watch.github-roles.postreview.test.ts` (with the watch cases under
+  the watch module): the env a real WATCH spawn hands its child, applied to
+  this process; a temp git checkout standing in for the project root.
+  - REQ-plugins-1202: the owner's WATCH `files-edit`, `files-write`,
+    `files-delete`, `git-branch-create` and `git-commit` (tier `code`,
+    allowlisted) are refused with "writes the watcher's own checkout", and
+    the checkout's file, branches and `git status` are unchanged; the
+    owner's Discord run still writes a file there.
+  - REQ-plugins-1203: a team member's WATCH `github-pr-review` (dry run)
+    appends `started` / `ok` rows with actor `github:4242` and surface
+    `watch:watch_w1`; the owner's WATCH must-ask card has requester
+    `github:8268288`, and after the owner denies it the same call from the
+    local CLI raises a new card (requester `local`) and runs on approval.
+- `tests/audit.log.test.ts` (updated): `auditContextFromEnv` with only a
+  WATCH session id gives `github:(unknown)`, with nothing `local` / `cli`.
+- Fail on base: main's `src/plugins/{run,roles}.ts` fail the checkout case;
+  main's `src/audit/log.ts` fails both audit cases. Restored: they pass.
 ## GITHUB-7 typed github-pr-merge (REQ-plugins-099)
 
 `tests/github.merge.plugin.test.ts` (12 tests, fake Octokit, no token):
@@ -787,3 +806,62 @@ draft/closed/not-mergeable, surfaces merge API errors; plugin listing is
 dangerous minTier 1, SAFE-1 denies without allowlist, outside-Corvidinho
 refusal before Octokit, usage error without a PR number.
 `tests/plugins.list.smoke.test.ts` expects `github-pr-merge` in `plugins list`.
+
+## delegate --skill picks a named persona; the file tools leave personas/ alone (REQ-plugins-225; AUTONOMOUS-5.a, SAFE-2)
+
+`tests/agent.personas.test.ts`: `delegate` with a fake worker bin that records
+`CORVIDINHO_DELEGATE_PERSONA` and a temp persona root: `--skill review` with
+`zeta` and `alpha` both tagged runs the worker as `alpha` (`data.persona`,
+`[review → persona alpha]`); `--skill docs` and no skill run it with none,
+even with one in the lead's env; a match whose model is not configured is
+refused and no worker starts; the `delegate` description lists `alpha
+(review); zeta (review)` but not the unconfigured persona, and carries no
+persona line without personas. With cwd at this checkout, `files-write`
+(relative and absolute), `files-edit` and `files-delete` of a
+`personas/<probe>` path are refused `refused (SAFE-2)` and nothing is
+written; `files-write personas/x.md` in another project works. Fail on base:
+with main's `plugins/autonomous/commands.ts`, `src/autonomous/delegate.ts`
+and the files plugin, all four fail; restored, pass.
+## My memory forget / override by id on a DM card (REQ-plugins-183 added, REQ-plugins-011 modified; SAFE-18.a, SAFE-4/19/20)
+
+`tests/memory.forget-card.test.ts` (17 tests; the real card engine with
+`memoryApprovalKind` and recording DMs, a temp data dir, no token, no
+network): the owner's `memory-forget` in a Discord conversation raises one
+`memory` card (destructive) DMed to the owner with the exact action, the
+target (id, category/key, owner scope, last changed) and the amount; Approve
+alone forgets nothing, Approve + the one-time code forgets it once (request
+`used`; `memory-card`, `approval-code-issue`, `memory-approve` and the
+`memory-forget` tool rows on the audit trail); Deny, a lapse (and a late
+Approve), a stopped run (exit 130) and a memory changed after the card went
+out change nothing. `memory-override`: the new text goes out first, word for
+word, inside one code block headed as data, then the card; Approve + code
+stores exactly it; backticks can't end the block; a secret is scrubbed on the
+card exactly as stored; Deny keeps the old text. No card and no change: the
+local CLI (also with `--confirm` and a token in the env) and the owner's
+schedule run refuse with the bridge line; a typed token in the owner's chat is
+refused; a card that can't be raised or read refuses with a SAFE-6 scrubbed
+reason and changes nothing; a non-owner (also with a forged ADMIN bit) is
+refused as before with no card, and their `memory-forget-me` still records a forget request. A card
+whose waiting run is gone closes as a no. The fake model's `memory-forget`
+call through `createTaskExecute` waits for the card and succeeds once
+approved with the code. The argv hint and descriptions name the card and no
+`--confirm`.
+
+`tests/memory.plugins.test.ts` (two-phase cases replaced): the owner's forget
+asks on the card and forgets once approved (no token, no content in the
+result); `--confirm` in any form is refused with no card; an override stores
+exactly the card's text; Deny and no answer change nothing; override without
+text is a usage error with no card; `--confirm` after `--` is the override's
+text, not a token. The ACL cases (argv identity, empty admin, non-owner,
+deny-listed / muted owner, admin lists, the bridge bit, SAFE-1) are unchanged.
+
+Fail on base: with main's (`85871fa4`) `plugins/memory/commands.ts`,
+`src/discord/agent-client.ts` and `src/agent/tools.ts` swapped in (the new
+card module kept loadable), 21 of the 43 tests in
+`tests/memory.forget-card.test.ts`, `tests/memory.plugins.test.ts` and
+`tests/memory.spawn-env.test.ts` fail (no card is raised, the first call
+returns a token, `--confirm` is accepted, the spawn passes the typed token,
+the hint names `--confirm`); with every touched source swapped back to main
+the two card files cannot load. Restored: 43 of 43 pass. REQ-plugins-010
+(modified): the forget / override ACL fixtures in `tests/memory.plugins.test.ts`
+now refuse without the owner's approved card instead of a token.

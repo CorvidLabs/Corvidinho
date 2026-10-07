@@ -1,0 +1,92 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791350819,
+      "digest": "c1582eddc8fba5edd513fba2b5e1159946e20c39216dc9b2b51bd84072d52e7a",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "once-a-session-question-s-buttons-expire-the-session-stops-waiting-and-my-next-message-runs-normally-a-schedule-s",
+        "title": "Once a session question's buttons expire the session stops waiting and my next message runs normally; a schedule's questions still wait until answered (AUTONOMY-6.b)",
+        "description": "Once a session question's buttons expire the session stops waiting and my next message runs normally; a schedule's questions still wait until answered (AUTONOMY-6.b)",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "INTENT.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "hi/autonomy.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "tests/discord.expired-asks.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "AUTONOMY-6.b (captured with hi in this PR from Leif's 2026-09-28 interview, round 17 decision on 2026-10-07: keep as built): \"Once a session question's buttons expire, the session stops waiting and my next message runs normally; a schedule's questions still wait until answered.\" Holds as built, no runtime change: a session's Choose question (chat, /work, /session start) gets buttons that expire ASK_BUTTON_TTL_MS (~30 minutes, DISCORD-ASK-5) after it is asked; inside that window a thin reply restates it with its live Choose button and runs nothing (AUTONOMY-5/6); once the window has passed, the requester's next message that is not a cancel first drops the expired ask (clearPendingAsk, REQ-discord-044) and then runs the agent as ordinary chat with no prior-question block (a thin ok included), leaves no question open unless an earlier ask is still live, and a late press on the expired buttons gets ASK_CHOICE_EXPIRED with no run (REQ-discord-045). A schedule's question (AUTONOMY-6.a, REQ-discord-606) never lapses: one minute past that same window and a day on, the schedule's due runs are still skipped with one wait note, its Choose still opens and takes a pick, a chat message from its creator does not close it, and only an answer (or cancel) lets the next run go. REQ-discord-044 and REQ-discord-045 (Modified) cite AUTONOMY-6.b; docs/discord.md (at the ~30-minute expiry, the thin-reply rule and the schedule exception) and docs/DISCORD-GO-LIVE.md cite it. tests/discord.expired-asks.test.ts pins both halves on a frozen system clock; its hi/doc citation cases fail on the base sources and pass on the branch, and its behaviour cases fail under a mutation that keeps expired session asks waiting or lets schedule asks lapse after 30 minutes."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "7dbee276b69d077b1a5d3a04966998d0682ad0f973caed11a01e18e628bf549a"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791352124,
+      "digest": "c1582eddc8fba5edd513fba2b5e1159946e20c39216dc9b2b51bd84072d52e7a",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "once-a-session-question-s-buttons-expire-the-session-stops-waiting-and-my-next-message-runs-normally-a-schedule-s",
+        "title": "Once a session question's buttons expire the session stops waiting and my next message runs normally; a schedule's questions still wait until answered (AUTONOMY-6.b)",
+        "description": "Once a session question's buttons expire the session stops waiting and my next message runs normally; a schedule's questions still wait until answered (AUTONOMY-6.b)",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "INTENT.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "hi/autonomy.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "tests/discord.expired-asks.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "AUTONOMY-6.b (captured with hi in this PR from Leif's 2026-09-28 interview, round 17 decision on 2026-10-07: keep as built): \"Once a session question's buttons expire, the session stops waiting and my next message runs normally; a schedule's questions still wait until answered.\" Holds as built, no runtime change: a session's Choose question (chat, /work, /session start) gets buttons that expire ASK_BUTTON_TTL_MS (~30 minutes, DISCORD-ASK-5) after it is asked; inside that window a thin reply restates it with its live Choose button and runs nothing (AUTONOMY-5/6); once the window has passed, the requester's next message that is not a cancel first drops the expired ask (clearPendingAsk, REQ-discord-044) and then runs the agent as ordinary chat with no prior-question block (a thin ok included), leaves no question open unless an earlier ask is still live, and a late press on the expired buttons gets ASK_CHOICE_EXPIRED with no run (REQ-discord-045). A schedule's question (AUTONOMY-6.a, REQ-discord-606) never lapses: one minute past that same window and a day on, the schedule's due runs are still skipped with one wait note, its Choose still opens and takes a pick, a chat message from its creator does not close it, and only an answer (or cancel) lets the next run go. REQ-discord-044 and REQ-discord-045 (Modified) cite AUTONOMY-6.b; docs/discord.md (at the ~30-minute expiry, the thin-reply rule and the schedule exception) and docs/DISCORD-GO-LIVE.md cite it. tests/discord.expired-asks.test.ts pins both halves on a frozen system clock; its hi/doc citation cases fail on the base sources and pass on the branch, and its behaviour cases fail under a mutation that keeps expired session asks waiting or lets schedule asks lapse after 30 minutes."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "fa4c8007d80c203322d2a5941b67122f80f8e943443edc6e6b0490d69632b0fd"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1791358068,
+      "digest": "0ac2a583a1e37c5ae2ca71045821e273a9278b654a75a4da178e1d0911aa8fc7",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}
