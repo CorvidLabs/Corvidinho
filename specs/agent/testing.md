@@ -1386,3 +1386,58 @@ the fake model's `memory-forget` call through `createTaskExecute` waits for
 the owner's card and its tool result reports the forget once approved with
 the code.
 
+## A headless agent CLI is one of my models, in my own runs only (REQ-agent-1301 added, REQ-agent-179 modified; AGENT-13, AGENT-13.a)
+
+`tests/agent.headless-cli.test.ts` — a stand-in `fakecli` shell script on a
+temp PATH (never a real agent CLI) logs its argv, cwd, the env keys that
+matter and its stdin outside the worktree, then answers (`{"result": …,
+"usage": …}`), edits files, touches protected files or fails. Temp git
+projects with `app.ts`, `fledge.toml` and `specs/agent/x.md` committed, the
+owner's talk worktree from `ensureTalkWorkspace`, a temp allowlist (owner +
+team member), an injected fake chat provider, a temp data dir; no network.
+- Parsing and pricing: `cli:` is its own kind (single-spaced command, argv,
+  provider id `cli:<program>`, no key, usable); `cli:gpt-5` keeps its whole
+  label for pricing and `modelForTier`; a provider cap may name
+  `cli:fakecli`; a `skipped` hop survives `modelFallbackFromUnknown`;
+  `parseCliOutput` / `cliUsage`; `cliPassKeys` passes only named keys that are
+  no git / GitHub / cloud / Discord / audit / acting key; `isCliProtectedPath`.
+- `cliTurnGate`: granted for the owner's chat / ask / session / work in the
+  talk worktree and a local run in its own worktree; refused with its fixed
+  why for team, community, WATCH (stamp or marker), schedule, worker, main
+  checkout, local `--here`, no `shell-exec`, tool tier, no rounds, SAFE-13.
+- The owner's run: cwd the worktree, the prompt on stdin, the shell's env plus
+  the one named key; reply, usage (cache input counted) and label are the
+  run's; no chat request. Protected files (`fledge.toml` edited,
+  `specs/agent/x.md` deleted, new `specs/agent/new.md`, new
+  `.fledge/lanes/verify.toml`) go back and are named; an already-dirty
+  protected file goes back to its dirty state. `runTask`: the lane runs in the
+  worktree, `app.ts` in `filesChanged`, the failed lane's output reaches turn
+  2, verified. Exit 3 falls back (`exited 3`); a chat model's HTTP 500 hands
+  the attempt to the CLI. Spend cap: the unknown-price card first; denied,
+  nothing runs and the result asks `spend-cap`; approved, one `unknown`
+  ledger row with its tokens.
+- Other runs (team, owner WATCH, owner schedule, delegate worker, outside the
+  talk worktree, local `--here`, no shell, tool tier): the CLI never starts,
+  `gpt-x` answers with the `skipped` note, one operator line, attempt 2 stays
+  on `gpt-x`; only `cli:` configured fails with `cliSkippedError`;
+  `gpt-bad,cli:…,gpt-x` in a team run skips past it.
+- The real `task run`: by default the CLI works in the worktree the run made
+  and the stand-in `fledge` lane verifies its edit; `--here` skips it.
+- Review fixes: the stand-in's stdin carries the IDENTITY-4 and SAFE-12 /
+  SAFE-13 rules; `cliTurnPrompt` adds the hi and SpecSync lines only for a
+  repo that uses them; `CORVIDINHO_PROJECT_ROOT` named in
+  `CORVIDINHO_LLM_CLI_ENV` stays the worktree (a dropped key it names is
+  passed); `loadLlmEnv` gives `cli:gpt-4o`, flagged unpriced under a total cap
+  and not under a provider cap that does not name it. In
+  `tests/agent.fallback.test.ts`, a council worker's skipped `cli:` hop reads
+  `council worker: cli:… skipped (…)` at the lead. Each fails on the pre-fix
+  branch sources and passes with the fixes.
+
+Fail-on-base: with the base's (`85871fa4`) `src/agent/providers.ts`,
+`execute.ts`, `spend.ts`, `tier.ts`, `types.ts`, `src/work/review.ts` and
+`plugins/fledge/spawn.ts` swapped in (no `src/agent/headless-cli.ts`), the
+file gave 0 pass, 1 fail (the module does not load); a scratch probe with only
+base-era imports gave 0 of 3 on the base (`cli:` parsed as `openai`; the
+owner's run sent `cli:fakecli --print` as a chat model and never started the
+CLI; a team run did the same instead of skipping it) and 3 of 3 on the
+branch. Restored, 29 of 29 pass (32 with the review fixes).

@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 55
+version: 56
 status: draft
 files:
   - src/agent/types.ts
@@ -71,6 +71,8 @@ files:
   - tests/fixtures/lane-output.ts
   - src/agent/providers.ts
   - tests/agent.providers.test.ts
+  - src/agent/headless-cli.ts
+  - tests/agent.headless-cli.test.ts
   - tests/agent.fallback.test.ts
   - tests/fixtures/fake-llm.ts
   - tests/agent.safe3a-gate.test.ts
@@ -103,11 +105,26 @@ Missing-capability soft-land (REQ-agent-742; `src/agent/missing-capability.ts`):
 Model providers (AGENT-13 / AGENT-10, REQ-agent-179; `src/agent/providers.ts`):
 the operator configures every model, and none is built in as a default.
 `CORVIDINHO_LLM_MODEL` and the per-tier keys hold `kind:model` entries
-(`openai`, `ollama`, `anthropic`; a bare or unknown prefix is
-OpenAI-compatible), each with its vendor endpoint and key, all over the one
-OpenAI-compatible chat transport and the SAFE-8 guard (no headless-CLI kind
-yet). With no usable provider for the run's tier the attempt calls nothing and
+(`openai`, `ollama`, `anthropic`, `cli`; a bare or unknown prefix is
+OpenAI-compatible), each with its vendor endpoint and key, the first three
+over the one OpenAI-compatible chat transport, all through the SAFE-8 guard.
+With no usable provider for the run's tier the attempt calls nothing and
 fails with the no-provider notice; there is no demo stub.
+
+Headless agent CLI models (AGENT-13 / AGENT-13.a, REQ-agent-1301;
+`src/agent/headless-cli.ts`): a `cli:<program> [args…]` entry is an agent CLI
+the owner runs headless. It is not a chat endpoint: it runs a whole execute
+attempt itself with its own built-in tools, so it is offered exactly where the
+owner's shell is — the SAFE-3.a gate (the owner's own chat, ask answer,
+`/session start`, `/work` or local `task run`, inside that talk's own
+worktree), `shell-exec` allowlisted, the code tier with tool rounds, and no
+SAFE-13 injection in the run (`cliTurnGate`). Anywhere else it is skipped,
+never started, with the AGENT-11 notice (a `skipped` hop) and the next entry
+runs. Where it runs, its cwd is the talk worktree, its env the shell's plus
+only the keys the owner names in `CORVIDINHO_LLM_CLI_ENV`, its prompt on
+stdin, its turn one SAFE-8 call at no known price; protected files it changed
+are put back after the turn (SAFE-2) and everything else goes through the
+run's verify gate.
 
 Model fallback (AGENT-11, REQ-agent-080; `callChain` in
 `src/agent/providers.ts`): a tier's list is a chain. A run calls its first
@@ -116,7 +133,10 @@ included, a network error, a timeout or a malformed reply) the run goes on at
 once with the next entry — no retry, no backoff — and keeps it for the rest of
 the process; a new `task run` process tries the head again (nothing stored). A
 SAFE-8 spend-cap stop, the run's own stop, and a Deny or lapsed card on a
-must-ask tool are not model failures and never fail over. Each failover is an
+must-ask tool are not model failures and never fail over. A `cli:` entry the
+attempt may not run is skipped the same way, never called (AGENT-13.a: hop
+`skipped`, read `<a> skipped (<why>)`); one it may run takes the attempt over
+(`handover`). Each failover is an
 `[operator] <a> failed (<reason>); falling back to <b>` Text event, a closing
 `(model fallback: …)` note on every later summary (clips keep it, like the
 role note), and `TaskResult.modelFallback`; the result names the model that
@@ -298,7 +318,33 @@ REQ-agent-088, above),
 `modelLabelFromUnknown` (a child's result read back: scrubbed, one line,
 bounded, at most `MODEL_FALLBACK_MAX` 16), `mergeModelFallbacks` and
 `addModelUsage`. `ModelUsage` and `ModelFallback` are in
-`src/agent/types.ts`. The chat transport sends
+`src/agent/types.ts`. Headless agent CLI (REQ-agent-1301, AGENT-13.a):
+`PROVIDER_KINDS` holds `cli`; `parseModelEntry("cli:<command>")` keeps the
+command with single spaces; `cliArgv(entry)` (split on whitespace, no shell),
+`cliProviderId(entry)` (`cli:<program name>`, lower-cased; `resolveEntry`
+gives a `cli` entry that as its `baseUrl`, no key, always `usable`, so
+`providerId` and the SAFE-8 ledger name it so), `entryModelId(entry)` — and
+through it `modelIdOfLabel`, `modelForTier`, `loadLlmEnv().model` and the
+spend snapshot's head match — gives a `cli` entry its whole label (never
+priced),
+`ModelFailure` gains `skipped` (`why`) and `exit` (`code`; 127 = could not
+start), `ModelFallback.skipped`, `failOver(chain, failure, onFallback?)` (one
+hop, false with no next entry), `CliTurnVerdict`, `CLI_SKIP_DEFAULT_WHY`,
+`cliSkippedError(entry, why)`, and `callChain(chain, fn, onFallback?, cli?)`
+never calls `fn` with a `cli` entry: granted, it stops there with
+`handover: true` (`failure: null`); otherwise it skips it as a `skipped` hop.
+`src/agent/headless-cli.ts` exports `CLI_ENV_PASS_ENV`
+(`CORVIDINHO_LLM_CLI_ENV`), `CLI_SHELL_TOOL`, `CLI_MAX_OUTPUT_BYTES`,
+`CLI_PROTECTED_SNAPSHOT_MAX_BYTES`, `CLI_SKIP_WHY`, `cliTurnGate`,
+`cliRefusedLine`, `cliPassKeys`, `cliChildEnv`, `CLI_TURN_INSTRUCTIONS`,
+`cliTurnPrompt` (with the identity and SAFE-12 / SAFE-13 untrusted-content
+rules every model gets, and `cliRepoWaysLines` for a hi / SpecSync repo),
+`cliRepoWaysLines`, `cliUsage`, `parseCliOutput`, `runCliTurn`,
+`isCliProtectedPath`, `guardProtectedPaths` (`ProtectedGuard`,
+`ProtectedRestore`), `pathPreview`, `cliRestoredNote` and
+`cliRestoreFailedLine`. `SpendGuard.call(c)` (`GuardedCall`,
+`GuardedOutcome`, `src/agent/spend.ts`) runs any model call under the same
+caps, cards and ledger as the guarded fetch, which now uses it. The chat transport sends
 `authorization: Bearer <key>` only when the kind has a key. `modelKeyForTier(env, tier)` names the key that set a tier's
 model (the SAFE-8 unpriced ask names it via `createSpendGuard({ modelKey })`),
 and `perTierModels(env)` lists each tier's model when any per-tier key is set
@@ -878,6 +924,18 @@ SAFE-3.a grant only at the top of that worktree (REQ-cli-681,
 REQ-agent-503).
 
 ## Invariants
+
+A headless agent CLI model never gets more than the owner's shell
+(AGENT-13.a, REQ-agent-1301): it starts only when `cliTurnGate` grants the
+attempt (SAFE-3.a grant, `shell-exec` allowlisted, code tier with tool rounds,
+no SAFE-13 trip), re-read every attempt; it never starts for a non-owner,
+WATCH, a schedule, a worker, `--here`, a non-git folder or outside the talk's
+own worktree, and is then skipped with the AGENT-11 notice so the next model
+runs. Its env is the shell's (`runnerChildEnv`) plus only owner-named keys
+that are never git / GitHub / cloud / Discord / audit / search / acting keys;
+it never gets a chat request (`callChain` skips or hands over); every
+protected file it changed is put back or the attempt fails; its edits go
+through the same verify gate; each turn is one SAFE-8 call at no known price.
 
 A limit I set stops a stalled or endless run and the run says so (AGENT-12,
 REQ-agent-244 / REQ-agent-312). The turn cap is per execute attempt, so verify
@@ -1556,6 +1614,12 @@ A change the run did not open is never touched.
 - **When** the model calls `discord-post-message` and the owner denies its Approve card (or lets it lapse)
 - **Then** nothing is posted, no later call in that batch runs, and the run ends `blocked` with a stuck question naming `discord-post-message`, why it asks, AUTONOMY-10 and the card; the schedule records it and waits; the same deny in the owner's chat goes back to the model instead (REQ-agent-741)
 
+### Scenario: my own chat uses the headless agent CLI I configured
+
+- **Given** `CORVIDINHO_LLM_MODEL=cli:claude -p --output-format json,gpt-4.1`, `CORVIDINHO_ALLOWLIST=shell-exec` and a code-tier run spawned for the owner's chat message in that talk's own worktree
+- **When** the run's attempt starts
+- **Then** the CLI runs there with the prompt on stdin and the shell's env, its `result` is the answer and its `usage` counts under `cli:claude -p --output-format json`; any protected file it changed is put back with a note, and the verify gate checks the rest; the same message from a team member, on WATCH, in a schedule, a worker or `--here` never starts it and `gpt-4.1` answers, ending `(model fallback: cli:claude -p --output-format json skipped (only in the owner's own runs, in that talk's worktree), fell back to gpt-4.1)` (REQ-agent-1301)
+
 ### Scenario: the owner's chat uses the shell in its own talk worktree
 
 - **Given** `CORVIDINHO_ALLOWLIST=shell-exec`, a code-tier run spawned by the bridge for the owner's chat message (`CORVIDINHO_ACTING_SURFACE=chat`) in the talk worktree made for its session
@@ -1576,6 +1640,10 @@ A change the run did not open is never touched.
 | Talk worktree whose last run ended blocked / failed / cancelled or died | baseline is the talk branch's merge-base: its edits are verified before done; one carried note; a base git cannot find verifies anyway (REQ-agent-015) |
 | Cwd not in a git work tree, or start snapshot unreadable | tool-reported filesChanged only, as before (REQ-agent-085); if the run called a Fledge command (or the shell / a runner, or a local run's `delegate` with a Fledge plugin command allowlisted, or a `delegate` whose worker left no result frame), verify runs anyway with a `Verify gate: no git working tree to diff` note (REQ-agent-502) |
 | Dangerous plugin the run's allowlist does not name | not in the catalog; a model call to it is refused as not offered (REQ-agent-501 / REQ-agent-128) |
+| A `cli:` model in a run that is not the owner's own in that talk's worktree, without `shell-exec` allowlisted, below the code tier or after a SAFE-13 trip | never started; a `skipped` AGENT-11 hop and one operator line; the next model runs; with none after it the attempt fails with `cliSkippedError` (REQ-agent-1301) |
+| A `cli:` model exits non-zero, cannot start, times out or prints no reply | a model failure: fails over to the next model (`exited <n>`, `could not start`, `timed out`, `malformed reply`); on the last one the attempt fails (REQ-agent-1301) |
+| A `cli:` turn changed a protected file (SAFE-2 / SAFE-2.a, SpecSync records) | put back to its pre-turn state (or removed), one operator line and a closing note; one that cannot be put back fails the attempt, not verified (REQ-agent-1301) |
+| A `cli:` turn under a spend cap that covers it | the unknown-price spend card first (SAFE-16.a); a no runs nothing and the run ends with the spend-cap ask (REQ-agent-1301) |
 | The task names a plugin or asks for a GIF that this run does not offer | summary is the concrete gap (not installed / not allowlisted / not configured / role / tier) plus only HI ids and open PR numbers a lookup returned; no model call; no `ask`; no invented provider (REQ-agent-742) |
 | The same ask when a candidate tool is already offered | the model still runs; a vague install question is steered back to that tool instead of a clarify ask (REQ-agent-742) |
 | Scheduled run (`schedule_*` session), even the owner's, whose allowlist names a Fledge plugin command | no Fledge discovery, so the command is not offered and fledge is never spawned (REQ-agent-741) |
@@ -1769,3 +1837,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-10-07 | named-personas-are-their-own-files-in-personas-with-name-model-and-skill-tags-the-owner-can-run-a-task-as-one-and-a: Named personas are their own files in personas/ with name, model and skill tags; the owner can run a task as one and a lead's delegate picks one by skill tag; team and community can't pick one (AUTONOMOUS-2.a, AUTONOMOUS-5.a) |
 | 2026-10-07 | my-own-memory-forget-and-override-by-id-ask-me-on-a-dm-card-with-approve-and-a-one-time-code-and-an-override-shows-the: My own memory forget and override by id ask me on a DM card with Approve and a one-time code, and an override shows the new text word for word (SAFE-18.a) |
 | 2026-10-07 | after-a-move-to-a-stronger-model-the-model-it-moved-from-is-no-author-of-the-change-so-it-can-be-the-second-model: After a move to a stronger model, the model it moved from is no author of the change, so it can be the second-model reviewer (AGENT-17.a, GITHUB-9.a) |
+| 2026-10-07 | a-headless-agent-cli-can-be-one-of-my-models-in-my-own-runs-only-with-the-same-tools-as-my-other-models-inside-that: A headless agent CLI can be one of my models, in my own runs only, with the same tools as my other models, inside that talk's own worktree; other runs skip it and use my next model (AGENT-13, AGENT-13.a) |

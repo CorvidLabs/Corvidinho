@@ -324,3 +324,11 @@ keeps the `docs/DAEMON.md` Logs table in step with the daemon's events
 
 Fail on base: with main's (85871fa) `src/` swapped in, both daemon cases fail
 (`ownerDm` missing from `daemon.started`, no REST call). Restored, both pass.
+## `--help` and `.env.example` name the headless agent CLI kind (REQ-cli-079 modified; AGENT-13, AGENT-13.a)
+
+`tests/agent.headless-cli.test.ts` ("--help and .env.example name the cli:
+kind …") runs the real `corvidinho --help`: it lists the `cli:<program>
+[args]` form with where it runs and `CORVIDINHO_LLM_CLI_ENV`; `.env.example`
+lists `cli` among the kinds, has a `# CORVIDINHO_LLM_CLI_ENV=` line and no
+longer says every kind uses the chat API. With the pre-fix `src/cli.ts` and
+`.env.example` it fails.

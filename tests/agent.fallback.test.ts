@@ -571,6 +571,28 @@ describe("a delegate or council worker's failover reaches the lead (REQ-agent-08
     expect(r.summary).toBe("lead done\n\n(model fallback: delegate worker: w-a failed (HTTP 410), fell back to w-b)");
   });
 
+  test("a worker that skipped a headless agent CLI entry: the lead says skipped, not failed (AGENT-13.a)", async () => {
+    const SKIP = {
+      from: "cli:fakecli --print",
+      to: "w-b",
+      reason: "only in the owner's own runs, in that talk's worktree",
+      skipped: true as const,
+    };
+    registerTool("council", { state: "done", modelFallback: [SKIP] });
+    const f = perModel({
+      "model-a": [tools([{ name: "council", args: '{"argv":["--task","sub"]}' }]), ok("lead done")],
+    });
+    const h = harness(f.fetchImpl);
+    const r = await attempt(h.exec);
+    expect(h.hops).toEqual([{ ...SKIP, via: "council" }]);
+    expect(texts(h.events)).toContain(
+      "[operator] council worker: cli:fakecli --print skipped (only in the owner's own runs, in that talk's worktree); falling back to w-b",
+    );
+    expect(r.summary).toBe(
+      "lead done\n\n(model fallback: council worker: cli:fakecli --print skipped (only in the owner's own runs, in that talk's worktree), fell back to w-b)",
+    );
+  });
+
   function doneWorkerBin(hops: unknown[]): string {
     const dir = tmp("corvidinho-fallback-bin-");
     const bin = join(dir, "corvidinho");

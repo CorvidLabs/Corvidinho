@@ -152,7 +152,9 @@ function modelKey(label: string): string {
  * GITHUB-9.a: the first configured model ({@link configuredModels} order)
  * that has its key and is none of `authors` (compared by model id, so the
  * same model behind another kind or gateway still counts as an author).
- * Null when there is none — no second model, no PR.
+ * Null when there is none — no second model, no PR. A headless agent CLI
+ * entry (`cli:`, AGENT-13) is never the reviewer: the review is one no-tools
+ * completion, and a CLI is an agent with its own tools.
  */
 export function resolveReviewer(
   env: NodeJS.ProcessEnv,
@@ -161,7 +163,7 @@ export function resolveReviewer(
   const wrote = new Set<string>();
   for (const a of authors) wrote.add(modelKey(a));
   for (const p of configuredModels(env)) {
-    if (!p.usable) continue;
+    if (!p.usable || p.entry.kind === "cli") continue;
     if (wrote.has(modelKey(entryLabel(p.entry)))) continue;
     return p;
   }

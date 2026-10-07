@@ -3,6 +3,10 @@
  * Calls the configured model (AGENT-13, src/agent/providers.ts: openai,
  * ollama or anthropic entries, all over the OpenAI-compatible chat API); at
  * tier≠read it runs a thin tool loop over allowlisted plugins (AGENT-3/5).
+ * A `cli:` entry (a headless agent CLI, AGENT-13.a, src/agent/headless-cli.ts)
+ * runs a whole attempt itself, only where `cliTurnGate` allows it (the
+ * owner's own run in their talk worktree, with the shell theirs); elsewhere
+ * the chain skips it with the AGENT-11 note.
  * The tier's entries are a fallback chain (AGENT-11, `callChain`): a model
  * that fails hands the run to the next one, with a `Text` event and a
  * closing note in the summary. With no usable provider the attempt fails
@@ -155,7 +159,11 @@ import {
 import {
   addModelUsage,
   callChain,
+  CLI_SKIP_DEFAULT_WHY,
+  cliSkippedError,
   entryLabel,
+  entryModelId,
+  failOver,
   mergeModelFallbacks,
   modelChain,
   modelFallbackEventText,
@@ -169,6 +177,7 @@ import {
   withModelFallbackNote,
   withStrongerModelNote,
   type ChainCall,
+  type CliTurnVerdict,
   type ModelChain,
   type ModelFailure,
   type ProviderKind,
@@ -180,6 +189,17 @@ import { maxTurnsFromEnv, whileIdlePaused } from "./limits.ts";
 import { renderRepoWaysBlock, type RepoWays } from "./repo-ways.ts";
 import { HI_DRAFT_TOOL, HI_DRAFT_TOOL_RESULT_DETAIL, handleHiDraftCall, hiDraftGate, withHiDraftTool, type HiDraftMode } from "./hi-drafts.ts";
 import { shellToolsGate, shellToolsRefusedLine } from "./shell-gate.ts";
+import {
+  CLI_SKIP_WHY,
+  cliRefusedLine,
+  cliRestoreFailedLine,
+  cliRestoredNote,
+  cliTurnGate,
+  cliTurnPrompt,
+  guardProtectedPaths,
+  pathPreview,
+  runCliTurn,
+} from "./headless-cli.ts";
 import {
   allowlistOffers,
   argvFromToolArguments,
@@ -224,7 +244,8 @@ export function loadLlmEnv(
     kind: p?.entry.kind ?? null,
     apiKey: p?.apiKey,
     baseUrl: p?.baseUrl ?? "",
-    model: p?.entry.model ?? "",
+    // AGENT-13: a `cli` head is its whole label (`entryModelId`), as `modelForTier`.
+    model: p ? entryModelId(p.entry) : "",
     tier: runTier,
     notice: providerNotice(env, [runTier]),
   };
@@ -867,8 +888,13 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
   const models: ModelCalls = {
     chain,
     onFallback: noteFallback,
+    // AGENT-13.a: set for every attempt (`cliTurnGate`); refused until then.
+    cli: { granted: false, why: CLI_SKIP_DEFAULT_WHY },
     escalate: (kind) => {
-      const next = moveToStronger(chain, order);
+      // AGENT-13.a: a `cli:` model this attempt may not run is never the
+      // stronger model it moves to.
+      const usable = models.cli.granted ? order : order.filter((e) => e.kind !== "cli");
+      const next = moveToStronger(chain, usable);
       if (next.ok) {
         movedTo = { from: next.from, to: next.to, kind };
         // GITHUB-9.a: a move only follows a run that changed nothing, so the
@@ -885,7 +911,14 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
     },
     onWorkerFallback: (via, hops) => {
       for (const h of hops) {
-        const hop: ModelFallback = { from: h.from, to: h.to, reason: h.reason, via };
+        // AGENT-13.a: a worker's skipped `cli:` entry stays `skipped` here too.
+        const hop: ModelFallback = {
+          from: h.from,
+          to: h.to,
+          reason: h.reason,
+          via,
+          ...(h.skipped ? { skipped: true as const } : {}),
+        };
         if (mergeModelFallbacks(fallbacks, [hop]).length > fallbacks.length) noteFallback(hop);
       }
     },
@@ -967,6 +1000,116 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
   let safe3aNoted = false;
   // REQ-agent-318: the attribution lines this run's successful tool calls need.
   const attributions = new Set<string>();
+  // AGENT-13.a: this run already said once why a `cli:` model was not run.
+  let cliNoted = false;
+
+  /**
+   * AGENT-13 / AGENT-13.a: one turn of the `cli:` model `p` for this attempt
+   * (the gate already granted it): protected files snapshotted, the CLI run
+   * in the talk worktree through the spend guard, protected files it changed
+   * put back. `done` with the attempt's result, or a model failure that fails
+   * over to the next entry.
+   */
+  const cliTurn = async (
+    p: ResolvedProvider,
+    ctx: { attempt: number; verifyFeedback?: string; signal: AbortSignal; specBriefing?: string; repoWays?: RepoWays },
+  ): Promise<{ done: true; result: ExecuteResult } | { done: false; failure: ModelFailure; error: string }> => {
+    const label = entryLabel(p.entry);
+    const guard = await guardProtectedPaths(cwd);
+    if (!guard) {
+      return {
+        done: false,
+        failure: { kind: "skipped", why: CLI_SKIP_WHY.noGuard },
+        error: cliSkippedError(p.entry, CLI_SKIP_WHY.noGuard),
+      };
+    }
+    emit(onEvent, { type: "Text", text: `[operator] AGENT-13.a: ${label} is working in this talk's worktree` });
+    const turn = await runCliTurn({
+      provider: p,
+      cwd,
+      env,
+      prompt: cliTurnPrompt({
+        taskText,
+        attempt: ctx.attempt,
+        ...(ctx.verifyFeedback ? { verifyFeedback: ctx.verifyFeedback } : {}),
+        specBriefingBlock: renderSpecBriefing(ctx.specBriefing),
+        personaBlock,
+        projectBlock,
+        // SAFE-11 / IDENTITY-4: the identity rules every model of the run gets.
+        identityRules: IDENTITY_AGENT_SYSTEM_INSTRUCTIONS,
+        ...(ctx.repoWays ? { repoWays: ctx.repoWays } : {}),
+      }),
+      signal: ctx.signal,
+      timeoutMs,
+      spend,
+    });
+    // SAFE-2: whatever the turn did, protected files go back first.
+    const back = await guard.restore();
+    // AGENT-4: its edits are its own (no tool reports them); the real git diff lists them.
+    const edits = { unreportedEditTools: [label] };
+    if (!back.ok) {
+      const line = cliRestoreFailedLine(label, back);
+      emit(onEvent, { type: "Text", text: `[operator] ${line}` });
+      return { done: true, result: { summary: line, filesChanged: [], error: true, failureReason: line, ...edits } };
+    }
+    let note = "";
+    if (back.restored.length > 0) {
+      emit(onEvent, {
+        type: "Text",
+        text: `[operator] SAFE-2: ${label} changed protected files; put back: ${pathPreview(back.restored)}`,
+      });
+      note = cliRestoredNote(back.restored);
+    }
+    if (!turn.ok) {
+      if (turn.failure !== null) return { done: false, failure: turn.failure, error: turn.error };
+      // The run's stop, or a spend-cap stop (the execute hook turns it into its ask).
+      return {
+        done: true,
+        result: {
+          summary: turn.error,
+          filesChanged: [],
+          ...(ctx.signal.aborted ? {} : { error: true, failureReason: turn.error }),
+          ...edits,
+        },
+      };
+    }
+    if (turn.usage) onUsage?.(turn.usage, label);
+    models.onModel?.(label);
+    return { done: true, result: { summary: note ? `${turn.reply}\n\n${note}` : turn.reply, filesChanged: [], ...edits } };
+  };
+
+  /**
+   * AGENT-13.a: while the chain's current entry is a `cli:` model, it takes
+   * this attempt (when the gate granted it) or is skipped, and a failed or
+   * skipped one hands over to the next entry (AGENT-11). Null once the
+   * current entry is a chat model: the attempt goes on as usual.
+   */
+  const cliStep = async (ctx: {
+    attempt: number;
+    verifyFeedback?: string;
+    signal: AbortSignal;
+    specBriefing?: string;
+    repoWays?: RepoWays;
+  }): Promise<ExecuteResult | null> => {
+    for (;;) {
+      const p = chain.entries[chain.index];
+      if (!p || p.entry.kind !== "cli") return null;
+      let failure: ModelFailure;
+      let error: string;
+      const verdict: CliTurnVerdict = models.cli;
+      if (!verdict.granted) {
+        failure = { kind: "skipped", why: verdict.why };
+        error = cliSkippedError(p.entry, verdict.why);
+      } else {
+        const turn = await cliTurn(p, ctx);
+        if (turn.done) return turn.result;
+        ({ failure, error } = turn);
+      }
+      if (!failOver(chain, failure, noteFallback)) {
+        return { summary: error, filesChanged: [], error: true, failureReason: modelCallFailedLine(failure, p) };
+      }
+    }
+  };
 
   const run: ExecuteFn = async ({
     attempt,
@@ -1016,6 +1159,38 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
     // read-tier return so a missing-capability reply can name a role gap.
     const actingRole = await resolveActingRole(env);
     const actingIsAdmin = actingRole === null || actingRole === "owner";
+
+    // AGENT-13 / AGENT-13.a: may this attempt run a headless agent CLI model?
+    // Re-read for every attempt. Refused, each `cli:` entry is skipped (here
+    // and in the chat path) with the AGENT-11 note, and one operator line per
+    // run says why; granted, the current `cli:` entry takes the attempt.
+    models.cli = { granted: false, why: CLI_SKIP_DEFAULT_WHY };
+    const cliAhead = chain.entries.slice(chain.index).filter((p) => p.entry.kind === "cli");
+    if (cliAhead.length > 0) {
+      const gate = await cliTurnGate({
+        env,
+        cwd,
+        ...(opts.talkWorktree ? { talkWorktree: opts.talkWorktree } : {}),
+        tier,
+        maxToolRounds,
+        allowlist,
+        injectionTripped: injection !== null,
+      });
+      models.cli = gate.granted ? { granted: true } : { granted: false, why: gate.why };
+      if (!gate.granted && !cliNoted) {
+        cliNoted = true;
+        const labels = [...new Set(cliAhead.map((p) => entryLabel(p.entry)))].join(", ");
+        emit(onEvent, { type: "Text", text: cliRefusedLine(labels, gate.detail) });
+      }
+    }
+    const viaCli = await cliStep({
+      attempt,
+      ...(verifyFeedback ? { verifyFeedback } : {}),
+      signal,
+      ...(specBriefing ? { specBriefing } : {}),
+      ...(repoWays ? { repoWays } : {}),
+    });
+    if (viaCli) return viaCli;
     const citePrs = opts.citeOpenPrs !== false;
     const lookup: CoverageLookup =
       opts.coverageLookup ??
@@ -1134,7 +1309,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
             assessCapability(askDetected, factsFor(offered)) ?? { ask: askDetected, offered: [], gaps: [] },
             tier,
           );
-    return runToolLoop({
+    const looped = await runToolLoop({
       llm,
       capabilityFacts: factsFor(offered),
       capabilityNote,
@@ -1186,6 +1361,13 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
       // whose edits no result reports (a role-session worker is non-ADMIN).
       workerEditsUnreported: !roleSessionActive(env) && allowsFledge(allowlist),
     });
+    // AGENT-11 / AGENT-13.a: the chain reached a `cli:` model this attempt
+    // may run (a failover or a stronger-model move); it takes the attempt
+    // over from here (the edits so far stay on disk).
+    if (looped.cliHandover) {
+      return run({ attempt, verifyFeedback, signal, specBriefing, repoWays, workspaceChanged });
+    }
+    return looped;
   };
   // SAFE-8: an attempt stopped at the cap ends with its spend-cap ask (blocked).
   // SAFE-13: once a tool result in this run looked like an injection, every
@@ -1241,6 +1423,12 @@ type ModelCalls = {
   chain: ModelChain;
   /** This run's own chain moved to its next configured model. */
   onFallback: (hop: ModelFallback) => void;
+  /**
+   * AGENT-13.a: whether this attempt may run a `cli:` model (set per
+   * attempt): granted, the chat path stops at one and hands the attempt
+   * over; refused, it is skipped with this reason.
+   */
+  cli: CliTurnVerdict;
   /**
    * AGENT-17 / AGENT-17.a: after the nudge, move the chain to the next
    * stronger model in the order I set (`moveToStronger`), or say why it stays.
@@ -1313,7 +1501,10 @@ type LoopArgs = {
   capabilityNote?: string;
 };
 
-async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
+/** A tool-loop result; `cliHandover` (AGENT-13.a) never leaves `createTaskExecute`. */
+type LoopResult = ExecuteResult & { cliHandover?: true };
+
+async function runToolLoop(args: LoopArgs): Promise<LoopResult> {
   const {
     llm,
     models,
@@ -1472,6 +1663,15 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
     });
 
     if (!completion.ok) {
+      // AGENT-13.a: the chain reached a `cli:` model this attempt may run.
+      if (completion.handover) {
+        return {
+          summary: lastText,
+          filesChanged: [...filesChanged],
+          ...unreportedEdits(unreportedEditTools),
+          cliHandover: true,
+        };
+      }
       return {
         summary: completion.error,
         filesChanged: [...filesChanged],
@@ -2067,6 +2267,8 @@ export type Completion =
       failure: ModelFailure | null;
       /** DISCORD-3.b: the chain's last failure as one plain line (`modelCallFailedLine`). */
       reason?: string;
+      /** AGENT-13.a: the chain stopped at a `cli:` model that takes the attempt over. */
+      handover?: true;
     };
 
 /**
@@ -2089,9 +2291,11 @@ async function callModels(
           : { ok: false, error: reply.error, failure: reply.failure };
       },
       models.onFallback,
+      models.cli,
     ),
   );
   if (!r.ok) {
+    if (r.handover) return { ok: false, error: r.error, failure: null, handover: true };
     return {
       ok: false,
       error: r.error,

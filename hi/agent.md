@@ -30,6 +30,7 @@ Corvidinho is the agent I actually run on a Linux box: it reads the project’s 
 - **AGENT-8**  While it works I can see what state it is in — planning, calling a tool, verifying, or done — so bridges and the CLI are not guessing.
 - **AGENT-9**  When the tool-round budget runs out, finish with the best prose so far or a brief clarifying ask — never dump internal stop reasons like Stopped after N tool rounds into the Discord channel body (thinking embed / operator plumbing may note it)
 - **AGENT-13**  I configure its models (OpenAI-compatible, Ollama, Anthropic or a headless agent CLI), and there's no built-in default.
+  - **AGENT-13.a**  A headless agent CLI model runs only in my own runs, with the same tools as my other models, inside that talk's own worktree; other runs skip it and use my next model.
 - **AGENT-10**  With no provider set, it says so at startup and in /status.
 - **AGENT-11**  If a model fails or is retired, it falls back to my next configured model and tells me.
 - **AGENT-12**  An idle timeout and a turn cap that I set stop stalled or endless runs, and it says so.

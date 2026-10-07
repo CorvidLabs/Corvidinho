@@ -4,8 +4,9 @@
  *
  * `CORVIDINHO_LLM_MODEL` and the per-tier keys (`CORVIDINHO_LLM_MODEL_READ`,
  * `_TOOL`, `_CODE`, AGENT-5) each hold a comma-separated list of entries. An
- * entry is `kind:model` with kind `openai`, `ollama` or `anthropic`; a bare
- * entry, or one whose prefix is not a kind (`qwen3:30b`), is OpenAI-compatible.
+ * entry is `kind:model` with kind `openai`, `ollama`, `anthropic` or `cli`; a
+ * bare entry, or one whose prefix is not a kind (`qwen3:30b`), is
+ * OpenAI-compatible.
  *
  * The list is a fallback chain (AGENT-11, {@link callChain}): a run calls the
  * tier's first entry, and when that model fails (an HTTP error, 404 / 410 for
@@ -29,17 +30,28 @@
  *   `/v1` API, no key.
  * - `anthropic`: `https://api.anthropic.com/v1` (its OpenAI-compatible API),
  *   key `ANTHROPIC_API_KEY`.
- * All of them go through the one chat-completions transport and the SAFE-8
+ * Those three go through the one chat-completions transport and the SAFE-8
  * spend guard. With no usable entry a run fails with the no-provider notice.
  * Keys are read from env only and never printed (SAFE-6).
+ *
+ * - `cli` (AGENT-13 / AGENT-13.a): a headless agent CLI the owner names,
+ *   `cli:<program> [args…]` (split on whitespace, no shell). It is not a chat
+ *   endpoint: it runs a whole attempt itself (src/agent/headless-cli.ts), only
+ *   in the owner's own runs inside that talk's worktree. Anywhere else the
+ *   chain skips it ({@link callChain}, a `skipped` hop with the AGENT-11
+ *   note) and the next entry runs; where it may run, the chat path stops at
+ *   it and hands the attempt over (`handover`). Its provider id is
+ *   `cli:<program name>`, it goes through the same SAFE-8 spend guard, and it
+ *   never has a known price (SAFE-16).
  */
 
 import { STATUS_CODES } from "node:http";
+import { basename } from "node:path";
 import { scrubSecrets } from "../store/scrub.ts";
 import { loadTierFromEnv, TIER_MODEL_ENV, type CapabilityTier } from "./tier.ts";
 import type { AgentTokenUsage, ModelFallback, ModelUsage } from "./types.ts";
 
-export const PROVIDER_KINDS = ["openai", "ollama", "anthropic"] as const;
+export const PROVIDER_KINDS = ["openai", "ollama", "anthropic", "cli"] as const;
 export type ProviderKind = (typeof PROVIDER_KINDS)[number];
 
 /** One configured model: the provider kind and the model id sent as `body.model`. */
@@ -57,6 +69,9 @@ export const PROVIDER_KEY_ENV: Readonly<Record<ProviderKind, readonly string[]>>
   openai: ["CORVIDINHO_LLM_API_KEY", "OPENAI_API_KEY"],
   ollama: [],
   anthropic: ["ANTHROPIC_API_KEY"],
+  // AGENT-13.a: the CLI reads its own login or the keys the owner passes it
+  // (`CORVIDINHO_LLM_CLI_ENV`, src/agent/headless-cli.ts); none is required.
+  cli: [],
 };
 
 const ALL_TIERS: readonly CapabilityTier[] = ["read", "tool", "code"];
@@ -88,7 +103,9 @@ export function parseModelEntry(raw: string): ModelEntry | null {
   if (i > 0) {
     const prefix = s.slice(0, i).trim().toLowerCase();
     if (isKind(prefix)) {
-      const model = s.slice(i + 1).trim();
+      let model = s.slice(i + 1).trim();
+      // AGENT-13: a CLI command is argv split on whitespace; one space each.
+      if (prefix === "cli") model = model.replace(/\s+/g, " ");
       return model ? { kind: prefix, model } : null;
     }
   }
@@ -121,6 +138,23 @@ export function modelChainForTier(
 /** How an entry is shown: the bare model for `openai`, else `kind:model`. */
 export function entryLabel(entry: ModelEntry): string {
   return entry.kind === "openai" ? entry.model : `${entry.kind}:${entry.model}`;
+}
+
+/**
+ * AGENT-13: the argv of a `cli` entry — its command split on whitespace (no
+ * shell, no quoting); the program is a name looked up on PATH or a path.
+ */
+export function cliArgv(entry: ModelEntry): string[] {
+  return entry.model.split(/\s+/).filter(Boolean);
+}
+
+/**
+ * AGENT-13 / SAFE-14: a `cli` entry's provider id, `cli:<program name>`
+ * (lower-cased): what the SAFE-8 ledger records for its turns and what a
+ * provider cap names (`CORVIDINHO_PROVIDER_SPEND_CAPS_USD=cli:<name>=<USD>`).
+ */
+export function cliProviderId(entry: ModelEntry): string {
+  return `cli:${basename(cliArgv(entry)[0] ?? "").toLowerCase()}`;
 }
 
 /**
@@ -173,7 +207,10 @@ export function resolveEntry(
   const keyEnv = keyNames.length > 0 ? keyNames.join(" or ") : null;
   const usable = keyNames.length === 0 || apiKey !== undefined;
   let baseUrl: string;
-  if (entry.kind === "ollama") baseUrl = `${ollamaHostUrl(env)}/v1`;
+  // AGENT-13: a CLI has no endpoint; its "base" is its provider id, so
+  // `providerId` (and the SAFE-8 ledger) name it `cli:<program name>`.
+  if (entry.kind === "cli") baseUrl = cliProviderId(entry);
+  else if (entry.kind === "ollama") baseUrl = `${ollamaHostUrl(env)}/v1`;
   else if (entry.kind === "anthropic") baseUrl = ANTHROPIC_BASE_URL;
   else baseUrl = env.CORVIDINHO_LLM_BASE_URL?.trim() || OPENAI_BASE_URL;
   return { entry, baseUrl: baseUrl.replace(/\/+$/, ""), apiKey, keyEnv, usable };
@@ -284,7 +321,15 @@ export type ModelFailure =
   | { kind: "network" }
   | { kind: "malformed" }
   /** A fallback entry whose kind needs a key that is not set: skipped, never called. */
-  | { kind: "no-key"; keyEnv: string };
+  | { kind: "no-key"; keyEnv: string }
+  /**
+   * AGENT-13.a: a `cli` entry this attempt may not run (not the owner's own
+   * run in their talk worktree, or the shell is not theirs here): skipped,
+   * never started. `why` is one fixed short line.
+   */
+  | { kind: "skipped"; why: string }
+  /** AGENT-13: a `cli` entry's program exited non-zero (127: it could not start). */
+  | { kind: "exit"; code: number };
 
 /** A failure's short, fixed reason — never provider output (SAFE-6). */
 export function modelFailureReason(f: ModelFailure): string {
@@ -299,6 +344,10 @@ export function modelFailureReason(f: ModelFailure): string {
       return "malformed reply";
     case "no-key":
       return `${f.keyEnv} is not set`;
+    case "skipped":
+      return f.why;
+    case "exit":
+      return f.code === 127 ? "could not start" : `exited ${f.code}`;
   }
 }
 
@@ -330,6 +379,10 @@ export function modelCallFailedLine(
       return `The model call failed (malformed reply from ${host})`;
     case "no-key":
       return `The model call failed (${entryLabel(provider.entry)} needs ${failure.keyEnv}, which is not set)`;
+    case "skipped":
+      return `The model call failed (${entryLabel(provider.entry)} was skipped: ${failure.why})`;
+    case "exit":
+      return `The model call failed (${entryLabel(provider.entry)} ${modelFailureReason(failure)})`;
   }
 }
 
@@ -368,7 +421,17 @@ export function withoutProviderHost(reason: string): string {
  */
 export type ChainCall<T> =
   | { ok: true; value: T }
-  | { ok: false; error: string; failure: ModelFailure | null };
+  | {
+      ok: false;
+      error: string;
+      failure: ModelFailure | null;
+      /**
+       * AGENT-13.a: the chain stopped at a `cli` entry this attempt may run;
+       * it takes the attempt over (src/agent/headless-cli.ts). Never a model
+       * failure, and the chain stays on that entry.
+       */
+      handover?: true;
+    };
 
 /**
  * A tier's configured models in order, and which one calls go to now. One
@@ -393,6 +456,47 @@ export function modelChain(env: NodeJS.ProcessEnv, tier: CapabilityTier): ModelC
 }
 
 /**
+ * AGENT-11: move `chain` past its current entry, which failed (or, AGENT-13.a,
+ * was skipped) with `failure`: record the hop, call `onFallback` and keep the
+ * next entry for every later call. False (nothing moves) when there is no
+ * next entry.
+ */
+export function failOver(
+  chain: ModelChain,
+  failure: ModelFailure,
+  onFallback?: (hop: ModelFallback) => void,
+): boolean {
+  const p = chain.entries[chain.index];
+  const next = chain.entries[chain.index + 1];
+  if (!p || !next) return false;
+  const hop: ModelFallback = {
+    from: entryLabel(p.entry),
+    to: entryLabel(next.entry),
+    reason: modelFailureReason(failure),
+    ...(failure.kind === "skipped" ? { skipped: true as const } : {}),
+  };
+  chain.index += 1;
+  chain.fallbacks.push(hop);
+  onFallback?.(hop);
+  return true;
+}
+
+/**
+ * AGENT-13.a: whether this attempt may run a `cli` entry (the gate in
+ * src/agent/headless-cli.ts), and if not, the fixed short reason its skip
+ * names.
+ */
+export type CliTurnVerdict = { granted: true } | { granted: false; why: string };
+
+/** The skip reason when no gate verdict was given (fail closed). */
+export const CLI_SKIP_DEFAULT_WHY = "only in the owner's own runs, in that talk's worktree";
+
+/** The error of a chain that ends on a `cli` entry it skipped (AGENT-13.a). */
+export function cliSkippedError(entry: ModelEntry, why: string): string {
+  return `${entryLabel(entry)} was not run: ${why} (AGENT-13.a), and no model is configured after it.`;
+}
+
+/**
  * Call the chain's current model with `fn` (AGENT-11). When it fails as a
  * model (`failure` set) and a next entry exists, record the failover, call
  * `onFallback` and go on at once with that entry — no retry, no backoff; the
@@ -400,33 +504,45 @@ export function modelChain(env: NodeJS.ProcessEnv, tier: CapabilityTier): ModelC
  * not set is skipped the same way without being called. A failure that is not
  * a model's (`failure: null`) or on the last entry comes back as it is.
  * `provider` is the entry the result came from (null for an empty chain).
+ *
+ * AGENT-13.a: `fn` is never called with a `cli` entry. When this attempt may
+ * run it (`cli` granted) the chain stops there with `handover` (the CLI then
+ * takes the attempt over); otherwise (refused, or no verdict given) it is
+ * skipped like a keyless entry, its hop marked `skipped`.
  */
 export async function callChain<T>(
   chain: ModelChain,
   fn: (provider: ResolvedProvider) => Promise<ChainCall<T>>,
   onFallback?: (hop: ModelFallback) => void,
+  cli?: CliTurnVerdict,
 ): Promise<ChainCall<T> & { provider: ResolvedProvider | null }> {
   for (;;) {
     const p = chain.entries[chain.index];
     if (!p) return { ok: false, error: NO_PROVIDER_NOTICE, failure: null, provider: null };
-    const r: ChainCall<T> = p.usable
-      ? await fn(p)
-      : {
+    let r: ChainCall<T>;
+    if (p.entry.kind === "cli") {
+      if (cli?.granted) {
+        return {
           ok: false,
-          error: `${entryLabel(p.entry)} needs ${p.keyEnv}, which is not set`,
-          failure: { kind: "no-key", keyEnv: p.keyEnv ?? "its key" },
+          error: `${entryLabel(p.entry)} takes this attempt over (AGENT-13.a)`,
+          failure: null,
+          handover: true,
+          provider: p,
         };
+      }
+      const why = cli && !cli.granted ? cli.why : CLI_SKIP_DEFAULT_WHY;
+      r = { ok: false, error: cliSkippedError(p.entry, why), failure: { kind: "skipped", why } };
+    } else {
+      r = p.usable
+        ? await fn(p)
+        : {
+            ok: false,
+            error: `${entryLabel(p.entry)} needs ${p.keyEnv}, which is not set`,
+            failure: { kind: "no-key", keyEnv: p.keyEnv ?? "its key" },
+          };
+    }
     if (r.ok || r.failure === null) return { ...r, provider: p };
-    const next = chain.entries[chain.index + 1];
-    if (!next) return { ...r, provider: p };
-    const hop: ModelFallback = {
-      from: entryLabel(p.entry),
-      to: entryLabel(next.entry),
-      reason: modelFailureReason(r.failure),
-    };
-    chain.index += 1;
-    chain.fallbacks.push(hop);
-    onFallback?.(hop);
+    if (!failOver(chain, r.failure, onFallback)) return { ...r, provider: p };
   }
 }
 
@@ -538,12 +654,18 @@ function hopPrefix(hop: ModelFallback): string {
   return hop.via ? `${hop.via} worker: ` : "";
 }
 
+/** "failed", or "skipped" for an entry never called (AGENT-13.a). */
+function hopVerb(hop: ModelFallback): string {
+  return hop.skipped ? "skipped" : "failed";
+}
+
 /**
  * The live operator line for one failover (AGENT-11): a `Text` event, shown
- * by the CLI and streamed to bridges.
+ * by the CLI and streamed to bridges. A skipped `cli` entry (AGENT-13.a)
+ * reads `skipped` instead of `failed`.
  */
 export function modelFallbackEventText(hop: ModelFallback): string {
-  return `[operator] ${hopPrefix(hop)}${oneLine(hop.from)} failed (${oneLine(hop.reason)}); falling back to ${oneLine(hop.to)}`;
+  return `[operator] ${hopPrefix(hop)}${oneLine(hop.from)} ${hopVerb(hop)} (${oneLine(hop.reason)}); falling back to ${oneLine(hop.to)}`;
 }
 
 /** Start of the closing note a run's summary carries after a failover. */
@@ -561,7 +683,7 @@ export function modelFallbackNote(hops: readonly ModelFallback[]): string {
 
 function hopsText(hops: readonly ModelFallback[]): string {
   return hops
-    .map((h) => `${hopPrefix(h)}${oneLine(h.from)} failed (${oneLine(h.reason)}), fell back to ${oneLine(h.to)}`)
+    .map((h) => `${hopPrefix(h)}${oneLine(h.from)} ${hopVerb(h)} (${oneLine(h.reason)}), fell back to ${oneLine(h.to)}`)
     .join("; ");
 }
 
@@ -599,9 +721,24 @@ export function answeredModelLabel(
   return from.length > 0 ? `${answered} (fell back from ${from.join(", ")})` : answered;
 }
 
-/** The model id a label prices at (`body.model`: the label without its `kind:`). */
+/**
+ * The model id a label prices at (`body.model`: the label without its
+ * `kind:`). A `cli` entry sends no `body.model` and has no known price
+ * (AGENT-13, SAFE-16), so its id is its whole label: `cli:gpt-5` never
+ * prices as `gpt-5`.
+ */
 export function modelIdOfLabel(label: string): string {
-  return parseModelEntry(label)?.model ?? label.trim();
+  const e = parseModelEntry(label);
+  return e ? entryModelId(e) : label.trim();
+}
+
+/**
+ * The model id an entry prices and shows as: its `body.model`, or for a
+ * `cli` entry (no `body.model`, no known price, AGENT-13 / SAFE-16) its
+ * whole label.
+ */
+export function entryModelId(entry: ModelEntry): string {
+  return entry.kind === "cli" ? entryLabel(entry) : entry.model;
 }
 
 /** Failovers kept on a result or tool data; more are dropped. */
@@ -641,6 +778,7 @@ export function modelFallbackFromUnknown(v: unknown): ModelFallback[] | undefine
     if (!from || !to || !reason) continue;
     const hop: ModelFallback = { from, to, reason };
     if (r.via === "delegate" || r.via === "council") hop.via = r.via;
+    if (r.skipped === true) hop.skipped = true;
     out.push(hop);
   }
   return out.length > 0 ? out : undefined;
@@ -654,7 +792,14 @@ export function mergeModelFallbacks(
   const out = [...list];
   for (const h of add) {
     if (out.length >= MODEL_FALLBACK_MAX) break;
-    if (out.some((o) => o.from === h.from && o.to === h.to && o.reason === h.reason && o.via === h.via)) continue;
+    if (
+      out.some(
+        (o) =>
+          o.from === h.from && o.to === h.to && o.reason === h.reason && o.via === h.via && o.skipped === h.skipped,
+      )
+    ) {
+      continue;
+    }
     out.push(h);
   }
   return out;

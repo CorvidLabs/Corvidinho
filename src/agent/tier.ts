@@ -4,7 +4,7 @@
  * Numeric plugin minTier: 0 = read floor, 1 = tool, 2+ = code.
  */
 
-import { modelChainForTier, parseModelChain } from "./providers.ts";
+import { entryModelId, modelChainForTier, parseModelChain } from "./providers.ts";
 
 export type CapabilityTier = "read" | "tool" | "code";
 
@@ -48,13 +48,16 @@ export const TIER_MODEL_ENV: Readonly<Record<CapabilityTier, string>> = {
 /**
  * The model id a run at `tier` sends as `body.model` (AGENT-5 / AGENT-13):
  * the first entry of the tier's key, else of `CORVIDINHO_LLM_MODEL`, without
- * its `kind:` prefix. "" when no model is configured (no default).
+ * its `kind:` prefix. "" when no model is configured (no default). A `cli`
+ * entry sends none and has no known price, so it is its whole label
+ * (`modelIdOfLabel`).
  */
 export function modelForTier(
   env: NodeJS.ProcessEnv,
   tier: CapabilityTier,
 ): string {
-  return modelChainForTier(env, tier)[0]?.model ?? "";
+  const head = modelChainForTier(env, tier)[0];
+  return head ? entryModelId(head) : "";
 }
 
 /**

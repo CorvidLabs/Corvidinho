@@ -171,12 +171,16 @@ Env / allowlists (ALLOW-4; default-deny, never Merlin BASIC):
   CORVIDINHO_WATCH_USERNAME                             GitHub login to listen for (WATCH)
   CORVIDINHO_WATCH_INTERVAL_MS                          poll interval (default 60000, min 30000)
   CORVIDINHO_WATCH_DRY_RUN=1                            echo agent; no spawn
-  CORVIDINHO_LLM_MODEL                                  required: the model, as openai:<model>, ollama:<model> or anthropic:<model>
-                                                        (bare = OpenAI-compatible); no built-in default (AGENT-13)
+  CORVIDINHO_LLM_MODEL                                  required: the model, as openai:<model>, ollama:<model>, anthropic:<model> or a
+                                                        headless agent CLI, cli:<program> [args] (bare = OpenAI-compatible); no built-in
+                                                        default (AGENT-13). A cli: entry runs only in my own code-tier runs with
+                                                        shell-exec allowlisted, in that talk's worktree; other runs skip it (AGENT-13.a)
   CORVIDINHO_LLM_API_KEY / OPENAI_API_KEY               key for openai: models (never commit)
   CORVIDINHO_LLM_BASE_URL                               endpoint for openai: models (default https://api.openai.com/v1)
   OLLAMA_HOST                                           Ollama server for ollama: models (default 127.0.0.1:11434; no key)
   ANTHROPIC_API_KEY                                     key for anthropic: models (never commit)
+  CORVIDINHO_LLM_CLI_ENV                                optional comma list of env key names a cli: model gets (e.g. ANTHROPIC_API_KEY);
+                                                        unset = none, it uses its own login; git, GitHub, cloud, Discord keys never (AGENT-13.a)
   CORVIDINHO_LLM_TIER=read|tool|code                    capability tier (AGENT-5; default tool)
   CORVIDINHO_LLM_MODEL_READ / _TOOL / _CODE             optional model per tier (AGENT-5; else CORVIDINHO_LLM_MODEL)
   CORVIDINHO_LLM_MODEL_ORDER                            optional model order, weakest first, same entries: a run that still only plans or

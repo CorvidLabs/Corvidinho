@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 69
+version: 70
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -189,7 +189,7 @@ REQ-plugins-097).
 bounded rounds, and the PR body lists what it raised and what changed
 (GITHUB-9 / GITHUB-9.a, REQ-plugins-092, `src/work/review.ts`): the reviewer
 is the first other configured model that did not write the change (no
-reviewer setting); an agent run starts the rounds, an owner or team `/work`
+reviewer setting; never a headless agent CLI `cli:` entry, REQ-plugins-1301); an agent run starts the rounds, an owner or team `/work`
 run drives them itself once its tree is verified (the tree `/work` will
 commit, untracked files included; `workReviewHook`, REQ-agent-092), a caller
 with no run model opens only a tree whose review already finished, and no
@@ -373,7 +373,13 @@ REQ-plugins-115).
 
 `spawnCapped` counts each output chunk of its child as the calling run's
 activity for the idle timeout (AGENT-12, REQ-plugins-125, `noteIdleActivity`;
-a no-op outside a run), so a printing tool is never stopped as idle.
+a no-op outside a run), so a printing tool is never stopped as idle. Two
+optional options serve the headless agent CLI turn (AGENT-13.a,
+REQ-plugins-1301, `src/agent/headless-cli.ts`): `stdin` (text written to the
+child's stdin, then closed; default closed) and `killTreeAfterExit` (once the
+child exits, whatever it left running in its tree is killed, so nothing keeps
+changing files after the run checks them; default off). Every other caller is
+unchanged.
 
 Builtin plugin loaders MAY re-register after an in-process registry clear
 (test seam). Presence of an already-registered command name skips duplicate
@@ -1703,3 +1709,4 @@ and current rows for plugins host evolution.
 | 2026-10-06 | the-specsync-check-tool-the-verify-lane-s-spec-check-step-starts-without-my-cloud-credentials-and-its-output-is: The specsync-check tool (the verify lane's spec-check step) starts without my cloud credentials and its output is scrubbed (SAFE-21.b follow-up to #373) |
 | 2026-10-07 | named-personas-are-their-own-files-in-personas-with-name-model-and-skill-tags-the-owner-can-run-a-task-as-one-and-a: Named personas are their own files in personas/ with name, model and skill tags; the owner can run a task as one and a lead's delegate picks one by skill tag; team and community can't pick one (AUTONOMOUS-2.a, AUTONOMOUS-5.a) |
 | 2026-10-07 | my-own-memory-forget-and-override-by-id-ask-me-on-a-dm-card-with-approve-and-a-one-time-code-and-an-override-shows-the: My own memory forget and override by id ask me on a DM card with Approve and a one-time code, and an override shows the new text word for word (SAFE-18.a) |
+| 2026-10-07 | a-headless-agent-cli-can-be-one-of-my-models-in-my-own-runs-only-with-the-same-tools-as-my-other-models-inside-that: A headless agent CLI can be one of my models, in my own runs only, with the same tools as my other models, inside that talk's own worktree; other runs skip it and use my next model (AGENT-13, AGENT-13.a) |

@@ -983,3 +983,11 @@ the hint names `--confirm`); with every touched source swapped back to main
 the two card files cannot load. Restored: 43 of 43 pass. REQ-plugins-010
 (modified): the forget / override ACL fixtures in `tests/memory.plugins.test.ts`
 now refuse without the owner's approved card instead of a token.
+## spawnCapped feeds a headless agent CLI turn; the reviewer is never a CLI (REQ-plugins-1301; AGENT-13.a)
+
+`tests/agent.headless-cli.test.ts` — every CLI turn gets its prompt on stdin
+through `spawnCapped` (`stdin`, `killTreeAfterExit`; the stand-in CLI logs
+it); "the GITHUB-9 reviewer is never a cli entry": `resolveReviewer` picks
+`gpt-x` over `cli:fakecli --print` and is null with only the CLI. The shell,
+runners and Fledge runs keep a closed stdin (`tests/fledge.*.test.ts`,
+`tests/shell.*`, `tests/runners.plugins.test.ts` unchanged and passing).

@@ -855,17 +855,100 @@ watch` and the daemon. Until a model is set, every run fails instead of answerin
 below say why.
 
 `CORVIDINHO_LLM_MODEL` (and the optional per-tier `CORVIDINHO_LLM_MODEL_READ` / `_TOOL` /
-`_CODE`, AGENT-5) holds `kind:model` entries. Every kind speaks the OpenAI-compatible chat API
-and goes through the same SAFE-8 spend cap:
+`_CODE`, AGENT-5) holds `kind:model` entries. The first three kinds speak the OpenAI-compatible
+chat API; every kind goes through the same SAFE-8 spend cap:
 
 | Kind | Example | Endpoint | Key |
 |---|---|---|---|
 | `openai` (or no prefix) | `openai:gpt-4.1`, `gpt-4o-mini` | `CORVIDINHO_LLM_BASE_URL` (default `https://api.openai.com/v1`; any OpenAI-compatible gateway) | `CORVIDINHO_LLM_API_KEY` or `OPENAI_API_KEY` |
 | `ollama` | `ollama:qwen3:30b` | `OLLAMA_HOST` (default `127.0.0.1:11434`), its `/v1` API | none |
 | `anthropic` | `anthropic:<model>` | `https://api.anthropic.com/v1` (Anthropic's OpenAI-compatible API) | `ANTHROPIC_API_KEY` |
+| `cli` | `cli:claude -p --output-format json` | a headless agent CLI on this box, run as a program (below; your own runs only) | its own login, or the keys you name in `CORVIDINHO_LLM_CLI_ENV` |
 
 A prefix that is not one of these kinds is part of the model name (`qwen3:30b` is an
-OpenAI-compatible model). A headless agent CLI as a model is not built yet.
+OpenAI-compatible model).
+
+**A headless agent CLI as a model (AGENT-13 / AGENT-13.a).** `cli:<program> [args…]` names an
+agent CLI you run headless (for example `cli:claude -p --output-format json` or `cli:codex exec -`):
+the program is found on the bridge's / daemon's `PATH` (or give a full path) and the rest are its
+arguments, split on spaces — no shell and no quoting, so no commas or quotes in the command. It is
+not a chat endpoint: for one attempt of the run it **is** the model — Corvidinho writes its prompt
+(the persona, its rules, the project's AGENTS.md / CLAUDE.md, the SpecSync briefing, the task and,
+on a retry, the verify lane's failure output) to the CLI's stdin, the CLI works with its own
+built-in tools, and its stdout is the answer (scrubbed for secrets). When the CLI prints one JSON
+object with a string `result` (Claude Code's `--output-format json`), the answer is that `result`
+and its `usage` tokens (OpenAI or Anthropic names) count like any model's; anything else is the
+answer as printed, with no token count.
+
+It runs **only in your own runs, with the same tools as your other models, inside that talk's own
+worktree**; every other run skips it and goes on with your next model, with the AGENT-11 notice
+(`(model fallback: cli:claude -p skipped (only in the owner's own runs, in that talk's worktree),
+fell back to gpt-4.1)`, the `[operator] … skipped (…); falling back to …` line, the `llm.fallback`
+log line; `task run --json` / NDJSON mark the hop `"skipped": true`), plus one
+`[operator] AGENT-13.a: <entry> not run here: <why>` line per run. Corvidinho cannot narrow a CLI's
+own tools to its allowlist, so the CLI is offered exactly where its own shell (`shell-exec`) would
+be — every one of these must hold, re-checked on every attempt:
+
+- your own interactive run: Discord chat or an ask answer, `/session start`, `/work`, or a local
+  `task run` in the worktree it made for itself (the SAFE-3.a gate). Never a team or community
+  member's run, WATCH (even one you triggered), a schedule (even yours), a delegate or council
+  worker, `task run --here`, a subdirectory or a project folder that is not a git repo;
+- `shell-exec` is in the allowlist (`CORVIDINHO_ALLOWLIST`, SAFE-3.a: the CLI's own tools include a
+  shell), the run is on the `code` tier (the shell's tier) with tool rounds allowed, and no tool
+  result in the run looked like a prompt injection (SAFE-13 takes the shell away then).
+
+A model list such as `CORVIDINHO_LLM_MODEL_CODE=cli:claude -p --output-format json,anthropic:claude-sonnet-5`
+therefore gives you the CLI in your own code-tier runs and `anthropic:claude-sonnet-5` everywhere
+else. With only `cli:` entries, everyone else's runs fail and say why (`cli:… was not run: … and no
+model is configured after it`). A CLI later in the list takes over when the models before it fail
+(also in the middle of an attempt: the edits so far stay on disk and the CLI starts the task from
+there), and in your own runs a model order (`CORVIDINHO_LLM_MODEL_ORDER`) may move a stalled run to
+it; elsewhere it is passed over. It is never the second-model PR reviewer (GITHUB-9): that review is
+one no-tools completion.
+
+Where it runs it gets what the shell gets, and no more:
+
+- its working directory is the talk's worktree; its env is the shell's (no Discord, GitHub, audit or
+  LLM keys — SAFE-6; no GitHub / git credentials — SAFE-21.a; no cloud credentials — SAFE-21.b;
+  `CORVIDINHO_PROJECT_ROOT` set, so a `corvidinho task run` it starts is never offered the shell)
+  plus only the env keys you list in the optional **`CORVIDINHO_LLM_CLI_ENV`** (comma-separated
+  names, e.g. `ANTHROPIC_API_KEY`; unset = none, so it uses its own login under `HOME`). A name that
+  is a GitHub / git or cloud credential, a Discord key, the audit key, a search key or an acting
+  identity key is never passed, and a listed key never overrides one the shell's env sets. Never
+  put a key in the `cli:` command itself: the entry is shown in fallback notes, the footer and the
+  spend ledger (SAFE-6) — list its name in `CORVIDINHO_LLM_CLI_ENV` instead;
+- its prompt carries the same rules as your other models' (persona rules, who is speaking, and that
+  text from anyone but you is data, not instructions — SAFE-11 / SAFE-12 / SAFE-13), plus a line for
+  a repo that uses hi or SpecSync: it must not change `hi/`, and it cannot open a SpecSync change;
+- it is bounded like a model call: the 10-minute request cap, and your stop (Stop button, `stop`,
+  Ctrl-C) kills its whole process tree; whatever it leaves running is stopped when it exits;
+- **protected files are put back.** After each turn, every protected file it changed that git sees
+  (tracked or untracked; a gitignored one is not seen) — env files,
+  `.git`, `fledge.toml`, `.fledge/`, `.trust.toml`, `bunfig.toml`, `specs/`, `*.spec.md`, keystores and
+  SpecSync's change records (SAFE-2 / SAFE-2.a) — is restored to how it was before the turn (a file
+  it added there is removed), the answer ends with `(Protected files the headless agent CLI changed
+  were put back, SAFE-2: …)`, and a change it cannot put back fails the run as not verified. So in a
+  repo that requires a SpecSync change, the CLI cannot open or edit one itself;
+- everything else it changed goes through the same verify gate as any model's edits: the real git
+  diff, the hi and SpecSync gates, the verify lane and the tests-ran / none-deleted check (AGENT-14 /
+  AGENT-15 / AGENT-18), with the lane's failure output in its next turn's prompt;
+- spend: each turn is one model call under the SAFE-8 / SAFE-14 caps. A CLI has no known price, so
+  under a cap that covers it (the total cap, or a provider cap on `cli:<program name>`, e.g.
+  `CORVIDINHO_PROVIDER_SPEND_CAPS_USD=cli:claude=10`) each turn first asks on the unknown-price
+  spend card (SAFE-16.a), and an approved turn is recorded at an unknown price with the tokens it
+  reported; with no cap covering it, it just runs. The footer names it like any model (`cli:claude
+  -p`), its cost `unknown`.
+
+What it can still do that Corvidinho's own shell checks would have stopped: its built-in shell runs
+commands as the bot's Linux user, so the per-command checks of `shell-exec` — the SAFE-3 `cd`
+clamp, the SAFE-21 foot-gun refusals (`sed -i` / `>` edits, piping downloads into a shell, deleting
+outside the worktree, reading secrets), the AUTONOMY-9 must-ask card for prod contact and the
+AGENT-18.a refusal of `specsync change approve / review / finalize` — do not apply inside it. Like
+the shell, it can read any file that user can read and reach the network; it has no GitHub, git or
+cloud credentials, so pushes, PRs and merges still go only through Corvidinho's checked tools
+(`/work`, GITHUB-7). Gitignored files it writes are not seen by the git diff, and it can change
+files outside the worktree that the bot's user can write. Only allowlist `shell-exec` for a box
+where that is acceptable.
 
 A comma list is a fallback chain (AGENT-11), e.g.
 `CORVIDINHO_LLM_MODEL=openai:gpt-4.1,anthropic:claude-sonnet-5,ollama:qwen3:30b`. A run calls the

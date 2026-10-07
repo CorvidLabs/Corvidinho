@@ -96,7 +96,7 @@ import { getOwner } from "../identity/owner.ts";
 import { scheduleRunnerId } from "../scheduler/store.ts";
 import { openCorvidinhoDb } from "../store/db.ts";
 import { scrubSecrets } from "../store/scrub.ts";
-import { parseModelChain, providerForTier, providerId, resolveEntry } from "./providers.ts";
+import { entryModelId, parseModelChain, providerForTier, providerId, resolveEntry } from "./providers.ts";
 import { ensureSpendAlerts, rearmSpendAlerts, recordSpendWarning } from "./spend-alerts.ts";
 import {
   formatSpend,
@@ -849,10 +849,38 @@ function providerOf(input: string | URL | Request): string {
   }
 }
 
+/**
+ * How a guarded call that was sent ended: billed with the usage it reported
+ * (`yes`), certainly not billed (`no`: an HTTP error reply), or perhaps billed
+ * (`maybe`: a headless agent CLI that exited non-zero, AGENT-13).
+ */
+export type GuardedOutcome = { billed: "yes" | "no" | "maybe"; usage: AgentTokenUsage | null };
+
+/**
+ * One model call for {@link SpendGuard.call}: who it goes to (`provider`, the
+ * id a provider cap names), the model it prices at, the request size the
+ * pre-call estimate counts, the call's own abort signal, how to send it and
+ * how it ended.
+ */
+export type GuardedCall<T> = {
+  provider: string;
+  model: string;
+  requestBytes: number;
+  signal?: AbortSignal;
+  send: () => Promise<T>;
+  outcome: (value: T) => Promise<GuardedOutcome>;
+};
+
 /** Capped fetch plus the ask it stopped on, for the execute hook. */
 export type SpendGuard = {
   /** The provider fetch; `fetchImpl` itself when no cap is set. */
   fetch: SpendFetch;
+  /**
+   * The same caps, cards and ledger for a model call that is not a fetch (a
+   * headless agent CLI turn, AGENT-13): checked and reserved before `send`,
+   * settled from `outcome` after. No cap ⇒ `send()` and nothing else.
+   */
+  call<T>(c: GuardedCall<T>): Promise<T>;
   /**
    * When a call was stopped at the cap during this attempt, replace the
    * attempt's result with the `spend-cap` ask (the generic
@@ -887,7 +915,7 @@ export type SpendGuard = {
 export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): SpendGuard {
   const env = opts.env ?? process.env;
   const caps = parseSpendCaps(env);
-  if (caps.kind === "off") return { fetch: fetchImpl, finish: (r) => r };
+  if (caps.kind === "off") return { fetch: fetchImpl, call: (c) => c.send(), finish: (r) => r };
   const now = opts.now ?? Date.now;
   let db: Database | undefined;
   let ledger: SpendLedger | undefined;
@@ -1152,17 +1180,15 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
     for (const w of warnings) opts.onWarning(w);
   };
 
-  const guarded: SpendFetch = async (input, init) => {
+  const call = async <T>(c: GuardedCall<T>): Promise<T> => {
     if (caps.kind === "invalid") return stop(spendCapInvalidAsk(caps.keys));
-    const body = typeof init?.body === "string" ? init.body : "";
-    const model = modelFromRequestBody(body);
+    const { model, provider } = c;
     const price = priceForModel(model);
-    const provider = providerOf(input);
     const providerCap = caps.providers.get(provider);
     const total = caps.totalMicroUsd ?? undefined;
     if (!price) {
       // No cap covers this call: its unknown cost counts against nothing.
-      if (total === undefined && providerCap === undefined) return fetchImpl(input, init);
+      if (total === undefined && providerCap === undefined) return c.send();
       // SAFE-16.a: under a cap it stops and asks on a card showing the amount as unknown.
       const unknownId = await passUnknownOnCard(
         {
@@ -1171,30 +1197,31 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
           ...(total !== undefined ? { capMicroUsd: total } : {}),
           ...(providerCap !== undefined ? { providerCapMicroUsd: providerCap } : {}),
         },
-        init?.signal ?? undefined,
+        c.signal,
       );
-      let sent: Response;
+      let sent: T;
       try {
-        sent = await fetchImpl(input, init);
+        sent = await c.send();
       } catch (err) {
         settle(unknownId, { status: "unknown", usage: null }, provider, providerCap);
         throw err;
       }
-      if (!sent.ok) {
-        settle(unknownId, { status: "failed" }, provider, providerCap);
-        return sent;
-      }
-      let used: AgentTokenUsage | null = null;
+      let ended: GuardedOutcome;
       try {
-        used = opts.readUsage(await sent.clone().json());
+        ended = await c.outcome(sent);
       } catch {
-        used = null;
+        ended = { billed: "maybe", usage: null };
       }
-      settle(unknownId, { status: "unknown", usage: used }, provider, providerCap);
+      settle(
+        unknownId,
+        ended.billed === "no" ? { status: "failed" } : { status: "unknown", usage: ended.usage },
+        provider,
+        providerCap,
+      );
       return sent;
     }
-    const estimate = estimateCallMicroUsd(price, Buffer.byteLength(body, "utf8"));
-    const call: PausedCall = {
+    const estimate = estimateCallMicroUsd(price, c.requestBytes);
+    const paused: PausedCall = {
       provider,
       model,
       estimateMicroUsd: estimate,
@@ -1205,43 +1232,64 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
     try {
       db ??= opts.db ?? openCorvidinhoDb({ env });
       ledger ??= new SpendLedger(db);
-      hold = ledger.reserve({ ...call, now: now() });
+      hold = ledger.reserve({ ...paused, now: now() });
     } catch (err) {
       return stop(spendCapLedgerAsk(err instanceof Error ? err.message : String(err)));
     }
     // SAFE-8: past a cap, ask the owner to let this one call through (a no stops).
-    const holdId = hold.ok ? hold.id : await passOnCard(call, hold.trips, init?.signal ?? undefined);
+    const holdId = hold.ok ? hold.id : await passOnCard(paused, hold.trips, c.signal);
 
-    let resp: Response;
+    let sent: T;
     try {
-      resp = await fetchImpl(input, init);
+      sent = await c.send();
     } catch (err) {
       settle(holdId, { status: "estimated" }, provider, providerCap);
       throw err;
     }
-    if (!resp.ok) {
-      settle(holdId, { status: "failed" }, provider, providerCap);
-      return resp;
-    }
-    let usage: AgentTokenUsage | null = null;
+    let ended: GuardedOutcome;
     try {
-      usage = opts.readUsage(await resp.clone().json());
+      ended = await c.outcome(sent);
     } catch {
-      usage = null;
+      ended = { billed: "maybe", usage: null };
     }
     settle(
       holdId,
-      usage
-        ? { status: "actual", usage, costMicroUsd: costMicroUsd(price, usage) }
-        : { status: "estimated" },
+      ended.billed === "no"
+        ? { status: "failed" }
+        : ended.usage
+          ? { status: "actual", usage: ended.usage, costMicroUsd: costMicroUsd(price, ended.usage) }
+          : { status: "estimated" },
       provider,
       providerCap,
     );
-    return resp;
+    return sent;
+  };
+
+  const guarded: SpendFetch = (input, init) => {
+    const body = typeof init?.body === "string" ? init.body : "";
+    return call({
+      provider: providerOf(input),
+      model: modelFromRequestBody(body),
+      requestBytes: Buffer.byteLength(body, "utf8"),
+      signal: init?.signal ?? undefined,
+      send: () => fetchImpl(input, init),
+      // An HTTP error reply is not billed; a reply's own usage, when it reports one.
+      outcome: async (resp): Promise<GuardedOutcome> => {
+        if (!resp.ok) return { billed: "no", usage: null };
+        let usage: AgentTokenUsage | null = null;
+        try {
+          usage = opts.readUsage(await resp.clone().json());
+        } catch {
+          usage = null;
+        }
+        return { billed: "yes", usage };
+      },
+    });
   };
 
   return {
     fetch: guarded,
+    call,
     finish(result) {
       const ask = pending;
       pending = null;
@@ -1425,7 +1473,7 @@ export function readSpendSnapshot(opts: {
     // No model configured (AGENT-10): nothing is called, nothing to price.
     const head = providerForTier(env, loadTierFromEnv(env, "tool"));
     const headProvider =
-      head && head.entry.model === opts.model ? providerId(head).toLowerCase() : null;
+      head && entryModelId(head.entry) === opts.model ? providerId(head).toLowerCase() : null;
     const priced =
       !opts.model.trim() || priceForModel(opts.model) !== null || !covered(headProvider);
     const tierGap = priced ? unpricedTierModel(env, covered) : null;
