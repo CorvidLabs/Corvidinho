@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "a-headless-agent-cli-can-be-one-of-my-models-in-my-own-runs-only-with-the-same-tools-as-my-other-models-inside-that",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "4d8f4ef0201256119ed92163037383bde7dec029",
+      "contract_digest": "7576f4b9fdd695b8a3b625a2ddf747f35c165cf4a9e1829b82cb2fc98e03eb19",
+      "execution_digest": "3fcf869d685da81c9c82805869453b729c9a1fc9de53ac1ddbddcdf0654eca4e",
+      "workspace_digest": "91cef6d5c9801327a8d519f167f32475bde0f27bf41b3a477f0b67129dccb4e4",
+      "timestamp": 1791391604
+    }
+  ]
+}
