@@ -75,6 +75,13 @@
       "approved_delta_digests": {
         "plugins": "044369508ad0581758929e9bdfc5f088a04b5b322b8354aaeb7fcaa85b8e2ff6"
       }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1791387508,
+      "digest": "7d1c0c9533f158acc7abc92c2c0ac0c5ebd48d7a039d760e4915dcc10cfb0ea0",
+      "note": "Same-PR finalization closing digest"
     }
   ],
   "reopenings": []
