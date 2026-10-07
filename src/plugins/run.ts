@@ -15,6 +15,8 @@ import {
   resolveActingRole,
   roleAllowsPlugin,
   roleSessionActive,
+  watchCheckoutWriteRefusal,
+  watchCheckoutWriteRefused,
 } from "./roles.ts";
 import type { PluginHandlerArgs, PluginHandlerResult } from "./types.ts";
 
@@ -58,7 +60,8 @@ function toAllowSet(allowlist?: ReadonlySet<string> | string[]): Set<string> {
 
 /**
  * Run a registered plugin by name.
- * Enforces ROLES-CHAT role gate, then dangerous + nonInteractive deny unless
+ * Refuses a WATCH run's checkout writes (REQ-plugins-1202), then enforces
+ * ROLES-CHAT role gate, then dangerous + nonInteractive deny unless
  * allowlisted (SAFE-1 / PLUGIN-2), then the must-ask gate: a call its
  * command classes as prod or a channel post waits for the owner's Approve
  * card, and a deny or no answer runs nothing (AUTONOMY-9/10, SAFE-20;
@@ -76,6 +79,13 @@ export async function runPlugin(opts: RunOptions): Promise<PluginHandlerResult> 
   const mutating = isMutatingPlugin(cmd);
 
   const args = opts.args ?? [];
+
+  // REQ-plugins-1202 (SESSION-WORKTREE-1 on GitHub): a WATCH run works in
+  // the watcher's own checkout, with no worktree of its own, so tools that
+  // write it are refused for every role, the owner's included.
+  if (watchCheckoutWriteRefused(process.env, cmd.name)) {
+    return { ok: false, error: watchCheckoutWriteRefusal(cmd.name), exitCode: 2 };
+  }
 
   // ROLES-CHAT-3/5/6 + IDENTITY-9..12: the acting role, re-resolved at this
   // call from the owner config and the people list, gates mutating tools

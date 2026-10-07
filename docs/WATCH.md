@@ -56,30 +56,59 @@ people list, a GitHub `deny_users` entry (login or id), or the person's
 Discord id muted or deny-listed applies to the next call, and a stamp, a login
 or a Discord id alone never raises it.
 
+**Edited text (REQ-watch-1202):** GitHub keeps a comment's (or an issue / PR
+body's) author as its `user` when someone with write access — or an Actions /
+App token — edits it, so the author's role applies only when **nobody else
+edited that text**: for every new mention comment and body WATCH reads its
+edit history from GraphQL (`lastEditedAt`, `editor`, `userContentEdits`) —
+never REST `updated_at`, which is to the second, so an edit a bot makes in the
+second the comment was posted would look like none. An edit by anyone but the
+author — or a history that can't be read — gives the run community tools
+(fail closed), the identity block says so, the text loses the owner's SAFE-13
+exemption, and the run acts for nobody: no person's memory is put in its
+prompt or saved or read by it, a "forget me" in it raises no card (the thread
+is told why), and its audit rows and cards say `github:(unknown)`. An
+assignment or review request acts for whoever made it (by login, so no
+person's memory). Editing your own comment keeps your role. The lookups are
+made once per new event (one GraphQL call each), not at every poll.
+
 | Who triggered the run | Tools on GitHub |
 |---|---|
-| **Owner** (`[owner] github_id`, or `github_ids` on the owner's person) | The owner's tools (IDENTITY-9), behind the same must-ask gate: a must-ask call (a `git-push` to the default branch, a `discord-post-message`) waits for the owner's Approve card, which the Discord bridge DMs to the owner (the watch process and the bridge share `CORVIDINHO_DATA_DIR`); no answer or a deny runs nothing (SAFE-20). |
+| **Owner** (`[owner] github_id`, or `github_ids` on the owner's person) | The owner's tools (IDENTITY-9), behind the same must-ask gate: a must-ask call (a `discord-post-message`, a prod or deploy call) waits for the owner's Approve card, which the Discord bridge DMs to the owner (the watch process and the bridge share `CORVIDINHO_DATA_DIR`); no answer or a deny runs nothing (SAFE-20). Never the tools that write the watcher's own checkout (below). |
 | **Team** (`role = "team"` and a `github_ids` entry) | The team's tools (IDENTITY-10): every read tool, reviews (`github-issue-comment`, `github-pr-review` as `COMMENT`, allowlisted repos only), their own memory (MEMORY-8), `web-search` / `gif-search` when allowlisted. File edits stay `/work`-only (start a `/work` on Discord). |
 | Anyone else — undeclared, declared community, no numeric id, a re-registered login, every assignment and review request | Community, as before: read/chat tools only. |
 
 What stays the same for every role on GitHub: the shell, the runners, the
 Fledge runs and discovered Fledge plugin commands are never offered
-(SAFE-3.a); secret-looking paths (`.env*`,
+(SAFE-3.a); a WATCH run works in the watcher's own checkout (`task run
+--here`, the checkout every WATCH, Discord and daemon spawn runs its binary
+from) with no worktree of its own, so the tools that write that checkout —
+`files-write` / `files-edit` / `files-delete`, `git-branch-create` /
+`git-commit` / `git-push` and the SpecSync change steps — are refused there,
+the owner's runs included (REQ-plugins-1202; edit on Discord or with `/work`,
+which get a worktree); secret-looking paths (`.env*`,
 `.ssh`, keys, keystores) stay hidden from the file, search and git tools, the
 owner's runs included, because the answer goes to a public thread
 (ROLES-CHAT-8); the owner's `--person` memory view, private notes and profiles
 are never read there (MEMORY-7.a); WATCH runs never approve or archive a
-SpecSync change (AGENT-18.a); `delegate` / `council` workers are community; and
-the thread's title and body stay fenced untrusted data (SAFE-12).
+SpecSync change (AGENT-18.a); `delegate` / `council` workers are community;
+the thread's title and body stay fenced untrusted data (SAFE-12); and the
+SAFE-5 audit rows and must-ask cards of a WATCH run's tools name the person
+who triggered it as `github:<numeric id>` (else `github:<login>`), never
+`local`, which is the operator's own CLI (REQ-plugins-1203).
 
 **Untrusted text (SAFE-12 / SAFE-13, #71):** the issue / PR / comment title
 and body go to the model inside an `UNTRUSTED_DATA` fence (clipped first, so
 the end marker, which carries a random id, always survives the ~8000-char
 prompt cap); the run treats them as data, and what it may run is decided by
 its role (the trigger's declared role, IDENTITY-12.a — see "Roles on GitHub"). Before any ack or run, the same
-conservative detector as Discord checks the title and body of every event not
-sent by the owner (recognised by the owner's numeric id only, never the login —
-a re-registered owner login is checked like anyone else): on a hit WATCH posts one
+conservative detector as Discord checks every part of the event the owner did
+not write (REQ-watch-1202; the owner recognised by the owner's numeric id only,
+never the login — a re-registered owner login is checked like anyone else):
+the body, unless the owner sent it and nobody else edited it, and the title,
+unless the owner opened the thread and nobody else renamed it (its rename
+events, read from GraphQL; unreadable ⇒ checked) — so the owner's comment on a
+thread someone else opened, or renamed, still has that title checked: on a hit WATCH posts one
 comment saying it won't act on it and why (plain words, never quoting the
 text), @mentioning the owner's GitHub login from `[owner]` /
 `CORVIDINHO_OWNER_GITHUB_LOGIN` when set, appends an `injection-suspected`
@@ -158,9 +187,9 @@ HI: [`hi/watch.md`](../hi/watch.md).
 
 **Who assigned / requested (REQ-watch-302, ALLOW-1/2):** an `assignment` or `review_request` event is started by whoever assigned the watch user or requested its review, who need not be the thread author. WATCH reads that user from the issue's events (the newest `assigned` / `review_requested` event naming the watch user: `assigner` / `review_requester`, else the event `actor`) and runs the event only when **both** the author and that user pass the GitHub user allowlist and neither is on `deny_users`. Such a run is community whoever the author is (IDENTITY-12.a: the author did not trigger it, and the event names the assigner by login only). If that user is not allowlisted, is denied, or cannot be read (API error, no such event), the event is refused quietly: no session, no ack, no run. A collaborator who is not allowlisted cannot start a run by assigning Corvidinho to (or requesting its review on) an allowlisted author's issue or PR. Assignments made by bots or GitHub Actions need that bot's login on the user allowlist.
 
-**What a WATCH run can do:** the role of the person who triggered it (IDENTITY-12.a, "Roles on GitHub" above): the owner's or the team's tools for a recognised owner or team member, behind the same must-ask gate; community — read/chat tools only, no dangerous or mutating tool (`CORVIDINHO_ACTING_IS_ADMIN=0`, ROLES-CHAT) — for anyone else. They have no Discord actor; the poller passes the commenter's GitHub login / numeric id and the thread's repo instead (`CORVIDINHO_ACTING_GITHUB_LOGIN` / `_ID` / `_REPO`, from the GitHub API event, never from the text), and the memory plugins act for the commenter's **declared person** (MEMORY-8): someone on the owner's people list (matched by GitHub numeric user id only, IDENTITY-7 / IDENTITY-7.a) saves and recalls their own profile with `memory-store` / `memory-recall` — the same profile as on Discord. Anyone not on the list gets community scope: the thread repo's project memory read-only (`memory-recall --project`, keyed by the repo's `owner/repo`) and nothing saved. From GitHub, project memory is never written, `--person` is refused, private notes and profile reads (`memory-profile`) are never read (the thread is public; they are shown only privately, MEMORY-7 / MEMORY-7.a) and the `memory-forget-me` tool is refused (it points at the "forget me" comment below). Before each run the poller searches memory for the comment — the commenter's profile and the repo's project memory, most relevant first (MEMORY-9) — and prepends what it found (`[Corvidinho memory for this GitHub user …]` / `[Corvidinho project memory …]`), logging `[watch] memory inject: N recalled for @login`.
+**What a WATCH run can do:** the role of the person who triggered it (IDENTITY-12.a, "Roles on GitHub" above): the owner's or the team's tools for a recognised owner or team member, behind the same must-ask gate; community — read/chat tools only, no dangerous or mutating tool (`CORVIDINHO_ACTING_IS_ADMIN=0`, ROLES-CHAT) — for anyone else. They have no Discord actor; the poller passes the commenter's GitHub login / numeric id and the thread's repo instead (`CORVIDINHO_ACTING_GITHUB_LOGIN` / `_ID` / `_REPO`, from the GitHub API event, never from the text; for a comment or body someone else edited, no login or id at all, and for an assignment or review request the login of whoever made it, REQ-watch-1202), and the memory plugins act for the commenter's **declared person** (MEMORY-8): someone on the owner's people list (matched by GitHub numeric user id only, IDENTITY-7 / IDENTITY-7.a) saves and recalls their own profile with `memory-store` / `memory-recall` — the same profile as on Discord. Anyone not on the list gets community scope: the thread repo's project memory read-only (`memory-recall --project`, keyed by the repo's `owner/repo`) and nothing saved. From GitHub, project memory is never written, `--person` is refused, private notes and profile reads (`memory-profile`) are never read (the thread is public; they are shown only privately, MEMORY-7 / MEMORY-7.a) and the `memory-forget-me` tool is refused (it points at the "forget me" comment below). Before each run the poller searches memory for the comment — the commenter's profile and the repo's project memory, most relevant first (MEMORY-9) — and prepends what it found (`[Corvidinho memory for this GitHub user …]` / `[Corvidinho project memory …]`), logging `[watch] memory inject: N recalled for @login`.
 
-**Forget me from GitHub (MEMORY-ACL-6.a, #101):** a comment (or issue body) from an allowlisted user on an allowlisted repo that @mentions the watch user and says just "forget me" — or "forget / delete everything (you know) about me", with please / can you / thanks at most; quoted lines don't count — is handled by the poller itself: no ack, no model run, and it never hides another request on the same issue. The sender is matched in the owner's people list by their **GitHub numeric id** only (IDENTITY-7; a login alone never counts). A declared person's ask becomes the same forget request as a Discord ask (SAFE-5 `memory-forget-request` rows, actor `github:<login>`, surface `watch:forget-me`; one open ask per person) and the Discord bridge DMs the owner the same **Approve / Deny** card; nothing is deleted until the owner approves. The thread gets one reply: the request went to the owner (or is already waiting); or, for someone not on the list, that nothing is kept for them and no request was made; or, for a login on the list without its account id, that it can't be confirmed. Once the owner decides (or the ask lapses after 24 h), the next poll posts the outcome on that thread while its repo is still allowlisted (never a count or any content), giving up a day after the decision. The watch process and the bridge must share the data dir (`CORVIDINHO_DATA_DIR`) — and the audit key, if set — for the card to reach the owner. The owner can also start a forget for any declared person with `/admin people forget` ([`discord.md`](discord.md)).
+**Forget me from GitHub (MEMORY-ACL-6.a, #101):** a comment (or issue body) from an allowlisted user on an allowlisted repo that @mentions the watch user and says just "forget me" — or "forget / delete everything (you know) about me", with please / can you / thanks at most; quoted lines don't count — is handled by the poller itself: no ack, no model run, and it never hides another request on the same issue. The sender is matched in the owner's people list by their **GitHub numeric id** only (IDENTITY-7; a login alone never counts). A declared person's ask becomes the same forget request as a Discord ask (SAFE-5 `memory-forget-request` rows, actor `github:<login>`, surface `watch:forget-me`; one open ask per person) and the Discord bridge DMs the owner the same **Approve / Deny** card; nothing is deleted until the owner approves. The thread gets one reply: the request went to the owner (or is already waiting); or, for someone not on the list, that nothing is kept for them and no request was made; or, for a login on the list without its account id, that it can't be confirmed; or, when someone else edited that comment or body (or its edits can't be read), that it can't be sure the ask is theirs and no request was made (REQ-watch-1202). Once the owner decides (or the ask lapses after 24 h), the next poll posts the outcome on that thread while its repo is still allowlisted (never a count or any content), giving up a day after the decision. The watch process and the bridge must share the data dir (`CORVIDINHO_DATA_DIR`) — and the audit key, if set — for the card to reach the owner. The owner can also start a forget for any declared person with `/admin people forget` ([`discord.md`](discord.md)).
 
 **Stuck runs ping the owner on Discord (AGENT-16.a, #86):** a run that ends with a stuck question — the same tool call kept failing with nothing changed even after it was told to change approach (AGENT-16), or verification still fails after every retry (AUTONOMY-2) — is handed to the Discord bridge for every event type (assignments and review requests post no summary comment): the poller records the question (SAFE-6 scrubbed, one per issue or PR, a newer one replaces it, a later run there that is not stuck drops it) in the shared DB and the bridge DMs it to the owner with a link to the thread, where the owner answers ([`discord.md`](discord.md) "Stuck GitHub runs"). The watch process and the bridge must share the data dir (`CORVIDINHO_DATA_DIR`). One log line per stuck run: `[watch] stuck ask owner/repo#N id=…: queued for the owner's Discord ping (AGENT-16.a)`, or, with no bridge running on the data dir, `… the owner's Discord ping could not be sent — no Discord bridge is running on this data dir (CORVIDINHO_DATA_DIR); it is sent if one starts within a day; …`, or, with no owner Discord id configured, that it could not be sent (nothing kept). The run summary comment (ackable events after a successful ack) still carries the question as `Needs your input: …`. A clarify question stays the commenter's to answer on the thread and is not sent to the owner.
 

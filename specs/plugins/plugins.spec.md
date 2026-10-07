@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 67
+version: 68
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -264,7 +264,11 @@ imports) exports `GIPHY_MEDIA_HOSTS` and `hasGiphyMediaLink`, which
 put in an embed (REQ-discord-075), `src/plugins/roles.ts` exports
 `TEAM_SEARCH_TOOLS` (PLUGIN-9: `web-search` and `gif-search`) and
 `isWatchRunEnv(env)` (IDENTITY-12.a: the surface stamp is `watch`;
-REQ-plugins-1201), and `PluginHandlerResult.spendAsk` carries a
+REQ-plugins-1201), `WATCH_CHECKOUT_WRITE_TOOLS`,
+`watchCheckoutWriteRefused(env, name)` and `watchCheckoutWriteRefusal(name)`
+(a WATCH run never writes the watcher's own checkout; REQ-plugins-1202),
+`auditContextFromEnv` gives a WATCH run's GitHub trigger as its actor
+(`github:<id>`, never `local`; REQ-plugins-1203), and `PluginHandlerResult.spendAsk` carries a
 flat-priced call's SAFE-8 ask (REQ-agent-098),
 `githubRepoOfUrl(url)` says whether a URL is on a GitHub host and which
 `OWNER/REPO` it names (DISCORD-SCHEDULE-3.a),
@@ -366,7 +370,12 @@ plain module-name check), `refuseRootArg`, `readModuleSpec` (its error carries
 (the project `fledge.toml` defines a `spec-check` task; true when that file
 cannot be read or parsed) and `runSpecCheck` (the Fledge `spec-check` task
 when fledge is on PATH and the project defines it, else local `specsync
-check`).
+check`). `runSpecCheck` and `spawnSpecsync` start their child without the
+owner's cloud credentials (SAFE-21.b, REQ-plugins-621): the Fledge task gets
+`withoutCloudCredentials(buildVerifyEnv())`, the verify lane's env; specsync
+gets `withoutCloudCredentials` of `process.env` at call time; the stand-ins
+are released once the child exits and the output is secret-scrubbed
+(`scrubSecrets(redactSecretEnvValues(…))`).
 
 ## Invariants
 
@@ -881,7 +890,12 @@ owner's person; `team` the team (or owner) stamp and a team person; a GitHub
 deny-listed, is community. A WATCH run is never a `/work` task
 (`actingWorkTask` false whatever its stamp), and every must-ask call the owner's
 WATCH run makes raises the owner's Approve card like any other run
-(REQ-plugins-097). Refusals are "not allowed for your role" (ROLES-CHAT-3/6).
+(REQ-plugins-097). A WATCH run (surface `watch` or a WATCH session id) never
+runs the tools that write the watcher's own checkout — it has no worktree of
+its own — so `runPlugin` refuses `WATCH_CHECKOUT_WRITE_TOOLS` there before
+the role gate, for every role (REQ-plugins-1202); its SAFE-5 rows and must-ask
+card requester are `github:<id>` (else `github:<login>`), never `local`
+(REQ-plugins-1203). Refusals are "not allowed for your role" (ROLES-CHAT-3/6).
 `files-edit`, `specsync-change-new`, `specsync-change-answer`,
 `specsync-change-approve`, `specsync-change-finalize`); `community` (everyone else: undeclared, declared community,
 WATCH runs no declared owner or team member triggered, schedules, workers,
@@ -1591,5 +1605,7 @@ and current rows for plugins host evolution.
 | 2026-10-05 | where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts: Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts) |
 | 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
 | 2026-10-05 | in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2: In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause) |
+| 2026-10-07 | on-github-a-text-someone-else-edited-never-gets-its-author-s-role-the-safe-13-owner-exemption-covers-only-text-the: On GitHub, a text someone else edited never gets its author's role, the SAFE-13 owner exemption covers only text the owner wrote, a WATCH run never writes the watcher's own checkout, and its audit rows name its GitHub trigger (IDENTITY-12.a follow-up to #374) |
 | 2026-10-06 | github-7-typed-github-pr-merge-merges-the-bot-s-own-green-corvidinho-pr-only-when-ci-is-green-and-branch-protection: GITHUB-7: typed github-pr-merge merges the bot's own green Corvidinho PR only when CI is green and branch protection allows; never others or outside Corvidinho |
 | 2026-10-06 | it-can-merge-its-own-corvidinho-pr-when-i-ask-and-every-gate-is-green-never-its-gates-never-someone-else-s-github-7: It can merge its own Corvidinho PR when I ask and every gate is green; never its gates, never someone else's (GITHUB-7, GITHUB-7.a); supersedes the gate of the github-7-typed-github-pr-merge change (#395) |
+| 2026-10-06 | the-specsync-check-tool-the-verify-lane-s-spec-check-step-starts-without-my-cloud-credentials-and-its-output-is: The specsync-check tool (the verify lane's spec-check step) starts without my cloud credentials and its output is scrubbed (SAFE-21.b follow-up to #373) |

@@ -2502,6 +2502,11 @@ every call, the way it resolves a Discord run's (IDENTITY-12):
   approve or archive a SpecSync change (AGENT-18.a), the memory plugins' GitHub
   rules (REQ-plugins-067, REQ-plugins-710). No env var, config key, flag,
   table or schema change.
+- Since REQ-plugins-1202 (follow-up to #374) a WATCH run SHALL never run
+  the tools that write the watcher's own checkout, `git-push` included,
+  whatever its role, so the owner's WATCH must-ask calls are the rest (a
+  `discord-post-message`, a prod or deploy call); since REQ-plugins-1203 its
+  SAFE-5 rows and card requester are `github:<id>`, never `local`.
 
 Acceptance Criteria
 - With the env a real WATCH spawn hands its child: the owner's id with the owner stamp → owner (ADMIN re-check true); the team member's with the team stamp → team.
@@ -2511,6 +2516,52 @@ Acceptance Criteria
 - The owner's WATCH run: a mutating `prod` must-ask command raises one `mustask` card titled `… · from watch:watch_w1`, runs once on approval and is refused with nothing run on a deny; team, community and a re-registered login's runs get `not allowed for your role` and no card.
 - `secretPathsRefused` is true for the owner's WATCH run and false for the owner's Discord run; `shellToolsGate` refuses the owner's WATCH run; a `delegate` worker built from it resolves community.
 - `tests/watch.github-roles.test.ts` fails on the base sources and passes on the branch.
+- The owner's WATCH `files-edit` / `git-commit` are refused before any card (REQ-plugins-1202, `tests/watch.github-roles.postreview.test.ts`).
+
+### REQ-plugins-1202
+
+IDENTITY-12.a follow-up to #374 (SESSION-WORKTREE-1 on GitHub): a WATCH run
+works in the watcher's own checkout (`task run --here`, REQ-cli-122 — the
+checkout every WATCH, Discord and daemon spawn runs `src/cli.ts` from) and
+has no worktree of its own. `runPlugin` SHALL refuse, before the role gate,
+every `WATCH_CHECKOUT_WRITE_TOOLS` command (`src/plugins/roles.ts`) —
+`files-write`, `files-edit`, `files-delete`, `git-branch-create`,
+`git-commit`, `git-push`, `specsync-change-new`, `specsync-change-answer`,
+`specsync-change-approve`, `specsync-change-finalize` — when
+`watchCheckoutWriteRefused(env, name)` holds (the surface stamp is `watch`
+or `CORVIDINHO_WATCH_SESSION_ID` is set), for every role, the owner's
+included: exit 2 with `watchCheckoutWriteRefusal(name)` ("… writes the
+watcher's own checkout, and a GitHub (WATCH) run has no worktree of its own,
+so it never runs there, whoever triggered it (SESSION-WORKTREE-1)"). Nothing
+in the checkout, its branches or its index changes. Discord, `/work`,
+schedules and the local CLI are unchanged. No env var, config key, flag,
+table or schema change.
+
+Acceptance Criteria
+- With the env a real WATCH spawn hands the owner's run: `files-edit`, `files-write`, `files-delete`, `git-branch-create` and `git-commit` in a git checkout are refused with that line, and the checkout's files, branches and status are unchanged.
+- The owner's Discord run still writes a file there.
+- `tests/watch.github-roles.postreview.test.ts` fails on the base sources and passes on the branch.
+
+### REQ-plugins-1203
+
+IDENTITY-12.a follow-up to #374 (SAFE-5, AUTONOMY-9/10): `auditContextFromEnv`
+(`src/audit/log.ts`) SHALL give a run with no Discord actor and a
+`CORVIDINHO_WATCH_SESSION_ID` the actor `github:<CORVIDINHO_ACTING_GITHUB_ID>`
+(a numeric id), else `github:<CORVIDINHO_ACTING_GITHUB_LOGIN>` (lowercased,
+when a valid login), else `github:(unknown)` — never `local`, which stays the
+local CLI's. `runPlugin`'s SAFE-5 rows and the must-ask gate's card requester
+and earlier-denial key (REQ-plugins-097) use it, so the owner's and a team
+member's WATCH calls are told apart from each other and from the operator's
+CLI, and an owner's deny on a WATCH card never refuses the same local CLI call
+as resent (nor the reverse). A Discord actor still wins; the surface is
+unchanged (`watch:<session>`). No env var, config key, table or schema change.
+
+Acceptance Criteria
+- A team member's WATCH `github-pr-review` (dry run) appends `started` and `ok` rows with actor `github:<their id>` and surface `watch:watch_w1`.
+- The owner's WATCH must-ask card has requester `github:<owner id>`; after the owner denies it, the same call from the local CLI raises a new card (requester `local`) and runs on approval.
+- `auditContextFromEnv({ CORVIDINHO_WATCH_SESSION_ID: "w1" })` gives actor `github:(unknown)`; with no session, `local` / `cli`.
+- `tests/watch.github-roles.postreview.test.ts` fails on the base sources and passes on the branch.
+
 ### REQ-plugins-621
 
 The `shell-exec` child, the language runners' children (`node-exec`,
@@ -2533,6 +2584,18 @@ error), so those dirs are removed. Every other key the child got before is
 kept. Fledge plugin commands (`fledge-<command>`, `fledgeChildEnv`) are
 unchanged. No new slash command, env var or config key.
 
+The tier-0 `specsync-check` tool (and `corvidinho specsync check`), which runs
+the verify lane's `spec-check` step, SHALL start its child the same way
+(SAFE-21.b, follow-up to #373): `runSpecCheck` (`plugins/specsync/api.ts`)
+SHALL spawn `fledge run spec-check` with `withoutCloudCredentials(buildVerifyEnv())`
+(the verify lane's own env, REQ-agent-002), and `spawnSpecsync` (its plain
+`specsync check` fallback and the other SpecSync tools) SHALL spawn specsync
+with `withoutCloudCredentials` of `process.env` at call time (every other key
+kept, so `specsync change ship` still reads `GITHUB_TOKEN`); both SHALL call
+`releaseCloudStandIns` once the child has exited (also when the spawn throws)
+and SHALL pass the child's output through `scrubSecrets(redactSecretEnvValues(…))`
+(SAFE-6), the scrub `shell-exec` and the runners use.
+
 Acceptance Criteria
 - With the owner's cloud env set, and separately with only the owner's default
   files under a fake HOME (`~/.kube/config`, `~/.aws/credentials` /
@@ -2550,6 +2613,15 @@ Acceptance Criteria
   not reach the next runner child.
 - The SAFE-21.a git / GitHub scrub and its tests (`tests/runners.plugins.test.ts`,
   `tests/shell.footguns.test.ts`, `tests/fledge.core.test.ts`) are unchanged.
+- With the owner's cloud env set, and separately with only the owner's default
+  files under a fake HOME, `specsync-check` run by a process with the owner's
+  env (a stand-in `fledge` with a `fledge.toml` `spec-check` task, and a
+  stand-in `specsync` with no such task) shows no cloud key, value or file
+  content: the stand-ins are `/dev/null`, `CLOUDSDK_CONFIG` /
+  `AZURE_CONFIG_DIR` lie outside HOME and are gone after the call,
+  `AWS_REGION` / `GOOGLE_CLOUD_PROJECT` stay, and the owner's `GITHUB_TOKEN`
+  value never appears in the tool's output (`tests/agent.cloud-credentials.test.ts`).
+
 ### REQ-plugins-1818
 
 AGENT-18.a in the shell (captured on main, `hi/agent.md`, from Leif's

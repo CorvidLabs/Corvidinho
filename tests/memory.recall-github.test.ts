@@ -361,6 +361,8 @@ describe("MEMORY-8/9 WATCH poller searches memory for the comment and names the 
       body: "@corvid-agent what editor do I use?",
       sender: "tofu-dev",
       senderId: 4242,
+      // Never edited (REQ-watch-1202): the run acts for its sender.
+      textEditorIds: [],
       repo: REPO,
       number: 7,
       title: "setup question",
