@@ -159,6 +159,7 @@ import {
 } from "./permissions.ts";
 import { CORVIDINHO_PROTOCOL_VERSION } from "./protocol-version.ts";
 import { enforceProtocolVersionOrExit } from "./protocol-version.ts";
+import { NEW_TOPIC_ACK } from "./new-topic.ts";
 import { SessionStore, type SessionReplay } from "./session-store.ts";
 import {
   RUN_STOP_ACK,
@@ -872,6 +873,13 @@ export async function startBridge(
    * AGENT-3.a (REQ-discord-302): stop the run `runId` and answer the stop
    * message with one short ack, tracked on the run's session.
    */
+  /**
+   * SESSION-3.b: fresh session id → the open session its 'new topic' is
+   * waiting on and that wait's own turn on it, while it waits; a stop said in
+   * the fresh session meanwhile reaches the open session's run.
+   */
+  const newTopicWaits = new Map<string, { openId: string; waitRunId: string }>();
+
   async function stopRunFor(msg: InboundMessage, runId: string, sessionId: string): Promise<void> {
     const outcome = stopRun(runId, sessionId, msg.authorId);
     // Routing and this call happen in one tick, so the run is still there.
@@ -1125,9 +1133,16 @@ export async function startBridge(
         action.kind === "continue_session" &&
         isStopRunText(promptBodyForAskGate(prompt))
       ) {
-        const running = runControl.current(session.id);
+        // SESSION-3.b: while this session's 'new topic' still waits for the
+        // run of the session it replaces, the stop reaches that run.
+        const waitingOn = newTopicWaits.get(session.id);
+        const replaced = waitingOn ? runControl.current(waitingOn.openId) : undefined;
+        const running =
+          replaced && replaced.runId !== waitingOn?.waitRunId
+            ? replaced
+            : runControl.current(session.id);
         if (running) {
-          await stopRunFor(msg, running.runId, session.id);
+          await stopRunFor(msg, running.runId, running.sessionId);
           return;
         }
       }
@@ -1173,6 +1188,75 @@ export async function startBridge(
             }))
         ) {
           return;
+        }
+
+        // SESSION-3.b (REQ-discord-479): 'new topic'. This message holds the
+        // fresh session's turn from the start (a message sent after it waits
+        // behind it); it also takes the open session's turn, so it waits for
+        // a run going there like any message (AGENT-3.a), then parks that
+        // session the way idle expiry does (unless a message of its own waits
+        // behind this one). The fresh session counts as busy meanwhile, so an
+        // open run that outlasts the soft TTL never gets it (or the messages
+        // waiting behind it) purged as idle. After that wait it goes on only
+        // while the fresh session is still live and it still passes the
+        // channel, actor and mute gates and its author was not forgotten;
+        // otherwise nothing is parked, run or posted. With nothing after the
+        // phrase it posts only NEW_TOPIC_ACK, held by the fresh session, which
+        // takes the next message.
+        if (action.kind === "new_topic") {
+          const open = action.open;
+          if (open) {
+            const openTurn = runControl.enqueue({
+              sessionId: open.id,
+              requesterId: msg.authorId,
+              channelId,
+            });
+            newTopicWaits.set(session.id, { openId: open.id, waitRunId: openTurn.runId });
+            if (openTurn.waited) {
+              inflight ??= trackInflight({
+                sessionId: session.id,
+                channelId,
+                parentChannelId: msg.threadId ? msg.channelId : null,
+                requestMessageId: msg.id,
+              });
+            }
+            const goOn = await store.runActive(session, async () => {
+              try {
+                if (!(await openTurn.ready)) {
+                  inflight?.keep();
+                  return false;
+                }
+                if (
+                  openTurn.waited &&
+                  (store.get(session.id) !== session ||
+                    openTurn.requesterForgotten ||
+                    !waitedMessageStillAllowed(msg, {
+                      allowlist: config.allowlist,
+                      owner: config.owner ?? null,
+                      mutedUsers,
+                    }))
+                ) {
+                  return false;
+                }
+                // A message of the open session's own that came in while this
+                // waited (a reply to one of its answers, a pick) still runs
+                // there: the session is then left to idle out, not parked now.
+                if (!runControl.waitingBehind(openTurn.runId)) await store.endForNewTopic(open);
+                return true;
+              } finally {
+                newTopicWaits.delete(session.id);
+                openTurn.done();
+              }
+            });
+            if (!goOn) return;
+          }
+          if (!prompt) {
+            const sent = replyRef.fn
+              ? await replyRef.fn({ channelId, content: NEW_TOPIC_ACK, replyToMessageId: msg.id })
+              : null;
+            store.trackBotMessage(sent?.messageId ?? `bot_reply_for_${msg.id}`, session);
+            return;
+          }
         }
 
         // PLUGIN-5.a (REQ-discord-157): while /work is turned off, a message
@@ -1324,7 +1408,8 @@ export async function startBridge(
                 mentionUserIds: refusal.mentionUserIds,
               })
             : null;
-          if (action.kind === "start_session") {
+          // A fresh session ('new topic' included, SESSION-3.b) is dropped.
+          if (action.kind !== "continue_session") {
             await store.endSession(session);
           } else {
             store.trackBotMessage(sent?.messageId ?? `bot_reply_for_${msg.id}`, session);

@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "saying-new-topic-starts-a-fresh-session-a-normal-mention-keeps-continuing-the-open-one-session-3-b",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "f0e38e48200a50be2e57b58ad2ce6181ffe4e632",
+  "contract_digest": "e17e0fefcef1266b8cdf1e9d57dc6e296680da24aa0e8a7fe4879e18f61ef6e6",
+  "execution_digest": "728d71ee9ec720eb5248cc69f75ee9a96e1d0d98c7a21a4d10e9304974d8d6de",
+  "workspace_digest": "2f91efea9cddcae1e4738de373ae727869c46c6e9a152b2b9c44b91754494bc5",
+  "timestamp": 1791332448
+}

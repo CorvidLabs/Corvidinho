@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 103
+version: 104
 status: draft
 files:
   - src/discord/types.ts
@@ -1915,3 +1915,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-10-07 | admin-3-c-part-2-as-owner-i-can-mute-and-unmute-with-admin-mutes-add-remove-mute-and-unmute-are-audited-aliases-of-the: ADMIN-3.c part 2: as owner I can mute and unmute with /admin mutes add\|remove; /mute and /unmute are audited aliases of the same helper |
 | 2026-10-07 | with-only-the-daemon-running-and-no-bridge-a-scheduled-run-s-question-still-reaches-me-by-dm-autonomous-7-a: With only the daemon running and no bridge, a scheduled run's question still reaches me by DM (AUTONOMOUS-7.a): the scheduler's `ownerDm` pass DMs each pending ask to the owner over Discord's REST API (`createRestSendDm`) while no bridge runs on the data dir, and takes it so a bridge never sends it again (REQ-discord-707; REQ-discord-347 modified) |
 | 2026-10-07 | session-5-a-each-configured-model-has-its-own-context-window-at-about-80-of-the-whole-prompt-a-model-writes-the-summary: SESSION-5.a: each configured model has its own context window; at about 80% of the whole prompt a model writes the summary of older turns, the task and latest instruction stay word for word |
+| 2026-10-07 | saying-new-topic-starts-a-fresh-session-a-normal-mention-keeps-continuing-the-open-one-session-3-b: Saying 'new topic' starts a fresh session; a normal @mention keeps continuing the open one (SESSION-3.b) |

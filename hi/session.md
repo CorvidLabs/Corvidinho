@@ -16,6 +16,7 @@ Sessions stay short-lived by default. Soft TTL keeps an active conversation; idl
 - **SESSION-2**  Soft TTL of about 30–60 minutes: continued activity keeps the same session.
 - **SESSION-3**  Idle expiry or a clear new topic starts a new session.
   - **SESSION-3.a**  A reply to it, or a message in its thread, after the session has expired starts a new session that begins from the old one's summary, instead of getting no answer.
+  - **SESSION-3.b**  Only /session start or my saying 'new topic' starts a fresh session; a normal @mention keeps continuing the open one.
 - **SESSION-4**  Cross-session continuity comes from MEMORY, not from a long-lived process.
 - **SESSION-5**  At about 80% of the model's window, older turns are condensed into a summary; the current task and its latest instructions stay pinned word for word.
   - **SESSION-5.a**  Each model I configure has its own context window; at about 80% of it, a model writes the summary of older turns, and the current task and my latest instructions stay word for word.

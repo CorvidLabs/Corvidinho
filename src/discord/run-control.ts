@@ -145,6 +145,8 @@ type TurnState = {
   stoppedBy?: string;
   progressIds: string[];
   forgetEpoch: number;
+  /** The session's queue tail this turn ends (a later turn replaces it). */
+  tail: Promise<void>;
 };
 
 export type SessionRunControlOptions = {
@@ -203,6 +205,7 @@ export class SessionRunControl {
       released: false,
       progressIds: [],
       forgetEpoch: this.forgetEpochs.get(input.requesterId) ?? 0,
+      tail,
       turn: undefined as unknown as SessionRunTurn,
     };
     const start = (): boolean => {
@@ -271,6 +274,17 @@ export class SessionRunControl {
   /** True while a turn of the session runs or waits. */
   busy(sessionId: string): boolean {
     return this.tails.has(sessionId);
+  }
+
+  /**
+   * True while a later turn of the same session waits behind the queued or
+   * running turn `runId` (SESSION-3.b: a 'new topic' does not park a session
+   * that still has a message of its own to answer).
+   */
+  waitingBehind(runId: string): boolean {
+    const state = this.byRunId.get(runId);
+    if (!state) return false;
+    return this.tails.get(state.turn.sessionId) !== state.tail;
   }
 
   /**

@@ -281,6 +281,11 @@ export class SessionStore {
   private readonly summaries = new Map<string, string>();
   /** session id → id of the retained conversation it carries (AGENT-6.a). */
   private readonly conversationIds = new Map<string, string>();
+  /**
+   * Sessions a 'new topic' left behind until it parks them (SESSION-3.b):
+   * no longer their user's open session there. In memory only.
+   */
+  private readonly superseded = new Set<string>();
   /** Retained conversations (SESSION-6 / AGENT-6.a); only with a DB. */
   private readonly conversations: ConversationStore | undefined;
   /** Fallback context window in tokens (sizes the turn-cap summary cap). */
@@ -320,19 +325,56 @@ export class SessionStore {
     // A run in flight is live work in the worktree, never an idle talk.
     if (this.activeRuns.has(session.id)) return false;
     if (!this.expired(session)) return false;
-    // AGENT-6.a / SESSION-3.a: keep its conversation before the live rows go.
-    this.retainConversation(session);
     // Sync drop so lookups never return expired; park async (SESSION-WORKTREE-3).
-    void this.parkSessionWorktree(session);
-    // DISCORD-ASK-5: a later press on this talk's buttons is a late press.
+    void this.retire(session);
+    return true;
+  }
+
+  /**
+   * What idle expiry does to a live session leaving now: keep its
+   * conversation (AGENT-6.a / SESSION-3.a), park its worktree
+   * (SESSION-WORKTREE-3; the returned promise settles when parked), close its
+   * open asks so a later press on its buttons is a late press (DISCORD-ASK-5),
+   * and drop it from the maps and the DB at once.
+   */
+  private retire(session: SessionStub): Promise<void> {
+    this.retainConversation(session);
+    const parked = this.parkSessionWorktree(session);
     this.closeAsks(session, openAsksOf(session));
     this.removeLocal(session);
     this.deleteFromDb(session.id);
+    return parked;
+  }
+
+  /**
+   * SESSION-3.b (REQ-discord-479) — a 'new topic' started a fresh session for
+   * this session's user where it lives, so this one is no longer their open
+   * session there: {@link getByUserChannel} passes it over from now on (their
+   * next @mention finds the fresh one, even while this one's run still goes
+   * and before {@link endForNewTopic} parks it). Its runs, its queue and
+   * replies to its answers are unchanged.
+   */
+  supersede(session: SessionStub): void {
+    if (this.bySessionId.get(session.id) === session) this.superseded.add(session.id);
+  }
+
+  /**
+   * SESSION-3.b (REQ-discord-479) — 'new topic' ends the open session the way
+   * idle expiry does ({@link retire}), so the next session starts fresh while
+   * this one's conversation stays kept for a later reply (SESSION-3.a). False,
+   * and nothing changes, when it is no longer live or a run of it is still in
+   * flight (the bridge only calls it on the session's turn, AGENT-3.a).
+   */
+  async endForNewTopic(session: SessionStub): Promise<boolean> {
+    if (this.bySessionId.get(session.id) !== session) return false;
+    if (this.activeRuns.has(session.id)) return false;
+    await this.retire(session);
     return true;
   }
 
   private removeLocal(session: SessionStub): void {
     this.bySessionId.delete(session.id);
+    this.superseded.delete(session.id);
     this.turns.delete(session.id);
     this.summaries.delete(session.id);
     this.conversationIds.delete(session.id);
@@ -1335,8 +1377,9 @@ export class SessionStore {
 
   /**
    * Active session for this Discord user in this channel (SESSION-MULTI-1).
-   * Newest non-expired match wins. Thread-scoped talks use threadId as the
-   * channel key when present.
+   * Newest non-expired match wins; one a 'new topic' superseded never does
+   * (SESSION-3.b). Thread-scoped talks use threadId as the channel key when
+   * present.
    */
   getByUserChannel(
     userId: string,
@@ -1347,6 +1390,7 @@ export class SessionStore {
     for (const session of this.bySessionId.values()) {
       if (this.purgeIfExpired(session)) continue;
       if (session.userId !== userId) continue;
+      if (this.superseded.has(session.id)) continue;
       if (threadId) {
         if (session.threadId !== threadId) continue;
       } else {

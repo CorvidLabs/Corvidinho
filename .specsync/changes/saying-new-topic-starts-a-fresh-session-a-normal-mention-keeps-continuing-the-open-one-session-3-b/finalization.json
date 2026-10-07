@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "saying-new-topic-starts-a-fresh-session-a-normal-mention-keeps-continuing-the-open-one-session-3-b",
+  "implementation_commit": "f0e38e48200a50be2e57b58ad2ce6181ffe4e632",
+  "implementation_tree": "80a0862f8f097815c215b16ae76a6b2f99d05374",
+  "contract_digest": "e17e0fefcef1266b8cdf1e9d57dc6e296680da24aa0e8a7fe4879e18f61ef6e6",
+  "workspace_digest": "2f91efea9cddcae1e4738de373ae727869c46c6e9a152b2b9c44b91754494bc5",
+  "closing_digest": "a34a03c0ff534002770850287d0654a84e1880fd9d5485514e8a2671a41e9dee",
+  "review_digest": "4d583e8893485e7d4c8429fdd141b012f94c3eef9a57efa1ee744a9dd567e704",
+  "finalization_digest": "3fd12755608ad0278fae39dc982b227c0e322037889d418060e65fa46368e1d0",
+  "timestamp": 1791332478
+}

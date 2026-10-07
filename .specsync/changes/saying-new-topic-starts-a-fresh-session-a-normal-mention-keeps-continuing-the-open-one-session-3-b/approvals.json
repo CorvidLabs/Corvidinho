@@ -1,0 +1,148 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791248740,
+      "digest": "83064f67ee1043a92974757920119d799560d3493327db688c60cded5a37f3d6",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "saying-new-topic-starts-a-fresh-session-a-normal-mention-keeps-continuing-the-open-one-session-3-b",
+        "title": "Saying 'new topic' starts a fresh session; a normal @mention keeps continuing the open one (SESSION-3.b)",
+        "description": "Saying 'new topic' starts a fresh session; a normal @mention keeps continuing the open one (SESSION-3.b)",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "INTENT.md",
+          "docs/discord.md",
+          "hi/session.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/requirements.md",
+          "specs/discord/testing.md",
+          "src/discord/bridge.ts",
+          "src/discord/message-router.ts",
+          "src/discord/new-topic.ts",
+          "src/discord/session-store.ts",
+          "src/discord/types.ts",
+          "tests/discord.new-topic.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "SESSION-3.b (captured in this PR with hi from Leif's 2026-09-28 interview, round 16 'explicit only'): 'Only /session start or my saying 'new topic' starts a fresh session; a normal @mention keeps continuing the open one.' Observable outcomes: (1) a message whose text, after the bot mention, begins with 'new topic' (any case; then the end, whitespace, or one optional ':' / '-' / ',' before the request), sent where its author's session would continue (their thread session, a reply to one of its answers, the SESSION-3.a retained paths, the @mention in that channel or thread), parks that open session the way idle expiry does (conversation kept 30 days, worktree parked, open asks closed, live rows dropped) and runs the request as the first message of a fresh session (new session id, resume false, nothing replayed); with no open session it also starts fresh. (2) 'new topic' with nothing after it (or only '.' / '!') posts only the fixed 'New topic — your next message starts it fresh.', runs nothing, parks the open session, and the author's next message there (a reply to that note, a thread message, an @mention) goes to the fresh session. (3) The phrase anywhere but the start ('tell me about the new topic'), 'new topics', and every other message continue the open session as before; no heuristics, no model call. (4) Every gate still runs first (channel allowlist / deny, actor gate and deny lists, mute and rate limit; roles and SAFE-12/13 apply to the fresh run), and another user's session is never touched. (5) AGENT-3.a: a 'new topic' sent while a run of the open session is going waits for that run like any message, then parks it and starts fresh; a message the author sends after it goes to the fresh session and waits behind it; if, while it waits, the author is muted, deny-listed or forgotten or the channel is dropped, nothing is parked, run or posted. (6) Buttons and /session start are unchanged. No new env var, config key, slash command, table or schema change. Tests: tests/discord.new-topic.test.ts (fake LLM fixture model, stub agents, dry-run bridge; no network), failing on the base (e1a24ed2) and passing on the branch."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "fa1bfdbfa03a92e225916af33b00171d0b6bce037b77ea72ad25946da9dba1d5"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791328853,
+      "digest": "83064f67ee1043a92974757920119d799560d3493327db688c60cded5a37f3d6",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "saying-new-topic-starts-a-fresh-session-a-normal-mention-keeps-continuing-the-open-one-session-3-b",
+        "title": "Saying 'new topic' starts a fresh session; a normal @mention keeps continuing the open one (SESSION-3.b)",
+        "description": "Saying 'new topic' starts a fresh session; a normal @mention keeps continuing the open one (SESSION-3.b)",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "INTENT.md",
+          "docs/discord.md",
+          "hi/session.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/requirements.md",
+          "specs/discord/testing.md",
+          "src/discord/bridge.ts",
+          "src/discord/message-router.ts",
+          "src/discord/new-topic.ts",
+          "src/discord/session-store.ts",
+          "src/discord/types.ts",
+          "tests/discord.new-topic.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "SESSION-3.b (captured in this PR with hi from Leif's 2026-09-28 interview, round 16 'explicit only'): 'Only /session start or my saying 'new topic' starts a fresh session; a normal @mention keeps continuing the open one.' Observable outcomes: (1) a message whose text, after the bot mention, begins with 'new topic' (any case; then the end, whitespace, or one optional ':' / '-' / ',' before the request), sent where its author's session would continue (their thread session, a reply to one of its answers, the SESSION-3.a retained paths, the @mention in that channel or thread), parks that open session the way idle expiry does (conversation kept 30 days, worktree parked, open asks closed, live rows dropped) and runs the request as the first message of a fresh session (new session id, resume false, nothing replayed); with no open session it also starts fresh. (2) 'new topic' with nothing after it (or only '.' / '!') posts only the fixed 'New topic — your next message starts it fresh.', runs nothing, parks the open session, and the author's next message there (a reply to that note, a thread message, an @mention) goes to the fresh session. (3) The phrase anywhere but the start ('tell me about the new topic'), 'new topics', and every other message continue the open session as before; no heuristics, no model call. (4) Every gate still runs first (channel allowlist / deny, actor gate and deny lists, mute and rate limit; roles and SAFE-12/13 apply to the fresh run), and another user's session is never touched. (5) AGENT-3.a: a 'new topic' sent while a run of the open session is going waits for that run like any message, then parks it and starts fresh; a message the author sends after it goes to the fresh session and waits behind it; if, while it waits, the author is muted, deny-listed or forgotten or the channel is dropped, nothing is parked, run or posted. (6) Buttons and /session start are unchanged. No new env var, config key, slash command, table or schema change. Tests: tests/discord.new-topic.test.ts (fake LLM fixture model, stub agents, dry-run bridge; no network), failing on the base (e1a24ed2) and passing on the branch."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "fa1bfdbfa03a92e225916af33b00171d0b6bce037b77ea72ad25946da9dba1d5"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791330441,
+      "digest": "e17e0fefcef1266b8cdf1e9d57dc6e296680da24aa0e8a7fe4879e18f61ef6e6",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "saying-new-topic-starts-a-fresh-session-a-normal-mention-keeps-continuing-the-open-one-session-3-b",
+        "title": "Saying 'new topic' starts a fresh session; a normal @mention keeps continuing the open one (SESSION-3.b)",
+        "description": "Saying 'new topic' starts a fresh session; a normal @mention keeps continuing the open one (SESSION-3.b)",
+        "kind": "feature",
+        "affected_specs": [
+          "discord"
+        ],
+        "affected_paths": [
+          "INTENT.md",
+          "docs/discord.md",
+          "hi/session.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/requirements.md",
+          "specs/discord/testing.md",
+          "src/discord/bridge.ts",
+          "src/discord/message-router.ts",
+          "src/discord/new-topic.ts",
+          "src/discord/run-control.ts",
+          "src/discord/session-store.ts",
+          "src/discord/types.ts",
+          "tests/discord.new-topic.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "SESSION-3.b (captured in this PR with hi from Leif's 2026-09-28 interview, round 16 'explicit only'): 'Only /session start or my saying 'new topic' starts a fresh session; a normal @mention keeps continuing the open one.' Observable outcomes: (1) a message whose text, after the bot mention, begins with 'new topic' (any case; then the end, whitespace, or one optional ':' / '-' / ',' before the request), sent where its author's session would continue (their thread session, a reply to one of its answers, the SESSION-3.a retained paths, the @mention in that channel or thread), parks that open session the way idle expiry does (conversation kept 30 days, worktree parked, open asks closed, live rows dropped) and runs the request as the first message of a fresh session (new session id, resume false, nothing replayed); with no open session it also starts fresh. (2) 'new topic' with nothing after it (or only '.' / '!') posts only the fixed 'New topic — your next message starts it fresh.', runs nothing, parks the open session, and the author's next message there (a reply to that note, a thread message, an @mention) goes to the fresh session. (3) The phrase anywhere but the start ('tell me about the new topic'), 'new topics', and every other message continue the open session as before; no heuristics, no model call. (4) Every gate still runs first (channel allowlist / deny, actor gate and deny lists, mute and rate limit; roles and SAFE-12/13 apply to the fresh run), and another user's session is never touched. (5) AGENT-3.a: a 'new topic' sent while a run of the open session is going waits for that run like any message, then parks it and starts fresh (the fresh session is held busy while it waits, so a run longer than the soft TTL never purges it; a message of the open session's own that came in meanwhile, such as a reply to one of its answers, still runs there and that session then idles out instead of being parked); a message the author sends after it goes to the fresh session and waits behind it; if, while it waits, the author is muted, deny-listed or forgotten or the channel is dropped, nothing is parked, run or posted. (6) Buttons and /session start are unchanged. No new env var, config key, slash command, table or schema change. Tests: tests/discord.new-topic.test.ts (fake LLM fixture model, stub agents, dry-run bridge; no network), failing on the base (e1a24ed2) and passing on the branch."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "discord": "a3c1ba2da7714857300a3906b418be9b7ccc2cd933841a69bd787d8d74fa1cdf"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1791332478,
+      "digest": "a34a03c0ff534002770850287d0654a84e1880fd9d5485514e8a2671a41e9dee",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}
