@@ -109,6 +109,7 @@ import {
   APPROVAL_POLL_MS,
   APPROVAL_UNKNOWN_KIND,
   createApprovalCards,
+  memoryApprovalKind,
   mustAskApprovalKinds,
   type ApprovalDeliveryResult,
 } from "./approval-cards.ts";
@@ -654,6 +655,9 @@ export async function startBridge(
           // AUTONOMY-9/10: prod / deploy asks (code) and channel-post asks
           // the must-ask gate (src/plugins/must-ask.ts) records.
           ...mustAskApprovalKinds({ db }),
+          // SAFE-18.a: the owner's own memory forget / override by id
+          // (destructive: code), recorded by the memory plugins' waiting run.
+          memoryApprovalKind({ db }),
           // SAFE-8 / SAFE-8.a: one model call past a spend cap (money: code).
           spendApprovalKind({ db }),
           // AUTONOMY-10 / 10.a: one of its first 20 public-thread replies
@@ -1440,8 +1444,7 @@ export async function startBridge(
           result = await store.runActive(session, () =>
             agent.runChat({
               prompt: enrichedPrompt,
-              // Raw human text (before memory/image enrichment) — the only
-              // source of SAFE-4 confirm tokens.
+              // Raw human text (before memory/image enrichment).
               humanText: prompt,
               sessionId: session.id,
               resume: action.kind === "continue_session",

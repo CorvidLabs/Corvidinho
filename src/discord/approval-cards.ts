@@ -9,7 +9,8 @@
  * hash that binds it, what Approve does and how the asker is told. The
  * MEMORY-ACL-6 forget card is the `forget` kind (src/discord/forget-card.ts);
  * {@link storedApprovalKind} serves kinds whose requests live in
- * `approval_requests` (src/approvals/store.ts).
+ * `approval_requests` (src/approvals/store.ts), among them the owner's own
+ * memory forget and override by id ({@link memoryApprovalKind}, SAFE-18.a).
  *
  * One delivery pass (the engine's own ~5 s poll, started and stopped with
  * the bridge so it works with the scheduler off, plus a pass after each chat
@@ -65,6 +66,7 @@ import {
   type ApprovalRequest,
 } from "../approvals/store.ts";
 import type { OwnerRecord } from "../identity/owner.ts";
+import { MEMORY_CARD_CLASS, MEMORY_CARD_KIND, MEMORY_CARD_NOTHING_DONE } from "../memory/card.ts";
 import { MUST_ASK_CARD_KINDS, MUST_ASK_NOTHING_DONE } from "../plugins/must-ask.ts";
 import { isScheduleRunnerAlive } from "../scheduler/store.ts";
 import {
@@ -848,4 +850,26 @@ export function mustAskApprovalKinds(opts: { db: Database; now?: () => number })
       ...(opts.now ? { now: opts.now } : {}),
     }),
   );
+}
+
+/**
+ * SAFE-18.a: the owner's own memory forget and override by id
+ * (plugins/memory/commands.ts, src/memory/card.ts), stored in
+ * `approval_requests` as the `memory` kind — destructive, so Approve also
+ * needs the one-time code (SAFE-19); an override's new text goes out first,
+ * word for word, like every card's text. Approve only records the decision:
+ * the waiting run reads it, uses it once and makes exactly that change; a
+ * card whose run is gone closes as a no.
+ */
+export function memoryApprovalKind(opts: { db: Database; now?: () => number }): ApprovalKind<ApprovalRequest, void> {
+  return storedApprovalKind({
+    db: opts.db,
+    kind: MEMORY_CARD_KIND,
+    class: MEMORY_CARD_CLASS,
+    audit: "memory",
+    nothingDone: MEMORY_CARD_NOTHING_DONE,
+    failed: "Memory change failed",
+    approvedOutcome: () => "Approved by you — the waiting run makes exactly this change.",
+    ...(opts.now ? { now: opts.now } : {}),
+  });
 }
