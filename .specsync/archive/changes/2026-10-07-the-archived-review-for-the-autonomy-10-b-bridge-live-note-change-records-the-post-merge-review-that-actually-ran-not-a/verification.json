@@ -1,0 +1,32 @@
+{
+  "timestamp": 1791357458,
+  "commit": "8c91ddba0c2f777ec43c2bf07a55e069dc798d34",
+  "contract_digest": "2cc297ca07538d21ac5e29e12848c3145261aa9d3e1c92664fd56b5862b4a95c",
+  "execution_digest": "4e1db2676934de57bb13eaf5149f37d1f69c63bdfa66c21b6109c3ab7741e463",
+  "workspace_digest": "e4b7a9e42fd9769c73de4cebacf91a053b78a3c65eb731958c2263560992eb2a",
+  "acceptance_input_digest": "c9aa002ab77712d0f730c694599835dba45705bba5cbe4af2d93f58e84336ecd",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "tests/specsync.archive-review.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "d8472908d977ccddfebede0d929ac40233fd46b73dd37b01642c55140615ad63",
+        "entry_digest": "8fcd1c2cf8a09473569ac98a8d8cc8770b9c8718d873967cea076a2c9d19a9a3",
+        "owners": [
+          "@exact:test"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check (no spec in scope)",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": []
+}

@@ -32,6 +32,22 @@
       "execution_digest": "4e1db2676934de57bb13eaf5149f37d1f69c63bdfa66c21b6109c3ab7741e463",
       "workspace_digest": "9e67f6b859515b98197461a515d94cdd2a08d05242793139cc225b6ba582c213",
       "timestamp": 1791356257
+    },
+    {
+      "schema_version": 2,
+      "change_id": "the-archived-review-for-the-autonomy-10-b-bridge-live-note-change-records-the-post-merge-review-that-actually-ran-not-a",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "8c91ddba0c2f777ec43c2bf07a55e069dc798d34",
+      "contract_digest": "2cc297ca07538d21ac5e29e12848c3145261aa9d3e1c92664fd56b5862b4a95c",
+      "execution_digest": "4e1db2676934de57bb13eaf5149f37d1f69c63bdfa66c21b6109c3ab7741e463",
+      "workspace_digest": "e4b7a9e42fd9769c73de4cebacf91a053b78a3c65eb731958c2263560992eb2a",
+      "timestamp": 1791357472
     }
   ]
 }

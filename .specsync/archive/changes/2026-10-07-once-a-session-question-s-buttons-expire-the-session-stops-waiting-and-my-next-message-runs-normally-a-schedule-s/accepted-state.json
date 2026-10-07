@@ -7,11 +7,11 @@
   "title": "Once a session question's buttons expire the session stops waiting and my next message runs normally; a schedule's questions still wait until answered (AUTONOMY-6.b)",
   "description": "Once a session question's buttons expire the session stops waiting and my next message runs normally; a schedule's questions still wait until answered (AUTONOMY-6.b)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "d8c77bb6d8457640272a3b72c5c054c5905b0691",
   "created_at": 1791350685,
-  "updated_at": 1791357958,
+  "updated_at": 1791358068,
   "affected_specs": [
     "discord"
   ],
