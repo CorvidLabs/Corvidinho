@@ -1,6 +1,6 @@
 ---
 id: on-github-a-text-someone-else-edited-never-gets-its-author-s-role-the-safe-13-owner-exemption-covers-only-text-the
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 86d68cd0d65e1836475d5e37a49444bdd0177ecb
 ---
