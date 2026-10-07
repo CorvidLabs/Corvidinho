@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "cover-the-session-5-a-hi-capture-hi-session-md-gains-session-5-a-and-hi-refreshed-the-intent-md-feature-index",
+  "reviewer": "Corvid Agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "8fcd1f735daefdb29f58671fba40761d781ef818",
+  "contract_digest": "5a67469c6673c489a4e72643f368d00ae942da41fe89b98946ab739a555bb016",
+  "execution_digest": "941dee62630486791bbc9b77610cc4d8ca1915a9d800a976b9dfcd7fc2d6ae27",
+  "workspace_digest": "99512d44d2912c78ea229c2d21ac4269a5c5a34b5737475456c47df7b13d50bf",
+  "timestamp": 1791393603
+}

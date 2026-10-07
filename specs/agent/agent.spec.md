@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 57
+version: 58
 status: draft
 files:
   - src/agent/types.ts
@@ -70,6 +70,8 @@ files:
   - tests/agent.test-evidence.test.ts
   - tests/fixtures/lane-output.ts
   - src/agent/providers.ts
+  - src/agent/condense.ts
+  - tests/agent.condense.test.ts
   - tests/agent.providers.test.ts
   - src/agent/headless-cli.ts
   - tests/agent.headless-cli.test.ts
