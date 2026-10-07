@@ -189,7 +189,7 @@ REQ-plugins-097).
 bounded rounds, and the PR body lists what it raised and what changed
 (GITHUB-9 / GITHUB-9.a, REQ-plugins-092, `src/work/review.ts`): the reviewer
 is the first other configured model that did not write the change (no
-reviewer setting); an agent run starts the rounds, an owner or team `/work`
+reviewer setting; never a headless agent CLI `cli:` entry, REQ-plugins-1301); an agent run starts the rounds, an owner or team `/work`
 run drives them itself once its tree is verified (the tree `/work` will
 commit, untracked files included; `workReviewHook`, REQ-agent-092), a caller
 with no run model opens only a tree whose review already finished, and no
@@ -373,7 +373,13 @@ REQ-plugins-115).
 
 `spawnCapped` counts each output chunk of its child as the calling run's
 activity for the idle timeout (AGENT-12, REQ-plugins-125, `noteIdleActivity`;
-a no-op outside a run), so a printing tool is never stopped as idle.
+a no-op outside a run), so a printing tool is never stopped as idle. Two
+optional options serve the headless agent CLI turn (AGENT-13.a,
+REQ-plugins-1301, `src/agent/headless-cli.ts`): `stdin` (text written to the
+child's stdin, then closed; default closed) and `killTreeAfterExit` (once the
+child exits, whatever it left running in its tree is killed, so nothing keeps
+changing files after the run checks them; default off). Every other caller is
+unchanged.
 
 Builtin plugin loaders MAY re-register after an in-process registry clear
 (test seam). Presence of an already-registered command name skips duplicate

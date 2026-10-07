@@ -1,7 +1,8 @@
 /**
  * Bounded subprocess helper for the Fledge plugin bridge (FLEDGE-4 / PLUGIN-3).
  *
- * argv arrays only (no shell), stdin closed, hard timeout, capped output, and a
+ * argv arrays only (no shell), stdin closed (or, for a headless agent CLI
+ * turn, AGENT-13, the given prompt), hard timeout, capped output, and a
  * child env without Corvidinho's own secrets. Never throws: spawn failures come
  * back as `spawnError` so discovery can degrade cleanly.
  *
@@ -28,6 +29,15 @@ export type SpawnCappedOptions = {
   maxBytes: number;
   /** Stops the run (and its process tree) like a timeout, reported as `aborted`. */
   signal?: AbortSignal;
+  /** Text written to the child's stdin, then closed (AGENT-13 CLI prompt). Default: stdin closed. */
+  stdin?: string;
+  /**
+   * AGENT-13.a: once the child exits, stop whatever it left running in its
+   * tree, so nothing it started keeps changing files after the run checks
+   * them. Default false (left-behind members are reached only by a timeout,
+   * an abort or this process exiting).
+   */
+  killTreeAfterExit?: boolean;
 };
 
 export type SpawnCappedResult = {
@@ -135,7 +145,7 @@ export async function spawnCapped(
     proc = Bun.spawn(argv, {
       cwd: opts.cwd,
       env: opts.env,
-      stdin: "ignore",
+      stdin: opts.stdin === undefined ? "ignore" : new TextEncoder().encode(opts.stdin),
       stdout: "pipe",
       stderr: "pipe",
       // Own process group: a timeout can then stop grandchildren too.
@@ -166,7 +176,7 @@ export async function spawnCapped(
   const untrack = trackChildProcess(pid, () => atExit);
   let pipesOpen = 2;
   const exited = proc.exited.then((code) => {
-    if (pipesOpen > 0) atExit = collectProcessTree(pid, { rootJustExited: true });
+    if (pipesOpen > 0 || opts.killTreeAfterExit) atExit = collectProcessTree(pid, { rootJustExited: true });
     return code;
   });
   const drained = <T,>(p: Promise<T>) =>
@@ -210,6 +220,7 @@ export async function spawnCapped(
     clearTimeout(timer);
     if (grace) clearTimeout(grace);
     opts.signal?.removeEventListener("abort", onAbort);
+    if (opts.killTreeAfterExit && !stopped) killProcessTree(pid, { known: atExit });
     untrack();
   }
 }

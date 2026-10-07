@@ -53,6 +53,11 @@ export type ModelFallback = {
   to: string;
   reason: string;
   via?: "delegate" | "council";
+  /**
+   * AGENT-13.a: `from` was skipped, never called — a headless agent CLI
+   * entry outside the owner's own runs in their talk worktree.
+   */
+  skipped?: true;
 };
 
 /**
