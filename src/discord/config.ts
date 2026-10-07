@@ -35,7 +35,12 @@ function parseList(raw: string | undefined): string[] {
     .filter(Boolean);
 }
 
-function resolveToken(env: NodeJS.ProcessEnv): string | null {
+/**
+ * The bot token (`DISCORD_BOT_TOKEN`, else `DISCORD_TOKEN`), trimmed; null
+ * when neither is set. The bridge's login and the daemon's owner DM
+ * (AUTONOMOUS-7.a) read it here.
+ */
+export function resolveDiscordToken(env: NodeJS.ProcessEnv): string | null {
   const t =
     env.DISCORD_BOT_TOKEN?.trim() ||
     env.DISCORD_TOKEN?.trim() ||
@@ -142,7 +147,7 @@ export async function loadBridgeConfig(
     },
   };
 
-  const token = resolveToken(env);
+  const token = resolveDiscordToken(env);
   if (requireToken && !token) {
     return {
       ok: false,

@@ -377,8 +377,10 @@ provider cap's `message` names its `provider:<id>` scope) and a `warn`
 `run.needs_human` line with the ask reason for a run that stopped to ask,
 leaving the recorded warning and the ask recorded on the run row pending for
 a bridge to deliver (REQ-discord-347; AUTONOMY-2 / AUTONOMOUS-7). The daemon
-SHALL NOT post or take the ask itself and still needs no Discord token
-(REQ-cli-108). `--help` and `.env.example` SHALL list both variables and say
+SHALL NOT post the ask to a channel and still needs no Discord token
+(REQ-cli-108); while no bridge runs on its data dir and it has a bot token
+and an owner, it SHALL DM the ask to the owner and take it (AUTONOMOUS-7.a,
+REQ-cli-707 / REQ-discord-707), and otherwise leave it pending for a bridge. `--help` and `.env.example` SHALL list both variables and say
 each cap warns at 80% and stops and asks at 100%; for
 `CORVIDINHO_PROVIDER_SPEND_CAPS_USD` they SHALL say it is a `provider=USD`
 comma list keyed on the provider id (the endpoint host) and that a bad entry
@@ -1506,4 +1508,39 @@ Acceptance Criteria
 - A community role session's `--persona` gets `PERSONA_OWNER_ONLY_LINE`.
 - At depth 1 `CORVIDINHO_DELEGATE_PERSONA` reaches the run (not-found line); at depth 0 it is ignored.
 - Fails on main's `src/cli.ts` and passes on the branch.
+
+### REQ-cli-707
+
+With only the daemon running and no bridge, a scheduled run's question SHALL
+still reach the owner by DM (AUTONOMOUS-7.a, captured with `hi` in this
+change from Leif's 2026-09-28 interview, round 17). `corvidinho daemon`
+SHALL wire its scheduler's owner DM (REQ-discord-707):
+
+- `send`: with a bot token (`resolveDiscordToken(env)`), `createRestSendDm`
+  over Discord's REST API (no gateway session); `StartDaemonOptions.discordRest`
+  is the test seam for the REST client. Without a token there is no `send`,
+  and a waiting ask logs `schedule_ask.dm_unavailable` once.
+- `bridgeLive`: `bridgeRunning(db)` (`src/watch/owner-ask.ts`), the
+  `schema_meta` mark a bridge with a scheduler and a DM path writes on this
+  data dir, counted only while its process is alive.
+- `spendAlerts`: the shared spend alert outbox on the daemon's DB, so a
+  spend-cap stop's details reach the owner once per cap episode.
+- `log`: the daemon's JSON-line logger (scrubbed, SAFE-6), with
+  `schedule_ask.dm_error` (warn, the REST reason) from the REST sender.
+
+`daemon.started` SHALL carry `ownerDm`: `on`, `no-token` or `no-owner` (the
+owner as loaded at start). On stop, after the runs' grace and before the DB
+closes, the daemon SHALL wait up to `ABANDONED_SETTLE_MS` for an owner DM in
+flight (`settleAskDelivery`), which hands an unfinished one back. The token
+SHALL never appear in a log line. It SHALL add no environment variable: the
+token and the owner are the bridge's (`.env.example` says the daemon reads
+them too). `docs/DAEMON.md` SHALL document the DM, its log events and the
+no-token / no-owner behaviour; the test preload SHALL unset
+`DISCORD_TOKEN` / `DISCORD_BOT_TOKEN` so `bun test` never DMs for real.
+
+Acceptance Criteria
+- With a fake bot token, an owner and a fake REST client, a daemon's stuck run logs `daemon.started` with `ownerDm` `on`, `run.needs_human` and `schedule_ask.dm_sent`, and the REST client sees `POST /users/@me/channels` (`recipient_id` the owner) then `POST /channels/<dm>/messages` with the question, the daemon note, `allowed_mentions.parse = []` and no components; no log line carries the token.
+- A Discord bridge started afterwards on the same data dir, once the schedule comes due again, posts only the wait note (with the controls) to the schedule's channel and never the question, and DMs nothing.
+- With no bot token, `daemon.started` has `ownerDm` `no-token`, the REST client is never called, `schedule_ask.dm_unavailable` (`no-token`) is logged once over two ticks, and the ask stays pending (`ask_posted_at` null).
+- The `docs/DAEMON.md` Logs table has a row for every event the daemon logs, `schedule_ask.dm_error` included.
 

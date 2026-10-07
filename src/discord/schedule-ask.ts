@@ -167,6 +167,27 @@ export function formatScheduleWaitNote(title: string): string {
   );
 }
 
+/**
+ * AUTONOMOUS-7.a (REQ-discord-707) — the closing line of a schedule ask that
+ * `corvidinho daemon` sent the owner by DM because no Discord bridge runs on
+ * its data dir. The DM carries no controls (a press needs a gateway to be
+ * received, and no `corvidinho` command answers one), so it says how the
+ * question becomes answerable: once a bridge runs, the schedule's one wait
+ * note brings its controls — to the schedule's channel, or with no channel
+ * to this DM — when its next run comes due and waits (AUTONOMY-6.a). Until
+ * it is answered or cancelled its next runs wait. The channel is named only
+ * as a mention (`<#id>`).
+ */
+export function formatScheduleAskDaemonNote(schedule: { channelId?: string }): string {
+  const channelId = schedule.channelId?.trim();
+  const where = channelId ? `in <#${channelId}>` : "here";
+  return (
+    "📭 Sent by `corvidinho daemon`: no Discord bridge is running, so this can't be answered yet. " +
+    `Once \`corvidinho discord bridge\` runs, the schedule's wait note brings its controls ${where} ` +
+    "when its next run comes due. Until it is answered or cancelled, its next runs wait."
+  );
+}
+
 export type ScheduleAskPressDeps = {
   store: Pick<ScheduleStore, "get" | "refresh" | "openRunAsk" | "closeRunAsk">;
   /** The live allowlist (the object `/admin` edits in place). */

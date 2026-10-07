@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "with-only-the-daemon-running-and-no-bridge-a-scheduled-run-s-question-still-reaches-me-by-dm-autonomous-7-a",
+  "slug": "with-only-the-daemon-running-and-no-bridge-a-scheduled-run-s-question-still-reaches-me-by-dm-autonomous-7-a",
+  "title": "With only the daemon running and no bridge, a scheduled run's question still reaches me by DM (AUTONOMOUS-7.a)",
+  "description": "With only the daemon running and no bridge, a scheduled run's question still reaches me by DM (AUTONOMOUS-7.a)",
+  "kind": "feature",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "6526a95b9f0be002f310767668a37f072e625bf6",
+  "created_at": 1791351222,
+  "updated_at": 1791391292,
+  "affected_specs": [
+    "discord",
+    "cli"
+  ],
+  "affected_paths": [
+    "src/scheduler/service.ts",
+    "src/scheduler/index.ts",
+    "src/discord/rest-dm.ts",
+    "src/discord/schedule-ask.ts",
+    "src/discord/config.ts",
+    "src/daemon/daemon.ts",
+    "tests/daemon.owner-dm.test.ts",
+    "tests/discord.rest-dm.test.ts",
+    "tests/preload.ts",
+    "specs/discord/discord.spec.md",
+    "specs/discord/testing.md",
+    "specs/cli/cli.spec.md",
+    "specs/cli/testing.md",
+    "docs/DAEMON.md",
+    "docs/DISCORD-GO-LIVE.md",
+    "docs/discord.md",
+    "README.md",
+    ".env.example",
+    "hi/autonomous.md",
+    "INTENT.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "AUTONOMOUS-7.a (hi/autonomous.md, captured in this PR from Leif's 2026-09-28 interview, round 17): with only corvidinho daemon running and no Discord bridge on its CORVIDINHO_DATA_DIR (bridgeRunning, the schema_meta mark a bridge with a scheduler writes, its process alive), each pending schedule ask (pendingAsks: the newest finished run's, open, not taken) whose creator and channel pass the live DISCORD-SCHEDULE-3 gate is taken with claimRunAsk (ask_posted_at, the delivered marker; no schema change) and DMed to the owner as configured now over Discord's REST API with the bot token (createRestSendDm: POST /users/@me/channels then /channels/<id>/messages, allowed_mentions parse [], defanged, refused over DISCORD_DM_MAX, no components) right after the run and on later ticks: the schedule ask post with no mention (scrubbed, defanged, quoted question) or a spend-cap stop's details once per cap episode (headline only when the episode was told), then formatScheduleAskDaemonNote (no controls; the schedule's wait note brings them once a bridge runs; its next runs wait, AUTONOMY-6.a). A bridge started later never sends it again and posts only the wait note with controls. While a bridge runs nothing is DMed; no token or no owner: nothing is taken, schedule_ask.dm_unavailable is logged once, the ask waits; a DM that does not go out is handed back and retried after 10 min; a stop that outlasts a DM in flight hands it back. Tests in tests/daemon.owner-dm.test.ts (fake DM sender and fake Discord REST client) and tests/discord.rest-dm.test.ts fail on main and pass on the branch."
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

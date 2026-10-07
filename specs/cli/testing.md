@@ -304,3 +304,23 @@ unknown persona fails (exit 1) with the not-found line and no model call;
 role session gets `PERSONA_OWNER_ONLY_LINE`; `CORVIDINHO_DELEGATE_PERSONA`
 reaches a depth-1 run and is ignored at depth 0. Fail on base: with main's
 `src/cli.ts` the flag and env are ignored, so all four fail; restored, pass.
+## `corvidinho daemon` DMs the owner a schedule's question while no bridge runs (REQ-cli-707, REQ-cli-098 modified; AUTONOMOUS-7.a)
+
+`tests/daemon.owner-dm.test.ts` "`corvidinho daemon` with no bridge DMs the
+owner over Discord's REST API …": `startDaemon` on a temp data dir with a fake
+bot token, the owner and a fake Discord REST client (`discordRest`). A stuck
+run logs `daemon.started` (`ownerDm: "on"`), `run.needs_human` and
+`schedule_ask.dm_sent`; the REST client sees `POST /users/@me/channels`
+(`recipient_id` the owner) then `POST /channels/<dm>/messages` (the question,
+the daemon note, `allowed_mentions.parse = []`, no components); no log line
+carries the token. A Discord bridge then started on the same data dir, with
+the schedule due again, posts only the wait note with the controls to the
+channel and DMs nothing. With no token, `daemon.started` says `no-token`, the
+REST client is never called, `schedule_ask.dm_unavailable` is logged once
+over two ticks and the ask stays pending. `tests/docs.operator-facts.test.ts`
+keeps the `docs/DAEMON.md` Logs table in step with the daemon's events
+(`schedule_ask.dm_error` included). The test preload unsets `DISCORD_TOKEN` /
+`DISCORD_BOT_TOKEN`.
+
+Fail on base: with main's (85871fa) `src/` swapped in, both daemon cases fail
+(`ownerDm` missing from `daemon.started`, no REST call). Restored, both pass.

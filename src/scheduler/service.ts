@@ -14,6 +14,10 @@
  * REQ-discord-347 (AUTONOMY-2 / AUTONOMOUS-7): a run's ask is recorded on its
  * run row; a ticker with no Discord (the daemon) leaves it pending, and a
  * bridge tick posts it once without waiting for the post.
+ * REQ-discord-707 (AUTONOMOUS-7.a): a ticker that cannot post but has the
+ * owner DM (`ownerDm`, the daemon with a bot token) DMs each pending ask to
+ * the owner while no Discord bridge runs on its data dir, taking it with the
+ * same compare-and-set, so a bridge that starts later never sends it again.
  * REQ-discord-353 (AUTONOMY-2): a run that cannot start (project resolve or
  * worktree failure) and a run that auto-pauses its schedule record a stuck
  * ask the same way, so the owner hears about it instead of the schedule
@@ -82,12 +86,16 @@ import { projectLabel } from "../discord/list-scope.ts";
 import { gateActor, resolveDiscordActingRole } from "../discord/permissions.ts";
 import {
   ASK_NO_OWNER_WARNING,
+  appendPostLine,
   askPingKey,
   clipPostSummary,
+  defangMassMentions,
   formatAskReply,
 } from "../discord/ask-ping.ts";
 import { askPingOwner } from "../discord/spend-post.ts";
-import { spendStopFor, type SpendDm } from "../discord/spend-dm.ts";
+import { formatSpendStopDm, spendStopFor, type SpendDm } from "../discord/spend-dm.ts";
+import type { SendPrivateDm } from "../discord/private-reply.ts";
+import { DISCORD_DM_MAX } from "../discord/rich-reply.ts";
 import {
   failedRunOutcome,
   failureReasonFor,
@@ -95,6 +103,7 @@ import {
   type FailureOwnerDm,
 } from "../discord/failure-reason.ts";
 import {
+  formatScheduleAskDaemonNote,
   formatScheduleWaitNote,
   scheduleAskComponents,
   scheduleAskHint,
@@ -143,6 +152,12 @@ export const FAILURE_AUTO_PAUSE = 5;
  * tree is already killed; what is left is `git worktree remove`.
  */
 export const ABANDONED_SETTLE_MS = 3_000;
+
+/**
+ * AUTONOMOUS-7.a (REQ-discord-707): wait before retrying a pending ask whose
+ * owner DM did not go out (DMs closed, Discord down), as for WATCH asks.
+ */
+export const OWNER_DM_RETRY_MS = 10 * 60 * 1000;
 
 /**
  * Stuck-ask questions for a run that could not start (REQ-discord-353,
@@ -259,6 +274,23 @@ function logSchedulerError(
   console.error(`[scheduler] ${where} failed: ${errorLine(err)}`);
 }
 
+/** AUTONOMOUS-7.a: the owner DM's log without a daemon logger (one scrubbed line). */
+function defaultOwnerDmLog(level: "info" | "warn", event: string, fields: Record<string, unknown>): void {
+  const line = `[scheduler] ${event} ${scrubSecrets(JSON.stringify(fields))}`;
+  if (level === "warn") console.warn(line);
+  else console.log(line);
+}
+
+/** AUTONOMOUS-7.a: `bridgeLive` now; a throw counts as live (fail closed: no DM). */
+function bridgeLiveNow(dm: ScheduleOwnerDm): boolean {
+  try {
+    return dm.bridgeLive();
+  } catch (err) {
+    logSchedulerError("ask", err);
+    return true;
+  }
+}
+
 /** Schedule-run worktrees (and their branch) registered in `projectDir`'s repo. */
 async function listScheduleRunWorktrees(
   projectDir: string,
@@ -315,6 +347,32 @@ export type SchedulerOutbound = {
    */
   dm?: (opts: { userId: string; content: string; components?: unknown[] }) => Promise<boolean>;
 };
+
+/**
+ * AUTONOMOUS-7.a (REQ-discord-707) — the owner DM of a ticker that cannot
+ * post (`corvidinho daemon`): while no Discord bridge runs on its data dir,
+ * each pending ask goes to the owner by direct message (over Discord's REST
+ * API with the bot token, src/discord/rest-dm.ts; no gateway session).
+ */
+export type ScheduleOwnerDm = {
+  /** The DM sender; unset when no bot token is set (asks keep waiting). */
+  send?: SendPrivateDm;
+  /**
+   * True while a Discord bridge that delivers schedule asks runs on this
+   * data dir (`bridgeRunning`, src/watch/owner-ask.ts): it posts them
+   * instead. A throw counts as live (nothing is DMed).
+   */
+  bridgeLive: () => boolean;
+  /** SAFE-8: the once-per-cap-episode claim a spend-cap stop's details take. */
+  spendAlerts?: SpendAlertOutbox;
+  /** One operator log line (the daemon's JSON-line logger); default console. */
+  log?: (level: "info" | "warn", event: string, fields: Record<string, unknown>) => void;
+  /** Wait before retrying an ask whose DM did not go out (default OWNER_DM_RETRY_MS). */
+  retryMs?: number;
+};
+
+/** Why an ask the daemon would DM keeps waiting instead (logged once each). */
+export type OwnerDmUnavailable = "no-token" | "no-owner";
 
 /**
  * AGENT-3.c (REQ-discord-304) — the bridge's stop control for schedule runs
@@ -476,6 +534,12 @@ export type SchedulerServiceOpts = {
    * (the daemon) a run has no Stop control.
    */
   runStop?: ScheduleRunStop;
+  /**
+   * AUTONOMOUS-7.a (REQ-discord-707) — the daemon's owner DM. Used only
+   * when this ticker cannot post (no `outbound.post`): while no bridge runs
+   * on the data dir, pending asks are DMed to the owner and taken.
+   */
+  ownerDm?: ScheduleOwnerDm;
 };
 
 /** What a start-up `recoverAbandoned()` fixed (REQ-discord-346). */
@@ -523,6 +587,16 @@ export class SchedulerService {
   private readonly mutedUsers?: Set<string>;
   private readonly schedulesEnabled?: () => boolean;
   private readonly runStop?: ScheduleRunStop;
+  private readonly ownerDm?: ScheduleOwnerDm;
+  /** AUTONOMOUS-7.a: per run, when its ask's owner DM may be retried. */
+  private readonly ownerDmRetryAt = new Map<string, number>();
+  /** AUTONOMOUS-7.a: the reasons already logged for asks left waiting. */
+  private readonly ownerDmUnavailableLogged = new Set<OwnerDmUnavailable>();
+  /**
+   * AUTONOMOUS-7.a: the ask whose owner DM is in flight, with its spend-cap
+   * episode claim; a stop that outlasts it hands both back for a later start.
+   */
+  private ownerDmInFlight: { runId: string; handedBack: boolean; release: () => void } | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly running = new Map<string, InFlight>();
   /** Runs already finished/abandoned — a run is recorded once. */
@@ -558,6 +632,7 @@ export class SchedulerService {
     this.mutedUsers = opts.mutedUsers;
     this.schedulesEnabled = opts.schedulesEnabled;
     this.runStop = opts.runStop;
+    this.ownerDm = opts.ownerDm;
     if (!opts.manual) {
       this.start();
     }
@@ -715,6 +790,20 @@ export class SchedulerService {
     } finally {
       if (timer) clearTimeout(timer);
     }
+    // AUTONOMOUS-7.a: an owner DM still in flight hands its ask (and its
+    // spend-cap episode claim) back, so the next start sends it instead of
+    // finding it taken and never sent; a DM that then goes out after all
+    // takes them again.
+    const held = this.ownerDmInFlight;
+    if (held && !held.handedBack) {
+      held.handedBack = true;
+      held.release();
+      try {
+        this.store.releaseRunAsk(held.runId);
+      } catch (err) {
+        logSchedulerError("ask", err);
+      }
+    }
     return this.askDelivery === null;
   }
 
@@ -731,11 +820,28 @@ export class SchedulerService {
    * post does not go out, so the next tick retries it. The claim re-checks that the
    * ask is still its schedule's newest, so one a later run made moot while
    * this pass was posting is skipped; after `stop()` no further ask is
-   * taken. One pass at a time; never rejects.
+   * taken. One pass at a time; never rejects. A ticker that cannot post but
+   * has the owner DM (the daemon) runs `dmPendingAsks` instead
+   * (AUTONOMOUS-7.a, REQ-discord-707).
    */
   private deliverPendingAsks(): void {
-    if (!this.outbound?.post || this.askDelivery || this.stopped) return;
-    const pass = (async () => {
+    if (this.askDelivery || this.stopped) return;
+    const pass = this.outbound?.post
+      ? this.postPendingAsks()
+      : this.ownerDm
+      ? this.dmPendingAsks(this.ownerDm)
+      : null;
+    if (!pass) return;
+    this.askDelivery = pass
+      .catch((err) => logSchedulerError("ask", err))
+      .finally(() => {
+        this.askDelivery = null;
+      });
+  }
+
+  /** The bridge's delivery pass (REQ-discord-347; see `deliverPendingAsks`). */
+  private postPendingAsks(): Promise<void> {
+    return (async () => {
       for (const pending of this.store.pendingAsks()) {
         if (this.stopped) break;
         const schedule = this.store.get(pending.scheduleId);
@@ -785,11 +891,135 @@ export class SchedulerService {
         }
       }
     })();
-    this.askDelivery = pass
-      .catch((err) => logSchedulerError("ask", err))
-      .finally(() => {
-        this.askDelivery = null;
-      });
+  }
+
+  /**
+   * AUTONOMOUS-7.a (REQ-discord-707) — the daemon's delivery pass: "With
+   * only the daemon running and no bridge, a scheduled run's question still
+   * reaches me by DM." While no Discord bridge runs on this data dir
+   * (`bridgeLive`, re-read before each ask), each pending ask (the same
+   * `pendingAsks()` a bridge would post: the newest finished run's, open,
+   * not taken) whose creator and channel pass the live DISCORD-SCHEDULE-3
+   * gate is taken with the bridge's compare-and-set (`claimRunAsk`: this is
+   * the delivered marker on the ask row, so a bridge that starts later never
+   * sends it again) and DMed to the owner as configured now: the schedule
+   * ask post with no mention (the DM notifies; `formatAskReply`, the
+   * question scrubbed, defanged and quoted, SAFE-6), or for a spend-cap stop
+   * whose cap episode this DM claims the stop's details (SAFE-14.a: only the
+   * owner sees them; an episode already told gets the headline alone), then
+   * `formatScheduleAskDaemonNote`. No controls: nothing can receive a press
+   * without a gateway, so the ask keeps blocking the schedule (AUTONOMY-6.a)
+   * until a bridge's wait note brings them. A DM that does not go out hands
+   * the ask and the episode claim back and is retried after `retryMs`. No bot
+   * token or no owner: nothing is taken, the reason is logged once, and the
+   * ask keeps waiting (a bridge that starts later posts it).
+   */
+  private dmPendingAsks(dm: ScheduleOwnerDm): Promise<void> {
+    const log = dm.log ?? defaultOwnerDmLog;
+    const retryMs = dm.retryMs ?? OWNER_DM_RETRY_MS;
+    return (async () => {
+      for (const pending of this.store.pendingAsks()) {
+        if (this.stopped) break;
+        // REQ-discord-347: a live bridge on this data dir posts it.
+        if (bridgeLiveNow(dm)) return;
+        let schedule = this.store.get(pending.scheduleId);
+        if (!schedule) {
+          // Created by another process on this data dir since the last read.
+          this.store.refresh();
+          schedule = this.store.get(pending.scheduleId);
+        }
+        if (!schedule) continue;
+        // DISCORD-SCHEDULE-3: creator and channel re-checked live, as a post.
+        if (!this.gateTick(schedule).ok) continue;
+        if ((this.ownerDmRetryAt.get(pending.runId) ?? 0) > this.nowFn()) continue;
+        if (!dm.send) {
+          this.ownerDmUnavailable(log, "no-token", pending.runId);
+          return;
+        }
+        const owner = await this.liveOwner();
+        const ownerId = owner?.discordId?.trim();
+        if (!ownerId || !owner) {
+          this.ownerDmUnavailable(log, "no-owner", pending.runId);
+          return;
+        }
+        if (this.stopped || bridgeLiveNow(dm)) return;
+        if (!this.store.claimRunAsk(pending.runId, this.nowFn())) continue;
+        // SAFE-8: a spend-cap stop's details go out once per cap episode.
+        const claim = askPingOwner(pending.ask, owner, dm.spendAlerts);
+        const entry = { runId: pending.runId, handedBack: false, release: claim.release };
+        this.ownerDmInFlight = entry;
+        let sent = false;
+        try {
+          const content = this.ownerDmContent(schedule, pending.ask, pending.summary, claim.owner !== null);
+          sent = (await dm.send({ userId: ownerId, content })) !== null;
+        } catch (err) {
+          logSchedulerError("ask", err);
+        } finally {
+          this.ownerDmInFlight = null;
+        }
+        const fields = { scheduleId: schedule.id, runId: pending.runId, reason: pending.ask.reason };
+        if (sent) {
+          // Handed back by a stop while the DM was in flight: it went out,
+          // so take the ask (and the episode) again.
+          if (entry.handedBack) {
+            this.store.claimRunAsk(pending.runId, this.nowFn());
+            if (claim.owner !== null) askPingOwner(pending.ask, owner, dm.spendAlerts);
+          }
+          this.ownerDmRetryAt.delete(pending.runId);
+          log("info", "schedule_ask.dm_sent", fields);
+        } else {
+          if (!entry.handedBack) {
+            claim.release();
+            this.store.releaseRunAsk(pending.runId);
+          }
+          this.ownerDmRetryAt.set(pending.runId, this.nowFn() + retryMs);
+          log("warn", "schedule_ask.dm_failed", { ...fields, retryInMinutes: Math.round(retryMs / 60_000) });
+        }
+      }
+    })();
+  }
+
+  /**
+   * AUTONOMOUS-7.a: the owner's DM for a pending ask — the schedule ask post
+   * without mentions or controls (its title leaves out a name that tripped
+   * SAFE-13), or a spend-cap stop's details when this DM claimed its cap
+   * episode, then the daemon note; kept under the DM cap.
+   */
+  private ownerDmContent(
+    schedule: Schedule,
+    ask: HumanAsk,
+    summary: string | undefined,
+    spendDetails: boolean,
+  ): string {
+    const title = scheduleTitle(schedule, {
+      withName: !scheduleInjection({ name: schedule.name }, this.creatorRole(schedule)),
+    });
+    const body =
+      ask.reason === "spend-cap" && spendDetails
+        ? `${defangMassMentions(scrubSecrets(`${title}:`))}\n${formatSpendStopDm({
+            ask,
+            ...(schedule.channelId ? { channelId: schedule.channelId } : {}),
+          })}`
+        : formatAskReply({ ask, owner: null, context: summary, prefix: `${title}:` }).content;
+    return appendPostLine(body, formatScheduleAskDaemonNote(schedule), DISCORD_DM_MAX);
+  }
+
+  /** AUTONOMOUS-7.a: log once per reason that asks keep waiting for a bridge. */
+  private ownerDmUnavailable(
+    log: NonNullable<ScheduleOwnerDm["log"]>,
+    why: OwnerDmUnavailable,
+    runId: string,
+  ): void {
+    if (this.ownerDmUnavailableLogged.has(why)) return;
+    this.ownerDmUnavailableLogged.add(why);
+    log("warn", "schedule_ask.dm_unavailable", {
+      reason: why,
+      runId,
+      message:
+        why === "no-token"
+          ? "a schedule's question waits: no DISCORD_TOKEN or DISCORD_BOT_TOKEN to DM the owner, and no Discord bridge is running on this data dir (AUTONOMOUS-7.a)"
+          : "a schedule's question waits: no owner Discord id is configured to DM (IDENTITY-3), and no Discord bridge is running on this data dir (AUTONOMOUS-7.a)",
+    });
   }
 
   /**
@@ -1332,7 +1562,12 @@ export class SchedulerService {
       injection?: InjectionNotice;
     } = {},
   ): Promise<void> {
-    if (!this.canSend(schedule)) return;
+    if (!this.canSend(schedule)) {
+      // AUTONOMOUS-7.a: the daemon DMs it to the owner now (its pass takes
+      // it, as a later tick's would; a pass in flight leaves it for the next).
+      if (!this.outbound?.post && this.ownerDm) this.deliverPendingAsks();
+      return;
+    }
     if (!this.gateTick(schedule).ok) return;
     const recorded = run.ask !== undefined;
     if (recorded && !this.store.claimRunAsk(run.id, this.nowFn())) return;
@@ -1563,7 +1798,8 @@ export class SchedulerService {
    * (`injectedScheduleQuestion`), the schedule paused so no later tick runs
    * it or posts again, and that ask posted through the usual ask path — the
    * owner pinged once, handed back for the next delivery pass when the post
-   * does not go out (a daemon's run leaves it pending for a bridge).
+   * does not go out (a daemon's run leaves it pending for a bridge, or with
+   * no bridge running its owner DM pass DMs it, AUTONOMOUS-7.a).
    */
   private async refuseInjectedRun(
     schedule: Schedule,
@@ -1633,7 +1869,11 @@ export class SchedulerService {
       ok: boolean;
       summary?: string;
       error?: string;
-      /** Recorded on the run row until a bridge posts it (REQ-discord-347). */
+      /**
+       * Recorded on the run row until a bridge posts it (REQ-discord-347) or,
+       * with no bridge running, the daemon's owner DM pass takes it
+       * (REQ-discord-707).
+       */
       ask?: HumanAsk;
       spendWarning?: SpendWarning;
       /**

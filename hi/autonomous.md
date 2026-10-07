@@ -21,5 +21,6 @@ Optional multi-agent work should be a config flag away, not the default personal
   - **AUTONOMOUS-5.a**  I can run a task as a named persona, and a lead run picks a persona by its skill tags; team members and the community can't pick personas.
 - **AUTONOMOUS-6**  A council can deliberate in structured phases when a decision needs more than one voice.
 - **AUTONOMOUS-7**  When autonomous work needs a human, it can reach me through the configured owner channel (Discord) instead of dying quietly.
+  - **AUTONOMOUS-7.a**  With only the daemon running and no bridge, a scheduled run's question still reaches me by DM.
 - **AUTONOMOUS-8**  I can see credit/spend usage for autonomous runs against a budget I set.
 - **AUTONOMOUS-9**  Bridges and other clients can talk to the running agent team over a local HTTP/WS API with a token, without that API being required for plain CLI use.
