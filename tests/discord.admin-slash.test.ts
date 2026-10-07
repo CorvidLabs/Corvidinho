@@ -189,7 +189,7 @@ function auditRows(db: Database): Array<{ action: string; actor: string; surface
 }
 
 describe("/admin command body (ADMIN-1..3)", () => {
-  test("nine commands; admin groups users add, channels add|remove, config show, people list|add|link|unlink|remove|role|forget, deny add|remove, github add|remove", () => {
+  test("nine commands; admin groups users add, channels add|remove, config show, people list|add|link|unlink|remove|role|forget, deny add|remove, github add|remove, mutes add|remove", () => {
     expect(SLASH_COMMAND_NAMES).toContain("admin");
     expect(SLASH_COMMAND_NAMES.length).toBe(9);
     const admin = buildSlashCommandBodies().find((b) => b.name === "admin");
@@ -202,6 +202,8 @@ describe("/admin command body (ADMIN-1..3)", () => {
       // ADMIN-3.c (part 1): the deny lists and the GitHub repo allow lists.
       [OPT_SUB_COMMAND_GROUP, "deny"],
       [OPT_SUB_COMMAND_GROUP, "github"],
+      // ADMIN-3.c (part 2): mutes; /mute and /unmute are its aliases.
+      [OPT_SUB_COMMAND_GROUP, "mutes"],
     ]);
     const subs = (name: string) =>
       groups.find((g) => g.name === name)?.options?.map((o) => {
@@ -215,6 +217,7 @@ describe("/admin command body (ADMIN-1..3)", () => {
     expect(subs("people")).toEqual(["list", "add", "link", "unlink", "remove", "role", "forget"]);
     expect(subs("deny")).toEqual(["add", "remove"]);
     expect(subs("github")).toEqual(["add", "remove"]);
+    expect(subs("mutes")).toEqual(["add", "remove"]);
     // ADMIN-3.b / IDENTITY-8: role takes a person and one of team / community.
     const roleSub = groups[3]?.options?.find((o) => o.name === "role");
     expect(roleSub?.options?.map((o) => [o.type, o.name, o.required])).toEqual([

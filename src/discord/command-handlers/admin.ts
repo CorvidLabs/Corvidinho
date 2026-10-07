@@ -37,6 +37,11 @@
  *        org:<org> | repo:<owner/repo>    [github].orgs|repos (the GitHub repo
  *                                         allow lists; [github].users stays
  *                                         file / env, shown read-only)
+ *   /admin mutes add|remove user:@x      ADMIN-3.c (part 2) mute / unmute a
+ *                                         Discord user in the live in-memory
+ *                                         mute set (until restart); /mute and
+ *                                         /unmute are aliases of the same
+ *                                         audited helper (applyMuteChange)
  *
  * Owner-only (IDENTITY-2): dispatch enforces minPermission ADMIN and this
  * handler re-checks ADMIN itself before anything else (ADMIN-4 / DISCORD-7);
@@ -51,7 +56,7 @@
  */
 
 import { argsDigest, type AuditEntryInput, type AuditOutcome } from "../../audit/index.ts";
-import { formatOwnerStatus } from "../../identity/owner.ts";
+import { formatOwnerStatus, isOwnerDiscord } from "../../identity/owner.ts";
 import {
   encodeForgetRequester,
   FORGET_REQUEST_TTL_MS,
@@ -96,7 +101,7 @@ import {
   type AdminListPlan,
 } from "../admin-allowlist.ts";
 import { resolveChannelOption } from "../channel-autocomplete.ts";
-import { PermissionLevel, resolvePermissionLevel } from "../permissions.ts";
+import { muteUser, PermissionLevel, resolvePermissionLevel, unmuteUser } from "../permissions.ts";
 import type { SlashContext, SlashInteraction } from "../slash-types.ts";
 import { NOT_AUTHORIZED } from "../types.ts";
 
@@ -220,6 +225,22 @@ export const PEOPLE_FORGET_ACTION = "admin-people-forget";
 const PEOPLE_FORGET_USAGE =
   "usage: /admin people forget person:<id> — a declared person (see /admin people list); you then approve or deny it on the card I DM you";
 
+/**
+ * ADMIN-3.c (part 2) — `/admin mutes add|remove`; `/mute` and `/unmute`
+ * (REQ-discord-009) are aliases served by the same helper, with the same
+ * SAFE-5 actions.
+ */
+export type MuteOp = "add" | "remove";
+const MUTE_ROUTES: Record<string, MuteOp> = { "mutes add": "add", "mutes remove": "remove" };
+export const MUTE_ACTIONS: Record<MuteOp, string> = {
+  add: "admin-mutes-add",
+  remove: "admin-mutes-remove",
+};
+
+/** Ephemeral refusal for a mute of yourself or the configured owner (DISCORD-6 / IDENTITY-2). */
+export const MUTE_SELF_OR_OWNER_REFUSED =
+  "You can't mute yourself or the owner — the owner would lose /unmute until the bridge restarts.";
+
 function isAdmin(ctx: SlashContext, interaction: SlashInteraction): boolean {
   return (
     resolvePermissionLevel({
@@ -288,8 +309,10 @@ export async function handleAdminCommand(
   if (!isAdmin(ctx, interaction)) {
     const m = MUTATIONS[route] ?? LIST_ROUTES[route];
     const pop = PEOPLE_OPS[route];
+    const mop = MUTE_ROUTES[route];
     if (m) auditSoft(ctx, auditEntry(interaction, m.action, "denied", [group, sub]));
     else if (pop) auditSoft(ctx, auditEntry(interaction, `admin-people-${pop}`, "denied", [group, sub]));
+    else if (mop) auditSoft(ctx, auditEntry(interaction, MUTE_ACTIONS[mop], "denied", [group, sub]));
     else if (route === PEOPLE_FORGET_ROUTE) {
       auditSoft(ctx, auditEntry(interaction, PEOPLE_FORGET_ACTION, "denied", [group, sub]));
     }
@@ -321,6 +344,12 @@ export async function handleAdminCommand(
   const lr = LIST_ROUTES[route];
   if (lr) {
     await handleListRoute(ctx, interaction, lr, [group, sub]);
+    return;
+  }
+
+  const mop = MUTE_ROUTES[route];
+  if (mop) {
+    await applyMuteChange(ctx, interaction, mop, `/admin ${route}`);
     return;
   }
 
@@ -567,6 +596,88 @@ async function applyListChange(
     content: formatApplied(ctx, interaction, plan, c.command, startedSeq, okSeq),
     ephemeral: true,
   });
+}
+
+/**
+ * ADMIN-3.c (part 2) — the one audited mute helper behind `/admin mutes
+ * add|remove` and its aliases `/mute` / `/unmute` (`command` names the one
+ * used, for replies). The callers gate ADMIN: the dispatcher floor, and
+ * `/admin` re-checks it too. A mute of the owner or of the caller is refused
+ * (`denied`): a muted owner is not ADMIN and could not undo it until a
+ * restart. SAFE-5 as the list routes: `started` before the change — no
+ * trail wired, or a trail that throws, refuses with the set unchanged —
+ * then `ok`; a mute already in place or an unmute of someone not muted
+ * changes nothing and writes no row. Mutes stay in memory until a restart
+ * (REQ-discord-010, seeded from `DISCORD_MUTED_USER_IDS`); the reply says so
+ * and points to `/admin deny add user:` for a lasting block.
+ */
+export async function applyMuteChange(
+  ctx: SlashContext,
+  interaction: SlashInteraction,
+  op: MuteOp,
+  command: string,
+): Promise<void> {
+  const raw = interaction.options.user;
+  const target = typeof raw === "string" ? raw.trim() : "";
+  if (!target) {
+    await interaction.reply({ content: `usage: ${command} user:@someone`, ephemeral: true });
+    return;
+  }
+  const action = MUTE_ACTIONS[op];
+  // The same row for every alias: the canonical route and the target.
+  const args = ["mutes", op, target];
+  if (op === "add" && (target === interaction.userId.trim() || isOwnerDiscord(ctx.owner, target))) {
+    auditSoft(ctx, auditEntry(interaction, action, "denied", args));
+    await interaction.reply({ content: MUTE_SELF_OR_OWNER_REFUSED, ephemeral: true });
+    return;
+  }
+  const set = ctx.mutedUsers ?? new Set<string>();
+  ctx.mutedUsers = set;
+  const who = `<@${target}>`;
+  if (op === "add" ? set.has(target) : !set.has(target)) {
+    await interaction.reply({
+      content: op === "add" ? `No change: ${who} is already muted.` : `No change: ${who} is not muted.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // SAFE-5: the intent is on the tamper-evident trail before the change; no
+  // trail (or a trail that throws) fails closed — an unaudited mute is never made.
+  let startedSeq: number;
+  try {
+    if (!ctx.recordAudit) throw new Error("no audit database is wired to this bridge");
+    startedSeq = ctx.recordAudit(auditEntry(interaction, action, "started", args)).seq;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await interaction.reply({
+      content: `Refused: audit log unavailable (SAFE-5): ${msg}. Nothing changed.`,
+      ephemeral: true,
+    });
+    return;
+  }
+  if (op === "add") muteUser(set, target);
+  else unmuteUser(set, target);
+  const okSeq = auditSoft(ctx, auditEntry(interaction, action, "ok", args));
+
+  const lines =
+    op === "add"
+      ? [
+          `✅ ${command}: muted ${who} from bot interactions.`,
+          `In memory only: the mute lasts until the bridge restarts. For a lasting block use \`/admin deny add user:\` (written to [discord].deny_users in the allowlist file).`,
+        ]
+      : [`✅ ${command}: unmuted ${who}.`];
+  if (op === "remove" && envMutedIds(ctx).includes(target)) {
+    lines.push(`Note: ${who} is in DISCORD_MUTED_USER_IDS, so the next restart mutes them again — change the VM env to make this last.`);
+  }
+  lines.push(`Audit: #${startedSeq} started${okSeq !== undefined ? ` · #${okSeq} ok` : " · ok row not recorded (see bridge log)"}.`);
+  await interaction.reply({ content: lines.join("\n"), ephemeral: true });
+}
+
+/** The mute seed a restart re-applies (`DISCORD_MUTED_USER_IDS`, as `src/discord/config.ts` parses it). */
+function envMutedIds(ctx: SlashContext): string[] {
+  const raw = (ctx.env ?? process.env).DISCORD_MUTED_USER_IDS ?? "";
+  return raw.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean);
 }
 
 /**
@@ -1129,11 +1240,11 @@ function configShowText(ctx: SlashContext, maxIds: number): string {
       `Rate limit: ${ctx.rateLimitConfig.maxMessages} per ${Math.round(ctx.rateLimitConfig.windowMs / 1000)}s (env)`,
     );
   }
-  lines.push(`Muted users: ${ctx.mutedUsers?.size ?? 0} (in-memory; /mute /unmute)`);
+  lines.push(`Muted users: ${ctx.mutedUsers?.size ?? 0} (in memory until restart; lasting block: /admin deny add user:)`);
   const audit = ctx.auditLine?.();
   if (audit) lines.push(audit);
   lines.push(
-    "Updatable here: [discord].users (/admin users add), [discord].channels (/admin channels add|remove), the deny lists [discord].deny_channels|deny_users|deny_roles and [github].deny_orgs|deny_repos|deny_users (/admin deny add|remove), the GitHub repo allow lists [github].orgs|repos (/admin github add|remove), declared people (/admin people add|link|unlink|remove) and their roles (/admin people role) — written to the file, live immediately.",
+    "Updatable here: [discord].users (/admin users add), [discord].channels (/admin channels add|remove), the deny lists [discord].deny_channels|deny_users|deny_roles and [github].deny_orgs|deny_repos|deny_users (/admin deny add|remove), the GitHub repo allow lists [github].orgs|repos (/admin github add|remove), declared people (/admin people add|link|unlink|remove) and their roles (/admin people role) — written to the file, live immediately; mutes (/admin mutes add|remove, alias /mute /unmute) — live, in memory until restart.",
   );
   lines.push(
     "Read-only at runtime: env values (CORVIDINHO_DISCORD_*, DISCORD_CHANNEL_IDS, CORVIDINHO_GITHUB_*, CORVIDINHO_OWNER_*, rate limits), [github].users, [discord].roles and every other file key — edit on the VM and restart.",

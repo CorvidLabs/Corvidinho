@@ -6,7 +6,8 @@
  * + /schedule list|create|pause|resume|delete (single-project; skip templates)
  * + /admin users|channels|config (corvid-agent admin-commands.ts, trimmed to
  * the captured ADMIN-1..3 surface) + /admin people (ADMIN-3.a, #36; role ADMIN-3.b, #65; forget MEMORY-ACL-6.a, #101)
- * + /admin deny|github add|remove (ADMIN-3.c part 1: deny lists and the GitHub repo allow lists). Channel options use STRING + autocomplete
+ * + /admin deny|github add|remove (ADMIN-3.c part 1: deny lists and the GitHub repo allow lists)
+ * + /admin mutes add|remove (ADMIN-3.c part 2; /mute /unmute are its aliases). Channel options use STRING + autocomplete
  * (searchable names/ids) instead of the limited native CHANNEL picker.
  */
 
@@ -54,7 +55,8 @@ export type SlashCommandBody = {
  * /admin users add | channels add|remove | config show (ADMIN-1..3)
  * | people list|add|link|unlink|remove (ADMIN-3.a / IDENTITY-13) | people role
  * (ADMIN-3.b / IDENTITY-8) | people forget (MEMORY-ACL-6.a) | deny add|remove
- * and github add|remove (ADMIN-3.c part 1).
+ * and github add|remove (ADMIN-3.c part 1) | mutes add|remove (ADMIN-3.c
+ * part 2; `/mute` / `/unmute` are its aliases).
  */
 export function buildSlashCommandBodies(): SlashCommandBody[] {
   return [
@@ -123,7 +125,7 @@ export function buildSlashCommandBodies(): SlashCommandBody[] {
     },
     {
       name: "mute",
-      description: "Mute a user from bot interactions (admin)",
+      description: "Mute a user from bot interactions until restart (admin; alias of /admin mutes add)",
       options: [
         {
           type: OPT_USER,
@@ -135,7 +137,7 @@ export function buildSlashCommandBodies(): SlashCommandBody[] {
     },
     {
       name: "unmute",
-      description: "Unmute a user (admin)",
+      description: "Unmute a user (admin; alias of /admin mutes remove)",
       options: [
         {
           type: OPT_USER,
@@ -536,6 +538,25 @@ export function buildSlashCommandBodies(): SlashCommandBody[] {
               name: "remove",
               description: "Remove exactly one GitHub org or repo from the allow lists (owner only)",
               options: githubListOptions(),
+            },
+          ],
+        },
+        {
+          type: OPT_SUB_COMMAND_GROUP,
+          name: "mutes",
+          description: "Mutes: in memory until restart; /mute and /unmute are aliases (ADMIN-3.c)",
+          options: [
+            {
+              type: OPT_SUB_COMMAND,
+              name: "add",
+              description: "Mute a user from bot interactions until restart (owner only)",
+              options: [{ type: OPT_USER, name: "user", description: "User to mute", required: true }],
+            },
+            {
+              type: OPT_SUB_COMMAND,
+              name: "remove",
+              description: "Unmute a user (owner only)",
+              options: [{ type: OPT_USER, name: "user", description: "User to unmute", required: true }],
             },
           ],
         },
