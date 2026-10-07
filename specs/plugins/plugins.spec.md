@@ -342,7 +342,12 @@ plain module-name check), `refuseRootArg`, `readModuleSpec` (its error carries
 (the project `fledge.toml` defines a `spec-check` task; true when that file
 cannot be read or parsed) and `runSpecCheck` (the Fledge `spec-check` task
 when fledge is on PATH and the project defines it, else local `specsync
-check`).
+check`). `runSpecCheck` and `spawnSpecsync` start their child without the
+owner's cloud credentials (SAFE-21.b, REQ-plugins-621): the Fledge task gets
+`withoutCloudCredentials(buildVerifyEnv())`, the verify lane's env; specsync
+gets `withoutCloudCredentials` of `process.env` at call time; the stand-ins
+are released once the child exits and the output is secret-scrubbed
+(`scrubSecrets(redactSecretEnvValues(…))`).
 
 ## Invariants
 
@@ -1578,3 +1583,4 @@ and current rows for plugins host evolution.
 | 2026-10-05 | in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2: In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause) |
 | 2026-10-06 | github-7-typed-github-pr-merge-merges-the-bot-s-own-green-corvidinho-pr-only-when-ci-is-green-and-branch-protection: GITHUB-7: typed github-pr-merge merges the bot's own green Corvidinho PR only when CI is green and branch protection allows; never others or outside Corvidinho |
 | 2026-10-07 | shell-exec-refuses-a-specsync-lifecycle-step-written-as-a-glob-or-brace-pattern-or-reached-through-an-expanding: Shell-exec refuses a SpecSync lifecycle step written as a glob or brace pattern, or reached through an expanding subcommand or xargs input (AGENT-18.a follow-up to #372) |
+| 2026-10-06 | the-specsync-check-tool-the-verify-lane-s-spec-check-step-starts-without-my-cloud-credentials-and-its-output-is: The specsync-check tool (the verify lane's spec-check step) starts without my cloud credentials and its output is scrubbed (SAFE-21.b follow-up to #373) |
