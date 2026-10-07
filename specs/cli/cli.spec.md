@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 86
+version: 87
 status: draft
 files:
   - src/cli.ts
@@ -392,3 +392,4 @@ Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), 
 | 2026-10-07 | named-personas-are-their-own-files-in-personas-with-name-model-and-skill-tags-the-owner-can-run-a-task-as-one-and-a: Named personas are their own files in personas/ with name, model and skill tags; the owner can run a task as one and a lead's delegate picks one by skill tag; team and community can't pick one (AUTONOMOUS-2.a, AUTONOMOUS-5.a) |
 | 2026-10-07 | release-0-0-45-admin-3-c-part-2-mutes-407-and-agent-17-a-github-9-a-moved-from-authorship-401-package-bump-changelog: Release 0.0.45: ADMIN-3.c part 2 mutes (#407) and AGENT-17.a / GITHUB-9.a moved-from authorship (#401). Package bump, CHANGELOG fold, STATUS rows, version fixtures; CI tags v0.0.45 on land. |
 | 2026-10-07 | with-only-the-daemon-running-and-no-bridge-a-scheduled-run-s-question-still-reaches-me-by-dm-autonomous-7-a: With only the daemon running and no bridge, a scheduled run's question still reaches me by DM (AUTONOMOUS-7.a): `corvidinho daemon` DMs the owner each pending schedule ask over Discord's REST API with the bot token while no bridge runs, `daemon.started` carries `ownerDm` (REQ-cli-707; REQ-cli-098 modified) |
+| 2026-10-07 | a-headless-agent-cli-can-be-one-of-my-models-in-my-own-runs-only-with-the-same-tools-as-my-other-models-inside-that: A headless agent CLI can be one of my models, in my own runs only, with the same tools as my other models, inside that talk's own worktree; other runs skip it and use my next model (AGENT-13, AGENT-13.a) |

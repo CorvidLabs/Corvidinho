@@ -7,7 +7,7 @@
 
 <!-- hi:index -->
 - [admin](hi/admin.md): ADMIN (7 criteria)
-- [agent](hi/agent.md): AGENT (30 criteria)
+- [agent](hi/agent.md): AGENT (31 criteria)
 - [allow](hi/allow.md): ALLOW, WALLET (9 criteria)
 - [autonomous](hi/autonomous.md): AUTONOMOUS (12 criteria)
 - [autonomy](hi/autonomy.md): AUTONOMY (17 criteria)

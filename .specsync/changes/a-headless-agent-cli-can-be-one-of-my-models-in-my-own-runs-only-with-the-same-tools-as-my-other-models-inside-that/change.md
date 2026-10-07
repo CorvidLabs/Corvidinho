@@ -1,6 +1,6 @@
 ---
 id: a-headless-agent-cli-can-be-one-of-my-models-in-my-own-runs-only-with-the-same-tools-as-my-other-models-inside-that
-state: verifying
+state: implementing
 type: feature
 base_commit: b53cc4679baee4355db339e22f7929095b81d0a1
 ---
