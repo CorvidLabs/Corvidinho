@@ -180,6 +180,18 @@ describe("update-helpers.sh", () => {
     }
   });
 
+  test("extract_changelog_section finds 0.0.45", () => {
+    const r = bashEval(
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.45`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("ADMIN-3.c");
+    expect(r.stdout).toContain("#407");
+    expect(r.stdout).toContain("AGENT-17.a");
+    expect(r.stdout).toContain("#401");
+    expect(r.stdout).not.toContain("## 0.0.44");
+  });
+
   test("extract_changelog_section finds 0.0.44", () => {
     const r = bashEval(
       `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.44`,
@@ -1013,10 +1025,10 @@ describe("release tagging helpers", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.44", () => {
+  test("package.json is 0.0.45", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.44");
+    expect(pkg.version).toBe("0.0.45");
   });
 });
