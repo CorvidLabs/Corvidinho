@@ -80,6 +80,13 @@ export function buildSlashCommandBodies(): SlashCommandBody[] {
               description: "Target project path (optional; default bridge root)",
               required: false,
             },
+            {
+              // AUTONOMOUS-2 / 5.a: owner only; the handler refuses anyone else.
+              type: OPT_STRING,
+              name: "persona",
+              description: "Run as a named persona from personas/ (optional; owner only)",
+              required: false,
+            },
           ],
         },
       ],
@@ -337,7 +344,7 @@ export function buildSlashCommandBodies(): SlashCommandBody[] {
             {
               type: OPT_SUB_COMMAND,
               name: "add",
-              description: "Declare a person, or change their display name (owner only)",
+              description: "Declare a person, or change their display name, time zone or hours (owner only)",
               options: [
                 {
                   type: OPT_STRING,
@@ -349,6 +356,18 @@ export function buildSlashCommandBodies(): SlashCommandBody[] {
                   type: OPT_STRING,
                   name: "display",
                   description: "Display name (never used for matching)",
+                  required: false,
+                },
+                {
+                  type: OPT_STRING,
+                  name: "timezone",
+                  description: "Time zone for their daily briefing, e.g. Europe/Oslo (COS-2.a)",
+                  required: false,
+                },
+                {
+                  type: OPT_STRING,
+                  name: "hours",
+                  description: "Working hours HH:MM-HH:MM, e.g. 09:00-17:00; the briefing comes at the start",
                   required: false,
                 },
               ],

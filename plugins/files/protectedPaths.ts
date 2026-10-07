@@ -6,6 +6,8 @@
 import { statSync } from "node:fs";
 import { basename, isAbsolute, join, relative } from "node:path";
 import { PROJECT_INSTRUCTION_FILES } from "../../src/agent/project-instructions.ts";
+import { CORVIDINHO_ROOT } from "../../src/agent/persona.ts";
+import { PERSONAS_DIR } from "../../src/agent/personas.ts";
 import {
   isWatchRunEnv,
   resolveActingIsAdmin,
@@ -162,6 +164,27 @@ export function rootInstructionRefuseMessage(path: string): string {
     `refused (AGENT-1.b): '${path}' is this project's root AGENTS.md / CLAUDE.md (or the file one leads to). ` +
     `In a project folder that isn't a git repo they are read into every run's instructions, ` +
     `so the file tools never change them; the owner edits them outside the agent.`
+  );
+}
+
+/**
+ * SAFE-2 / AUTONOMOUS-2.a: Corvidinho's own named persona files — the
+ * `personas/` folder next to `persona.md` at the root of the checkout runs
+ * read them from (`root`, default `CORVIDINHO_ROOT`) — are owner-edited
+ * config: the file tools never write, edit or delete there. `absPath` is
+ * where the tool would write (`resolveProjectPath`, symlinks resolved). Only
+ * that one folder: a project's own `personas/` directory is not touched.
+ * Runs also load only the committed copy (like `persona.md`), so this is a
+ * second wall, not the only one.
+ */
+export function isLivePersonaPath(absPath: string, root: string = CORVIDINHO_ROOT): boolean {
+  return isInsideRoot(join(realRoot(root), PERSONAS_DIR), absPath);
+}
+
+export function livePersonaRefuseMessage(path: string): string {
+  return (
+    `refused (SAFE-2): '${path}' is in Corvidinho's ${PERSONAS_DIR}/ folder, the named persona files ` +
+    `(AUTONOMOUS-2.a). They are owner-edited config: the file tools never change them; the owner edits and commits them.`
   );
 }
 

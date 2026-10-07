@@ -1108,6 +1108,16 @@ emoji, and SHALL hold no secret (it passes `scrubSecrets` unchanged). No
 flag, environment variable, config key or slash command is added;
 `CreateTaskExecuteOpts.personaRoot` is a test seam, not a product surface.
 
+AUTONOMOUS-2.a (REQ-agent-225): `persona.md` stays the default voice. A run
+the owner, or a lead's `delegate` for its worker, started as a named persona
+(`CreateTaskExecuteOpts.persona`) SHALL NOT load `persona.md`; it SHALL use
+that persona's own file from `personas/` in the same place, under
+`NAMED_PERSONA_HEADER`, with the same rules after it. Every other run SHALL
+load `persona.md` exactly as above. The `--persona` flag and the
+`/session start` `persona` option that pick a named persona are REQ-cli-225 /
+REQ-discord-225; `persona.md` itself still has no flag, env var, key or
+command.
+
 Acceptance Criteria
 - A committed `persona.md` renders as `PERSONA_HEADER` plus a `<persona file="persona.md">` block, with no note.
 - With no `persona.md` at the root there is no block and one note, and a committed `persona.md` in a parent git checkout is never read; a plain (non-git) root inside a git parent reads its own working-tree file.
@@ -1120,6 +1130,7 @@ Acceptance Criteria
 - By default the persona comes from Corvidinho's checkout: a decoy `persona.md` in the run's cwd never loads.
 - The shipped `persona.md` loads whole from this checkout, passes `scrubSecrets` unchanged and carries the persona fields, "corvid-agent", "warm", "direct", "Never a flat changelog voice", an emoji and "one message per turn".
 - End to end against a local fake provider, with a decoy `persona.md` in the cwd: `corvidinho task run`, the Discord spawn client (chat, slash commands, `/work` and schedules), the WATCH spawn client and a delegate worker (the council's worker path) each send a system prompt that starts with the shipped persona and has the PERSONA-3 rules after it.
+- A run with no persona picked loads `persona.md` and calls the tier's first model as before; a run as a named persona has no `persona.md` text in its prompt and starts with `NAMED_PERSONA_HEADER` (`tests/agent.personas.test.ts`).
 
 ### REQ-agent-071
 
@@ -2874,4 +2885,126 @@ Acceptance Criteria
 - A `fledge.toml` that is a directory gives both `{ on: false, reason: "config-unreadable", error: "the install's fledge.toml could not be read (EISDIR)" }`; a `.json` allowlist file `{oops` gives `the allowlist file could not be parsed`.
 - `[corvidinho.autonomous] enabled = false` leaves both on.
 - Fixture: `tests/plugins.extras-toggle.test.ts`.
+
+### REQ-agent-102
+
+`src/agent/execute.ts` SHALL export `chatCompletions` (and its result type
+`Completion`) unchanged in behaviour: one OpenAI-compatible request to
+`${provider.baseUrl}/chat/completions` with `model`, `messages` and
+`temperature`, `tools` only when given, the bearer key only when the
+provider has one, the caller's abort plus the per-request timeout, and the
+same `Completion` result (`failure: null` for a SAFE-8 spend-cap stop or the
+caller's own abort, so no model fallback routes around a cap). It is the
+transport of the GITHUB-9 reviewer's no-tools call and of the daily briefing
+composer (COS-1, REQ-discord-102), each through its own spend-capped fetch
+(SAFE-8 / SAFE-14). No new tool, env var or config key.
+
+Acceptance Criteria
+- The briefing composer's call reaches the fake provider at `https://llm.test/v1/chat/completions` with the configured read-tier model and no `tools` key, and its reply becomes the briefing text (`tests/cos.briefing.test.ts`).
+- With a spend cap of 0 the composer's call is never sent and comes back as a `spend-cap` stop, not a model failure (`tests/cos.briefing.test.ts`).
+- The GITHUB-9 review tests that use the same call are unchanged (`tests/work.review.test.ts`).
+### REQ-agent-225
+
+Named personas (AUTONOMOUS-2 / AUTONOMOUS-2.a, AUTONOMOUS-5 / AUTONOMOUS-5.a,
+captured in this change's PR from Leif's 2026-09-28 interview, round 17 on
+2026-10-07): "persona.md stays the default voice; each named persona is its
+own file with its name, model, skill tags and voice in a personas folder."
+and "I can run a task as a named persona, and a lead run picks a persona by
+its skill tags; team members and the community can't pick personas."
+
+`src/agent/personas.ts` SHALL read every `personas/*.md` file directly in the
+`personas/` folder next to `persona.md` at Corvidinho's own checkout root
+(`CORVIDINHO_ROOT`; `personaRoot` is a test seam), never the project a run
+works in, with the persona loader and rules (REQ-agent-069 / REQ-agent-084):
+`listInstructionDir` (`src/agent/project-instructions.ts`) lists the files
+committed at `HEAD` and those in the working tree (dot files skipped, sorted,
+at most `PERSONAS_MAX_FILES` = 32, the rest counted as `skipped`), and
+`loadProjectInstructions(root, { exactRoot: true })` reads them: in a git
+checkout only the committed copy (an untracked file refused as not committed,
+a working-tree edit not loaded and flagged `uncommitted`), capped at
+`PERSONA_MAX_BYTES`, symlinks out of the checkout and binary files refused,
+SAFE-6 scrubbed. They SHALL be read again for every run.
+
+- `parsePersonaFile` SHALL take `---` front matter with `name` (a short label
+  `[a-z0-9][a-z0-9_-]{0,31}`, lowercased), `model` (one AGENT-13 `kind:model`
+  entry, `parseModelEntry`; a list is refused) and `skills` (tags in `[a, b]`,
+  `a, b` or a `- a` list, each a short label, lowercased, de-duplicated, at
+  most 16; none is allowed), other keys ignored, then the voice (the text
+  after the front matter, required). A file with no or unclosed front matter,
+  a missing or bad name or model, a bad or excess tag, a repeated key or no
+  voice SHALL be refused with one plain reason; a file whose name an earlier
+  file (by file name) already uses SHALL be refused.
+- `findPersona(set, name)` SHALL return the persona with that name, else one
+  plain line: the named file's refusal (`personas/<name>.md refused: …`), else
+  `Persona "<name>" not found in personas/ (named personas: …)`; every line
+  ends `nothing was run (AUTONOMOUS-2.a)`.
+- `personaForSkill(set, tag)` (AUTONOMOUS-5.a) SHALL return the first persona
+  by name whose skill tags hold `tag` exactly (case-insensitive input), else
+  null.
+- `configuredModelEntries(env)` SHALL be the entries of
+  `CORVIDINHO_LLM_MODEL` and each per-tier key (`_READ`, `_TOOL`, `_CODE`);
+  `personaModelRefusal` SHALL refuse a persona whose model (same kind and
+  model) is not one of them, naming the persona, its file and model label and
+  the keys, never a key's value.
+- `personaRunEnv(p, env, tier)` SHALL set the tier's model key to the
+  persona's model followed by the tier's other configured models
+  (`modelChainForTier`, the persona's own entry removed), every other key
+  unchanged.
+- `personaSkillsHint(set, env)` (AUTONOMOUS-5.a) SHALL be one line,
+  `Named personas by skill tag: <name> (<tag>, …); …`, naming each persona
+  (sorted by name) that has skill tags and a model `personaModelRefusal`
+  accepts, labels only (never a voice, model or key), capped at
+  `PERSONA_SKILLS_HINT_MAX` (400) characters; "" when there is none.
+
+`createTaskExecute` SHALL accept `persona: { name, by: "owner" | "lead" }`.
+With it the run SHALL resolve the persona once (`resolveRunPersona`) and use
+`personaRunEnv` as the run's env, so the AGENT-11 fallback chain (with its
+notice), the AGENT-10 no-provider notice and the SAFE-8 spend guard apply to
+the persona's model like any configured model; an unpriced persona model's
+spend ask names `the model in personas/<file>.md`. Its system prompts SHALL
+start with `renderNamedPersona` (`NAMED_PERSONA_HEADER`, then the voice in a
+`<persona file="personas/<file>.md" name="<name>">` block it cannot close
+early; a quote, angle bracket or line break in the file name is shown as
+`_`) instead of `persona.md`, with the PERSONA-3 rules after it, and a
+truncated or uncommitted file SHALL get one `Persona: personas/<file>.md (…)`
+note. Before anything else each attempt SHALL refuse, with one plain line as
+its summary and `failureReason`, an error result and no model call:
+
+- `by: "owner"` when the acting role (`resolveActingRole`) is neither null
+  (the local CLI) nor `owner` — `PERSONA_OWNER_ONLY_LINE` (team members and
+  the community can't pick personas);
+- `by: "lead"` at delegation depth 0 (a lead's pick reaches only its worker);
+- then an unknown persona, a refused file or an unconfigured model (the
+  `resolveRunPersona` line).
+
+`src/autonomous/delegate.ts` SHALL carry a lead's pick to its worker only
+through `DELEGATE_PERSONA_ENV` (`CORVIDINHO_DELEGATE_PERSONA`): the worker
+spawn env SHALL set it to the picked persona name, else delete it (never
+inherited); `delegatePersonaFromEnv` SHALL read it only at depth > 0 and only
+as a short label. The worker keeps every other limit (REQ-agent-117).
+
+Acceptance Criteria
+- Front matter in each list form parses; each bad shape is refused with its reason (`tests/agent.personas.test.ts`).
+- A git checkout: committed files load, sorted by name; an untracked one is refused as not committed; a working-tree edit is not loaded and is flagged; a duplicate name, a bad file and dot / non-`.md` files are refused or skipped; a plain root reads its working tree; 34 files read 32 and skip 2.
+- `findPersona`, `personaForSkill` (exact tag, ties to the first by name, none = null), `configuredModelEntries`, `personaModelRefusal` and `personaRunEnv` give the documented results.
+- `personaSkillsHint` names only tagged personas with a configured model, in name order, without voice or model, and stops at 400 characters; a file name cannot break the `<persona>` label.
+- Through `createTaskExecute` and a mock provider, at read and tool tier: the persona's model is called first with its voice and no `persona.md` text, the rules after it; its model failing falls back to the tier's next model with the AGENT-11 note; an unconfigured model or unknown persona is one line and no call; team and community role sessions get `PERSONA_OWNER_ONLY_LINE` and no call, the owner's role session runs; a lead's pick at depth 0 is refused and runs at depth 1; a working-tree edit is not loaded (one note) and a committed one shows on the next run.
+- Fails on main's sources (the persona option is ignored) and passes on the branch.
+### REQ-agent-183
+
+My own memory forget and override by id ask me on a DM card with Approve and
+a one-time code (SAFE-18.a, captured in this change's PR from Leif's
+2026-09-28 interview, round 17). What the tool loop tells the model about
+them SHALL match: the argv description `toolDefForEntry` gives every
+`memory-*` tool (`src/agent/tools.ts`) SHALL say that forget / override
+need `--id` (override also the new text), ask the owner on a DM card and
+wait, and that there are no confirm tokens; it SHALL NOT mention
+`--confirm`. The tool loop runs `memory-forget` / `memory-override`
+through `runPlugin` like any tool, so a call waits for the owner's card
+(REQ-plugins-183) and its tool result reports the outcome. Nothing else in
+the tool definitions changes.
+
+Acceptance Criteria
+- `toolDefForEntry` for a `memory-*` tool names the DM card and no `--confirm`.
+- A fake model's `memory-forget` call through `createTaskExecute` waits for the owner's card and its `ToolResult` reports the forget once approved with the code.
 

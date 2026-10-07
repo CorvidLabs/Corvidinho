@@ -140,6 +140,8 @@ function ev(o: Partial<DetectedEvent> & Pick<DetectedEvent, "id" | "body" | "sen
     htmlUrl: `https://github.com/${REPO}/issues/${o.number}`,
     createdAt: "2026-09-29T00:00:00Z",
     isPullRequest: false,
+    // Never edited (REQ-watch-1202): the ask is its sender's.
+    textEditorIds: [],
     ...o,
   };
 }

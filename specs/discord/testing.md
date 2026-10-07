@@ -546,8 +546,8 @@ both.
   stored as its run starts (a restart mid-run finds it) and a run that
   throws (chat, `/session start`, `/work`) keeps it for the next message; `planningSelectionText` of a continued prompt is the new message
   only (REQ-agent-004); replayed and stored turns are scrubbed. Guards: idle past the TTL starts fresh with no
-  replay; another user's session never sees my turns; confirm tokens only
-  from the current message (no live Discord).
+  replay; another user's session never sees my turns; `humanText` is only
+  the current message, never a replayed turn (no live Discord).
 - `tests/discord.session-thread.unit.test.ts` — the renderer (32000-char
   block ceiling, opening request + newest turns, exact omitted count,
   per-turn clip by role — agent 1500, a 4000-char human turn whole, human
@@ -1784,3 +1784,122 @@ Fail on base: with the stacked base's (387dada) sources swapped in, both
 `tests/work.pr.test.ts` GITHUB-9 cases fail (the base commits and pushes
 before `github-pr-create` refuses, and drops the frame's `review`);
 `tests/work.review.test.ts` cannot load. Restored, all pass.
+
+## Daily briefing DMs and per-person briefing hours (REQ-discord-102 added, REQ-discord-036 modified; COS-1, COS-2, COS-2.a)
+
+`tests/identity.briefing-hours.test.ts` (7): `timezone` / `working_hours`
+read from TOML and JSON in canonical spelling; a bad zone (unknown name,
+`+02:00`, a list) or bad hours (end before start, `9am-5pm`, `24:00`) skips
+the entry whole with an issue naming the person, never the account id; the
+owner still resolves on stable ids only; `/admin people add
+timezone:… hours:…` writes only those keys of that person (header comment,
+unread key and every other line kept), `admin-people-add` `started` + `ok`,
+live on the next read, no change for the same zone, `old → new` for new
+hours, `list` shows `tz … · hours …`, a new person declared with a zone;
+invalid values refused (`denied`, file unchanged); a non-owner refused; a
+JSON plan keeps the entry's other keys.
+
+`tests/cos.briefing.test.ts` (22): hours from the person, else the owner's
+zone and 09:00, else UTC; Monday–Friday slot within the hours (Oslo,
+New York, UTC, a UTC time that is already Thursday in Oslo, weekend);
+recipients owner + team only, deny-listed, muted, clashing and no-owner
+excluded; Tofu's one DM at 08:35 Oslo through the fake DM send with the
+fixed header and the fake LLM's text, the one read-tier no-tools call's
+fenced facts holding only Tofu's items (their PR, assigned issue, a task
+that stopped to ask today, review request, schedule question, finished task
+and runs) and none of Bob's, old (a task that stopped to ask days ago
+included), off-allowlist, denied, other-id or owner-only items; never twice
+a day (later ticks and a second ticker), the next working day covers only
+what is new, nothing at the weekend; a task that stopped to ask is told
+once and the following days are skipped; a time zone moved west never
+opens a second briefing the same day (the claim refuses an earlier day);
+with the scheduler switch off (`enabled` false or throwing) nothing is
+claimed, called or sent, back on the DM goes out; Bob and the owner at 09:05 New York,
+the owner's own Approve card count without its title; nothing to say →
+skipped, no call; a token and `@everyone` in the reply scrubbed and
+defanged at rest and in the DM, text dropped once sent; a refused DM retried
+after 15 min, logged once, expired at the end of the hours; spend cap 0 →
+no request, no DM, `budget`, one stop handed over; a failed call retried 30
+min later; no DM path → nothing claimed; the claim rules (once a day, dead
+compose reclaimed ≤3 times, sent never reclaimed, next day starts at
+`covered_to`); `readGithubBriefingFacts` reads nothing without an id, a
+login or an allowed repo and reports a failed read; `SchedulerService.tick`
+calls `briefings.tick(now)` with schedules off (the ticker checks the switch
+itself); `startBridge` (dry run with seams) sends exactly one DM through the
+gateway `sendDm` and no channel post, sends nothing with `[corvidinho.plugins]
+schedule = false` in its allowlist file until the file is rewritten, and DMs
+the owner the 80% spend warning a briefing call crossed (SAFE-15).
+
+Fail on base (85871fa4): with every modified source from the base both files
+fail to load; with the branch's `people.ts` only, the three `/admin people
+add` cases fail; with the branch's `people.ts`, `execute.ts` and
+`briefing.ts` and the base's `service.ts`, `bridge.ts` and `scrub.ts`, the
+tick, bridge and scrub cases fail. Restored, 24 of 24 pass. Review fixes:
+with the first branch head's (d2404368) `briefing.ts` and `bridge.ts`, the
+cases for the task that stopped to ask, the scheduler switch (ticker and
+bridge), the time zone moved west and the seed / Thursday / claim rules
+fail (15 pass, 7 fail); restored, 29 of 29 pass.
+## /session start persona (REQ-discord-225; AUTONOMOUS-2 / AUTONOMOUS-5.a)
+
+`tests/discord.session-persona.test.ts` (handler ctx with a recording agent
+and a plain persona root; a fake bin for the spawn client): `/session start`
+options are `topic`, `project`, `persona` (optional STRING); a team member and
+a community user setting `persona` get exactly `PERSONA_OWNER_ONLY_LINE`
+ephemerally with no run and no session; the owner's unknown persona and
+unconfigured model each get one ephemeral line, nothing started; the owner's
+`Reviewer` reaches `runChat` as `reviewer` and the answer says
+`Persona: reviewer`, and without it nothing changes; the spawn client puts
+`--persona reviewer` before `--task` and nothing when unset. Fail on base:
+with main's `session.ts`, `slash-commands.ts`, `slash-types.ts` and
+`agent-client.ts` all 5 fail; restored, all pass.
+## The `memory` card and the spawn without typed tokens (REQ-discord-183 added, REQ-discord-021 and REQ-discord-128 modified; SAFE-18.a)
+
+`tests/memory.forget-card.test.ts` drives the card engine with
+`memoryApprovalKind` (recording DMs, the owner's presses and code-form
+submits through `tests/fixtures/approval-code.ts`): the card goes only to
+the owner by DM, `cvok:memory:…` buttons, title with the asking surface,
+exact action / target / amount lines and the one-time-code line; an
+override's text part comes first as quoted data, fence-safe and scrubbed;
+Approve + code records `approved`, the waiting run uses it once (`used`);
+Deny, a lapse, a late press and a gone waiter close it as a no.
+`tests/memory.spawn-env.test.ts` ("SAFE-18.a: a confirm token the human typed
+is not passed to the run"): the Discord spawn clears
+`CORVIDINHO_ACTING_CONFIRM_TOKENS` even when the human's message holds a
+token (fails on main, which passed it), and a token only in the enriched
+prompt is not passed either (REQ-discord-128). `tests/discord.session-thread.test.ts`
+keeps the `humanText` check without the removed token helper.
+
+## Once a session question's buttons expire the session stops waiting; a schedule's questions still wait (REQ-discord-044 / 045 modified; AUTONOMY-6.b)
+
+`tests/discord.expired-asks.test.ts` (9 tests) pins both halves on the real
+~30-minute window: the system clock is frozen (`setSystemTime`) and moved to
+one minute inside and one minute past `ASK_BUTTON_TTL_MS`, never a
+hand-edited `expiresAt`.
+
+- Session half (REQ-discord-044): through `startBridge` (null gateway, owner
+  set, an agent whose first run asks a two-choice Choose question) the ask's
+  `expiresAt` is the ask time plus `ASK_BUTTON_TTL_MS`; at +29 min a thin
+  `ok` restates it with its Choose button and runs nothing; at +31 min a thin
+  `ok`, or a new request, runs the agent with no prior-question block, posts
+  no stub or Choose button for it and leaves no pending or open ask; a late
+  pick gets `ASK_CHOICE_EXPIRED`; a later `ok` runs too. The same for a reply
+  to a `/session start` or `/work` Choose answer, and across a bridge
+  restart on the same DB (the stored ask keeps its `expiresAt`).
+- Schedule half (REQ-discord-045): with a session ask and a schedule ask of
+  the same age at +31 min, the session Choose press gets
+  `ASK_CHOICE_EXPIRED`, the creator's chat message runs and leaves the
+  schedule ask open, and the schedule's Choose opens its choices and a pick
+  closes it. A manual `SchedulerService` (`*/5` schedule, both clocks moved)
+  skips the due run at +31 min and a day later (no run, one wait note, ask
+  open) and runs the next one with the owner's pick after it is answered.
+- `hi/autonomy.md` holds the captured text after AUTONOMY-6.a; three
+  `docs/discord.md` passages and the `docs/DISCORD-GO-LIVE.md` schedule
+  bullet cite AUTONOMY-6.b.
+
+Fail on base: with main (85871fa4)'s `docs/discord.md`,
+`docs/DISCORD-GO-LIVE.md`, `hi/autonomy.md` and `INTENT.md` swapped in, 7
+pass, 2 fail (the hi and doc citation cases). The behaviour cases pass on
+main: this records Leif's round-17 decision (keep as built). Mutation checks:
+skipping the expired-ask clear in the bridge's continue path fails the five
+session cases; letting `ScheduleStore.openAsk` / `openRunAsk` drop an ask 30
+minutes after its run fails both schedule cases. Restored: 9 of 9 pass.

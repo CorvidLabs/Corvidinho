@@ -50,7 +50,7 @@ import type { DetectedEvent } from "../src/watch/types.ts";
 import { answerMustAsk, MUST_ASK_TEST_OWNER } from "./fixtures/must-ask.ts";
 
 /** Read through the namespace, so the base sources fail on behaviour, not on import. */
-type TriggerRole = (event: Pick<DetectedEvent, "type" | "senderId">, people: unknown) => string;
+type TriggerRole = (event: Pick<DetectedEvent, "type" | "senderId" | "textEditorIds">, people: unknown) => string;
 const watchTriggerRole: TriggerRole | undefined = (routerModule as { watchTriggerRole?: TriggerRole }).watchTriggerRole;
 
 const OWNER_DC = MUST_ASK_TEST_OWNER;
@@ -183,6 +183,8 @@ function ev(over: Partial<DetectedEvent> = {}): DetectedEvent {
     htmlUrl: `https://github.com/${REPO}/issues/7`,
     createdAt: "2026-10-06T12:00:00Z",
     isPullRequest: false,
+    // Never edited after it was posted (REQ-watch-1202).
+    textEditorIds: [],
     ...over,
   };
 }
@@ -309,16 +311,16 @@ describe("IDENTITY-12.a: the poller stamps the role of whoever triggered the run
     expect(typeof watchTriggerRole).toBe("function");
     if (!watchTriggerRole) return;
     const people = buildPeopleDirectory(parsePeopleToml(PEOPLE), OWNER);
-    expect(watchTriggerRole({ type: "issue_comment", senderId: OWNER_GH }, people)).toBe("owner");
-    expect(watchTriggerRole({ type: "issues", senderId: TOFU_GH }, people)).toBe("team");
-    expect(watchTriggerRole({ type: "pull_request_review_comment", senderId: TOFU_GH }, people)).toBe("team");
+    expect(watchTriggerRole({ type: "issue_comment", senderId: OWNER_GH, textEditorIds: [] }, people)).toBe("owner");
+    expect(watchTriggerRole({ type: "issues", senderId: TOFU_GH, textEditorIds: [] }, people)).toBe("team");
+    expect(watchTriggerRole({ type: "pull_request_review_comment", senderId: TOFU_GH, textEditorIds: [] }, people)).toBe("team");
     for (const id of [KYN_GH, STRANGER_GH, SQUATTER_GH, undefined]) {
-      expect(watchTriggerRole({ type: "issue_comment", senderId: id }, people)).toBe("community");
+      expect(watchTriggerRole({ type: "issue_comment", senderId: id, textEditorIds: [] }, people)).toBe("community");
     }
     for (const type of ["assignment", "review_request"] as const) {
-      expect(watchTriggerRole({ type, senderId: OWNER_GH }, people)).toBe("community");
+      expect(watchTriggerRole({ type, senderId: OWNER_GH, textEditorIds: [] }, people)).toBe("community");
     }
-    expect(watchTriggerRole({ type: "issue_comment", senderId: OWNER_GH }, null)).toBe("community");
+    expect(watchTriggerRole({ type: "issue_comment", senderId: OWNER_GH, textEditorIds: [] }, null)).toBe("community");
   });
 });
 

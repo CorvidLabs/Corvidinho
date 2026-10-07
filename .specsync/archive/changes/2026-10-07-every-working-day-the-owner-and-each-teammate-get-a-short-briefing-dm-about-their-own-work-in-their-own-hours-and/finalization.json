@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "every-working-day-the-owner-and-each-teammate-get-a-short-briefing-dm-about-their-own-work-in-their-own-hours-and",
+  "implementation_commit": "3019b05e111b0610c137f854827d22cc01301e1a",
+  "implementation_tree": "77fd10ab9babb4b0adfee816c49a454080720f2d",
+  "contract_digest": "5c9488c6a6a80433b09f37eb36e761f468896bafce1477180072faef5b621cb8",
+  "workspace_digest": "7be57d80485946e680166502ad781fc0be487def5b8e1d3cc5a4906f19590022",
+  "closing_digest": "853069cf531910f4f3d1f30bf930c3f212b4d4476173c653db6c30aa8c9fa806",
+  "review_digest": "fc5399f0b7bfa2c18ffe387e65e1769ccc4701fc98a5b3e9c09689876ce5ecc9",
+  "finalization_digest": "29b64eb523f6ed0e533304765965dbd60b3806cf8fb919f181e9c22c212e3177",
+  "timestamp": 1791386448,
+  "note": "tip-orphan archive after #412 squash (same class as #414/#415); no COS HI invented"
+}

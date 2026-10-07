@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "my-own-memory-forget-and-override-by-id-ask-me-on-a-dm-card-with-approve-and-a-one-time-code-and-an-override-shows-the",
+  "slug": "my-own-memory-forget-and-override-by-id-ask-me-on-a-dm-card-with-approve-and-a-one-time-code-and-an-override-shows-the",
+  "title": "My own memory forget and override by id ask me on a DM card with Approve and a one-time code, and an override shows the new text word for word (SAFE-18.a)",
+  "description": "My own memory forget and override by id ask me on a DM card with Approve and a one-time code, and an override shows the new text word for word (SAFE-18.a)",
+  "kind": "feature",
+  "state": "accepted",
+  "canonical_applied": true,
+  "base_commit": "2856f4efae009e9d663d05c0acde0021ac577e3e",
+  "created_at": 1791351154,
+  "updated_at": 1791386009,
+  "affected_specs": [
+    "plugins",
+    "discord",
+    "agent"
+  ],
+  "affected_paths": [
+    "hi/safe.md",
+    "INTENT.md",
+    "src/memory/card.ts",
+    "src/memory/index.ts",
+    "src/memory/confirm.ts",
+    "plugins/memory/commands.ts",
+    "src/discord/approval-cards.ts",
+    "src/discord/bridge.ts",
+    "src/discord/agent-client.ts",
+    "src/agent/tools.ts",
+    "tests/memory.forget-card.test.ts",
+    "tests/memory.plugins.test.ts",
+    "tests/memory.confirm.test.ts",
+    "tests/memory.spawn-env.test.ts",
+    "tests/discord.session-thread.test.ts",
+    "docs/discord.md",
+    "docs/DISCORD-GO-LIVE.md",
+    "specs/plugins/plugins.spec.md",
+    "specs/plugins/testing.md",
+    "specs/discord/discord.spec.md",
+    "specs/discord/testing.md",
+    "specs/agent/testing.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "SAFE-18.a (captured in this PR from Leif's 2026-09-28 interview, round 17; under SAFE-18, with SAFE-4/19/20 binding): the owner's own memory-forget and memory-override by id no longer use the typed confirm token (src/memory/confirm.ts and its tests are removed; --confirm is refused with a line saying there are no tokens). Each call, from a Discord conversation run the bridge started for the owner, records one 'memory' Approve/Deny request on the shared approvals store (approval_requests, no schema bump) \u2014 class destructive, so Approve also needs the SAFE-19 one-time code \u2014 showing the exact action (forget / override), the target (memory id, category/key, owner scope, last changed), the amount (1 memory, no money) and, for an override, the new text word for word as the quoted-data text sent before the card (SAFE-6 scrubbed exactly as the memory store scrubs what it writes, fence-safe); the bridge's card engine (memoryApprovalKind, registered in the bridge) DMs it to the owner, and the call waits (5 min) for the answer. Only an approval used once (Approve + the right code) runs the change, and only while the memory is still exactly what the card showed and the actor is still the owner; Deny, no answer, a late press, a gone waiting run or a stopped run is a no and nothing changes (SAFE-20). The local CLI, schedules and other runs with no bridge conversation fail closed with a clear line (no token fallback, no card). Non-owners are refused exactly as before with no card; memory-forget-me (MEMORY-ACL-6) is unchanged. SAFE-5: the tool run, the card, the code and the approval stay on the audit trail and the reply names memory, actor and card. The Discord spawn no longer passes typed tokens (CORVIDINHO_ACTING_CONFIRM_TOKENS always cleared, like WATCH); the model's memory argv hint no longer mentions --confirm. tests/memory.forget-card.test.ts and the updated tests/memory.plugins.test.ts / tests/memory.spawn-env.test.ts fail on the base (main) sources and pass on the branch."
+  ],
+  "selected_artifacts": [
+    "context",
+    "requirements",
+    "plan",
+    "tasks",
+    "testing",
+    "docs",
+    "design",
+    "research"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "yes",
+    "public_contract": "yes"
+  }
+}

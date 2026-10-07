@@ -23,7 +23,9 @@ import { MAX_IMAGE_SIZE_BYTES, sniffImageFile } from "./image.ts";
 import { repoWaysNow } from "../../src/agent/repo-ways.ts";
 import {
   hiRefuseMessage,
+  livePersonaRefuseMessage,
   isHiPath,
+  isLivePersonaPath,
   isNonGitRootInstructionPath,
   isProtectedPath,
   isSddRecordPath,
@@ -71,6 +73,10 @@ function refuseProtected(
   // AGENT-1.b: a non-git project's root AGENTS.md / CLAUDE.md.
   if (isNonGitRootInstructionPath(absPath, cwd)) {
     return { ok: false, error: rootInstructionRefuseMessage(userPath), exitCode: 2 };
+  }
+  // SAFE-2 / AUTONOMOUS-2.a: Corvidinho's own named persona files.
+  if (isLivePersonaPath(absPath)) {
+    return { ok: false, error: livePersonaRefuseMessage(userPath), exitCode: 2 };
   }
   return null;
 }

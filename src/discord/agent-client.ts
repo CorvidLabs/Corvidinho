@@ -24,7 +24,6 @@ import { spendWarningFromUnknown } from "../agent/spend-notice.ts";
 import { injectionNoticeFromUnknown } from "../agent/untrusted.ts";
 import { stopReasonFromUnknown } from "../agent/limits.ts";
 import type { PersonRole } from "../identity/people.ts";
-import { extractConfirmTokens } from "../memory/confirm.ts";
 import {
   collectProcessTree,
   killProcessTree,
@@ -49,9 +48,11 @@ export type AgentStatusUpdate = {
 export type AgentRunChatOpts = {
   prompt: string;
   /**
-   * The human's own words for this run, before memory/image enrichment.
-   * SAFE-4 confirm tokens are taken only from here — never from `prompt`,
-   * which may carry recalled memory the model wrote. Omitted ⇒ no tokens.
+   * The human's own words for this run, before memory/image enrichment
+   * (never `prompt`, which may carry recalled memory the model wrote). The
+   * spawn takes nothing from it: since SAFE-18.a a typed confirm token
+   * counts for nothing (the owner's memory forget and override by id ask on
+   * a DM card instead).
    */
   humanText?: string;
   sessionId: string;
@@ -113,6 +114,12 @@ export type AgentRunChatOpts = {
    * always written, never inherited).
    */
   replyPublicThread?: boolean;
+  /**
+   * AUTONOMOUS-2 / 5.a: the named persona the owner picked for this run
+   * (`/session start persona:`), passed as `task run --persona`; the run
+   * re-checks that its actor is the owner. Omitted ⇒ persona.md.
+   */
+  persona?: string;
 };
 
 export type AgentClient = {
@@ -165,7 +172,6 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
   return {
     async runChat({
       prompt,
-      humanText,
       sessionId,
       actingUserId,
       actingIsAdmin,
@@ -178,6 +184,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       replyChannelId,
       replyParentChannelId,
       replyPublicThread,
+      persona,
     }) {
       if (signal?.aborted) {
         return { ok: false, sessionId, summary: "interrupted before start", exitCode: 130 };
@@ -189,6 +196,8 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         // SESSION-WORKTREE-1.a (REQ-cli-122): the run works in the cwd given
         // here, never in a new worktree of its own.
         "--here",
+        // AUTONOMOUS-2 / 5.a: the owner's persona pick (a validated label).
+        ...(persona ? ["--persona", persona] : []),
         "--task",
         prompt,
         "--output",
@@ -207,8 +216,10 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
           CORVIDINHO_NON_INTERACTIVE: "1",
           // Always overwrite: never inherit an actor from the bridge env (REQ-discord-021).
           CORVIDINHO_ACTING_DISCORD_USER_ID: actingUserId ?? "",
-          // SAFE-4: only confirm tokens the human typed in this message count.
-          CORVIDINHO_ACTING_CONFIRM_TOKENS: extractConfirmTokens(humanText ?? "").join(","),
+          // SAFE-18.a: a typed confirm token counts for nothing (the owner's
+          // memory forget / override by id ask on a DM card); always cleared,
+          // like the WATCH spawn, so no stale value reaches a run.
+          CORVIDINHO_ACTING_CONFIRM_TOKENS: "",
           // DISCORD-17: the only channel discord-send-file may attach in.
           // Always overwritten, never inherited from the bridge env.
           CORVIDINHO_DISCORD_REPLY_CHANNEL_ID: replyChannelId ?? "",

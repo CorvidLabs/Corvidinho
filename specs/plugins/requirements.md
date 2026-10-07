@@ -227,16 +227,17 @@ shared-store `MemoryStore` (REQ-discord-021).
 
 `memory-store` / `memory-recall` are safe and act only in the acting user's
 own scope. `memory-forget` / `memory-override` are dangerous (SAFE-1) and
-SHALL require the two-phase confirm token plus ADMIN re-checked at handler
-time (REQ-plugins-011, MEMORY-ACL-3/4). Acting Discord user id and ADMIN come
-only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID`,
-`CORVIDINHO_ACTING_IS_ADMIN`) checked against the live admin config — never
-from argv.
+SHALL require the two-phase confirm — since SAFE-18.a the owner's Approve
+plus the one-time code on a DM card (REQ-plugins-183), with no typed confirm
+token — plus ADMIN re-checked at handler time (REQ-plugins-011,
+MEMORY-ACL-3/4). Acting Discord user id and ADMIN come only from bridge-set
+env (`CORVIDINHO_ACTING_DISCORD_USER_ID`, `CORVIDINHO_ACTING_IS_ADMIN`)
+checked against the live admin config — never from argv.
 
 Acceptance Criteria
 - `plugins list` shows the four memory commands with danger markings.
 - Store/recall work for the env acting user's scope without admin.
-- Forget/override without a valid confirm token or without admin refuse.
+- Forget/override without the owner's approved DM card (Approve plus the one-time code) or without admin refuse.
 - Non-admin cross-user forget refuses without leaking content.
 - Builtins load memory plugins; fixture tests without live Discord.
 
@@ -352,27 +353,26 @@ never grant ADMIN; deny-listed or muted users are never ADMIN. Self-forget
 stays ADMIN-only.
 Refusals stay opaque and never include memory content (MEMORY-ACL-2).
 
-Forget and override SHALL be two-phase (SAFE-4). Phase 1 (no `--confirm`)
-returns a confirm token, expiry, and target id/category/key/owner — no
-content. Phase 2 (`--confirm <token>`) SHALL succeed only when the token's
-HMAC matches op + actor + memory id + the row's `updated_at` (+ override
-content hash), it is unexpired (10 minutes), and it is confirmed from a
-different process/turn than the one that issued it, and the token appears in
-the human's own message for this run (bridge-extracted into
-`CORVIDINHO_ACTING_CONFIRM_TOKENS`) so the model cannot confirm from its own
-memory. Tokens are single-use
-because the row changes. The HMAC secret lives in `schema_meta` (no schema
-version bump).
+Forget and override SHALL be two-phase (SAFE-4): since SAFE-18.a
+(REQ-plugins-183) the second phase is the owner's Approve plus the one-time
+code on a DM card that shows the exact action, target and, for an override,
+the new text; the call waits for it and changes the memory only on an
+approval it uses once, while the memory is still what the card showed. The
+typed HMAC confirm token (`src/memory/confirm.ts`, `--confirm <token>`,
+`CORVIDINHO_ACTING_CONFIRM_TOKENS`) is gone: `--confirm` SHALL be refused,
+and a token in the env or the human's message SHALL count for nothing. With
+no bridge conversation to deliver the card (the local CLI, a schedule) the
+call SHALL refuse; there is no token fallback.
 
 Acceptance Criteria
 - `--user` / `--admin` / `--db` refused on all memory commands.
 - No acting user env ⇒ refused; other actors never see a user's memories.
 - No owner + `CORVIDINHO_ACTING_IS_ADMIN=1` ⇒ forget/override refused.
 - Owner id without the bridge bit (scheduled runs) refused; deny-listed or muted owner refused; admin user/role lists + env bit refused.
-- Phase 1 returns a token without content; same-turn confirm refused; a token the human did not supply refused; new-turn human-supplied confirm succeeds; replay refused.
-- Token for another memory, another actor, or changed override content refused; expired token refused.
+- The owner's forget / override asks on the DM card and changes the memory only once approved with the code; Deny or no answer changes nothing; no token or content in the result.
+- `--confirm` (`--confirm X`, `--confirm=X`, bare) is refused with no card; a token in the env changes nothing.
 - `--include-deleted` refused for non-admins; `--include-deleted=false` is off.
-- `--user` / `--admin` / `--db` are only refused in flag position; text after `--` or in `--content=` is data.
+- `--user` / `--admin` / `--db` are only refused in flag position; text after `--` or in `--content=` is data (`--confirm` after `--` is override text too).
 
 ### REQ-plugins-095
 
@@ -2491,6 +2491,11 @@ every call, the way it resolves a Discord run's (IDENTITY-12):
   approve or archive a SpecSync change (AGENT-18.a), the memory plugins' GitHub
   rules (REQ-plugins-067, REQ-plugins-710). No env var, config key, flag,
   table or schema change.
+- Since REQ-plugins-1202 (follow-up to #374) a WATCH run SHALL never run
+  the tools that write the watcher's own checkout, `git-push` included,
+  whatever its role, so the owner's WATCH must-ask calls are the rest (a
+  `discord-post-message`, a prod or deploy call); since REQ-plugins-1203 its
+  SAFE-5 rows and card requester are `github:<id>`, never `local`.
 
 Acceptance Criteria
 - With the env a real WATCH spawn hands its child: the owner's id with the owner stamp → owner (ADMIN re-check true); the team member's with the team stamp → team.
@@ -2500,6 +2505,52 @@ Acceptance Criteria
 - The owner's WATCH run: a mutating `prod` must-ask command raises one `mustask` card titled `… · from watch:watch_w1`, runs once on approval and is refused with nothing run on a deny; team, community and a re-registered login's runs get `not allowed for your role` and no card.
 - `secretPathsRefused` is true for the owner's WATCH run and false for the owner's Discord run; `shellToolsGate` refuses the owner's WATCH run; a `delegate` worker built from it resolves community.
 - `tests/watch.github-roles.test.ts` fails on the base sources and passes on the branch.
+- The owner's WATCH `files-edit` / `git-commit` are refused before any card (REQ-plugins-1202, `tests/watch.github-roles.postreview.test.ts`).
+
+### REQ-plugins-1202
+
+IDENTITY-12.a follow-up to #374 (SESSION-WORKTREE-1 on GitHub): a WATCH run
+works in the watcher's own checkout (`task run --here`, REQ-cli-122 — the
+checkout every WATCH, Discord and daemon spawn runs `src/cli.ts` from) and
+has no worktree of its own. `runPlugin` SHALL refuse, before the role gate,
+every `WATCH_CHECKOUT_WRITE_TOOLS` command (`src/plugins/roles.ts`) —
+`files-write`, `files-edit`, `files-delete`, `git-branch-create`,
+`git-commit`, `git-push`, `specsync-change-new`, `specsync-change-answer`,
+`specsync-change-approve`, `specsync-change-finalize` — when
+`watchCheckoutWriteRefused(env, name)` holds (the surface stamp is `watch`
+or `CORVIDINHO_WATCH_SESSION_ID` is set), for every role, the owner's
+included: exit 2 with `watchCheckoutWriteRefusal(name)` ("… writes the
+watcher's own checkout, and a GitHub (WATCH) run has no worktree of its own,
+so it never runs there, whoever triggered it (SESSION-WORKTREE-1)"). Nothing
+in the checkout, its branches or its index changes. Discord, `/work`,
+schedules and the local CLI are unchanged. No env var, config key, flag,
+table or schema change.
+
+Acceptance Criteria
+- With the env a real WATCH spawn hands the owner's run: `files-edit`, `files-write`, `files-delete`, `git-branch-create` and `git-commit` in a git checkout are refused with that line, and the checkout's files, branches and status are unchanged.
+- The owner's Discord run still writes a file there.
+- `tests/watch.github-roles.postreview.test.ts` fails on the base sources and passes on the branch.
+
+### REQ-plugins-1203
+
+IDENTITY-12.a follow-up to #374 (SAFE-5, AUTONOMY-9/10): `auditContextFromEnv`
+(`src/audit/log.ts`) SHALL give a run with no Discord actor and a
+`CORVIDINHO_WATCH_SESSION_ID` the actor `github:<CORVIDINHO_ACTING_GITHUB_ID>`
+(a numeric id), else `github:<CORVIDINHO_ACTING_GITHUB_LOGIN>` (lowercased,
+when a valid login), else `github:(unknown)` — never `local`, which stays the
+local CLI's. `runPlugin`'s SAFE-5 rows and the must-ask gate's card requester
+and earlier-denial key (REQ-plugins-097) use it, so the owner's and a team
+member's WATCH calls are told apart from each other and from the operator's
+CLI, and an owner's deny on a WATCH card never refuses the same local CLI call
+as resent (nor the reverse). A Discord actor still wins; the surface is
+unchanged (`watch:<session>`). No env var, config key, table or schema change.
+
+Acceptance Criteria
+- A team member's WATCH `github-pr-review` (dry run) appends `started` and `ok` rows with actor `github:<their id>` and surface `watch:watch_w1`.
+- The owner's WATCH must-ask card has requester `github:<owner id>`; after the owner denies it, the same call from the local CLI raises a new card (requester `local`) and runs on approval.
+- `auditContextFromEnv({ CORVIDINHO_WATCH_SESSION_ID: "w1" })` gives actor `github:(unknown)`; with no session, `local` / `cli`.
+- `tests/watch.github-roles.postreview.test.ts` fails on the base sources and passes on the branch.
+
 ### REQ-plugins-621
 
 The `shell-exec` child, the language runners' children (`node-exec`,
@@ -2715,4 +2766,100 @@ Acceptance Criteria
 - Outside Corvidinho, other author, non-green CI, draft/closed/not-mergeable
   refuse exit 2; dry-run skips merge; SAFE-1 denies without allowlist;
   `plugins list` names `github-pr-merge`.
+
+### REQ-plugins-225
+
+AUTONOMOUS-5.a: after its tier clamp and before taking a worker slot, the
+`delegate` handler (REQ-plugins-117) SHALL, for a `--skill`, load the named
+personas (`loadPersonas`, Corvidinho's checkout; `DelegateCommandDeps.personaRoot`
+is a test seam) and pick `personaForSkill` — the first persona by name whose
+skill tags hold the skill exactly. With a pick whose model is not one the
+owner configured (`personaModelRefusal` against the lead's env) it SHALL
+refuse with exit 2 (`refused: Persona "…" … names model …`) and spawn
+nothing; with a pick it SHALL run the worker as that persona (its model and
+voice: `runDelegateChild({ persona })`, REQ-agent-225), add
+`data.persona` (the name, else null) and label the result `[<skill> →
+persona <name>]`; with no skill or no match the worker SHALL run as before
+and an inherited `CORVIDINHO_DELEGATE_PERSONA` SHALL NOT reach it. So the
+lead can pick by tag, the `delegate` description SHALL end with
+`personaSkillsHint` (REQ-agent-225) over those personas and the lead's env,
+read again at most every 5 s; with no such persona it is unchanged. Every
+other delegate gate and limit is unchanged; `council` is unchanged.
+
+SAFE-2 / AUTONOMOUS-2.a: `files-write`, `files-edit` and `files-delete` SHALL
+refuse (exit 2, `refused (SAFE-2): … personas/ folder …`) any path whose
+resolved target is in Corvidinho's own `personas/` folder
+(`isLivePersonaPath`: inside `realpath(CORVIDINHO_ROOT)/personas`), before
+any write or existence check; a project's own `personas/` directory SHALL
+stay writable. Reads are unaffected.
+
+Acceptance Criteria
+- `delegate --skill review` with personas `zeta` and `alpha` both tagged `review` spawns the worker with `CORVIDINHO_DELEGATE_PERSONA=alpha` and returns `data.persona = "alpha"` (`tests/agent.personas.test.ts`).
+- `--skill docs` (no match) and no skill spawn the worker with no `CORVIDINHO_DELEGATE_PERSONA`, even when the lead's env has one, and `data.persona` null.
+- A match whose model is not configured is refused and no worker starts.
+- The `delegate` description lists `alpha (review); zeta (review)` and not the persona whose model is not configured; with no personas it carries no persona line.
+- With cwd at Corvidinho's checkout, `files-write` (relative and absolute), `files-edit` and `files-delete` of `personas/<file>` are refused with `refused (SAFE-2)` and nothing is written; `files-write personas/x.md` in another project succeeds.
+- Fails on main's sources and passes on the branch.
+### REQ-plugins-183
+
+My own memory forget and override by id ask me on a DM card with Approve and
+a one-time code, and an override shows the new text word for word
+(SAFE-18.a, captured in this change's PR from Leif's 2026-09-28 interview,
+round 17, under SAFE-18; SAFE-4, SAFE-19 and SAFE-20 stay binding). The card
+is SAFE-4's two-phase confirm for `memory-forget` and `memory-override`;
+there is no typed confirm token any more.
+
+- After the argv identity refusal, `memory-forget` / `memory-override`
+  SHALL refuse at once, with one line saying only the running Discord bridge
+  delivers the card and there is no typed-token fallback, when the run has no
+  role session (the local CLI). Then, as before: no acting Discord user ⇒
+  refused (MEMORY-ACL-1); a missing id (or override text) ⇒ usage; not the
+  owner ⇒ the opaque `not authorized` (REQ-plugins-011). For the owner,
+  `--confirm` in any form in flag position SHALL be refused (no card, no
+  change) with a line saying there are no confirm tokens; a run that is not
+  a conversation with the owner (no `CORVIDINHO_DISCORD_REPLY_CHANNEL_ID`:
+  a schedule, any other run) SHALL refuse with the bridge line. None of these
+  raises a card or changes anything.
+- Otherwise the handler SHALL look the memory up (missing or already
+  forgotten ⇒ `memory not found`, no card) and call `askMemoryCard`
+  (`src/memory/card.ts`): one `memory` request on the shared approvals
+  store (`approval_requests`, no schema bump), class `destructive`, with
+  title `Forget|Override a memory by id (SAFE-18.a) · from <surface>`, the
+  exact action (`memory-forget: forget this memory …` /
+  `memory-override: replace this memory's text with the text above, word for
+  word`), the target `memory <id> — <category>/<key>, owner scope <scope>,
+  last changed <ISO time>`, the amount `1 memory (no money)`, and for an
+  override the new text as the card's text (SAFE-6 scrubbed as recorded —
+  the same scrub the memory store applies when it writes, so the card shows
+  exactly what would be stored), requester the acting owner and waiter this
+  process; then wait (`MEMORY_CARD_TTL_MS`, 5 minutes; the run's abort
+  signal stops the wait).
+- Only an approval this run uses once (`ApprovalStore.consume`; Approve plus
+  the right one-time code on the card, REQ-discord-183) SHALL let the change
+  run, and only when the actor is still the owner and, inside one IMMEDIATE
+  transaction, the memory is still the same row, not forgotten and not
+  changed since the card (`updated_at` equal); else nothing changes and the
+  refusal says the memory changed after the card. A denied card, no answer
+  by its expiry (or a card the engine closed because the waiting run was
+  gone), and a stopped run (exit 130; the stop wins over an approval) SHALL
+  change nothing, with a refusal naming the card (SAFE-20); `data` carries
+  `refused`, `op`, `id`, `outcome` and `request`.
+- On success the reply SHALL keep the audit-friendly line
+  `forgot|overrode memory <id> (<category>/<key>, owner <scope>) by <actor>`
+  plus the card id, and `data` the op, target, actor, time and request id;
+  never the memory's content. The SAFE-5 rows of the dangerous tool run
+  (`runPlugin`) and of the card (REQ-discord-183) stay.
+- Anyone else's flows are unchanged: non-owners are refused before any card
+  (role gate or the handler's opaque refusal), and `memory-forget-me`
+  (MEMORY-ACL-6) keeps its own `forget` card. The tool descriptions and the
+  memory argv hint (`src/agent/tools.ts`) SHALL describe the card, the code
+  and the wait, and no longer mention `--confirm`.
+
+Acceptance Criteria
+- The owner's forget in a Discord conversation raises one destructive `memory` card with the exact action, target and amount; Approve alone changes nothing; Approve + the code forgets it once (request `used`).
+- An override's card text is the new text word for word (scrubbed as stored); Approve + code stores exactly it.
+- Deny, no answer, a late press, a gone waiter or a stopped run changes nothing; a memory changed after the card is not changed even with the right code.
+- The local CLI and a schedule run refuse with the bridge line and raise no card; `--confirm` is refused with no card.
+- Non-owners are refused as before with no card; `memory-forget-me` still records its forget request.
+- The fake model's `memory-forget` call waits for the card and succeeds once approved; the hint names no `--confirm`.
 
