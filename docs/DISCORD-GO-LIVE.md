@@ -585,12 +585,19 @@ Run the daemon when schedules should tick without the bridge. Full guide and uni
 
 - It uses the bridge's environment and adds no variables: `CORVIDINHO_DATA_DIR`,
   `CORVIDINHO_BIN`, the allowlists, the model (`CORVIDINHO_LLM_MODEL`) and its key (E.9), and `CORVIDINHO_BACKUP_DIR` when the nightly
-  backup is on. Put them in the unit's `EnvironmentFile` (mode 600, not in git).
+  backup is on; with the bot token (`DISCORD_BOT_TOKEN` / `DISCORD_TOKEN`) and the owner
+  (`CORVIDINHO_OWNER_DISCORD_ID` or `[owner]`) it can also DM the owner a schedule's question
+  (below). Put them in the unit's `EnvironmentFile` (mode 600, not in git).
 - One daemon per data dir: `<data dir>/daemon.lock`. A second one logs `daemon.lock_held` and exits 1.
 - It can run next to the bridge on the same DB. Each due run is claimed once. Runs the daemon
-  claims are recorded in the run history; the daemon itself never posts to Discord. A daemon
-  run that stops to ask a human (stuck, clarify, spend cap) keeps its question on the run row,
-  and the bridge's next scheduler tick posts it to the schedule's channel once (see
+  claims are recorded in the run history; the daemon itself never posts to a Discord channel. A
+  daemon run that stops to ask a human (stuck, clarify, spend cap) keeps its question on the run
+  row, and the bridge's next scheduler tick posts it to the schedule's channel once. With no
+  bridge running on the data dir, the daemon DMs that question to the owner instead
+  (AUTONOMOUS-7.a), over Discord's REST API with the bot token, once — a bridge started later
+  does not send it again. The DM has no buttons; once the bridge runs, the schedule's wait note
+  brings them when its next run comes due. No token or no owner: logged once
+  (`schedule_ask.dm_unavailable`) and the question waits for a bridge (see
   [`DAEMON.md`](DAEMON.md)).
 - A schedule the owner created runs as the owner: the tools their allowlist names (E.3), with
   the must-ask Approve cards (E.1), but never the shell, the runners, the Fledge lane/task runs

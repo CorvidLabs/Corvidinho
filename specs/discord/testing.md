@@ -1985,3 +1985,33 @@ minutes after its run fails both schedule cases. Restored: 9 of 9 pass.
   `tests/discord.admin-mutes.test.ts` fail; restored, 12 of 12 pass. With
   the first pushed head's (c0cae98) `admin.ts` swapped in, the handler-time
   re-check case and the seed-note case fail; restored, they pass.
+## With only the daemon running, a schedule's question reaches the owner by DM (REQ-discord-707, REQ-discord-347 modified; AUTONOMOUS-7.a)
+
+`tests/daemon.owner-dm.test.ts` "the daemon's owner DM pass (SchedulerService
+ownerDm, …)": a daemon-wired scheduler (no outbound) with `ownerDm` on an
+in-memory DB, a recording DM sender and logger. A stuck run's question is DMed
+once (schedule line, stuck headline, quoted question, no `<@`, the daemon note
+naming `<#channel>`, ≤ 1900 chars), the ask taken (`ask_posted_at`),
+`schedule_ask.dm_sent` logged, nothing more on later ticks, and a bridge-wired
+scheduler on the same DB posts and DMs nothing; a no-channel clarify question
+says `here` and the next due run is skipped; `bridgeLive` true or throwing
+sends nothing and leaves the ask pending, false DMs it; no `send` → one
+`schedule_ask.dm_unavailable` (`no-token`), no owner → one (`no-owner`),
+nothing taken; a DM that resolves null or throws is handed back,
+`schedule_ask.dm_failed` (`retryInMinutes` 5), not retried inside the wait,
+sent once after it; a channel `/admin` dropped gets no DM until it is back;
+a secret and `@here` / `@everyone` are redacted and defanged; a spend-cap stop
+DMs its details once per cap episode and a second schedule's stop only the
+headline; a stop that outlasts a DM in flight hands the ask back and the DM
+going out takes it again.
+
+`tests/discord.rest-dm.test.ts`: `createRestSendDm` with a fake REST client —
+the two routes and bodies (`recipient_id`; defanged content,
+`allowed_mentions.parse = []`), content over `DISCORD_DM_MAX`, a non-snowflake
+user id and responses without an id resolve null (no call where refused
+early), a REST error resolves null with one scrubbed `onError` line, a
+throwing `onError` never throws; `formatScheduleAskDaemonNote` text.
+
+Fail on base: with main's (85871fa) `src/` swapped in, all 12 cases of
+`tests/daemon.owner-dm.test.ts` fail and `tests/discord.rest-dm.test.ts`
+cannot load (no `src/discord/rest-dm.ts`). Restored, all 17 pass.

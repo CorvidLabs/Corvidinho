@@ -24,6 +24,15 @@
  * `schedules` (`on` / `off` / `config-unreadable`), and each change is logged
  * once as `schedules.off` (warn, with why) or `schedules.on`.
  *
+ * AUTONOMOUS-7.a (REQ-cli-707 / REQ-discord-707): "With only the daemon
+ * running and no bridge, a scheduled run's question still reaches me by DM."
+ * While no Discord bridge runs on this data dir (`bridgeRunning`, the mark a
+ * bridge with a scheduler writes), the scheduler's delivery pass DMs each
+ * pending schedule ask to the owner over Discord's REST API with the bot
+ * token (src/discord/rest-dm.ts; no gateway session) and takes it, so a
+ * bridge that starts later never sends it again. No token or no owner: the
+ * reason is logged once and the ask waits for a bridge, as before.
+ *
  * Supervision/restart is systemd's job (docs/DAEMON.md); heartbeat, crash DMs
  * and running the bridge/watch inside the daemon are not built here.
  */
@@ -31,13 +40,19 @@
 import type { Database } from "bun:sqlite";
 import { defaultProviderLabel, formatModelFallbackLog, providerNotice } from "../agent/providers.ts";
 import { formatSpendWarningLine, SPEND_CAP_SUMMARY } from "../agent/spend-notice.ts";
+import { createSpendAlertOutbox } from "../agent/spend-outbox.ts";
 import { loadAllowlist, tryLoadAllowlist } from "../allowlist/load.ts";
 import type { AllowlistConfig } from "../allowlist/types.ts";
 import {
   createSpawnAgentClient,
   type AgentClient,
 } from "../discord/agent-client.ts";
-import { mergeChannelIds, resolveCorvidinhoBin } from "../discord/config.ts";
+import {
+  mergeChannelIds,
+  resolveCorvidinhoBin,
+  resolveDiscordToken,
+} from "../discord/config.ts";
+import { createRestSendDm, type DiscordRestClient } from "../discord/rest-dm.ts";
 import {
   CORVIDINHO_PROTOCOL_VERSION,
   checkProtocolVersion,
@@ -54,11 +69,13 @@ import {
   DEFAULT_POLL_INTERVAL_MS,
   ScheduleStore,
   SchedulerService,
+  type ScheduleOwnerDm,
 } from "../scheduler/index.ts";
 import { createBackupTicker, resolveBackupConfig } from "../store/backup.ts";
 import { openCorvidinhoDb } from "../store/db.ts";
 import { resolveDataDir } from "../store/paths.ts";
 import { VERSION } from "../version.ts";
+import { bridgeRunning } from "../watch/owner-ask.ts";
 import {
   acquireDaemonLock,
   type AcquireDaemonLockOptions,
@@ -83,6 +100,11 @@ export type StartDaemonOptions = {
   lock?: Omit<AcquireDaemonLockOptions, "dataDir">;
   /** Injectable clock for the scheduler and the nightly backup (tests). */
   now?: () => number;
+  /**
+   * AUTONOMOUS-7.a test seam: the Discord REST client the owner DM uses
+   * (default: discord.js REST with the bot token). Used only with a token.
+   */
+  discordRest?: DiscordRestClient;
 };
 
 export type DaemonStopSummary = {
@@ -228,6 +250,25 @@ export async function startDaemon(
     },
   );
   schedulesState();
+  // AUTONOMOUS-7.a: with no bridge on this data dir, a schedule's question
+  // reaches the owner by DM over Discord's REST API (the bot token; no
+  // gateway). No token or no owner: logged once when an ask waits.
+  const token = resolveDiscordToken(env);
+  const ownerDm: ScheduleOwnerDm = {
+    ...(token
+      ? {
+          send: createRestSendDm({
+            token,
+            ...(opts.discordRest ? { rest: opts.discordRest } : {}),
+            onError: (reason) => log("warn", "schedule_ask.dm_error", { reason }),
+          }),
+        }
+      : {}),
+    bridgeLive: () => bridgeRunning(database),
+    // SAFE-8: a spend-cap stop's details go to the owner once per cap episode.
+    spendAlerts: createSpendAlertOutbox({ db: database, env, ...(opts.now ? { now: opts.now } : {}) }),
+    log: (level, event, fields) => log(level, event, fields),
+  };
   const scheduler = new SchedulerService({
     store,
     agent,
@@ -242,6 +283,8 @@ export async function startDaemon(
     backup,
     // PLUGIN-5.a: only the schedules part of the tick is gated.
     schedulesEnabled: () => schedulesState().on,
+    // AUTONOMOUS-7.a: pending asks reach the owner by DM while no bridge runs.
+    ownerDm,
     // The daemon owns the interval so it can log each tick.
     manual: true,
     onRunFinished: (e) => {
@@ -252,10 +295,11 @@ export async function startDaemon(
         ...(e.error ? { error: e.error.slice(0, 500) } : {}),
         ...(e.autoPaused ? { autoPaused: true } : {}),
       });
-      // SAFE-8 / AUTONOMY-2 / AUTONOMOUS-7: the daemon has no Discord, so the
-      // operator hears about the spend cap and a run that needs a human here;
-      // the warning row and the ask recorded on the run row (REQ-discord-347)
-      // stay pending, and a bridge's next scheduler tick posts them.
+      // SAFE-8 / AUTONOMY-2 / AUTONOMOUS-7: the operator hears about the
+      // spend cap and a run that needs a human here. The warning row stays
+      // pending for a bridge; the ask recorded on the run row
+      // (REQ-discord-347) goes to the owner by DM while no bridge runs
+      // (AUTONOMOUS-7.a), else a bridge's next scheduler tick posts it.
       if (e.spendWarning) {
         log("warn", "spend.warning", {
           scheduleId: e.scheduleId,
@@ -344,6 +388,8 @@ export async function startDaemon(
     llm: defaultProviderLabel(env) ?? "none",
     // PLUGIN-5.a: whether this daemon runs schedules ([corvidinho.plugins]).
     schedules: startSchedules ? extraStateLabel(startSchedules) : "on",
+    // AUTONOMOUS-7.a: whether a schedule's question can reach the owner by DM.
+    ownerDm: !token ? "no-token" : owner?.discordId?.trim() ? "on" : "no-owner",
   });
   // PLUGIN-5.a: say why schedules are off (or the config is unreadable).
   if (startSchedules && !startSchedules.on) {
@@ -386,6 +432,9 @@ export async function startDaemon(
         // Let the killed runs park their worktree before we exit.
         await scheduler.settleAbandoned(ABANDONED_SETTLE_MS);
       }
+      // AUTONOMOUS-7.a: an owner DM in flight gets the same short grace; one
+      // still going then is handed back for the next start, never lost.
+      await scheduler.settleAskDelivery(ABANDONED_SETTLE_MS);
       if (ownsDb) db?.close();
       lock.release();
       log("info", "daemon.stopped", { reason, abandoned: abandoned.length });

@@ -107,6 +107,12 @@ delete process.env.CORVIDINHO_LLM_MODEL_CODE;
 delete process.env.CORVIDINHO_LLM_MODEL_ORDER;
 delete process.env.CORVIDINHO_LLM_BASE_URL;
 delete process.env.CORVIDINHO_LLM_TIER;
+// The Discord bot token: `corvidinho daemon` DMs the owner a schedule's
+// question over Discord's REST API when no bridge runs (AUTONOMOUS-7.a), and
+// daemon tests start it with process.env; `bun test` never DMs for real
+// (tests that need a token set a fake one with a fake REST client).
+delete process.env.DISCORD_TOKEN;
+delete process.env.DISCORD_BOT_TOKEN;
 // The Brave Search key (PLUGIN-7): `bun test` never sends a real (paid) search.
 delete process.env.BRAVE_SEARCH_API_KEY;
 // The GIPHY key (PLUGIN-8): `bun test` never sends a real GIF search.

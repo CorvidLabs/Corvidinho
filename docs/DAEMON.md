@@ -33,6 +33,7 @@ bun src/cli.ts daemon
 | Stops cleanly on SIGTERM / SIGINT | Heartbeats, `/status` uptime per part, crash DMs (draft OPS-3..5) |
 | Takes the nightly backup and the weekly restore test when `CORVIDINHO_BACKUP_DIR` is set (OPS-1/2, below) | Tell the owner on Discord itself: a failure's notice waits for a bridge tick |
 | | Send the daily briefing DMs (COS-1/2): only the running bridge sends them, on its own tick |
+| DMs the owner a schedule's question while no Discord bridge runs on its data dir (AUTONOMOUS-7.a, below) | Receive a press on a question's controls (only a running bridge can) |
 
 Schedules are still created, paused, resumed and deleted from Discord
 (`/schedule`, ADMIN only). The daemon picks up those changes on its next tick.
@@ -77,8 +78,8 @@ on the same data dir:
   is spent. A schedule with no channel
   gets its question by DM to the owner instead. Only the newest ask of a
   schedule is posted, and not at all once it was cancelled or a later run of
-  that schedule has finished. With only the daemon running, the question
-  waits until a bridge starts.
+  that schedule has finished. With only the daemon running, the daemon DMs
+  the question to the owner instead (next section).
 - Every such question blocks its schedule (AUTONOMY-6.a) until the
   schedule's creator or the owner answers or cancels it on Discord (the
   **Choose** / **Answer** and **Cancel** buttons on its post; a spend-cap
@@ -93,6 +94,46 @@ on the same data dir:
   the bridge's own ticker started it (AGENT-3.c; see
   [`discord.md`](discord.md) "Stopping a scheduled run"). Stop the daemon
   (SIGTERM) to stop the daemon's runs.
+
+## With no bridge running: the owner gets the question by DM (AUTONOMOUS-7.a)
+
+"With only the daemon running and no bridge, a scheduled run's question still
+reaches me by DM." While no Discord bridge runs on the daemon's data dir, the
+daemon sends each question a schedule run stops with (stuck, clarify, a
+spend-cap stop, a run that could not start, the auto-pause, a SAFE-13
+refusal) to the owner as a **direct message**, right after the run and on
+later ticks:
+
+- **No bridge.** "A bridge runs" means a `corvidinho discord bridge` with its
+  scheduler is up on the same `CORVIDINHO_DATA_DIR`: the bridge marks itself in
+  the shared DB (the same mark `github watch` reads for stuck GitHub asks) and
+  the daemon checks that its process is alive before each question. While one
+  runs, the bridge posts the question as before and the daemon sends nothing.
+- **How.** Over Discord's REST API with the bot token (`DISCORD_BOT_TOKEN` or
+  `DISCORD_TOKEN`), with no gateway session, to the configured owner
+  (`CORVIDINHO_OWNER_DISCORD_ID` or the allowlist file's `[owner]`, read again
+  for each question). The DM is the question as the bridge would post it — the
+  schedule line, the headline and the question quoted, secrets scrubbed and
+  `@everyone` / `@here` defanged, nobody mentioned — or, for a spend-cap stop,
+  its details (amounts, cap and setting; only the owner sees them, SAFE-14.a),
+  once per cap episode; a second stop in the same episode says only
+  "💸 Work is paused for budget.". The schedule's creator and channel pass the
+  same live allowlist gate as a post first (DISCORD-SCHEDULE-3); a refused one
+  waits.
+- **Answering.** The DM has no buttons: a press needs a running bridge to be
+  received, and there is no `corvidinho` command that answers a question. It
+  ends with a line saying so: once `corvidinho discord bridge` runs, the
+  schedule's wait note brings the question's controls (in its channel, or in
+  this DM for a schedule with no channel) when its next run comes due. Until it
+  is answered or cancelled, the schedule's runs wait (AUTONOMY-6.a).
+- **Once.** The DM takes the question in the shared DB (the same mark a
+  bridge's post sets), so a bridge started later never sends it again. A DM
+  that does not go out (the owner does not accept DMs, Discord is down) is
+  logged and retried after 10 minutes; a stop that outlasts a DM still going
+  (3 s) hands the question back for the next start.
+- **No token or no owner.** Nothing is sent: `schedule_ask.dm_unavailable` is
+  logged once, and the question waits for a bridge, as before.
+  `daemon.started` says which (`ownerDm`).
 
 ## Nightly backup (OPS-1/2)
 
@@ -155,7 +196,9 @@ To look at a snapshot without touching the live DB, restore it to a new path.
 ## Configuration
 
 The daemon uses the same environment as the bridge and adds no variables of its own. The
-optional `CORVIDINHO_BACKUP_DIR` (nightly backup, above) is read by both.
+optional `CORVIDINHO_BACKUP_DIR` (nightly backup, above) is read by both, and so are the
+optional bot token and owner, which let the daemon DM the owner a schedule's question when no
+bridge runs (AUTONOMOUS-7.a, above).
 
 | Env | Purpose |
 |-----|---------|
@@ -164,6 +207,7 @@ optional `CORVIDINHO_BACKUP_DIR` (nightly backup, above) is read by both.
 | `CORVIDINHO_ALLOWLIST_FILE`, `CORVIDINHO_DISCORD_ALLOW_CHANNELS`, `DISCORD_CHANNEL_IDS`, … | The same allowlists as the bridge. An empty channel list refuses every schedule that has a channel. Users and roles both empty leave only the channel gate and the deny lists, so any creator's schedule runs; once either is set, the creator gate above applies. Deny lists always win. |
 | `CORVIDINHO_LLM_MODEL` (+ its key: `CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`; `OLLAMA_HOST` for `ollama:`) | The model the spawned `task run` calls: `openai:<model>`, `ollama:<model>` or `anthropic:<model>` (AGENT-13); a comma list is a fallback chain (AGENT-11, `llm.fallback` below). There is no built-in default: unset, every scheduled run fails and the `llm.no_provider` start line says why (never commit keys) |
 | `CORVIDINHO_BACKUP_DIR` | Optional absolute local directory for the nightly backup (OPS-1/2); unset = no backup |
+| `DISCORD_BOT_TOKEN` / `DISCORD_TOKEN`, `CORVIDINHO_OWNER_DISCORD_ID` (or `[owner]` in the allowlist file) | Optional: the bridge's bot token and the owner. With both set, a schedule's question reaches the owner by DM while no bridge runs (AUTONOMOUS-7.a); without either it waits for a bridge (`schedule_ask.dm_unavailable`). The daemon never logs the token |
 | `[corvidinho.plugins]` `schedule = false` (allowlist file, or `fledge.toml` in the daemon's working directory) | Turns schedule runs off (PLUGIN-5.a): read at every tick, no restart; while off no run is claimed, runs in flight finish and the nightly backup still runs. Off in either file is off; a file that cannot be read is off (`config-unreadable`). Logged as `schedules` on `daemon.started` and `schedules.off` / `schedules.on`. When it is back on, each overdue schedule runs once. See [`DISCORD-GO-LIVE.md`](DISCORD-GO-LIVE.md) E.11 |
 | `CORVIDINHO_MAX_TURNS`, `CORVIDINHO_IDLE_TIMEOUT_MS` | Optional run limits every spawned `task run` reads (AGENT-12): model/tool rounds per attempt (default 8) and the idle timeout in ms (default 600000). A run stopped for no output fails and its reason is logged like any failed run; a run whose last attempt hit the turn cap posts its best answer so far and the scheduler logs `[scheduler] schedule <id>: run stopped=turn-cap …` |
 
@@ -189,7 +233,9 @@ On SIGTERM or SIGINT the daemon:
    `daemon.abandoned`;
 4. waits up to 3 s more for those runs to remove their worktree (a `talk/`
    branch with commits of its own is kept);
-5. removes the lock and exits **0**.
+5. waits up to 3 s for an owner DM still going (AUTONOMOUS-7.a); one still
+   going after that is handed back, so the next start sends it;
+6. removes the lock and exits **0**.
 
 A second signal skips the rest of the 30 s wait (not the 3 s worktree
 cleanup). Under systemd the stop signal goes to the whole control group, so a
@@ -214,7 +260,7 @@ scrubbed for secrets (SAFE-6).
 
 | Event | When |
 |-------|------|
-| `daemon.started` | Lock taken, DB open, ticker armed; `backup` is the backup directory, `off`, or why it is unusable; `llm` is the model runs at the default tier call (`<model> @ <host>`), or `none` (AGENT-13); `schedules` is `on`, `off` or `config-unreadable` (`[corvidinho.plugins] schedule`, PLUGIN-5.a) |
+| `daemon.started` | Lock taken, DB open, ticker armed; `backup` is the backup directory, `off`, or why it is unusable; `llm` is the model runs at the default tier call (`<model> @ <host>`), or `none` (AGENT-13); `schedules` is `on`, `off` or `config-unreadable` (`[corvidinho.plugins] schedule`, PLUGIN-5.a); `ownerDm` is `on`, `no-token` or `no-owner` (AUTONOMOUS-7.a, at start) |
 | `schedules.off` / `schedules.on` | (warn / info) Schedule runs were turned off or back on in `[corvidinho.plugins]` (PLUGIN-5.a), logged once per change (and `schedules.off` at start when off). `reason` is `off` (with `offIn`: `fledge.toml`, `allowlist file`) or `config-unreadable` (with `error`). While off no `tick` starts a run; the backup still runs |
 | `llm.no_provider` | (warn, at start) Some or every tier has no usable model provider (AGENT-10): `notice` says which and what to set (`CORVIDINHO_LLM_MODEL`, or the entry's missing key). Those scheduled runs fail until one is set (each `run.finished` `error` reads `failed (exit 1): No model provider is configured …`); there is no built-in default |
 | `daemon.lock_held` / `daemon.lock_failed` | Start refused (exit 1) |
@@ -224,7 +270,10 @@ scrubbed for secrets (SAFE-6).
 | `run.finished` | One run ended: `ok`, `error`, `autoPaused` |
 | `llm.fallback` | (warn) A scheduled run's model failed and it fell back to the next configured model (AGENT-11): `sessionId`, `fallbacks` (`from`, `to`, `reason` each; `via` for a delegate or council worker's) and a `message` line. The post of a run that still finished carries the same note (a failed run's post is its DISCORD-3.b line); there is no DM |
 | `spend.warning` | (warn) A schedule run crossed 80% of a rolling 24 h spend cap — the total (`CORVIDINHO_DAILY_SPEND_CAP_USD`, SAFE-8) or a provider's (`CORVIDINHO_PROVIDER_SPEND_CAPS_USD`, SAFE-14/15; its `message` names `provider:<id>`): `spentMicroUsd`, `capMicroUsd`, `percent` and a `message` line. The daemon has no Discord: the warning stays pending for a bridge's scheduler tick to DM to the owner (never posted in a channel, SAFE-14.a) |
-| `run.needs_human` | (warn) A run stopped to ask a human: `reason` is `stuck`, `clarify` or `spend-cap`. Also `stuck` for a run that could not start and for the run that auto-paused its schedule. Its question stays on the run row until a bridge posts it, and the schedule's due runs wait until someone answers or cancels it on Discord (AUTONOMY-6.a). |
+| `run.needs_human` | (warn) A run stopped to ask a human: `reason` is `stuck`, `clarify` or `spend-cap`. Also `stuck` for a run that could not start and for the run that auto-paused its schedule. Its question stays on the run row until the daemon DMs it to the owner (no bridge running, AUTONOMOUS-7.a) or a bridge posts it, and the schedule's due runs wait until someone answers or cancels it on Discord (AUTONOMY-6.a). |
+| `schedule_ask.dm_sent` | (info) A schedule's question went to the owner by DM because no bridge runs on this data dir (AUTONOMOUS-7.a): `scheduleId`, `runId`, `reason`. A bridge started later does not send it again |
+| `schedule_ask.dm_failed` / `schedule_ask.dm_error` | (warn) That DM did not go out: `dm_failed` names the question (`scheduleId`, `runId`, `reason`) and when it is retried (`retryInMinutes`, 10); `dm_error` gives Discord's scrubbed `reason` (for example the owner does not accept DMs). The question stays pending, and a bridge that starts meanwhile posts it |
+| `schedule_ask.dm_unavailable` | (warn, once per reason) A question waits because there is no bot token (`reason` `no-token`) or no owner Discord id (`no-owner`) to DM, and no bridge runs; a bridge started later posts it |
 | `tick.failed` | A tick threw (for example, SQLite busy); the daemon keeps running |
 | `tick.allowlist_failed` | The allowlist file could not be read or parsed, so the tick was skipped (no schedule ran; due schedules stay due; the nightly backup still runs when due). Fix the file; the next tick picks it up |
 | `daemon.recovered` | At start: `runs` (ids) a dead process left running were marked failed, `worktrees` leftover schedule-run worktrees removed |

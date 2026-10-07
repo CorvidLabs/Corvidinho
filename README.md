@@ -132,7 +132,7 @@ Before `github-pr-create` opens a PR, a second model reviews the diff in at most
 bun src/cli.ts daemon
 ```
 
-Ticks `/schedule` work on the Linux host without Discord or a REPL (CLI-8 / AUTONOMOUS-4). One daemon per data dir; JSON-line logs; SIGTERM stops it cleanly. systemd unit and details: [`docs/DAEMON.md`](docs/DAEMON.md).
+Ticks `/schedule` work on the Linux host without Discord or a REPL (CLI-8 / AUTONOMOUS-4). One daemon per data dir; JSON-line logs; SIGTERM stops it cleanly. With no bridge running, a schedule's question still reaches the owner by DM (AUTONOMOUS-7.a; needs the bot token and the owner set). systemd unit and details: [`docs/DAEMON.md`](docs/DAEMON.md).
 
 ## Nightly backup
 
