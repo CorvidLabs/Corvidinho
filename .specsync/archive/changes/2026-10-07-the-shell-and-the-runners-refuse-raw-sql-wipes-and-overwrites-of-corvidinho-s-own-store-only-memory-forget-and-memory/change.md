@@ -1,6 +1,6 @@
 ---
 id: the-shell-and-the-runners-refuse-raw-sql-wipes-and-overwrites-of-corvidinho-s-own-store-only-memory-forget-and-memory
-state: verifying
+state: accepted
 type: feature
 base_commit: 86d68cd0d65e1836475d5e37a49444bdd0177ecb
 ---

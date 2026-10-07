@@ -1,6 +1,6 @@
 ---
 id: admin-3-c-part-1-as-owner-i-can-change-the-deny-lists-and-the-github-repo-allow-lists-with-admin-deny-and-admin-github
-state: verifying
+state: accepted
 type: feature
 base_commit: 54d6a6c777f51b4fa430511a5d7f049a8ba42083
 ---
