@@ -1,6 +1,6 @@
 ---
 id: after-a-move-to-a-stronger-model-the-model-it-moved-from-is-no-author-of-the-change-so-it-can-be-the-second-model
-state: implementing
+state: verifying
 type: bug_fix
 base_commit: 54d6a6c777f51b4fa430511a5d7f049a8ba42083
 ---
