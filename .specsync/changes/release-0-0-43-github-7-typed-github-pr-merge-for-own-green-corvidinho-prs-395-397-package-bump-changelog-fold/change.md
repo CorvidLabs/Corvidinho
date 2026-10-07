@@ -1,6 +1,6 @@
 ---
 id: release-0-0-43-github-7-typed-github-pr-merge-for-own-green-corvidinho-prs-395-397-package-bump-changelog-fold
-state: implementing
+state: accepted
 type: operations
 base_commit: 4973f5eade8423c3f65f979e9d6727b45239e13e
 ---

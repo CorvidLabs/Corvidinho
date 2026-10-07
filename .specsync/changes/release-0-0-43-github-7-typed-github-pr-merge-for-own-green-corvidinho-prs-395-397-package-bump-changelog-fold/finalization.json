@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-43-github-7-typed-github-pr-merge-for-own-green-corvidinho-prs-395-397-package-bump-changelog-fold",
+  "implementation_commit": "524257c05f26a706314395e32ed4f4241ae6c933",
+  "implementation_tree": "4e106962847128eeba12925d4993c648f598c1d9",
+  "contract_digest": "0499efb66b424ae687e881e2d47ab9f6c75184a529018fbd8da8d6bc8ded22da",
+  "workspace_digest": "deea6560f38ea076a2b308a4cb4e03370581b5e7a8e8972aa80040662423692e",
+  "closing_digest": "51865a652ec54679ad58d564e4b00bf5dfa18030c2856f5df62c1c76f08a1060",
+  "review_digest": "835f2272c4e9a93b4fcb7538116ef8917c670bcac8f9b48b750382170c82ce53",
+  "finalization_digest": "015451c6ff28af8f38ea91fa964c84077f2525970dd29caf1a200552ed382fbf",
+  "timestamp": 1791332719
+}
