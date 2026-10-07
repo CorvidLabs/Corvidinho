@@ -139,7 +139,9 @@ describe("audit chain (SAFE-5)", () => {
     expect(formatAuditLine({ ok: true, count: 3, keyedRows: 0, unkeyedRows: 3, keyAvailable: false })).toContain("unkeyed");
     expect(formatAuditLine({ ok: true, count: 3, keyedRows: 3, unkeyedRows: 0, keyAvailable: true })).toContain("chain OK (keyed)");
     expect(auditContextFromEnv({ CORVIDINHO_ACTING_DISCORD_USER_ID: "u9", CORVIDINHO_DISCORD_SESSION_ID: "sess_1" })).toEqual({ actor: "u9", surface: "discord:sess_1" });
-    expect(auditContextFromEnv({ CORVIDINHO_WATCH_SESSION_ID: "w1" })).toEqual({ actor: "local", surface: "watch:w1" });
+    // REQ-plugins-1203: a WATCH run's actor is its GitHub trigger, never "local" (the local CLI).
+    expect(auditContextFromEnv({ CORVIDINHO_WATCH_SESSION_ID: "w1" })).toEqual({ actor: "github:(unknown)", surface: "watch:w1" });
+    expect(auditContextFromEnv({})).toEqual({ actor: "local", surface: "cli" });
     const body = formatStatusReport({
       version: "0.0.0", protocolVersion: 1, startedAt: 0, now: 0, channelCount: 1,
       sessions: 0, workActive: 0, workDone: 0, workFailed: 0, llmLine: "LLM: -",
