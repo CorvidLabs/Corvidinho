@@ -2,9 +2,17 @@
 
 ## Unreleased
 
+## 0.0.43
+
 ### GitHub (GITHUB-7)
 
-- **Typed `github-pr-merge` merges the bot's own green Corvidinho PR only** — (closes #99): Octokit `pulls.merge` behind SAFE-1 / GITHUB-6; CorvidLabs/Corvidinho only; author must be the authenticated token user; CI verdict green (reuse `github-ci-status`); open + mergeable + not draft; never admin/bypass so branch protection, reviews and CODEOWNERS stay enforced; outside Corvidinho refused (`outside Corvidinho a human still merges`). Default squash. Fixture/mock tests; no live tokens in CI. No package bump and no live-bridge cut in this PR.
+- **Typed `github-pr-merge` merges the bot's own green Corvidinho PR only** — [#395](https://github.com/CorvidLabs/Corvidinho/pull/395) (closes #99; tip orphan [#397](https://github.com/CorvidLabs/Corvidinho/pull/397)): Octokit `pulls.merge` behind SAFE-1 / GITHUB-6; CorvidLabs/Corvidinho only; author must be the authenticated token user; CI verdict green (reuse `github-ci-status`); open + mergeable + not draft; never admin/bypass so branch protection, reviews and CODEOWNERS stay enforced; outside Corvidinho refused (`outside Corvidinho a human still merges`). Default squash. Fixture/mock tests; no live tokens in CI.
+
+### Ops
+
+- Package version **0.0.43** (GITHUB-7) — restart the Discord bridge and `github watch` after update so presence (DISCORD-12) reports 0.0.43. The bridge already ticks schedules; do **not** start a second `corvidinho daemon`. Source `~/.config/corvidinho/env` **and** `watch.env` so `GIPHY_API_KEY` and the watch username stay set. Leave Brave off (do not invent keys). No schema bump; NDJSON protocol stays 2. v0.0.43 gets its tag and Release from CI when this bump lands on main.
+- Needs operator action: (1) Update live checkout to the **release commit** (not a tip-orphan ahead of it). (2) Restart bridge + github watch via pidfile pattern with env + watch.env loaded. (3) Post a feature/version summary in the allowlisted main channel.
+- Rollback to the v0.0.42 tag: schema unchanged. That tag does not include GITHUB-7 `github-pr-merge`.
 
 ## 0.0.42
 
