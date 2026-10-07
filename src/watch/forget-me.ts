@@ -8,7 +8,10 @@
  *   no model call and no run, after the usual repo + user allowlist gates.
  * - The sender is matched in the owner's people list by their GitHub numeric
  *   id only (IDENTITY-7; a login alone never counts, so a renamed or
- *   re-registered login cannot ask for someone else). A declared person's
+ *   re-registered login cannot ask for someone else). The ask is theirs only
+ *   when nobody else edited that comment or body (REQ-watch-1202,
+ *   `textUneditedByOthers`): GitHub keeps the author when someone with write
+ *   access edits it, so an edited (or unreadable) one raises no card. A declared person's
  *   ask is recorded as the same `forget_requests` row a Discord ask is
  *   (SAFE-5 `memory-forget-request` `started` first, fail closed; one open
  *   ask per person), so the bridge DMs the owner the same Approve/Deny card
@@ -45,6 +48,7 @@ import {
 import { memorySubjectFor, memorySubjectForPerson, type MemorySubject } from "../memory/scope.ts";
 import type { AckClient, AckCommentResult } from "./ack.ts";
 import { parseGithubRateLimit } from "./rate-limit.ts";
+import { textUneditedByOthers } from "./router.ts";
 import { containsMention } from "./searcher.ts";
 import type { DetectedEvent, DetectedEventType } from "./types.ts";
 
@@ -113,6 +117,8 @@ export type WatchForgetMeOutcome =
   | { kind: "not_declared" }
   /** Their login is on the list but their numeric id is not (IDENTITY-7): no card. */
   | { kind: "unconfirmed" }
+  /** Someone else edited the ask, or its edits could not be read (REQ-watch-1202): no card. */
+  | { kind: "edited" }
   /** No owner configured: nobody could approve (IDENTITY-3). */
   | { kind: "no_owner" }
   /** Could not record it (no DB, audit trail unavailable, store failure). */
@@ -143,7 +149,8 @@ export function forgetSubjectForGithubId(
  * Never throws.
  */
 export function recordWatchForgetMe(opts: {
-  event: Pick<DetectedEvent, "sender" | "senderId" | "repo" | "number">;
+  event: Pick<DetectedEvent, "sender" | "senderId" | "repo" | "number"> &
+    Partial<Pick<DetectedEvent, "textEditorIds">>;
   people: PeopleDirectory | null | undefined;
   db: Database | undefined;
   env?: NodeJS.ProcessEnv;
@@ -157,6 +164,9 @@ export function recordWatchForgetMe(opts: {
     const byLogin = login ? people?.byGithubLogin.get(login) : undefined;
     return byLogin ? { kind: "unconfirmed" } : { kind: "not_declared" };
   }
+  // REQ-watch-1202: an ask someone else edited (or whose edits could not be
+  // read) is not the sender's, so it raises no card.
+  if (!textUneditedByOthers(event)) return { kind: "edited" };
   if (!people?.owner) return { kind: "no_owner" };
   if (!opts.db) return { kind: "error", message: "no database" };
   const db = opts.db;
@@ -225,6 +235,10 @@ export function watchForgetMeReplyBody(login: string, outcome: WatchForgetMeOutc
     case "unconfirmed":
       return footer(
         `${who} I can't confirm this GitHub account is the person on the owner's people list (people are matched by GitHub account id, never by login alone), so no forget request was made. The owner can start one for you.`,
+      );
+    case "edited":
+      return footer(
+        `${who} This text may have been edited by someone other than you after it was posted, so I can't be sure the ask is yours and no forget request was made. Post it as a new comment, or the owner can start one for you.`,
       );
     case "no_owner":
       return footer(`${who} No owner is configured to approve a forget request, so nothing was recorded.`);

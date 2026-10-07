@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 100
+version: 101
 status: draft
 files:
   - src/discord/types.ts
@@ -52,6 +52,7 @@ files:
   - src/memory/profile.ts
   - src/memory/forget.ts
   - src/memory/rank.ts
+  - src/memory/card.ts
   - src/discord/approve-card.ts
   - src/discord/approval-cards.ts
   - src/approvals/store.ts
@@ -162,6 +163,7 @@ files:
   - tests/discord.ask-buttons.test.ts
   - tests/discord.ask-answer-modal.test.ts
   - tests/discord.ask-ephemeral.test.ts
+  - tests/discord.expired-asks.test.ts
   - tests/discord.ask-scrub-first.test.ts
   - src/discord/inflight-replies.ts
   - tests/discord.inflight-replies.test.ts
@@ -256,6 +258,10 @@ notified }`, `press(interaction, parsed, mayDecide)`, `start(pollMs)`,
 `ApprovalTelling`, `AnyApprovalKind`), `storedApprovalKind(opts)` (a kind
 over `approval_requests`), `mustAskApprovalKinds(opts)` (the must-ask gate's
 `mustask` destructive and `mustask-post` plain kinds, REQ-discord-097),
+`memoryApprovalKind(opts)` (the `memory` kind, class `destructive`, over
+`approval_requests`: audit prefix `memory`; the owner's own memory forget and
+override by id — Approve only records the decision, the waiting run uses it
+once; SAFE-18.a, REQ-discord-183),
 `APPROVAL_POLL_MS` (5 s), `APPROVAL_DM_RETRY_MS`
 (60 s), `APPROVAL_NOT_OWNER` and `APPROVAL_UNKNOWN_KIND`.
 `src/discord/approve-card.ts` exports the custom ids
@@ -294,6 +300,17 @@ capture on the session's branch (`hiCaptureCommitMessage(req)` in
 `src/agent/hi-drafts.ts`; the request records the commit). An `ApprovalKind` may
 declare `prepare(req)`, which Approve awaits after the hash check and before
 the SAFE-5 `started` row (a throw: nothing runs, the request stays open).
+`src/memory/card.ts` exports `askMemoryCard(input)` (records the `memory`
+card for a forget or override by id and waits for the answer →
+`MemoryCardAnswer`: approved and used once, or denied / expired / aborted),
+`memoryCardFields(op, row, content, surface)` (`MemoryCardFields`: title,
+action, target, amount and the override's text), `setMemoryCardTestHooks`
+(`MemoryCardTestHooks`), `MEMORY_CARD_KIND` (`memory`), `MEMORY_CARD_CLASS`
+(`destructive`), `MEMORY_CARD_TTL_MS` (5 min), `MEMORY_CARD_POLL_MS` and
+`MEMORY_CARD_NOTHING_DONE` ("nothing was forgotten or changed"), all
+re-exported from `src/memory/index.ts` (SAFE-18.a, REQ-discord-183 /
+REQ-plugins-183); the typed confirm token module (`src/memory/confirm.ts`) is
+gone.
 `SlashCtx.deliverApprovalCards` runs one card pass when a `/work` run ends. `src/memory/forget.ts` adds
 `previewForgetTargets` (`ForgetCounts`) and `ForgetRequestStore.resetCard`.
 `StartBridgeResult.deliverApprovalCards` (and `deliverForgetCards`, the same
@@ -393,7 +410,10 @@ custom ids. Sessions persist their open asks in `discord_sessions.pending_ask`
 (with `askId` / `expiresAt` / options) is the newest, the one a thin reply
 restates and a free-text reply answers (a button `pendingAsk` past its
 timeout is cleared with `clearPendingAsk` before any reply but `cancel` is
-gated, so a thin reply never restates it — DISCORD-ASK-5), and `openAsks` holds earlier button
+gated, so a thin reply never restates it — DISCORD-ASK-5; once a session
+question's buttons expire the session stops waiting and the next message runs
+normally, while a schedule's questions still wait until answered —
+AUTONOMY-6.b), and `openAsks` holds earlier button
 asks a later ask did not replace — one JSON object when one ask is open, an
 array (oldest first, newest last) when several are. The stored question,
 option labels and option ids are secret-scrubbed (SAFE-6 / REQ-discord-066),
@@ -1107,7 +1127,7 @@ SessionStore/WorkStore MAY persist via shared store SQLite under ~/.local/share/
 every Discord agent run (chat, button pick, `/session start`, `/work`) records the human's own words with its session as the run starts (so a run that throws or a bridge that dies mid-run keeps the request) and the posted answer or failure line when it ends (a button ask as its question and choices, a spend-cap stop with no answer turn), and a continued run gets those turns, scrubbed, oldest first, in one labelled block ahead of the new message; when that prompt reaches about 80% of the model's window (`CORVIDINHO_LLM_CONTEXT_TOKENS`, default 8192 tokens, never past 32000 chars) the oldest turns fold into the session's summary (extractive points, no model call) while the opening request, the newest human turn and the new message stay word for word, and the summary is stored with the session so a restart or a smaller window picks up from it (SESSION-5/6 / REQ-discord-472); the block is one `[Corvidinho …]` paragraph, so Planning module selection skips it (REQ-agent-004); live turns persist in `discord_session_turns` across a restart within the soft TTL and their rows go with their session (end or TTL) after its conversation is kept 30 days in `conversation_threads`, from which only its own user's reply to one of its answers or message in its thread starts a new session after the gates (SESSION-3.a / AGENT-6.a); turns never reach another user's session, and never feed SAFE-4 confirm tokens, which stay the current message's only (AGENT-6 / DISCORD-2 / SESSION-3 / SESSION-MULTI-1 / REQ-discord-072);
 channel autocomplete (`/admin channels add|remove`, `/announce channel`) lists channels only for ADMIN (the owner, not muted, not deny-listed) invoking from an allowlisted channel, re-checked on every request; anyone else, anywhere else, or a gateway with no gate wired gets an empty choice list, so no channel name, id or allowlist entry leaks (DISCORD-DENY-3 / ADMIN-4 / REQ-discord-431);
 `/admin` users add | channels add|remove | config show is owner-only with a dispatcher ADMIN floor plus a handler re-check, writes only `[discord].users` / `[discord].channels` of the allowlist file the bridge loaded (atomic temp+rename, other lines kept), updates the live allowlist in place without restart, never writes env values, refuses deny-listed ids, env-only removals and removing the last live channel (a channel also on `deny_channels` does not count as live), warns when the first user narrows STANDARD→BLOCKED, and appends SAFE-5 audit rows (fail closed) (ADMIN-1..4 / REQ-discord-043);
-memories in shared SQLite schema v3 scoped by `owner_user_id` — the acting Discord user id for anyone undeclared, `person:<id>` for a declared person's one profile (MEMORY-5), `project:<key>` for a repo's own memory (MEMORY-6) (src/memory/scope.ts); ADMIN-only forget/override incl. self-forget; empty admin deny-all; no `/memory` slash (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021); a person's memory is read only by them and the owner and private notes are never injected or recalled unless asked for by name (MEMORY-7 / REQ-plugins-101); anyone's forget request (`forget_requests`, schema v12, ids and times only; v14 adds the card's action hash) reaches the owner as a DM Approve/Deny card — the `forget` kind (destructive) of the card engine (`src/discord/approval-cards.ts`; `src/discord/forget-card.ts`) — on the engine's own poll (about every 5 s, with or without the scheduler), on scheduler ticks and after each chat message, and only the owner's Approve plus the one-time code typed back, on a pending, unexpired card whose targets and counts are still the ones it showed, forgets — the code used up first, SAFE-5 `started` next (fail closed), then one transaction deletes every memory row of that person and their session turns (and their kept conversations, REQ-discord-472) — telling both; Deny, no answer or a late press is a no (MEMORY-ACL-6 / REQ-discord-101); everything that needs the owner's OK goes through that one engine: a DM card with the exact action, target and amount one line each, a diff or text first as verbatim quoted-data DM parts split fence-safe and scrubbed, buttons last, nothing cut (a card that does not fit is not sent); destructive and money cards (and a kind with no class) also need a one-time code DMed apart from the card, typed only into the code form, valid once, only for that card and action hash, for at most 2 minutes, only a salted hash stored; the owner is re-checked on every press and submit; no answer, a late answer or a gone waiter is a no (SAFE-18..20 / REQ-discord-096); the gateway refuses (never cuts) a DM over 1900 characters and a component reply, code-form reply or message edit over 2000 (REQ-discord-096); a recall with a query is a ranked search (relevance, then recency; `src/memory/rank.ts`) and the chat / button-pick inject searches memory for the message (the owner's and team's `/work` project block for the description), relevant rows first then the newest (MEMORY-9 / REQ-discord-067); Discord agent spawn always overwrites `CORVIDINHO_ACTING_DISCORD_USER_ID` (empty when no actor) and `CORVIDINHO_ACTING_IS_ADMIN` so no run inherits an actor from the bridge env, and always clears the GitHub commenter keys (`CORVIDINHO_ACTING_GITHUB_*`, MEMORY-8); private notes, profile reads and the owner's view of someone's memory are shown only privately: a run's `privateReplies` (text the model never saw) go to whoever asked by direct message only (`src/discord/private-reply.ts`, scrubbed, split under the DM cap) on chat, a button pick or Answer form resume, `/session start` and `/work`, the channel answer gets a short "sent privately" note on top (or, when the DM did not go out, a "couldn't DM it" note) and never the text, and the session thread never records it (MEMORY-7.a / REQ-discord-710);
+memories in shared SQLite schema v3 scoped by `owner_user_id` — the acting Discord user id for anyone undeclared, `person:<id>` for a declared person's one profile (MEMORY-5), `project:<key>` for a repo's own memory (MEMORY-6) (src/memory/scope.ts); ADMIN-only forget/override incl. self-forget; empty admin deny-all; no `/memory` slash (MEMORY-1..4 / MEMORY-ACL-1..5 / REQ-discord-021); a person's memory is read only by them and the owner and private notes are never injected or recalled unless asked for by name (MEMORY-7 / REQ-plugins-101); anyone's forget request (`forget_requests`, schema v12, ids and times only; v14 adds the card's action hash) reaches the owner as a DM Approve/Deny card — the `forget` kind (destructive) of the card engine (`src/discord/approval-cards.ts`; `src/discord/forget-card.ts`) — on the engine's own poll (about every 5 s, with or without the scheduler), on scheduler ticks and after each chat message, and only the owner's Approve plus the one-time code typed back, on a pending, unexpired card whose targets and counts are still the ones it showed, forgets — the code used up first, SAFE-5 `started` next (fail closed), then one transaction deletes every memory row of that person and their session turns (and their kept conversations, REQ-discord-472) — telling both; Deny, no answer or a late press is a no (MEMORY-ACL-6 / REQ-discord-101); everything that needs the owner's OK goes through that one engine: a DM card with the exact action, target and amount one line each, a diff or text first as verbatim quoted-data DM parts split fence-safe and scrubbed, buttons last, nothing cut (a card that does not fit is not sent); destructive and money cards (and a kind with no class) also need a one-time code DMed apart from the card, typed only into the code form, valid once, only for that card and action hash, for at most 2 minutes, only a salted hash stored; the owner is re-checked on every press and submit; no answer, a late answer or a gone waiter is a no (SAFE-18..20 / REQ-discord-096); the gateway refuses (never cuts) a DM over 1900 characters and a component reply, code-form reply or message edit over 2000 (REQ-discord-096); a recall with a query is a ranked search (relevance, then recency; `src/memory/rank.ts`) and the chat / button-pick inject searches memory for the message (the owner's and team's `/work` project block for the description), relevant rows first then the newest (MEMORY-9 / REQ-discord-067); the owner's own memory forget and override by id ask on that engine too: the `memory` kind (destructive, so Approve + the one-time code) shows the exact action, the target (id, category/key, owner scope, last changed), one memory as the amount and, for an override, the new text word for word as the quoted-data text first; the run that asked waits and changes the memory only on an approval it uses once, while the memory is still what the card showed; Deny, no answer, a late press, a gone or stopped run is a no; no typed confirm token counts any more (SAFE-18.a / REQ-discord-183 / REQ-plugins-183); Discord agent spawn always overwrites `CORVIDINHO_ACTING_DISCORD_USER_ID` (empty when no actor) and `CORVIDINHO_ACTING_IS_ADMIN` so no run inherits an actor from the bridge env, always clears `CORVIDINHO_ACTING_CONFIRM_TOKENS` (a typed token confirms nothing, SAFE-18.a), and always clears the GitHub commenter keys (`CORVIDINHO_ACTING_GITHUB_*`, MEMORY-8); private notes, profile reads and the owner's view of someone's memory are shown only privately: a run's `privateReplies` (text the model never saw) go to whoever asked by direct message only (`src/discord/private-reply.ts`, scrubbed, split under the DM cap) on chat, a button pick or Answer form resume, `/session start` and `/work`, the channel answer gets a short "sent privately" note on top (or, when the DM did not go out, a "couldn't DM it" note) and never the text, and the session thread never records it (MEMORY-7.a / REQ-discord-710);
 `/schedule` list|create|pause|resume|delete with ADMIN mutations, 5m min cadence (a zero cron step — `*/0`, `a-b/0`, `n/0` in any field — is a `CadenceError` refused before any field is expanded, and a range is expanded only up to its field's maximum, so no cadence can hang `/schedule create`, the store's next-run computation or the bridge), schedules in shared SQLite, cooperative ~60s ticker that must not starve HEAR/WATCH ingress (DISCORD-SCHEDULE-1..5 / REQ-discord-020); `/schedule delete` (the schedule and its run history) appends SAFE-5 audit rows (`started` before the delete, then `ok`/`error`; `denied` for a non-ADMIN caller) and fails closed like `/admin` when the trail is unavailable or not wired (SAFE-5 / REQ-discord-020);
 a message reply or button-pick run keeps one `discord_inflight_replies` row (ids incl. the thread's parent channel for a message in a thread or a pick on a session a message started there + start time, no text) from before its progress embed is sent until it finishes, cleared on every exit path (including the moment the progress message is collapsed into the answer or Choose stub, DISCORD-ASK-6/7); the next bridge start edits each leftover row's own progress embed to the red failed status `interrupted: Corvidinho restarted before this reply finished — please send it again`, or replies to the recorded request message in the same channel when there is no embed id or the edit fails, then deletes the row — only while the row's channel or parent is still allowlisted and neither is deny-listed (DISCORD-5), sequential, best effort, never throws out of startup, nothing posted when no rows (DISCORD-3 / AGENT-3 / REQ-discord-311);
 per-talk/project git worktrees (or scoped dirs) under `.corvid-worktrees`/`WORKTREE_BASE_DIR` with schema v4 session columns; end/TTL parks worktree; project never silent mid-talk switch; schedule ticks use project scope (SESSION-WORKTREE-1..5 / REQ-discord-022); package 0.0.5.
@@ -1287,6 +1307,18 @@ starts (AUTONOMY-10.b, REQ-discord-024): it goes out at `ClientReady` only to
 the announcements channel with no Approve card, no hold line and no wait,
 never counts toward the 20, and carries only the fixed REQ-discord-025
 template (no model call, no model text).
+
+Once a session question's buttons expire, the session stops waiting and the
+requester's next message runs normally; a schedule's questions still wait
+until answered (AUTONOMY-6.b, REQ-discord-044 / REQ-discord-045). A session's
+button ask (chat, `/work`, `/session start`) keeps the session waiting only
+for its ~30 minutes (`ASK_BUTTON_TTL_MS`, kept with the stored ask across a
+restart): past them the next message that is not a cancel drops it and runs
+as ordinary chat, with no prior-question block (only a thin reply, while an
+earlier button ask of the session is still live, restates that one instead,
+SESSION-MULTI-3). A schedule's ask has no expiry: its controls take presses and its
+schedule's due runs stay skipped until it is answered or cancelled
+(AUTONOMY-6.a, REQ-discord-606).
 
 ## Behavioral Examples
 
@@ -1714,3 +1746,5 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-10-05 | where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts: Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts) |
 | 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
 | 2026-10-06 | work-schedule-and-the-scheduler-can-be-turned-off-in-corvidinho-plugins-and-existing-installs-stay-on-plugin-5-5-a: /work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a) |
+| 2026-10-07 | my-own-memory-forget-and-override-by-id-ask-me-on-a-dm-card-with-approve-and-a-one-time-code-and-an-override-shows-the: My own memory forget and override by id ask me on a DM card with Approve and a one-time code, and an override shows the new text word for word (SAFE-18.a) |
+| 2026-10-07 | once-a-session-question-s-buttons-expire-the-session-stops-waiting-and-my-next-message-runs-normally-a-schedule-s: Once a session question's buttons expire the session stops waiting and my next message runs normally; a schedule's questions still wait until answered (AUTONOMY-6.b) |

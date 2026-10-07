@@ -1,0 +1,86 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791330659,
+      "digest": "78d38af2be4474b202f1d7efca4f510274ab0969aee29dd4b2a049150436029e",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "the-specsync-check-tool-the-verify-lane-s-spec-check-step-starts-without-my-cloud-credentials-and-its-output-is",
+        "title": "The specsync-check tool (the verify lane's spec-check step) starts without my cloud credentials and its output is scrubbed (SAFE-21.b follow-up to #373)",
+        "description": "The specsync-check tool (the verify lane's spec-check step) starts without my cloud credentials and its output is scrubbed (SAFE-21.b follow-up to #373)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent",
+          "plugins"
+        ],
+        "affected_paths": [
+          "plugins/specsync/api.ts",
+          "tests/agent.cloud-credentials.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "SAFE-21.b (hi/safe.md, captured on main): the tier-0 specsync-check tool, which runs the verify lane's spec-check step (the project's Fledge spec-check task, else plain specsync check), starts without the owner's cloud credentials. runSpecCheck spawns fledge run spec-check with withoutCloudCredentials(buildVerifyEnv()), the verify lane's env, and spawnSpecsync spawns specsync with withoutCloudCredentials of process.env at call time; both release the stand-in config dirs once the child exits and pass the output through scrubSecrets(redactSecretEnvValues(...)). Regression test in tests/agent.cloud-credentials.test.ts: with the owner's cloud env set, and separately with only the default files under a fake HOME, specsync-check via a stand-in fledge and a fledge.toml spec-check task, and via a stand-in specsync with no such task, shows no cloud key, value or file content, the stand-ins at /dev/null and empty dirs gone after the call, AWS_REGION and GOOGLE_CLOUD_PROJECT kept, and the owner's GITHUB_TOKEN value never in the output; the test fails on main's plugins/specsync/api.ts and passes on the branch."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "eb39fc87e0468953e8472106ff66f8b0f45882b1304f670685d1c0a3b9d8bb48",
+        "plugins": "4bf5068a1805a71656329f2abf451351317d330a2292829db7799b88fb87ca9a"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791332399,
+      "digest": "78d38af2be4474b202f1d7efca4f510274ab0969aee29dd4b2a049150436029e",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "the-specsync-check-tool-the-verify-lane-s-spec-check-step-starts-without-my-cloud-credentials-and-its-output-is",
+        "title": "The specsync-check tool (the verify lane's spec-check step) starts without my cloud credentials and its output is scrubbed (SAFE-21.b follow-up to #373)",
+        "description": "The specsync-check tool (the verify lane's spec-check step) starts without my cloud credentials and its output is scrubbed (SAFE-21.b follow-up to #373)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "agent",
+          "plugins"
+        ],
+        "affected_paths": [
+          "plugins/specsync/api.ts",
+          "tests/agent.cloud-credentials.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "SAFE-21.b (hi/safe.md, captured on main): the tier-0 specsync-check tool, which runs the verify lane's spec-check step (the project's Fledge spec-check task, else plain specsync check), starts without the owner's cloud credentials. runSpecCheck spawns fledge run spec-check with withoutCloudCredentials(buildVerifyEnv()), the verify lane's env, and spawnSpecsync spawns specsync with withoutCloudCredentials of process.env at call time; both release the stand-in config dirs once the child exits and pass the output through scrubSecrets(redactSecretEnvValues(...)). Regression test in tests/agent.cloud-credentials.test.ts: with the owner's cloud env set, and separately with only the default files under a fake HOME, specsync-check via a stand-in fledge and a fledge.toml spec-check task, and via a stand-in specsync with no such task, shows no cloud key, value or file content, the stand-ins at /dev/null and empty dirs gone after the call, AWS_REGION and GOOGLE_CLOUD_PROJECT kept, and the owner's GITHUB_TOKEN value never in the output; the test fails on main's plugins/specsync/api.ts and passes on the branch."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "eb39fc87e0468953e8472106ff66f8b0f45882b1304f670685d1c0a3b9d8bb48",
+        "plugins": "4bf5068a1805a71656329f2abf451351317d330a2292829db7799b88fb87ca9a"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1791334483,
+      "digest": "25fe8e5911171bcd89434c7530f19a67e7bd106f60dfa30f889d0a0a0b949e61",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

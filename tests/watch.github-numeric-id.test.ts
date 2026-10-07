@@ -74,9 +74,21 @@ function stubGithub(
   const urls: string[] = [];
   const json = (body: unknown) =>
     new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
-  globalThis.fetch = (async (input: string | URL | Request) => {
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input instanceof Request ? input.url : input));
     urls.push(url.pathname);
+    if (url.pathname === "/graphql") {
+      // REQ-watch-1202: every text here is unedited and the title unrenamed.
+      const raw = input instanceof Request ? await input.text() : String(init?.body ?? "");
+      const { query } = JSON.parse(raw) as { query: string };
+      return json({
+        data: {
+          node: query.includes("RENAMED_TITLE_EVENT")
+            ? { issueRenames: { totalCount: 0, nodes: [] } }
+            : { lastEditedAt: null, editor: null, userContentEdits: { totalCount: 0, nodes: [] } },
+        },
+      });
+    }
     if (url.pathname === "/search/issues") {
       return json({
         total_count: 1,
@@ -84,6 +96,7 @@ function stubGithub(
         items: [
           {
             number: 7,
+            node_id: "I_7",
             title: "Crash on start",
             html_url: `https://github.com/${REPO}/issues/7`,
             body: issueBody,
@@ -99,6 +112,7 @@ function stubGithub(
       return json(
         comments.map((c) => ({
           id: c.id,
+          node_id: `IC_${c.id}`,
           body: c.body,
           user: c.user,
           html_url: `https://github.com/${REPO}/issues/7#issuecomment-${c.id}`,

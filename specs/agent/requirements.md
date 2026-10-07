@@ -2638,8 +2638,10 @@ one cloud scrub every such child uses:
   dirs still there when the process exits are removed then.
 - `defaultVerifyRunner` (runTask's lane) SHALL spawn fledge with
   `withoutCloudCredentials(buildVerifyEnv())` and release it after the lane
-  exits (REQ-agent-002); `shell-exec`, the language runners and the Fledge
-  core runs use the same scrub (REQ-plugins-621).
+  exits (REQ-agent-002); `shell-exec`, the language runners, the Fledge
+  core runs and the `specsync-check` tool (the lane's `spec-check` step,
+  `runSpecCheck` / `spawnSpecsync` in `plugins/specsync/api.ts`) use the same
+  scrub (REQ-plugins-621).
 - Fledge plugin commands (`fledge-<command>`, `fledgeChildEnv`) and
   `delegate` / `council` workers (`isWorkerEnvDropped`) are unchanged; the
   workers' own verify lane, shell and runners scrub as above. No new env var,
@@ -2663,6 +2665,14 @@ Acceptance Criteria
 - Two `withoutCloudCredentials` calls give different, empty, 0700 dirs;
   `releaseCloudStandIns` removes only its own (twice is a no-op), and an env
   naming the owner's `~/.config/gcloud` / `~/.azure` leaves them in place.
+- The `specsync-check` tool, which runs the verify lane's `spec-check` step,
+  uses the same scrub: its `fledge run spec-check` child gets
+  `withoutCloudCredentials(buildVerifyEnv())` and its `specsync check` child
+  `withoutCloudCredentials` of the current env, released after the child, and
+  its output is secret-scrubbed; with the owner's cloud env or default files
+  it shows none of them (`tests/agent.cloud-credentials.test.ts`,
+  REQ-plugins-621).
+
 ### REQ-agent-298
 
 Worst-case reply reserve (AUTONOMY-8.a, captured in this change from Leif's
@@ -2864,4 +2874,22 @@ Acceptance Criteria
 - A `fledge.toml` that is a directory gives both `{ on: false, reason: "config-unreadable", error: "the install's fledge.toml could not be read (EISDIR)" }`; a `.json` allowlist file `{oops` gives `the allowlist file could not be parsed`.
 - `[corvidinho.autonomous] enabled = false` leaves both on.
 - Fixture: `tests/plugins.extras-toggle.test.ts`.
+
+### REQ-agent-183
+
+My own memory forget and override by id ask me on a DM card with Approve and
+a one-time code (SAFE-18.a, captured in this change's PR from Leif's
+2026-09-28 interview, round 17). What the tool loop tells the model about
+them SHALL match: the argv description `toolDefForEntry` gives every
+`memory-*` tool (`src/agent/tools.ts`) SHALL say that forget / override
+need `--id` (override also the new text), ask the owner on a DM card and
+wait, and that there are no confirm tokens; it SHALL NOT mention
+`--confirm`. The tool loop runs `memory-forget` / `memory-override`
+through `runPlugin` like any tool, so a call waits for the owner's card
+(REQ-plugins-183) and its tool result reports the outcome. Nothing else in
+the tool definitions changes.
+
+Acceptance Criteria
+- `toolDefForEntry` for a `memory-*` tool names the DM card and no `--confirm`.
+- A fake model's `memory-forget` call through `createTaskExecute` waits for the owner's card and its `ToolResult` reports the forget once approved with the code.
 

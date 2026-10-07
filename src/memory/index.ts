@@ -24,17 +24,19 @@ export {
   type OverrideMemoryInput,
 } from "./store.ts";
 export {
-  CONFIRM_TOKEN_TTL_MS,
-  checkConfirmToken,
-  currentConfirmTurn,
-  extractConfirmTokens,
-  isHumanSuppliedToken,
-  issueConfirmToken,
-  setConfirmTurnForTests,
-  type ConfirmBinding,
-  type ConfirmCheck,
-  type ConfirmOp,
-} from "./confirm.ts";
+  MEMORY_CARD_CLASS,
+  MEMORY_CARD_KIND,
+  MEMORY_CARD_NOTHING_DONE,
+  MEMORY_CARD_POLL_MS,
+  MEMORY_CARD_TTL_MS,
+  askMemoryCard,
+  memoryCardFields,
+  setMemoryCardTestHooks,
+  type MemoryCardAnswer,
+  type MemoryCardFields,
+  type MemoryCardOp,
+  type MemoryCardTestHooks,
+} from "./card.ts";
 export {
   PERSON_SCOPE_PREFIX,
   PROJECT_SCOPE_PREFIX,

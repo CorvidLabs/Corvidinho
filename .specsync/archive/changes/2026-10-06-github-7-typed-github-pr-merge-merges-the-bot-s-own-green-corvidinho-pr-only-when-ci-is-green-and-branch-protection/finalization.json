@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "github-7-typed-github-pr-merge-merges-the-bot-s-own-green-corvidinho-pr-only-when-ci-is-green-and-branch-protection",
+  "implementation_commit": "51fd45e8d3d28e9bc767e3600337c44c553806d3",
+  "implementation_tree": "4a58e12c10f52b3b3665fc492cabbb0f096f9879",
+  "contract_digest": "8ed4e5b834479fd626ef4d59688895e793d8c8a3142578aac01b303f18e99964",
+  "workspace_digest": "a28df5b0a06740bff64715485834578494a3abe26f93504ef5c3d00e7a51f23d",
+  "closing_digest": "423ac56f37dbd599116b4f7231bb6e4db9c5a3c510c0f915656aaeae39bd8f52",
+  "review_digest": "498013990575a7953fb68cfef344453d790a2d5ec84ca083ad8ae63e240f7dbe",
+  "finalization_digest": "24dc57a8e657b0dec4fa9af4ee2e1c8af3ae5a55bb808e25f8071929b682efc0",
+  "timestamp": 1791331958
+}

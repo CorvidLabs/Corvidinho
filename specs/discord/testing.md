@@ -546,8 +546,8 @@ both.
   stored as its run starts (a restart mid-run finds it) and a run that
   throws (chat, `/session start`, `/work`) keeps it for the next message; `planningSelectionText` of a continued prompt is the new message
   only (REQ-agent-004); replayed and stored turns are scrubbed. Guards: idle past the TTL starts fresh with no
-  replay; another user's session never sees my turns; confirm tokens only
-  from the current message (no live Discord).
+  replay; another user's session never sees my turns; `humanText` is only
+  the current message, never a replayed turn (no live Discord).
 - `tests/discord.session-thread.unit.test.ts` — the renderer (32000-char
   block ceiling, opening request + newest turns, exact omitted count,
   per-turn clip by role — agent 1500, a 4000-char human turn whole, human
@@ -1784,3 +1784,55 @@ Fail on base: with the stacked base's (387dada) sources swapped in, both
 `tests/work.pr.test.ts` GITHUB-9 cases fail (the base commits and pushes
 before `github-pr-create` refuses, and drops the frame's `review`);
 `tests/work.review.test.ts` cannot load. Restored, all pass.
+
+## The `memory` card and the spawn without typed tokens (REQ-discord-183 added, REQ-discord-021 and REQ-discord-128 modified; SAFE-18.a)
+
+`tests/memory.forget-card.test.ts` drives the card engine with
+`memoryApprovalKind` (recording DMs, the owner's presses and code-form
+submits through `tests/fixtures/approval-code.ts`): the card goes only to
+the owner by DM, `cvok:memory:…` buttons, title with the asking surface,
+exact action / target / amount lines and the one-time-code line; an
+override's text part comes first as quoted data, fence-safe and scrubbed;
+Approve + code records `approved`, the waiting run uses it once (`used`);
+Deny, a lapse, a late press and a gone waiter close it as a no.
+`tests/memory.spawn-env.test.ts` ("SAFE-18.a: a confirm token the human typed
+is not passed to the run"): the Discord spawn clears
+`CORVIDINHO_ACTING_CONFIRM_TOKENS` even when the human's message holds a
+token (fails on main, which passed it), and a token only in the enriched
+prompt is not passed either (REQ-discord-128). `tests/discord.session-thread.test.ts`
+keeps the `humanText` check without the removed token helper.
+
+## Once a session question's buttons expire the session stops waiting; a schedule's questions still wait (REQ-discord-044 / 045 modified; AUTONOMY-6.b)
+
+`tests/discord.expired-asks.test.ts` (9 tests) pins both halves on the real
+~30-minute window: the system clock is frozen (`setSystemTime`) and moved to
+one minute inside and one minute past `ASK_BUTTON_TTL_MS`, never a
+hand-edited `expiresAt`.
+
+- Session half (REQ-discord-044): through `startBridge` (null gateway, owner
+  set, an agent whose first run asks a two-choice Choose question) the ask's
+  `expiresAt` is the ask time plus `ASK_BUTTON_TTL_MS`; at +29 min a thin
+  `ok` restates it with its Choose button and runs nothing; at +31 min a thin
+  `ok`, or a new request, runs the agent with no prior-question block, posts
+  no stub or Choose button for it and leaves no pending or open ask; a late
+  pick gets `ASK_CHOICE_EXPIRED`; a later `ok` runs too. The same for a reply
+  to a `/session start` or `/work` Choose answer, and across a bridge
+  restart on the same DB (the stored ask keeps its `expiresAt`).
+- Schedule half (REQ-discord-045): with a session ask and a schedule ask of
+  the same age at +31 min, the session Choose press gets
+  `ASK_CHOICE_EXPIRED`, the creator's chat message runs and leaves the
+  schedule ask open, and the schedule's Choose opens its choices and a pick
+  closes it. A manual `SchedulerService` (`*/5` schedule, both clocks moved)
+  skips the due run at +31 min and a day later (no run, one wait note, ask
+  open) and runs the next one with the owner's pick after it is answered.
+- `hi/autonomy.md` holds the captured text after AUTONOMY-6.a; three
+  `docs/discord.md` passages and the `docs/DISCORD-GO-LIVE.md` schedule
+  bullet cite AUTONOMY-6.b.
+
+Fail on base: with main (85871fa4)'s `docs/discord.md`,
+`docs/DISCORD-GO-LIVE.md`, `hi/autonomy.md` and `INTENT.md` swapped in, 7
+pass, 2 fail (the hi and doc citation cases). The behaviour cases pass on
+main: this records Leif's round-17 decision (keep as built). Mutation checks:
+skipping the expired-ask clear in the bridge's continue path fails the five
+session cases; letting `ScheduleStore.openAsk` / `openRunAsk` drop an ask 30
+minutes after its run fails both schedule cases. Restored: 9 of 9 pass.

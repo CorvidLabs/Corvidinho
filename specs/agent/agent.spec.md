@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 53
+version: 55
 status: draft
 files:
   - src/agent/types.ts
@@ -663,8 +663,9 @@ family in place, sets the stand-ins, and points `CLOUDSDK_CONFIG` /
 `AZURE_CONFIG_DIR` at fresh empty 0700 dirs inside one `corvidinho-no-cloud-*`
 temp dir made for that one child) and `releaseCloudStandIns(env)` (removes that
 temp dir once the child has exited; a no-op for any other env; leftovers go
-when the process exits). The verify lane, `shell-exec`, the language runners
-and the Fledge core runs use it (REQ-plugins-621), so none starts with the
+when the process exits). The verify lane, `shell-exec`, the language runners,
+the Fledge core runs and the `specsync-check` tool (the lane's `spec-check`
+step) use it (REQ-plugins-621), so none starts with the
 owner's cloud credentials or reads them from `~/.kube/config`, `~/.aws`,
 `~/.config/gcloud` or `~/.azure`.
 
@@ -1715,3 +1716,5 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
 | 2026-10-05 | in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2: In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause) |
 | 2026-10-06 | work-schedule-and-the-scheduler-can-be-turned-off-in-corvidinho-plugins-and-existing-installs-stay-on-plugin-5-5-a: /work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a) |
+| 2026-10-06 | the-specsync-check-tool-the-verify-lane-s-spec-check-step-starts-without-my-cloud-credentials-and-its-output-is: The specsync-check tool (the verify lane's spec-check step) starts without my cloud credentials and its output is scrubbed (SAFE-21.b follow-up to #373) |
+| 2026-10-07 | my-own-memory-forget-and-override-by-id-ask-me-on-a-dm-card-with-approve-and-a-one-time-code-and-an-override-shows-the: My own memory forget and override by id ask me on a DM card with Approve and a one-time code, and an override shows the new text word for word (SAFE-18.a) |

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "the-specsync-check-tool-the-verify-lane-s-spec-check-step-starts-without-my-cloud-credentials-and-its-output-is",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "064b768aec16743335a0aaa813f056a4f3dd9317",
+      "contract_digest": "78d38af2be4474b202f1d7efca4f510274ab0969aee29dd4b2a049150436029e",
+      "execution_digest": "37fea39b2cd7905ce2bf93c3a2d2cf9e3fac95d48d297c8166facc47e23393cc",
+      "workspace_digest": "555b3b05241f24dc5a24b362f6c6ac24e9f327de3759c139d850972518c38269",
+      "timestamp": 1791334464
+    }
+  ]
+}
