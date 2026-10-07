@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "cover-github-7-a-merge-incidental-path-395-s-github-pr-merge-tests-folded-into-the-self-merge-suite",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "adbf54ff6d1465216e2aab9447ac5d12c2092f26",
+      "contract_digest": "2e11ab07729066dd3c6d2b7fbd90ae087198e33ab15351afd7126a6c80f4b079",
+      "execution_digest": "a02d7aff3a5e9d551b3fbabcc7601eef61280dd80cbe2498c6427251f131204b",
+      "workspace_digest": "0785dc3270b48fdf913c86ed2c37e30b69828f878216b1e71f338bcab9490626",
+      "timestamp": 1791357280
+    }
+  ]
+}
