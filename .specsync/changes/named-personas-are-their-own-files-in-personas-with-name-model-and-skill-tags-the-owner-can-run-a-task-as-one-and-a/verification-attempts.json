@@ -352,6 +352,28 @@
         "REQ-discord-225",
         "REQ-plugins-225"
       ]
+    },
+    {
+      "timestamp": 1791386219,
+      "commit": "47873d6468f44a101a392c46bf7e5978c358025d",
+      "contract_digest": "ed2a5b73ada20f209c1c7053b1de7492ecf5c69aae39f81a30ed13e107808648",
+      "execution_digest": "3f82723e1dfb6830b68d1e17af1ee5a7d8f6e0fed7d1278fe1184b6ac63837d9",
+      "workspace_digest": "7be57d80485946e680166502ad781fc0be487def5b8e1d3cc5a4906f19590022",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec cli --spec discord --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-069",
+        "REQ-agent-225",
+        "REQ-cli-225",
+        "REQ-discord-225",
+        "REQ-plugins-225"
+      ]
     }
   ]
 }
