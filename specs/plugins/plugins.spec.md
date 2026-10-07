@@ -61,11 +61,10 @@ files:
   - tests/plugins.nongit-project-dir.test.ts
   - plugins/search/index.ts
   - plugins/search/commands.ts
-  - src/memory/confirm.ts
   - tests/memory.plugins.test.ts
+  - tests/memory.forget-card.test.ts
   - tests/memory.profiles.test.ts
   - tests/memory.recall-github.test.ts
-  - tests/memory.confirm.test.ts
   - tests/files.plugins.test.ts
   - tests/files.dangling-symlink.test.ts
   - tests/search.plugins.test.ts
@@ -406,8 +405,15 @@ REQ-plugins-520). Memory plugins take the acting user and ADMIN
 only from bridge-set env (`CORVIDINHO_ACTING_DISCORD_USER_ID` /
 `CORVIDINHO_ACTING_IS_ADMIN`), never argv — `--user` / `--admin` / `--db` are
 refused; ADMIN is re-checked in the handler (empty admin lists ⇒ nobody);
-`memory-forget` / `memory-override` are two-phase with an HMAC confirm token
-confirmed from a different turn (SAFE-4 / REQ-plugins-011).
+`memory-forget` / `memory-override` by id ask the owner on a DM Approve
+card with a one-time code — their SAFE-4 two-phase confirm, no typed token —
+and wait for the answer: the `memory` card (`askMemoryCard`,
+`src/memory/card.ts`) shows the exact action, target and amount and, for an
+override, the new text word for word; only an approval used once changes the
+memory, and only while it is still what the card showed; Deny, no answer or
+a stopped run changes nothing; `--confirm` is refused; with no bridge
+conversation to deliver the card (the local CLI, a schedule) they refuse
+(SAFE-18.a / REQ-plugins-183 / REQ-plugins-011).
 Whose memory a call reads and writes is the acting Discord id matched in the
 owner's people list re-read at the call (MEMORY-5 / REQ-plugins-101): a
 declared person's one `person:<id>` profile (plus rows under their Discord

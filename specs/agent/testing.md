@@ -1323,3 +1323,14 @@ the token value is absent from the tool's output (SAFE-6 scrub).
 Fail-on-main: with main's (`86d68cd0`) `plugins/specsync/api.ts` swapped in,
 the file gave 7 pass, 1 fail (the owner's cloud markers and `GITHUB_TOKEN`
 came back through the tool); restored, 8 of 8 pass.
+
+## The memory tools' argv hint names the card, not a token (SAFE-18.a)
+
+`tests/memory.forget-card.test.ts` ("the memory tools' argv hint and
+descriptions name the card and no confirm token"): `toolDefForEntry` for a
+`memory-*` tool says forget / override ask the owner on a DM card and wait,
+and no longer mentions `--confirm` (fails on main's `src/agent/tools.ts`);
+the fake model's `memory-forget` call through `createTaskExecute` waits for
+the owner's card and its tool result reports the forget once approved with
+the code.
+

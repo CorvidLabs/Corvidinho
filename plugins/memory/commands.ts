@@ -4,8 +4,12 @@
  * argv is model-controlled in the tool loop, so the acting user, ADMIN, and
  * the store path never come from argv — only from the env the Discord bridge
  * sets per spawn. ADMIN is re-checked here at handler time against the live
- * admin config (ADMIN-4 / DISCORD-7; empty ⇒ deny-all). Forget/override are
- * two-phase with a confirm token from a different turn (SAFE-4).
+ * admin config (ADMIN-4 / DISCORD-7; empty ⇒ deny-all). Forget/override by
+ * id ask the owner on a DM Approve card with a one-time code, which is their
+ * SAFE-4 two-phase confirm (SAFE-18.a, src/memory/card.ts): the call waits
+ * for the answer and changes the memory only on an approval it uses once.
+ * There is no typed confirm token any more, and with no running Discord
+ * bridge to deliver the card (the local CLI, a schedule) they refuse.
  *
  * Profiles, projects and privacy (MEMORY-5..7, MEMORY-ACL-6, #101 /
  * REQ-plugins-101): the acting Discord id is matched in the owner's people
@@ -47,14 +51,13 @@
 
 import { appendAudit, argsDigest, auditContextFromEnv, auditKeyFromEnv } from "../../src/audit/log.ts";
 import {
+  askMemoryCard,
   buildMemoryProfile,
-  checkConfirmToken,
   FORGET_REQUEST_TTL_MS,
   ForgetRequestStore,
   formatMemoryProfile,
-  isHumanSuppliedToken,
-  issueConfirmToken,
   loadPeopleForMemory,
+  MEMORY_CARD_NOTHING_DONE,
   MEMORY_ACL_DENIED,
   MemoryAclError,
   memorySubjectFor,
@@ -68,7 +71,7 @@ import {
   projectScopeForRepo,
   sameSubject,
   subjectLabel,
-  type ConfirmBinding,
+  type MemoryCardOp,
   type MemorySubject,
 } from "../../src/memory/index.ts";
 import {
@@ -405,35 +408,58 @@ function errResult(err: unknown): PluginHandlerResult {
   };
 }
 
-type ConfirmArg =
-  | { present: false }
-  | { present: true; token: string | undefined };
-
-function parseConfirm(args: string[]): ConfirmArg {
-  const end = args.indexOf("--");
-  const head = end >= 0 ? args.slice(0, end) : args;
-  if (!head.some((a) => a === "--confirm" || a.startsWith("--confirm="))) {
-    return { present: false };
-  }
-  return { present: true, token: flagValue(args, "--confirm")?.trim() || undefined };
+/** SAFE-18.a: the typed confirm token is gone; the card is the confirm. */
+function confirmGone(op: MemoryCardOp): PluginHandlerResult {
+  return {
+    ok: false,
+    error: `refused (SAFE-18.a): there are no confirm tokens any more — memory-${op} by id asks the owner on a DM Approve card with a one-time code. Call it once without --confirm and wait for the owner's answer; never ask anyone to type a token`,
+    exitCode: 2,
+  };
 }
 
-const CONFIRM_NEEDS_TOKEN: PluginHandlerResult = {
-  ok: false,
-  error:
-    "refused: --confirm needs the token from phase 1 (run once without --confirm, then confirm from a new turn) — SAFE-4",
-  exitCode: 1,
-};
+/**
+ * SAFE-18.a: the card can only be delivered by the running Discord bridge,
+ * to a run it started for a conversation with the owner. Anywhere else (the
+ * local CLI, a schedule, WATCH) it fails closed — no typed-token fallback.
+ */
+function cardNeedsBridge(op: MemoryCardOp): PluginHandlerResult {
+  return {
+    ok: false,
+    error: `refused (SAFE-18.a): memory-${op} by id asks the owner on a DM Approve card with a one-time code, and only the running Discord bridge delivers it, from a conversation with the owner (a Discord message or command) — this run has none (the local CLI, a schedule or another run), so ${MEMORY_CARD_NOTHING_DONE} and there is no typed-token fallback. Ask me in a Discord conversation`,
+    exitCode: 2,
+  };
+}
+
+/** The `memory-<op>` refusal for a card that came to no (SAFE-20). */
+function cardRefusal(
+  op: MemoryCardOp,
+  id: string,
+  outcome: "denied" | "expired" | "aborted" | "changed" | "unavailable",
+  error: string,
+  requestId?: string,
+): PluginHandlerResult {
+  return {
+    ok: false,
+    error,
+    exitCode: outcome === "aborted" ? 130 : 2,
+    data: { refused: true, op, id, outcome, ...(requestId ? { request: requestId } : {}) },
+  };
+}
 
 /**
- * Shared two-phase flow for forget/override. Phase 1 returns a token and the
- * target (never content); phase 2 verifies it, then `apply` runs.
+ * Shared flow for the owner's forget/override by id (SAFE-18.a / SAFE-4):
+ * the target is checked, the owner's DM card raised (src/memory/card.ts) and
+ * the call waits for the answer. On an approval it uses once, `apply` runs —
+ * only while the memory is still exactly what the card showed (same row,
+ * not forgotten, not changed since) and the actor is still the owner; else
+ * nothing changes. Deny, no answer or a stopped run changes nothing (SAFE-20).
  */
-async function twoPhase(opts: {
+async function ownerCard(opts: {
   args: string[];
-  op: ConfirmBinding["op"];
+  op: MemoryCardOp;
   usage: string;
   content?: string;
+  signal?: AbortSignal;
   apply: (store: MemoryStore, id: string, actor: string, isAdmin: boolean) => {
     deletedAt?: number;
     updatedAt: number;
@@ -442,6 +468,9 @@ async function twoPhase(opts: {
   const refused = refuseArgvIdentity(opts.args);
   if (refused) return refused;
   const env = process.env;
+  // The local CLI (no role session): no bridge started this run, so no card
+  // can reach the owner — fail closed.
+  if (!roleSessionActive(env)) return cardNeedsBridge(opts.op);
   const actor = actingUser(env);
   if (!actor) return NO_ACTOR;
   const id = flagValue(opts.args, "--id") ?? positionalAfterFlags(opts.args)[0];
@@ -450,51 +479,75 @@ async function twoPhase(opts: {
   }
   const isAdmin = await actingIsAdmin(env, actor);
   if (!isAdmin) return ACL_DENIED;
-  const confirm = parseConfirm(opts.args);
-  if (confirm.present && !confirm.token) return CONFIRM_NEEDS_TOKEN;
+  if (flagPresent(opts.args, "--confirm")) return confirmGone(opts.op);
+  if (!inConversation(env)) return cardNeedsBridge(opts.op);
 
   const { db, store, close } = openStore(env);
   try {
     const row = store.getById(id);
     if (!row || row.deletedAt != null) throw new MemoryNotFoundError();
-    const binding: ConfirmBinding = {
-      op: opts.op,
-      actorUserId: actor,
-      memoryId: row.id,
-      memoryUpdatedAt: row.updatedAt,
-      content: opts.op === "override" ? opts.content : undefined,
-    };
     const target = {
       id: row.id,
       category: row.category,
       key: row.key,
       ownerUserId: row.ownerUserId,
     };
-
-    if (!confirm.present) {
-      const { token, expiresAt } = issueConfirmToken(db, binding);
-      return {
-        ok: true,
-        data: { pending: true, op: opts.op, ...target, confirmToken: token, expiresAt },
-        message: `pending ${opts.op} of ${row.category}/${row.key} (owner ${row.ownerUserId}). To confirm within 10m the human must reply with this token in a new message: ${token} — then run memory-${opts.op} --id ${row.id} --confirm <token>${opts.op === "override" ? " --content <the same content as this request>" : ""}`,
-        exitCode: 0,
-      };
+    let asked;
+    try {
+      asked = await askMemoryCard({
+        db,
+        op: opts.op,
+        row,
+        ...(opts.op === "override" ? { content: opts.content } : {}),
+        requester: actor,
+        surface: auditContextFromEnv(env).surface,
+        ...(opts.signal ? { signal: opts.signal } : {}),
+      });
+    } catch (err) {
+      return cardRefusal(
+        opts.op,
+        row.id,
+        "unavailable",
+        `refused (SAFE-18.a): the owner's DM card could not be raised or read (${err instanceof Error ? err.message : String(err)}), so ${MEMORY_CARD_NOTHING_DONE}`,
+      );
+    }
+    const what = `memory-${opts.op} of memory ${row.id}`;
+    if (!asked.approved) {
+      const r = asked.requestId;
+      if (asked.outcome === "denied") {
+        return cardRefusal(opts.op, row.id, "denied", `refused (SAFE-18.a): the owner denied ${what} on their DM card ${r}, so ${MEMORY_CARD_NOTHING_DONE} (SAFE-20)`, r);
+      }
+      if (asked.outcome === "aborted") {
+        return cardRefusal(opts.op, row.id, "aborted", `stopped (SAFE-18.a): the run was interrupted while waiting for the owner's DM card ${r}, so ${MEMORY_CARD_NOTHING_DONE}`, r);
+      }
+      return cardRefusal(
+        opts.op,
+        row.id,
+        "expired",
+        `refused (SAFE-18.a): no answer on the owner's DM card ${r} for ${what} in time, so ${MEMORY_CARD_NOTHING_DONE} (SAFE-20: no answer means no)`,
+        r,
+      );
     }
 
-    const check = checkConfirmToken(db, confirm.token!, binding);
-    if (!check.ok) return { ok: false, error: check.error, exitCode: 2 };
-    // SAFE-4: phase 2 needs a human act — the token must appear in the
-    // human's own message for this run (bridge-extracted), not only argv.
-    if (!isHumanSuppliedToken(confirm.token!, env)) {
-      return {
-        ok: false,
-        error:
-          "refused: confirm token must come from the human — reply with the token in a new message (SAFE-4)",
-        exitCode: 2,
-      };
-    }
-
-    const done = opts.apply(store, row.id, actor, isAdmin);
+    // Approved with the code and used once: the owner, still, and the memory
+    // exactly as the card showed it.
+    const changed = () =>
+      cardRefusal(
+        opts.op,
+        row.id,
+        "changed",
+        `refused (SAFE-18.a): memory ${row.id} changed after the owner's DM card ${asked.requestId} went out, so ${MEMORY_CARD_NOTHING_DONE} — ask again for a card that shows it as it is now`,
+        asked.requestId,
+      );
+    if (!(await actingIsAdmin(env, actor))) return ACL_DENIED;
+    const done = db
+      .transaction(() => {
+        const now = store.getById(row.id);
+        if (!now || now.deletedAt != null || now.updatedAt !== row.updatedAt) return null;
+        return opts.apply(store, row.id, actor, isAdmin);
+      })
+      .immediate();
+    if (!done) return changed();
     const verb = opts.op === "forget" ? "forgot" : "overrode";
     return {
       ok: true,
@@ -503,8 +556,9 @@ async function twoPhase(opts: {
         ...target,
         actorUserId: actor,
         at: done.deletedAt ?? done.updatedAt,
+        request: asked.requestId,
       },
-      message: `${verb} memory ${row.id} (${row.category}/${row.key}, owner ${row.ownerUserId}) by ${actor}`,
+      message: `${verb} memory ${row.id} (${row.category}/${row.key}, owner ${row.ownerUserId}) by ${actor} — approved on the owner's DM card ${asked.requestId} with the one-time code (SAFE-18.a)`,
       exitCode: 0,
     };
   } catch (err) {
@@ -865,16 +919,18 @@ export const memoryCommands: PluginCommand[] = [
   {
     name: "memory-forget",
     description:
-      "ADMIN soft-delete a memory by id (own or other). Two-phase (SAFE-4): run without --confirm to get a token, " +
-      "the human must reply with that token in a new message, then run again with --confirm TOKEN. MEMORY-ACL-4. " +
-      'argv examples: ["--id","<uuid>"] then ["--id","<uuid>","--confirm","<token>"] (acting admin from bridge env).',
+      "Owner only: soft-delete a memory by id (own or anyone's; MEMORY-ACL-4). It asks the owner on a DM Approve/Deny card showing the exact action and target, " +
+      "and Approve also needs a one-time code the owner types back (SAFE-18.a / SAFE-19). Call it once and wait: it returns when the owner answers; " +
+      "Deny or no answer within 5 minutes means nothing is forgotten (SAFE-20). There are no confirm tokens — never ask anyone to type one. " +
+      'Only from a Discord conversation with the owner. argv: ["--id","<uuid>"] (acting user from the bridge env).',
     dangerous: true,
     minTier: 1,
     async handler(ctx) {
-      return twoPhase({
+      return ownerCard({
         args: ctx.args,
         op: "forget",
-        usage: "usage: memory-forget --id MEMORY_ID [--confirm TOKEN]",
+        usage: "usage: memory-forget --id MEMORY_ID",
+        ...(ctx.signal ? { signal: ctx.signal } : {}),
         apply: (store, id, actor, isAdmin) =>
           store.forget({ actorUserId: actor, id, isAdmin }),
       });
@@ -883,9 +939,10 @@ export const memoryCommands: PluginCommand[] = [
   {
     name: "memory-override",
     description:
-      "ADMIN overwrite memory content by id (own or other). Two-phase (SAFE-4): run without --confirm to get a token, " +
-      "the human must reply with that token in a new message, then run again with --confirm TOKEN and the same content. MEMORY-ACL-3/4. " +
-      'argv examples: ["--id","<uuid>","--content","new text"] then ["--id","<uuid>","--confirm","<token>","--content","new text"].',
+      "Owner only: replace a memory's text by id (own or anyone's; MEMORY-ACL-3/4). It asks the owner on a DM Approve/Deny card showing the exact action, target and the new text word for word, " +
+      "and Approve also needs a one-time code the owner types back (SAFE-18.a / SAFE-19). Call it once and wait: it returns when the owner answers; " +
+      "Deny or no answer within 5 minutes means nothing is changed (SAFE-20). There are no confirm tokens — never ask anyone to type one. " +
+      'Only from a Discord conversation with the owner. argv: ["--id","<uuid>","--content","new text"].',
     dangerous: true,
     minTier: 1,
     async handler(ctx) {
@@ -895,12 +952,12 @@ export const memoryCommands: PluginCommand[] = [
         content = (flagValue(ctx.args, "--id") ? pos : pos.slice(1)).join(" ");
       }
       const finalContent = content;
-      return twoPhase({
+      return ownerCard({
         args: ctx.args,
         op: "override",
         content: finalContent,
-        usage:
-          "usage: memory-override --id MEMORY_ID [--confirm TOKEN] <content>",
+        usage: "usage: memory-override --id MEMORY_ID <content>",
+        ...(ctx.signal ? { signal: ctx.signal } : {}),
         apply: (store, id, actor, isAdmin) =>
           store.override({ actorUserId: actor, id, content: finalContent, isAdmin }),
       });
