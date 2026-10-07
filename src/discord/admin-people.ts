@@ -20,6 +20,10 @@
  * - Fail closed: a person whose entry cannot be read is not edited (fix it on
  *   the VM); a stable id (Discord id, GitHub login, GitHub id) linked to
  *   another person is refused, because it would then match nobody.
+ * - Briefing hours (COS-2.a, #102): `add` also sets or changes a person's
+ *   `timezone` (an IANA zone name, stored canonical) and `working_hours`
+ *   (`HH:MM-HH:MM`), written as those keys; an invalid value is refused and
+ *   nothing is written. They are cleared only by editing the file.
  * - Roles (ADMIN-3.b / IDENTITY-8): `role` sets a declared person's one role,
  *   team or community, written as the `role` key. The owner role is never
  *   set here (it is `[owner]` / env, IDENTITY-1), and the owner's own person
@@ -49,6 +53,8 @@ import {
   buildPeopleDirectory,
   cleanPersonLabel,
   DECLARABLE_ROLES,
+  normalizePersonTimezone,
+  normalizeWorkingHours,
   DEFAULT_PERSON_ROLE,
   normalizePersonRole,
   emptyPerson,
@@ -83,6 +89,10 @@ export type PeopleAdminRequest = {
   personId: string;
   /** `add`: display name (new person, or a change of an existing one's). */
   display?: string;
+  /** `add`: IANA time zone (COS-2.a); normalized by the plan. */
+  timezone?: string;
+  /** `add`: working hours `HH:MM-HH:MM` (COS-2.a); normalized by the plan. */
+  hours?: string;
   /** `link` / `unlink`: raw values, normalized by the plan. */
   links?: Array<{ kind: PersonLinkKind; value: string }>;
   /** `role`: team or community (ADMIN-3.b); normalized by the plan. */
@@ -104,6 +114,9 @@ export type PeopleAdminPlan = {
   /** Links asked for that were already there (link) or not there (unlink). */
   unchanged: PersonLink[];
   displayChanged: boolean;
+  /** `add`: the time zone / working hours set or changed (COS-2.a). */
+  timezoneChanged: boolean;
+  hoursChanged: boolean;
   /** `role`: the person's effective role before / after (IDENTITY-8). */
   roleBefore?: PersonRole;
   roleAfter?: DeclarableRole;
@@ -144,6 +157,8 @@ function copyPerson(p: DeclaredPerson): DeclaredPerson {
   };
   if (p.display !== undefined) c.display = p.display;
   if (p.role !== undefined) c.role = p.role;
+  if (p.timezone !== undefined) c.timezone = p.timezone;
+  if (p.workingHours !== undefined) c.workingHours = p.workingHours;
   return c;
 }
 
@@ -156,6 +171,8 @@ export function samePerson(a: DeclaredPerson | null, b: DeclaredPerson | null): 
     a.id === b.id &&
     (a.display ?? null) === (b.display ?? null) &&
     (a.role ?? null) === (b.role ?? null) &&
+    (a.timezone ?? null) === (b.timezone ?? null) &&
+    (a.workingHours ?? null) === (b.workingHours ?? null) &&
     eq(a.nicknames, b.nicknames) &&
     eq(a.discordIds, b.discordIds) &&
     eq(a.githubLogins, b.githubLogins) &&
@@ -186,6 +203,8 @@ export function renderPersonTomlLines(p: DeclaredPerson): string[] {
   const lines: string[] = [];
   if (p.display) lines.push(`display = ${tomlQuoted(p.display)}`);
   if (p.role) lines.push(`role = ${tomlQuoted(p.role)}`);
+  if (p.timezone) lines.push(`timezone = ${tomlQuoted(p.timezone)}`);
+  if (p.workingHours) lines.push(`working_hours = ${tomlQuoted(p.workingHours)}`);
   if (p.nicknames.length) lines.push(`nicknames = ${tomlArray(p.nicknames)}`);
   if (p.discordIds.length) lines.push(`discord_ids = ${tomlArray(p.discordIds)}`);
   if (p.githubLogins.length) lines.push(`github_logins = ${tomlArray(p.githubLogins)}`);
@@ -261,6 +280,8 @@ function renderPersonJson(p: DeclaredPerson): Record<string, unknown> {
   const o: Record<string, unknown> = {};
   if (p.display) o.display = p.display;
   if (p.role) o.role = p.role;
+  if (p.timezone) o.timezone = p.timezone;
+  if (p.workingHours) o.working_hours = p.workingHours;
   if (p.nicknames.length) o.nicknames = [...p.nicknames];
   if (p.discordIds.length) o.discord_ids = [...p.discordIds];
   if (p.githubLogins.length) o.github_logins = [...p.githubLogins];
@@ -423,6 +444,8 @@ export function planPeopleChange(opts: {
   const changed: PersonLink[] = [];
   const unchanged: PersonLink[] = [];
   let displayChanged = false;
+  let timezoneChanged = false;
+  let hoursChanged = false;
   let roleBefore: PersonRole | undefined;
   let roleAfter: DeclarableRole | undefined;
 
@@ -447,6 +470,15 @@ export function planPeopleChange(opts: {
   } else if (req.op === "add") {
     const display = req.display === undefined ? undefined : cleanPersonLabel(req.display);
     if (req.display !== undefined && !display) return refuse("display must be a non-empty name");
+    // COS-2.a: optional briefing time zone and working hours.
+    const timezone = req.timezone === undefined ? undefined : normalizePersonTimezone(req.timezone);
+    if (req.timezone !== undefined && !timezone) {
+      return refuse("timezone must be an IANA time zone name such as Europe/Oslo or America/New_York");
+    }
+    const hours = req.hours === undefined ? undefined : normalizeWorkingHours(req.hours);
+    if (req.hours !== undefined && !hours) {
+      return refuse("hours must be HH:MM-HH:MM (24 h, start before end) such as 09:00-17:00");
+    }
     if (!after) {
       after = emptyPerson(id);
       if (display) after.display = display;
@@ -454,6 +486,14 @@ export function planPeopleChange(opts: {
     } else if (display && display !== after.display) {
       after.display = display;
       displayChanged = true;
+    }
+    if (timezone && timezone !== after.timezone) {
+      after.timezone = timezone;
+      timezoneChanged = true;
+    }
+    if (hours && hours !== after.workingHours) {
+      after.workingHours = hours;
+      hoursChanged = true;
     }
   } else if (req.op === "remove") {
     after = null;
@@ -522,6 +562,8 @@ export function planPeopleChange(opts: {
     changed,
     unchanged,
     displayChanged,
+    timezoneChanged,
+    hoursChanged,
     ...(roleAfter ? { roleBefore, roleAfter } : {}),
     countBefore,
     countAfter,

@@ -1,6 +1,7 @@
 /**
  * Spawned agent runs never inherit a stale memory actor
- * (REQ-discord-021 / REQ-watch-008 / REQ-plugins-011).
+ * (REQ-discord-021 / REQ-watch-008 / REQ-plugins-011), and never carry a
+ * typed confirm token (SAFE-18.a: the owner's DM card is the confirm).
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -54,7 +55,7 @@ describe("spawn env hygiene for memory actor", () => {
     expect(r.summary).toContain("actor=[u1] admin=[0] nonint=[1] tokens=[]");
   });
 
-  test("Discord spawn passes only confirm tokens the human typed", async () => {
+  test("SAFE-18.a: a confirm token the human typed is not passed to the run (the DM card is the confirm)", async () => {
     const token = `mc1.123.abc.${"f".repeat(64)}`;
     const client = createDiscordClient({ bin, cwd: dir });
     const r = await client.runChat({
@@ -64,7 +65,7 @@ describe("spawn env hygiene for memory actor", () => {
       actingUserId: "u1",
       actingIsAdmin: true,
     });
-    expect(r.summary).toContain(`admin=[1] nonint=[1] tokens=[${token}]`);
+    expect(r.summary).toContain("admin=[1] nonint=[1] tokens=[]");
   });
 
   test("tokens in the enriched prompt (e.g. recalled memory) are not human-supplied", async () => {

@@ -32,3 +32,15 @@ export {
   type SchedulerOutbound,
   type SchedulerServiceOpts,
 } from "./service.ts";
+export {
+  briefingHoursFor,
+  briefingRecipients,
+  briefingSlot,
+  consoleBriefingLog,
+  createBriefingComposer,
+  createBriefingGithub,
+  createBriefingTicker,
+  type BriefingCompose,
+  type BriefingGithub,
+  type BriefingTicker,
+} from "./briefing.ts";

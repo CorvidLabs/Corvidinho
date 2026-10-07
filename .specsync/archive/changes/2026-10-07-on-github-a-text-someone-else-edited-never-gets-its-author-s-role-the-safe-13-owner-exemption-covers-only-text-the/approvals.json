@@ -1,0 +1,115 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791331419,
+      "digest": "3c6fbe8babded9c98e4d1ebe19f81d777d2aff55bdfd7d4542f52954f5f83c3d",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "on-github-a-text-someone-else-edited-never-gets-its-author-s-role-the-safe-13-owner-exemption-covers-only-text-the",
+        "title": "On GitHub, a text someone else edited never gets its author's role, the SAFE-13 owner exemption covers only text the owner wrote, a WATCH run never writes the watcher's own checkout, and its audit rows name its GitHub trigger (IDENTITY-12.a follow-up to #374)",
+        "description": "On GitHub, a text someone else edited never gets its author's role, the SAFE-13 owner exemption covers only text the owner wrote, a WATCH run never writes the watcher's own checkout, and its audit rows name its GitHub trigger (IDENTITY-12.a follow-up to #374)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "plugins",
+          "watch"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/WATCH.md",
+          "docs/discord.md",
+          "src/audit/log.ts",
+          "src/plugins/roles.ts",
+          "src/plugins/run.ts",
+          "src/watch/router.ts",
+          "src/watch/searcher.ts",
+          "src/watch/types.ts",
+          "tests/audit.log.test.ts",
+          "tests/identity.recognise.test.ts",
+          "tests/safe.injection.test.ts",
+          "tests/watch.github-roles.postreview.test.ts",
+          "tests/watch.github-roles.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "IDENTITY-12.a ('On GitHub, the owner and team members I've declared get their role's tools too, behind the same must-ask gate; anyone else stays community.'), follow-up to #374. (1) REQ-watch-1202: a WATCH comment or issue/PR-body event carries textEditorIds (the GitHub numeric ids of everyone who edited the triggering text after it was posted: [] when a comment's updated_at is its created_at, else read from GraphQL lastEditedAt/editor/userContentEdits; unreadable = absent) and threadAuthorId; watchTriggerRole gives owner/team only when every editor is the sender, else community (fail closed), and the identity block says the run has community tools; SAFE-13 exempts only text the owner wrote (the body when the owner sent it and nobody else edited it, the title when the owner opened the thread). (2) REQ-plugins-1202: on a WATCH run (surface watch or a WATCH session id) runPlugin refuses files-write/edit/delete, git-branch-create/commit/push and specsync-change-new/answer/approve/finalize for every role, the owner's included, so the watcher's own checkout is never written. (3) REQ-plugins-1203: auditContextFromEnv gives a WATCH run with no Discord actor the actor github:<CORVIDINHO_ACTING_GITHUB_ID> (else github:<login>, else github:(unknown)), never local, so SAFE-5 rows and must-ask requester/earlier-denial keys name the GitHub trigger. tests/watch.github-roles.postreview.test.ts fails on the base sources (11 of 12; per finding by swapping each file) and passes on the branch."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "6785dc8b9b8cb0ed6cbc37fc080b6c79e4f939d919ac33d22cfdf9256e65731c",
+        "watch": "19a52029a5105f80a6a0e03c7a0c48dcfc90c2a28b39cbe19b4ebda9f0ea1fd6"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791333421,
+      "digest": "bd0e919b73220caa2ee7879ca78a67c423802b0c2dd8ac22786474061379f8f2",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "on-github-a-text-someone-else-edited-never-gets-its-author-s-role-the-safe-13-owner-exemption-covers-only-text-the",
+        "title": "On GitHub, a text someone else edited never gets its author's role, the SAFE-13 owner exemption covers only text the owner wrote, a WATCH run never writes the watcher's own checkout, and its audit rows name its GitHub trigger (IDENTITY-12.a follow-up to #374)",
+        "description": "On GitHub, a text someone else edited never gets its author's role, the SAFE-13 owner exemption covers only text the owner wrote, a WATCH run never writes the watcher's own checkout, and its audit rows name its GitHub trigger (IDENTITY-12.a follow-up to #374)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "plugins",
+          "watch"
+        ],
+        "affected_paths": [
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/WATCH.md",
+          "docs/discord.md",
+          "src/audit/log.ts",
+          "src/plugins/roles.ts",
+          "src/plugins/run.ts",
+          "src/watch/forget-me.ts",
+          "src/watch/poller.ts",
+          "src/watch/router.ts",
+          "src/watch/searcher.ts",
+          "src/watch/types.ts",
+          "tests/audit.log.test.ts",
+          "tests/identity.recognise.test.ts",
+          "tests/memory.recall-github.test.ts",
+          "tests/safe.injection.test.ts",
+          "tests/watch.forget-me.test.ts",
+          "tests/watch.github-numeric-id.test.ts",
+          "tests/watch.github-roles.postreview.test.ts",
+          "tests/watch.github-roles.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "IDENTITY-12.a ('On GitHub, the owner and team members I've declared get their role's tools too, behind the same must-ask gate; anyone else stays community.'), follow-up to #374. (1) REQ-watch-1202: a WATCH comment or issue/PR-body event carries textEditorIds (the GitHub numeric ids of everyone who edited the triggering text after it was posted, read from GraphQL lastEditedAt/editor/userContentEdits for every new event, never from REST updated_at; unreadable = absent), threadAuthorId and titleEditorIds (who renamed the title, from GraphQL rename events); watchTriggerRole gives owner/team only when every editor is the sender, else community (fail closed), and the identity block says the run has community tools; SAFE-13 exempts only text the owner wrote (the body when the owner sent it and nobody else edited it, the title when the owner opened the thread and nobody else renamed it); the run acts for (memory, audit, must-ask) the sender of a text nobody else edited, an assignment's or review request's actor by login, else nobody, and an edited 'forget me' raises no card. (2) REQ-plugins-1202: on a WATCH run (surface watch or a WATCH session id) runPlugin refuses files-write/edit/delete, git-branch-create/commit/push and specsync-change-new/answer/approve/finalize for every role, the owner's included, so the watcher's own checkout is never written. (3) REQ-plugins-1203: auditContextFromEnv gives a WATCH run with no Discord actor the actor github:<CORVIDINHO_ACTING_GITHUB_ID> (else github:<login>, else github:(unknown)), never local, so SAFE-5 rows and must-ask requester/earlier-denial keys name the GitHub trigger. tests/watch.github-roles.postreview.test.ts fails on the base sources (19 of 20; per finding by swapping each file) and passes on the branch."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "6785dc8b9b8cb0ed6cbc37fc080b6c79e4f939d919ac33d22cfdf9256e65731c",
+        "watch": "e28427f04c10b699a3d28d589d3d2477e41cdcae51a6b226b4c5bfa40c7d9c71"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1791356914,
+      "digest": "607f2600806a29ee1a10cb9742845f0d2ae25c44cc4c6e1b14469dc2f09a4f2f",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

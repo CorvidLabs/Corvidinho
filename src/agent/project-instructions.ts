@@ -30,6 +30,7 @@ import {
   fstatSync,
   lstatSync,
   openSync,
+  readdirSync,
   readlinkSync,
   readSync,
   realpathSync,
@@ -463,6 +464,46 @@ export function loadProjectInstructions(
     if (entry) files.push(entry);
   }
   return { root, source, files };
+}
+
+/**
+ * Names (`<dir>/<file>`) of the `suffix` files directly in `dir` under the
+ * root of `cwd` (with `exactRoot`, `cwd` itself), sorted, for
+ * {@link loadProjectInstructions} to read (AUTONOMOUS-2.a: the named persona
+ * files in `personas/`). A git root lists the files committed at `HEAD` and
+ * those in the working tree, so the loader reads the committed copy and
+ * refuses an untracked one as not committed; a root without `.git` lists the
+ * working tree. Dot files are skipped. Never throws; nothing found ⇒ [].
+ */
+export function listInstructionDir(
+  cwd: string,
+  dir: string,
+  opts: { exactRoot?: boolean; suffix?: string } = {},
+): string[] {
+  const suffix = opts.suffix ?? ".md";
+  const root = opts.exactRoot ? resolve(cwd) : findProjectRoot(cwd);
+  const keep = (base: string) => base !== "" && !base.startsWith(".") && base.endsWith(suffix);
+  const names = new Set<string>();
+  try {
+    for (const ent of readdirSync(join(root, dir))) {
+      if (keep(ent)) names.add(`${dir}/${ent}`);
+    }
+  } catch {
+    /* no such folder in the working tree */
+  }
+  if (existsSync(join(root, ".git"))) {
+    let real: string;
+    try {
+      real = realpathSync(root);
+    } catch {
+      real = root;
+    }
+    for (const path of lsTree(real, [`${dir}/`])?.keys() ?? []) {
+      const base = path.slice(dir.length + 1);
+      if (path.startsWith(`${dir}/`) && !base.includes("/") && keep(base)) names.add(path);
+    }
+  }
+  return [...names].sort();
 }
 
 /** Header placed before the files in the system prompt. */

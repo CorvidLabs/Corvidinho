@@ -86,6 +86,12 @@ deny_users = []
 # above); anyone not declared here is community. Set it here or with
 # /admin people role (owner-only, audited, ADMIN-3.b); re-read on every tool
 # call.
+# Daily briefing (COS-1/2/2.a): the owner and each team member get one DM a
+# working day at the start of their working hours. Optional timezone (an IANA
+# name) and working_hours ("HH:MM-HH:MM", 24 h, start before end); without a
+# timezone it uses the owner's (the timezone on the entry holding the owner's
+# discord_id), else UTC; without working_hours it starts at 09:00. Set them
+# here or with /admin people add person:<id> timezone:<zone> hours:<HH:MM-HH:MM>.
 # [people.tofu]
 # display = "Tofu"
 # role = "team"
@@ -93,6 +99,8 @@ deny_users = []
 # discord_ids = ["000000000000000000"]
 # github_logins = ["tofu-dev"]
 # github_ids = ["0"]
+# timezone = "Europe/Oslo"
+# working_hours = "08:30-16:30"
 
 # Optional extras switch (PLUGIN-5 / PLUGIN-5.a). Both are on unless set here
 # or in the install root's fledge.toml (off in either means off). This file is

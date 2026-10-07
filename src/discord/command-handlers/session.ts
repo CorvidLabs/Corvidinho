@@ -17,6 +17,14 @@ import { finishSlashWithThinking, holdSlashReply, recordSlashStub } from "../sla
 import { PUBLIC_REPLY_PROGRESS_TEXT, publicReplyNotPostedText } from "../public-reply-gate.ts";
 import { formatTaskPlumbing } from "../../agent/task-summary.ts";
 import { loadLlmEnv } from "../../agent/execute.ts";
+import {
+  findPersona,
+  loadPersonas,
+  personaModelRefusal,
+  PERSONA_OWNER_ONLY_LINE,
+  type NamedPersona,
+} from "../../agent/personas.ts";
+import { scrubSecrets } from "../../store/scrub.ts";
 import { ASK_NO_OWNER_WARNING, formatAskReply } from "../ask-ping.ts";
 import { answerAskFor, askExpiresAt, buttonAskFor, toPendingAsk } from "../ask-buttons.ts";
 import { answerTurnText } from "../session-thread.ts";
@@ -129,6 +137,25 @@ export async function handleSessionStart(
     return;
   }
 
+  // AUTONOMOUS-2 / 5.a: only the owner picks a persona to run as; anyone
+  // else, and an unknown persona or one whose model is not configured
+  // (AUTONOMOUS-2.a), gets one private line and nothing starts.
+  const personaRaw = interaction.options.persona;
+  let persona: NamedPersona | undefined;
+  if (typeof personaRaw === "string" && personaRaw.trim() !== "") {
+    if (!actingIsAdmin) {
+      await interaction.reply({ content: PERSONA_OWNER_ONLY_LINE, ephemeral: true });
+      return;
+    }
+    const found = findPersona(loadPersonas(ctx.personaRoot), personaRaw);
+    const refusal = found.ok ? personaModelRefusal(found.persona, process.env) : found.error;
+    if (!found.ok || refusal) {
+      await interaction.reply({ content: scrubSecrets(refusal ?? ""), ephemeral: true });
+      return;
+    }
+    persona = found.persona;
+  }
+
   await interaction.deferReply?.({ ephemeral: false });
 
   const created = await ctx.store.createWithWorktree({
@@ -166,6 +193,7 @@ export async function handleSessionStart(
       actingRole,
       actingIsAdmin,
       turn,
+      ...(persona ? { persona } : {}),
     });
   } finally {
     turn?.done();
@@ -183,10 +211,13 @@ async function runSessionStart(
     actingRole: PersonRole;
     actingIsAdmin: boolean;
     turn: SessionRunTurn | undefined;
+    /** AUTONOMOUS-2 / 5.a: the owner's persona pick for this run. */
+    persona?: NamedPersona;
   },
 ): Promise<void> {
-  const { session, topic, people, actingRole, actingIsAdmin, turn } = input;
-  const llmModel = loadLlmEnv(process.env).model;
+  const { session, topic, people, actingRole, actingIsAdmin, turn, persona } = input;
+  // A persona run calls the persona's model first (AUTONOMOUS-2.a).
+  const llmModel = persona ? persona.model.model : loadLlmEnv(process.env).model;
   // DISCORD-15.a: tokens and cost show on the owner's own runs only.
   const ownerRun = isOwnerDiscord(ctx.owner, interaction.userId);
   const outbound = ctx.thinkingOutbound;
@@ -256,6 +287,8 @@ async function runSessionStart(
         // AUTONOMY-10.a (REQ-discord-099): `discord-send-file` asks while
         // replies in this public thread wait for the owner's OK.
         replyPublicThread,
+        // AUTONOMOUS-2 / 5.a: the owner's persona pick (`task run --persona`).
+        ...(persona ? { persona: persona.name } : {}),
         onStatus: (u) => {
           void thinking?.update({
             tool: u.tool,
@@ -394,7 +427,8 @@ async function runSessionStart(
   const wt = session.worktreePath
     ? `\nWorktree: \`${session.worktreePath}\``
     : "";
-  const head = `Session \`${session.id}\` started.\nTopic: ${topic.slice(0, 200)}${wt}\n\n`;
+  const as = persona ? `\nPersona: ${persona.name}` : "";
+  const head = `Session \`${session.id}\` started.\nTopic: ${topic.slice(0, 200)}${as}${wt}\n\n`;
   // DISCORD-16: post the whole answer; the gateway splits at 2000.
   const body = `${head}${summary}`;
 

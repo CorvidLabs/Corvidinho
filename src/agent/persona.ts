@@ -15,6 +15,10 @@
  * scrubbed. A missing, empty or refused file never stops a run: the run goes
  * on with no persona and one operator note says why.
  *
+ * `persona.md` stays the default voice; named personas, each its own file in
+ * `personas/` next to it, are src/agent/personas.ts (AUTONOMOUS-2.a): a run
+ * as one uses that file's voice in place of this one.
+ *
  * In the system prompt the persona comes first and Corvidinho's rules come
  * after it: the persona's header says it sets tone only, and
  * {@link PERSONA_RULES_SYSTEM_INSTRUCTIONS} says the rules win over it
@@ -88,13 +92,22 @@ function personaText(p: Persona): string | null {
   return f.text;
 }
 
+/**
+ * A persona's system-prompt block: `header`, then the text inside a
+ * `<persona …attrs>` label it cannot close early (`</ persona` in any case or
+ * spacing is escaped). Shared by `persona.md` and the named persona files
+ * (AUTONOMOUS-2.a, src/agent/personas.ts).
+ */
+export function personaBlock(header: string, attrs: string, text: string): string {
+  const body = text.replace(/<\s*\/\s*persona/gi, "<\\/persona");
+  return `${header}\n\n<persona ${attrs}>\n${body}\n</persona>`;
+}
+
 /** System-prompt block for the persona, or "" when none loaded. */
 export function renderPersona(p: Persona): string {
   const text = personaText(p);
   if (text === null) return "";
-  // Keep the file from closing its own label early (`</ persona` too).
-  const body = text.replace(/<\s*\/\s*persona/gi, "<\\/persona");
-  return `${PERSONA_HEADER}\n\n<persona file="${PERSONA_FILE}">\n${body}\n</persona>`;
+  return personaBlock(PERSONA_HEADER, `file="${PERSONA_FILE}"`, text);
 }
 
 /**

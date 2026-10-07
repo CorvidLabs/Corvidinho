@@ -6,7 +6,10 @@
  *   /admin channels remove channel:<…>    ADMIN-2 remove a channel (STRING+autocomplete)
  *   /admin config show                    ADMIN-3 show knobs (read-only view)
  *   /admin people list                    IDENTITY-13 declared people (read-only view)
- *   /admin people add person:<id> [display:<name>]
+ *   /admin people add person:<id> [display:<name>] [timezone:<IANA zone>]
+ *                             [hours:<HH:MM-HH:MM>]
+ *                                         (timezone / hours: when that person's
+ *                                         daily briefing arrives, COS-2.a)
  *   /admin people link|unlink person:<id> [discord:@x] [github:<login>]
  *                             [github_id:<n>] [nickname:<text>]
  *                                         (link github: looks the login's
@@ -202,7 +205,7 @@ const PEOPLE_OPS: Record<string, PeopleAdminOp> = {
 };
 
 const PEOPLE_USAGE: Record<PeopleAdminOp, string> = {
-  add: "usage: /admin people add person:<id> [display:<name>] — id is lowercase letters, digits, - or _ (e.g. tofu)",
+  add: "usage: /admin people add person:<id> [display:<name>] [timezone:<IANA zone, e.g. Europe/Oslo>] [hours:<HH:MM-HH:MM>] — id is lowercase letters, digits, - or _ (e.g. tofu)",
   link: "usage: /admin people link person:<id> and one or more of discord:@user github:<login> github_id:<number> nickname:<text>",
   unlink: "usage: /admin people unlink person:<id> and one or more of discord:@user github:<login> github_id:<number> nickname:<text>",
   remove: "usage: /admin people remove person:<id>",
@@ -588,6 +591,9 @@ async function handlePeopleMutation(
     return;
   }
   const display = op === "add" ? str("display") : undefined;
+  // COS-2.a: the briefing time zone and working hours (`add` only).
+  const timezone = op === "add" ? str("timezone")?.trim() : undefined;
+  const hours = op === "add" ? str("hours")?.trim() : undefined;
   const role = op === "role" ? str("role")?.trim() : undefined;
   if (op === "role" && !role) {
     await interaction.reply({ content: PEOPLE_USAGE[op], ephemeral: true });
@@ -608,6 +614,8 @@ async function handlePeopleMutation(
     ...route,
     person.toLowerCase(),
     ...(display !== undefined ? [`display:${display}`] : []),
+    ...(timezone !== undefined ? [`timezone:${timezone}`] : []),
+    ...(hours !== undefined ? [`hours:${hours}`] : []),
     ...links.map((l) => `${l.kind}:${l.value}`),
     ...(role !== undefined ? [`role:${role.toLowerCase()}`] : []),
   ];
@@ -616,7 +624,15 @@ async function handlePeopleMutation(
       allowlist: ctx.allowlist,
       owner: ctx.owner,
       env: ctx.env ?? process.env,
-      request: { op, personId: person, display, links, ...(role !== undefined ? { role } : {}) },
+      request: {
+        op,
+        personId: person,
+        display,
+        links,
+        ...(timezone !== undefined ? { timezone } : {}),
+        ...(hours !== undefined ? { hours } : {}),
+        ...(role !== undefined ? { role } : {}),
+      },
     });
 
   // Plan, audit intent, commit: all synchronous, so no interleaving.
@@ -792,10 +808,18 @@ function personLabel(p: DeclaredPerson): string {
   return p.display ? `"${p.id}" (${p.display})` : `"${p.id}"`;
 }
 
+/** COS-2.a: ` (time zone …, hours …)` for a person who has either, else "". */
+function briefingHoursLabel(p: DeclaredPerson | null | undefined): string {
+  const parts: string[] = [];
+  if (p?.timezone) parts.push(`time zone ${p.timezone}`);
+  if (p?.workingHours) parts.push(`hours ${p.workingHours}`);
+  return parts.length ? ` (${parts.join(", ")})` : "";
+}
+
 function formatPeopleNoChange(plan: PeopleAdminPlan): string {
   const where = `(\`${plan.path}\`)`;
   if (plan.op === "add") {
-    return `No change: "${plan.personId}" is already declared${plan.before?.display ? ` as ${plan.before.display}` : ""} ${where}. Use display: to change the name, /admin people link to add links.`;
+    return `No change: "${plan.personId}" is already declared${plan.before?.display ? ` as ${plan.before.display}` : ""}${briefingHoursLabel(plan.before)} ${where}. Use display:, timezone: or hours: to change them, /admin people link to add links.`;
   }
   if (plan.op === "remove") {
     return `No change: "${plan.personId}" is not a declared person in the file ${where}.`;
@@ -817,10 +841,21 @@ function formatPeopleApplied(
   const lines: string[] = [];
   const who = plan.after ? personLabel(plan.after) : `"${plan.personId}"`;
   if (plan.op === "add") {
+    const changes: string[] = [];
+    if (plan.before && plan.displayChanged) {
+      changes.push(`display name changed${plan.before.display ? ` from ${plan.before.display}` : ""}`);
+    }
+    if (plan.timezoneChanged) {
+      changes.push(`time zone ${plan.before?.timezone ? `${plan.before.timezone} → ` : ""}${plan.after!.timezone}`);
+    }
+    if (plan.hoursChanged) {
+      changes.push(`working hours ${plan.before?.workingHours ? `${plan.before.workingHours} → ` : ""}${plan.after!.workingHours}`);
+    }
+    const briefing = plan.timezoneChanged || plan.hoursChanged ? " Their daily briefing follows it from the next working day (COS-2.a)." : "";
     lines.push(
       plan.before
-        ? `✅ /admin people add: ${who} — display name changed${plan.before.display ? ` from ${plan.before.display}` : ""}.`
-        : `✅ /admin people add: declared ${who}. Link accounts with /admin people link.`,
+        ? `✅ /admin people add: ${who} — ${changes.join("; ")}.${briefing}`
+        : `✅ /admin people add: declared ${who}${changes.length ? ` — ${changes.join("; ")}` : ""}. Link accounts with /admin people link.${briefing}`,
     );
   } else if (plan.op === "role") {
     lines.push(
@@ -880,6 +915,9 @@ export function formatPeopleList(ctx: SlashContext): string {
     if (p.discordIds.length) parts.push(`Discord ${p.discordIds.map((d) => `<@${d}>`).join(" ")}`);
     if (p.githubLogins.length) parts.push(`GitHub ${p.githubLogins.map((l) => `@${l}`).join(" ")}`);
     if (p.githubIds.length) parts.push(`GitHub id ${p.githubIds.join(" ")}`);
+    // COS-2.a: when their daily briefing arrives.
+    if (p.timezone) parts.push(`tz ${p.timezone}`);
+    if (p.workingHours) parts.push(`hours ${p.workingHours}`);
     const owner = p.id === dir.ownerPersonId ? " — **owner**" : ` — role ${listedRole(dir, p)}`;
     return `• ${parts.join(" · ")}${owner}`;
   });

@@ -145,7 +145,7 @@ export function buildOpenAiTools(opts: BuildToolsOpts): OpenAiToolDef[] {
  */
 export function toolDefForEntry(entry: { name: string; description: string }): OpenAiToolDef {
   const argvDesc = entry.name.startsWith("memory-")
-    ? 'CLI-style argv after the command. memory-store e.g. ["--category","person","--key","identity","Leif is the owner"]; memory-recall e.g. ["--category","person"] or ["--query","name"]; forget/override need --id and --confirm.'
+    ? 'CLI-style argv after the command. memory-store e.g. ["--category","person","--key","identity","Leif is the owner"]; memory-recall e.g. ["--category","person"] or ["--query","name"]; forget/override need --id (override also the new text), ask the owner on a DM card and wait; there are no confirm tokens.'
     : "CLI-style arguments after the command name (e.g. module name, --repo OWNER/REPO).";
   return {
     type: "function",

@@ -36,7 +36,7 @@ import {
 import type { ModelFallback, ModelUsage, TaskWorkspaceReport } from "./agent/types.ts";
 import type { InjectionNotice } from "./agent/untrusted.ts";
 import { startWorkspaceDiff } from "./agent/workspace-diff.ts";
-import { delegateDepthFromEnv } from "./autonomous/delegate.ts";
+import { delegateDepthFromEnv, delegatePersonaFromEnv } from "./autonomous/delegate.ts";
 import { actingSurface } from "./agent/shell-gate.ts";
 import { workReviewHook } from "./work/review.ts";
 import { SPAWN_BUN_CONFIG } from "./agent/spawn-argv.ts";
@@ -135,7 +135,7 @@ Usage:
   corvidinho specsync <list|read|check|brief|coverage|score|change-list|ship-status> [...]
                                     SpecSync agent tools (SPECSYNC-1..6; local binary)
   corvidinho task run [--task TEXT] [--tier read|tool|code] [--max-retries N]
-                    [--output text|json|ndjson] [--json] [--here]
+                    [--output text|json|ndjson] [--json] [--here] [--persona NAME]
                                     LLM tool loop (plugins) when key set; prove-before-done verify gate (AGENT-3/4/5):
                                     always on, runs the verify lane when the run's real git diff changed (AGENT-14/15)
                                     --json = --output json (one result); ndjson = live event stream
@@ -148,6 +148,8 @@ Usage:
                                     never with --here, outside a git repo or from a subdirectory (SAFE-3.a)
                                     A turn cap and an idle timeout stop endless or stalled runs and say so
                                     (CORVIDINHO_MAX_TURNS / CORVIDINHO_IDLE_TIMEOUT_MS below, AGENT-12)
+                                    --persona NAME runs it as a named persona from personas/ next to persona.md:
+                                    its voice and its model (one you configured); owner only (AUTONOMOUS-2/5.a)
   corvidinho --non-interactive ...  Deny dangerous plugins unless allowlisted (SAFE-1 / CLI-3)
   corvidinho --project <path> ...   Run as if started in <path>, without cd: its fledge.toml, specs
                                     and .env files, as Bun loads them there (CLI-5)
@@ -811,7 +813,31 @@ async function pluginsRun(
 }
 
 const TASK_RUN_USAGE =
-  "usage: corvidinho task run [--task TEXT] [--tier read|tool|code] [--max-retries N] [--output text|json|ndjson] [--json] [--here]";
+  "usage: corvidinho task run [--task TEXT] [--tier read|tool|code] [--max-retries N] [--output text|json|ndjson] [--json] [--here] [--persona NAME]";
+
+/**
+ * AUTONOMOUS-2 / AUTONOMOUS-5.a: `--persona NAME` (or `--persona=NAME`) from
+ * `task run`'s own args before the first `--`, like `--here`. Undefined when
+ * not given; null when given without a value (a usage error). The name is
+ * checked when the run starts (src/agent/personas.ts), and only the owner's
+ * runs (or the local CLI) may pick one.
+ */
+export function parseTaskPersona(args: readonly string[]): string | null | undefined {
+  let value: string | null | undefined;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (a === "--") break;
+    if (a === "--persona") {
+      const next = args[i + 1];
+      value = next !== undefined && next !== "--" && !next.startsWith("-") && next.trim() ? next.trim() : null;
+      if (value) i++;
+      continue;
+    }
+    const m = a.match(/^--persona=(.*)$/s);
+    if (m) value = m[1]!.trim() || null;
+  }
+  return value;
+}
 
 /**
  * SESSION-WORKTREE-1.a (REQ-cli-122): `--here` is read only from `task run`'s
@@ -883,6 +909,8 @@ async function taskRun(opts: {
   nonInteractive: boolean;
   /** SESSION-WORKTREE-1.a: run in this checkout instead of a new worktree. */
   here: boolean;
+  /** AUTONOMOUS-2 / 5.a: run as this named persona (`--persona`, the owner's pick). */
+  persona?: string;
 }): Promise<number> {
   const events: AgentEvent[] = [];
   const json = opts.output === "json";
@@ -1016,6 +1044,7 @@ async function taskRunIn(
     taskText: string | undefined;
     tier: CapabilityTier | undefined;
     nonInteractive: boolean;
+    persona?: string;
   },
   io: {
     events: AgentEvent[];
@@ -1053,12 +1082,21 @@ async function taskRunIn(
   // outcome lines ride the event stream (a Text frame in ndjson, stderr in
   // text mode), so bridges and the CLI say why a call is held.
   const prevNotifier = setMustAskNotifier((text) => handleEvent({ type: "Text", text }));
+  // AUTONOMOUS-2 / 5.a: the owner's `--persona` pick, else (a delegate
+  // worker only) the persona its lead picked by skill tag.
+  const leadPersona = delegateDepthFromEnv() > 0 ? delegatePersonaFromEnv() : undefined;
+  const persona = opts.persona
+    ? { name: opts.persona, by: "owner" as const }
+    : leadPersona
+      ? { name: leadPersona, by: "lead" as const }
+      : undefined;
   const execute = createTaskExecute({
     taskText: opts.taskText,
     cwd,
     tier: opts.tier,
     nonInteractive: opts.nonInteractive,
     allowlist: allowlistFromEnv(),
+    ...(persona ? { persona } : {}),
     ...(io.talkWorktree ? { talkWorktree: io.talkWorktree } : {}),
     onEvent: handleEvent,
     // AGENT-11: usage per model rides the usage frames and the result, so
@@ -1449,6 +1487,11 @@ export async function main(argv: string[]): Promise<number> {
         console.error(`${TASK_RUN_USAGE}\n`);
         return 1;
       }
+      const persona = parseTaskPersona(rest.slice(2));
+      if (persona === null) {
+        console.error(`--persona needs a name\n${TASK_RUN_USAGE}\n`);
+        return 1;
+      }
       return taskRun({
         output,
         maxRetries,
@@ -1456,6 +1499,7 @@ export async function main(argv: string[]): Promise<number> {
         tier,
         nonInteractive,
         here: parseTaskHere(rest.slice(2)),
+        ...(persona ? { persona } : {}),
       });
     }
     console.error(`${TASK_RUN_USAGE}\n`);

@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 53
+version: 55
 status: draft
 files:
   - src/agent/types.ts
@@ -84,6 +84,8 @@ files:
   - tests/agent.trust-verify.test.ts
   - src/agent/limits.ts
   - tests/agent.limits.test.ts
+  - src/agent/personas.ts
+  - tests/agent.personas.test.ts
 
 db_tables: []
 depends_on:
@@ -502,6 +504,14 @@ provider's host, any other line as is — WATCH's `watchPublicFailureLine` is
 it). For a worker that failed, `DelegateChildOutcome.summary` is that line
 and `resultText` is unset.
 
+Chat completion transport (REQ-agent-102): `src/agent/execute.ts` exports
+`chatCompletions({ provider, fetchImpl, messages, tools, signal, timeoutMs,
+onUsage? })` → `Completion` (one OpenAI-compatible request; `tools` sent
+only when given; `failure: null` for a spend-cap stop or the caller's
+abort), used unchanged by the tool loop, the GITHUB-9 reviewer's
+`complete` and the daily briefing composer (COS-1, REQ-discord-102,
+`src/scheduler/briefing.ts`), each through its own spend-capped fetch.
+
 Second-model review in the tool loop (REQ-agent-092, GITHUB-9 / GITHUB-9.a):
 `createTaskExecute` hands every `runPlugin` call of its tool loop a
 `PrReviewRun` (`env`, `authors()`: every model its chain called, AGENT-11
@@ -595,6 +605,32 @@ prompts as persona block, then Corvidinho's rules with
 `persona.md` at the repo root uses corvid-agent's persona shape (Archetype,
 Personality traits, Background, Communication style, Example messages).
 
+Named personas (REQ-agent-225, AUTONOMOUS-2.a / AUTONOMOUS-5.a):
+`src/agent/personas.ts` exports `PERSONAS_DIR` (`personas`),
+`PERSONAS_MAX_FILES` (32), `PERSONA_SKILLS_MAX` (16), `PERSONA_LABEL_RE`,
+`parsePersonaFile`, `loadPersonas(root?, { maxBytes? })` (a `PersonaSet`:
+`personas` sorted by name, `refused` files with a reason, `skipped`),
+`normalizePersonaName`, `findPersona`, `personaForSkill`,
+`configuredModelEntries`, `personaModelRefusal`, `personaRunEnv`,
+`resolveRunPersona`, `renderNamedPersona` / `NAMED_PERSONA_HEADER`,
+`namedPersonaWarning`, `PERSONA_OWNER_ONLY_LINE` and `personaSkillsHint` /
+`PERSONA_SKILLS_HINT_MAX` (the `delegate` description's persona line), plus the
+`NamedPersona` / `PersonaSet` / `RunPersona` types. Each named persona is its
+own `personas/<file>.md` next to `persona.md` at `CORVIDINHO_ROOT` (front
+matter `name`, `model` — one AGENT-13 `kind:model` entry — and `skills`,
+then the voice), listed by `listInstructionDir`
+(`src/agent/project-instructions.ts`: HEAD's tree plus the working tree) and
+read by the same loader as `persona.md`; `personaBlock` (`persona.ts`) renders
+both. `CreateTaskExecuteOpts.persona` (`{ name, by: "owner" | "lead" }`) runs
+the task as that persona: the run's env is `personaRunEnv` (the persona's
+model heads the run tier's key, the tier's other configured models after it),
+its voice replaces `persona.md`'s, and an owner pick from a non-owner role
+session, a lead pick at depth 0, an unknown persona or an unconfigured model
+fail the attempt with one plain line and no call. `src/autonomous/delegate.ts`
+adds `DELEGATE_PERSONA_ENV` (`CORVIDINHO_DELEGATE_PERSONA`, set or deleted on
+every worker spawn) and `delegatePersonaFromEnv` (depth > 0 only);
+`buildDelegateSpawn` / `runDelegateChild` take `persona`.
+
 `task-summary` exports `formatTaskPlumbing`, `chatBodyFromTaskResult` (optional
 `max`, default `CHAT_BODY_MAX` 1800), and
 `chatBodyFromTaskRunOutput` alongside `summarizeTaskResult`, plus
@@ -663,8 +699,9 @@ family in place, sets the stand-ins, and points `CLOUDSDK_CONFIG` /
 `AZURE_CONFIG_DIR` at fresh empty 0700 dirs inside one `corvidinho-no-cloud-*`
 temp dir made for that one child) and `releaseCloudStandIns(env)` (removes that
 temp dir once the child has exited; a no-op for any other env; leftovers go
-when the process exits). The verify lane, `shell-exec`, the language runners
-and the Fledge core runs use it (REQ-plugins-621), so none starts with the
+when the process exits). The verify lane, `shell-exec`, the language runners,
+the Fledge core runs and the `specsync-check` tool (the lane's `spec-check`
+step) use it (REQ-plugins-621), so none starts with the
 owner's cloud credentials or reads them from `~/.kube/config`, `~/.aws`,
 `~/.config/gcloud` or `~/.azure`.
 
@@ -925,6 +962,12 @@ instructions, then project instructions) follows it, whether or not a persona
 loaded. The persona is read from Corvidinho's own checkout at `HEAD`, never
 from the run's project folder or an uncommitted working-tree copy, so a run
 cannot plant a persona for later runs. A persona problem never stops a run.
+A run as a named persona (REQ-agent-225) puts that persona's voice in the same
+place, read from the same checkout the same way, with the same rules after
+it; only the owner (or the local CLI) picks one for a run, a lead only for its
+delegate worker, and its model must be one the owner configured. Unlike a
+persona.md problem, a named persona that cannot be used fails the run with
+one line before any model call.
 
 The verify gate can't be skipped (AGENT-14, REQ-agent-003): no option,
 config key or CLI flag turns it off, and chat, WATCH, schedules, `/work` and
@@ -1447,6 +1490,12 @@ A change the run did not open is never touched.
 - **Given** `persona.md` committed at the root of Corvidinho's checkout
 - **When** a Discord chat, a schedule, WATCH or a local `task run` spawns a run in any project
 - **Then** the system prompt starts with the persona block, then Corvidinho's rules with the PERSONA-3 rules text, then that project's AGENTS.md / CLAUDE.md block; the next run after a committed edit carries the new text (REQ-agent-069)
+### Scenario: the owner runs a task as a named persona
+
+- **Given** `personas/reviewer.md` committed next to `persona.md` with `model: openai:persona-model` (configured in `CORVIDINHO_LLM_MODEL`) and `skills: [review]`
+- **When** the owner runs `task run --persona reviewer` (or `/session start persona:reviewer`), or a lead's `delegate --skill review` starts a worker
+- **Then** that run calls `persona-model` first with the reviewer's voice in place of `persona.md`'s and the PERSONA-3 rules after it; if `persona-model` fails it falls back to the tier's next model with the AGENT-11 note; a team member's or community user's pick is refused with one line and nothing runs (REQ-agent-225)
+
 ### Scenario: a fetched issue title tells the model to ignore its rules
 
 - **Given** a tool-tier run that offers `files-write` and calls `github-issue-list`
@@ -1715,3 +1764,7 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
 | 2026-10-05 | in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2: In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause) |
 | 2026-10-06 | work-schedule-and-the-scheduler-can-be-turned-off-in-corvidinho-plugins-and-existing-installs-stay-on-plugin-5-5-a: /work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a) |
+| 2026-10-06 | the-specsync-check-tool-the-verify-lane-s-spec-check-step-starts-without-my-cloud-credentials-and-its-output-is: The specsync-check tool (the verify lane's spec-check step) starts without my cloud credentials and its output is scrubbed (SAFE-21.b follow-up to #373) |
+| 2026-10-07 | every-working-day-the-owner-and-each-teammate-get-a-short-briefing-dm-about-their-own-work-in-their-own-hours-and: Every working day the owner and each teammate get a short briefing DM about their own work, in their own hours and timezone (COS-1, COS-2, COS-2.a; #102) |
+| 2026-10-07 | named-personas-are-their-own-files-in-personas-with-name-model-and-skill-tags-the-owner-can-run-a-task-as-one-and-a: Named personas are their own files in personas/ with name, model and skill tags; the owner can run a task as one and a lead's delegate picks one by skill tag; team and community can't pick one (AUTONOMOUS-2.a, AUTONOMOUS-5.a) |
+| 2026-10-07 | my-own-memory-forget-and-override-by-id-ask-me-on-a-dm-card-with-approve-and-a-one-time-code-and-an-override-shows-the: My own memory forget and override by id ask me on a DM card with Approve and a one-time code, and an override shows the new text word for word (SAFE-18.a) |
