@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+## 0.0.44
+
+### Admin / Discord / Watch
+
+- **As owner I can change deny lists and the GitHub repo allow lists with `/admin`, every change audited** — [#404](https://github.com/CorvidLabs/Corvidinho/pull/404) (ADMIN-3.c part 1; tip orphan [#418](https://github.com/CorvidLabs/Corvidinho/pull/418)): `/admin deny add|remove` (channel, user, role, github_org, github_repo, github_user) and `/admin github add|remove` (org, repo); owner re-check; env-only and lockout refusals; SAFE-5 audit; live allowlist splice; `github watch` re-reads the allowlist every poll (REQ-watch-043). `[github].users` stays file/env. Part 2 mutes (#407) still draft.
+
+### Safe / plugins
+
+- **The shell and runners refuse raw-SQL wipes and overwrites of Corvidinho's own store** — [#396](https://github.com/CorvidLabs/Corvidinho/pull/396) (SAFE-4; tip orphan [#418](https://github.com/CorvidLabs/Corvidinho/pull/418)): only `memory-forget` / `memory-override` (SAFE-18.a DM card + one-time code) may change memories; shell-exec and language runners refuse store targets fail-closed.
+- **My own memory forget and override by id ask me on a DM card with Approve and a one-time code, and an override shows the new text** — [#409](https://github.com/CorvidLabs/Corvidinho/pull/409) (SAFE-18.a; tip orphan [#416](https://github.com/CorvidLabs/Corvidinho/pull/416)).
+
+### Agent / autonomy / personas / COS
+
+- **`shell-exec` refuses SpecSync lifecycle steps written as globs or braces, or reached through an expanding or xargs-fed subcommand** — [#403](https://github.com/CorvidLabs/Corvidinho/pull/403) (AGENT-18.a follow-up to #372; tip orphan [#417](https://github.com/CorvidLabs/Corvidinho/pull/417)).
+- **Named personas are their own files with model and skill tags; run as one and a lead picks one by skill** — [#410](https://github.com/CorvidLabs/Corvidinho/pull/410) (AUTONOMOUS-2.a / 5.a; tip orphan [#416](https://github.com/CorvidLabs/Corvidinho/pull/416)).
+- **Every working day each of us gets a short briefing DM about our own work, in our own hours and timezone** — [#412](https://github.com/CorvidLabs/Corvidinho/pull/412) (COS briefing behavior; tip orphan [#416](https://github.com/CorvidLabs/Corvidinho/pull/416)). COS-* HI capture into `hi/cos.md` remains parked pending Leif confirm.
+- **Once a session question's buttons expire the session stops waiting; schedule questions still wait** — [#408](https://github.com/CorvidLabs/Corvidinho/pull/408) (AUTONOMY-6.b; tip orphan [#415](https://github.com/CorvidLabs/Corvidinho/pull/415)).
+
+### Watch / SpecSync follow-ups
+
+- **Edited text never gets its author's role; SAFE-13 scans what the owner didn't write; WATCH never writes its checkout; audit names the GitHub trigger** — [#398](https://github.com/CorvidLabs/Corvidinho/pull/398) (IDENTITY-12.a follow-up; tip orphan [#415](https://github.com/CorvidLabs/Corvidinho/pull/415)).
+- **The verify lane's `spec-check` step also starts without my cloud credentials** — [#402](https://github.com/CorvidLabs/Corvidinho/pull/402) (SAFE-21.b follow-up; tip orphan [#414](https://github.com/CorvidLabs/Corvidinho/pull/414)).
+- **#375's archived review records the post-merge review that ran** — [#406](https://github.com/CorvidLabs/Corvidinho/pull/406) (AUTONOMY-10.b follow-up; tip orphan [#415](https://github.com/CorvidLabs/Corvidinho/pull/415)).
+
+### Ops
+
+- Package version **0.0.44** — restart the Discord bridge and `github watch` after update so presence (DISCORD-12) reports 0.0.44. The bridge already ticks schedules; do **not** start a second `corvidinho daemon`. Source `~/.config/corvidinho/env` **and** `watch.env` so `GIPHY_API_KEY` and the watch username stay set. Leave Brave off (do not invent keys). No schema bump; NDJSON protocol stays 2. v0.0.44 gets its tag and Release from CI when this bump lands on main.
+- Needs operator action: (1) Update live checkout to the **release commit** (not a tip-orphan ahead of it). (2) Restart bridge + github watch via pidfile pattern with env + watch.env loaded. (3) Post a feature/version summary in the allowlisted main channel.
+- Rollback to the v0.0.43 tag: schema unchanged. That tag does not include ADMIN-3.c p1, SAFE-4 store guard, AGENT-18.a glob/brace follow-up, SAFE-18.a memory cards, personas, or COS briefing behavior.
+- Parked: #394 closed superseded by thin GITHUB-7; #407 ADMIN-3.c p2 (mutes) still draft stacked on #404; COS HI capture and COMMUNITY-1..4 stay parked; #401/#411/#413/#393/#405 drafts remain.
+
 ## 0.0.43
 
 ### GitHub (GITHUB-7)
