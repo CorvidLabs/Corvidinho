@@ -830,11 +830,14 @@ Acceptance Criteria
 
 Discord call sites that spawn an agent run on behalf of a human (message
 path, `/session start`, `/work`) SHALL pass the human's own words as
-`humanText`, separate from the memory/image-enriched prompt. SAFE-4 memory
-confirm tokens SHALL be taken only from `humanText`; scheduler runs pass none.
+`humanText`, separate from the memory/image-enriched prompt. No confirm
+token SHALL reach a run from either: since SAFE-18.a the owner's memory
+forget and override by id ask on a DM card (REQ-discord-183), and the spawn
+always clears `CORVIDINHO_ACTING_CONFIRM_TOKENS` (REQ-discord-021);
+scheduler runs pass no `humanText`.
 
 Acceptance Criteria
-- A confirm token present only in the enriched prompt (e.g. recalled memory) is not passed as human-supplied.
+- A confirm token in the human's message, or only in the enriched prompt (e.g. recalled memory), is not passed to the run.
 - Bridge, `/session start` and `/work` pass `humanText`.
 
 ### REQ-discord-087
