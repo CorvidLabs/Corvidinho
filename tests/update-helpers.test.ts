@@ -180,16 +180,17 @@ describe("update-helpers.sh", () => {
     }
   });
 
-  test("extract_changelog_section finds 0.0.43", () => {
+  test("extract_changelog_section finds 0.0.44", () => {
     const r = bashEval(
-      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.43`,
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.44`,
     );
     expect(r.exitCode).toBe(0);
-    expect(r.stdout).toContain("GITHUB-7");
-    expect(r.stdout).toContain("#395");
-    expect(r.stdout).toContain("github-pr-merge");
-    expect(r.stdout).toContain("#99");
-    expect(r.stdout).not.toContain("## 0.0.42");
+    expect(r.stdout).toContain("ADMIN-3.c");
+    expect(r.stdout).toContain("#404");
+    expect(r.stdout).toContain("SAFE-4");
+    expect(r.stdout).toContain("#396");
+    expect(r.stdout).toContain("#403");
+    expect(r.stdout).not.toContain("## 0.0.43");
   });
 
   test("extract_changelog_section finds 0.0.42", () => {
@@ -1012,10 +1013,10 @@ describe("release tagging helpers", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.43", () => {
+  test("package.json is 0.0.44", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.43");
+    expect(pkg.version).toBe("0.0.44");
   });
 });
