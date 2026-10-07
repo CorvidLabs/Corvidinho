@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 85
+version: 86
 status: draft
 files:
   - src/cli.ts
@@ -388,3 +388,4 @@ Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), 
 | 2026-10-07 | release-0-0-44-admin-3-c-p1-404-safe-4-396-agent-18-a-follow-up-403-safe-18-a-409-personas-410-cos-briefing-412-package: Release 0.0.44: ADMIN-3.c p1 / SAFE-4 / AGENT-18.a follow-up / SAFE-18.a / personas / COS briefing. Package bump, CHANGELOG, STATUS, version fixtures; CI tags v0.0.44 on land. |
 | 2026-10-07 | release-0-0-43-github-7-typed-github-pr-merge-for-own-green-corvidinho-prs-395-397-package-bump-changelog-fold: Release 0.0.43: GITHUB-7 typed github-pr-merge for own green Corvidinho PRs (#395/#397). Package bump, CHANGELOG fold Unreleased into 0.0.43, STATUS rows, version fixtures; CI tags v0.0.43 on land. |
 | 2026-10-07 | named-personas-are-their-own-files-in-personas-with-name-model-and-skill-tags-the-owner-can-run-a-task-as-one-and-a: Named personas are their own files in personas/ with name, model and skill tags; the owner can run a task as one and a lead's delegate picks one by skill tag; team and community can't pick one (AUTONOMOUS-2.a, AUTONOMOUS-5.a) |
+| 2026-10-07 | release-0-0-45-admin-3-c-part-2-mutes-407-and-agent-17-a-github-9-a-moved-from-authorship-401-package-bump-changelog: Release 0.0.45: ADMIN-3.c part 2 mutes (#407) and AGENT-17.a / GITHUB-9.a moved-from authorship (#401). Package bump, CHANGELOG fold, STATUS rows, version fixtures; CI tags v0.0.45 on land. |
