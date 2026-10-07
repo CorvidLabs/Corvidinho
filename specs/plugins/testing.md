@@ -739,6 +739,31 @@ the `bun -e` residual.
   read-only and settle cases pass on both. Restored: 11 of 11 pass.
 - `tests/agent.repo-ways.test.ts` (the `runTask` settle cases, REQ-agent-519)
   passes unchanged.
+- Follow-up to #372 (REQ-plugins-1818 modified), same file, "glob / brace
+  patterns and an expanding or xargs-fed subcommand refuse too" (3 tests):
+  through `shell-exec`, from a repo holding files named `specsync`,
+  `change` and `approve` (what pathname expansion turns the patterns into),
+  `spec*ync`, `specsyn?`, `[s]pecsync`, `env spec*`, `bunx spec*` with a
+  literal step, `specsync c?ange approve`, `specsync change appr*ve` /
+  `appro?e` / `[a]pprove`, and `bash -c` with `{approve,}` or
+  `{specsync,}` are refused like the cases above (step null where the step
+  or subcommand is a pattern); a function forwarding `"$@"`, `set --` then
+  `"$@"`, `change${IFS}approve`, `specsync $S c1` with `S='change approve'`,
+  `… | xargs specsync`, `xargs -n3 specsync` and `xargs -I X specsync X
+  approve c1` are refused with step null. A unit test of
+  `firstLifecycleStep` covers each pattern form (path, `@version`,
+  `--bin=`, brace alternatives and sequences, bracket expressions and POSIX
+  classes, a pattern after an option, `sh -c` / `eval` re-reads), the
+  expanding-subcommand and xargs reasons, and what still runs: quoted
+  pattern characters, `cp * "$dest"`, `ls * specsync`,
+  `git ls-files | xargs grep -l specsync`, `grep -rn specsync "$f"`,
+  `specsync change status "$ID"`, `xargs specsync change status` / `check`,
+  and an expanding command word's own arguments.
+- Fail on base (54d6a6c's `plugins/shell/sdd-lifecycle.ts` and
+  `plugins/shell/clamp.ts` swapped in): the 3 new tests fail, the 11 earlier
+  ones pass; run one by one through `shell-exec` on the base, every new
+  refused case spawns the fake `specsync` with `change <step> c1`. Restored:
+  14 of 14 pass.
 ## The hi/ refusal names the owner's card and hi-draft (REQ-plugins-520 modified; AGENT-18 hi drafts)
 
 `tests/agent.hi-guard.test.ts`: the `files-write` refusal under `hi/` now

@@ -419,3 +419,143 @@ describe("firstLifecycleStep reads the step past options and fails closed (REQ-p
     expect(found("bun -e 'Bun.spawnSync([\"specsync\",\"change\",\"approve\",\"c1\"])'")).toBe(false); // stated residual
   });
 });
+
+describe("glob / brace patterns and an expanding or xargs-fed subcommand refuse too (REQ-plugins-1818, follow-up to #372)", () => {
+  test("a pattern that may be specsync, change or a step refuses, run from a folder holding files named for them", async () => {
+    const repo = sddRepo();
+    // What the shell's pathname expansion turns the patterns into.
+    for (const f of ["specsync", "change", "approve"]) writeFileSync(join(repo, f), "");
+    for (const [command, step] of [
+      ["touch spawned; spec*ync change approve c1", "approve"],
+      ["touch spawned; specsyn? change review c1", "review"],
+      ["touch spawned; [s]pecsync change finalize c1", "finalize"],
+      ["touch spawned; env spec* change approve c1", "approve"],
+      ["touch spawned; bunx spec* change ship c1", "ship"],
+      ["touch spawned; specsync c?ange approve c1", null],
+      ["touch spawned; specsync change appr*ve c1", null],
+      ["touch spawned; specsync change appro?e c1", null],
+      ["touch spawned; specsync change [a]pprove c1", null],
+      ["touch spawned; bash -c 'specsync change {approve,} c1'", null],
+      ["touch spawned; bash -c '{specsync,} change approve c1'", "approve"],
+    ] as const) {
+      await expectRefused(command, repo, step);
+    }
+  });
+
+  test("a subcommand that expands (forwarded arguments, set --, an IFS-joined word) or that xargs supplies refuses", async () => {
+    const repo = sddRepo();
+    for (const command of [
+      'touch spawned; f() { specsync "$@"; }; f change approve c1',
+      'touch spawned; set -- change approve c1; specsync "$@"',
+      "touch spawned; specsync change${IFS}approve c1",
+      "touch spawned; S='change approve'; specsync $S c1",
+      "touch spawned; echo change approve c1 | xargs specsync",
+      "touch spawned; echo change approve c1 | xargs -n3 specsync",
+      "touch spawned; echo change | xargs -I X specsync X approve c1",
+    ]) {
+      await expectRefused(command, repo, null);
+    }
+  });
+
+  test("firstLifecycleStep: patterns, expanding subcommands and xargs input fail closed; ordinary commands are untouched", async () => {
+    const { firstLifecycleStep } = await import("../plugins/shell/sdd-lifecycle.ts");
+    const root = plainDir();
+    const read = (c: string) => {
+      const f = firstLifecycleStep(c, root);
+      return f && { step: f.step, unread: f.unread };
+    };
+    // The program name as a pattern: read like `specsync`.
+    expect(read("spec*ync change approve c1")).toEqual({ step: "approve", unread: null });
+    expect(read("./specsyn? change approve c1")).toEqual({ step: "approve", unread: null });
+    expect(read("/usr/bin/[s]pecsync change review c1")).toEqual({ step: "review", unread: null });
+    expect(read("spec{sync,} change finalize c1")).toEqual({ step: "finalize", unread: null });
+    expect(read("{x,specsync} change ship c1")).toEqual({ step: "ship", unread: null });
+    expect(read("npx spec*@6 change approve c1")).toEqual({ step: "approve", unread: null });
+    expect(read("cargo run --bin=spec* -- change approve c1")).toEqual({ step: "approve", unread: null });
+    expect(read("* change approve c1")).toEqual({ step: "approve", unread: null });
+    // The step or `change` as a pattern.
+    const stepPattern = { step: null, unread: "its step is a pattern the shell expands" };
+    for (const c of [
+      "specsync change appr*ve c1",
+      "specsync change appro?e c1",
+      "specsync change [a]pprove c1",
+      "specsync change [[:alpha:]]pprove c1",
+      "specsync change [!x]eview c1",
+      "specsync change {approve,x} c1",
+      "specsync change fin{alize,} c1",
+      "specsync change {a..z}pprove c1",
+      "specsync change sh?p c1",
+      "specsync change ?????? c1",
+      "specsync change --note {x,approve} status",
+      "$X change appr*ve c1",
+      "sh -c 'specsync change appr*ve c1'",
+      "eval specsync change appr\\*ve c1",
+    ]) {
+      expect({ c, r: read(c) }).toEqual({ c, r: stepPattern });
+    }
+    expect(read("$X ch*nge approve c1")).toEqual({ step: "approve", unread: null });
+    const subPattern = { step: null, unread: "its subcommand is a pattern the shell expands" };
+    expect(read("specsync ch?nge approve c1")).toEqual(subPattern);
+    expect(read("specsync {change,approve} c1")).toEqual(subPattern);
+    expect(read("specsync --root {.,change} approve c1")).toEqual(subPattern);
+    // An expanding subcommand, or one xargs supplies.
+    const subExpands = { step: null, unread: "its subcommand expands" };
+    for (const c of [
+      'f() { specsync "$@"; }; f change approve c1',
+      'function f { specsync "$@"; }; f change approve c1',
+      'f() { specsync "$1" "$2" c1; }; f change approve',
+      'set -- change approve c1; specsync "$@"',
+      "specsync change${IFS}approve c1",
+      "specsync $SUB approve c1",
+      'specsync --verbose "$@"',
+      'bunx specsync "$@"',
+    ]) {
+      expect({ c, r: read(c) }).toEqual({ c, r: subExpands });
+    }
+    const xargsSupplies = { step: null, unread: "xargs supplies its subcommand from input" };
+    expect(read("echo change approve c1 | xargs specsync")).toEqual(xargsSupplies);
+    expect(read("echo change approve c1 | xargs -n3 specsync")).toEqual(xargsSupplies);
+    expect(read("echo change approve c1 | xarg? specsync")).toEqual(xargsSupplies);
+    expect(read("echo change approve c1 | $X specsync")).toEqual(xargsSupplies); // `$X` may be xargs
+    expect(read("echo approve c1 | xargs specsync --root .")).toEqual(xargsSupplies);
+    // Words that only mention specsync still refuse on a literal `change` step.
+    expect(read("grep specsync change appr*ve")).toEqual(stepPattern);
+    expect(read("echo change | xargs -I X specsync X approve c1")).toEqual({
+      step: null,
+      unread: "xargs fills in its subcommand from input",
+    });
+    // Untouched: quoted pattern characters, wildcards away from a command
+    // word, literal subcommands under xargs, and an expanding command word's
+    // own arguments (only a literal step refuses there).
+    for (const c of [
+      "echo 'spec*ync change approve'",
+      "echo spec\\*ync change approve",
+      "echo \"specsync change appr*ve\"",
+      "specsync change 'appr*ve' c1",
+      'cp * "$dest"',
+      'cp src/* "$dest"',
+      'ls *.ts "$x"',
+      "ls * specsync",
+      "ls * | xargs grep -l specsync",
+      "git ls-files | xargs grep -l specsync",
+      'grep -rn specsync "$f"',
+      "rg specsync $(git ls-files)",
+      'echo specsync "$x"',
+      "for f in *; do echo \"$f\"; done",
+      "[ -f x ] && echo ok",
+      'echo {a,b} "$x"',
+      "specsync change new 'fix [x] *' --kind bug-fix",
+      'specsync change answer c1 acceptance_criteria "a*b"',
+      'specsync change status "$ID"',
+      "specsync change {new,x} c1",
+      "echo c1 | xargs specsync change status",
+      "echo x | xargs specsync check",
+      "echo x | xargs specsync --root . check",
+      '$X "$Y"',
+      '$X change "$Y"',
+      "$X * c1",
+    ]) {
+      expect({ c, r: read(c) }).toEqual({ c, r: null });
+    }
+  });
+});

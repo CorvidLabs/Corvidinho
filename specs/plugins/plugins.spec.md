@@ -781,18 +781,36 @@ npm-style `specsync@<version>` or an option's value such as
 `nohup`, `xargs`, `sudo`, `exec`, `find -exec`) and package runner (`bunx`,
 `npx`, `bun x`, `pnpm dlx`, `watch`) in front of it is covered; at a command word that
 is a link to the binary; and at a command word that expands, where only a
-literal step refuses. The step is the first word past SpecSync's options
+literal step refuses. A glob or brace pattern (a word holding an unquoted
+`*`, `?`, `[` or `{`, which the tokenizer marks `Word.glob`) is read as
+every word it may stand for (brace alternatives expanded, a sequence or a
+bracket expression read as a wildcard): one that may be `specsync` names it
+(`spec*ync`, `env spec*`, `bunx spec*`; a pattern of wildcards alone away
+from a command word, as in `cp * "$d"`, is read like an expanding command
+word), one that may be `change` is read as `change`, and one that may be a
+lifecycle step refuses with step null (`appr*ve`, `[a]pprove`,
+`{approve,}`). The step is the first word past SpecSync's options
 after `change`; a word right after an option may be its value or the step,
 so a lifecycle step there counts. A step that expands, or one `xargs`
 supplies from its input (no step word, or one that is not another
-`specsync change` subcommand), refuses. Read-only `specsync change
+`specsync change` subcommand), refuses. So does a word that expands or is a
+pattern where the subcommand (or an option's value) belongs (`specsync "$@"`
+in a function or after `set --`, `change${IFS}approve`, `specsync $S c1`,
+`specsync c?ange approve`), and a subcommand `xargs` supplies (none, or a
+word that is no `specsync` subcommand: a replace string); a command word
+that expands, or a pattern that may be `xargs`, counts as `xargs` for the
+words after it. A `specsync` that is only an argument of a command that
+never runs its arguments (`echo`, `grep`, `rg`, `cat`, `ls` …:
+`grep -l specsync "$f"`, `xargs grep -l specsync`) is read only for a
+`change` step. Read-only `specsync change
 status|list|show|check|ship-status|…` and `specsync check` still run.
 AGENT-18.a residuals: code an interpreter runs (`bun -e`, `node -e`,
 `python -c`, a script handed to `node` / `python`, the `node-exec` /
 `python-exec` / `cargo-exec` runners) that spawns specsync itself is not
 parsed; neither are package-manager scripts, `make` / `just` recipes and git
 aliases (which AUTONOMY-9 does read), nor a copy of the binary under another
-name or a link made by the same command.
+name or a link made by the same command, a shell alias for it, or a bash
+extended glob (`@(…)` with `extglob` on).
 
 SAFE-21.a (REQ-plugins-495): the child env is the runners' env
 (`runnerChildEnv`): the verify lane's scrub, no `CDPATH` / `OLDPWD`, and no
