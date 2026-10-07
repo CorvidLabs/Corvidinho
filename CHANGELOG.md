@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.0.46
+
+### Daemon / Discord
+
+- **With only the daemon running, a scheduled run's question still reaches me by DM** — [#411](https://github.com/CorvidLabs/Corvidinho/pull/411) (AUTONOMOUS-7.a; tip orphan [#425](https://github.com/CorvidLabs/Corvidinho/pull/425)): `corvidinho daemon` DMs the owner each pending schedule ask over Discord's REST API with the bot token while no bridge runs; `daemon.started` carries `ownerDm`; a live bridge on the same data dir still owns channel posts and never double-DMs the question.
+
+### Agent
+
+- **A headless agent CLI can be one of my models, in my own runs only, with the same tools inside the talk's worktree** — [#413](https://github.com/CorvidLabs/Corvidinho/pull/413) (AGENT-13 / AGENT-13.a; tip orphan [#426](https://github.com/CorvidLabs/Corvidinho/pull/426)): configure an OpenAI-compatible / Ollama / Anthropic / headless-agent-CLI model with no built-in default; a headless agent CLI model runs only in the owner's own runs, with the same tools as other models, inside that talk's own worktree; other runs skip it and use the next model; after a stall move the weak model is dropped from authors so it can second-model review (GITHUB-9.a authorship already on tip).
+
+### Ops
+
+- Package version **0.0.46** — restart the Discord bridge and `github watch` after update so presence (DISCORD-12) reports 0.0.46. The bridge already ticks schedules; do **not** start a second `corvidinho daemon`. Source `~/.config/corvidinho/env` **and** `watch.env` so `GIPHY_API_KEY` and the watch username stay set. Leave Brave off (do not invent keys). No schema bump; NDJSON protocol stays 2. v0.0.46 gets its tag and Release from CI when this bump lands on main.
+- Needs operator action: (1) Update live checkout to the **release commit** (not a tip-orphan ahead of it). (2) Restart bridge + github watch via pidfile pattern with env + watch.env loaded. (3) Post a feature/version summary in the allowlisted main channel.
+- Rollback to the v0.0.45 tag: schema unchanged. That tag does not include AUTONOMOUS-7.a daemon schedule DM or AGENT-13/13.a headless agent CLI model.
+- Parked: #394 stays closed; COS HI capture and COMMUNITY-1..4 stay parked; drafts #405/#393 remain HI-backed DRAFT (not rebased this wave).
+
 ## 0.0.45
 
 ### Admin / Discord
@@ -17,7 +34,7 @@
 - Package version **0.0.45** — restart the Discord bridge and `github watch` after update so presence (DISCORD-12) reports 0.0.45. The bridge already ticks schedules; do **not** start a second `corvidinho daemon`. Source `~/.config/corvidinho/env` **and** `watch.env` so `GIPHY_API_KEY` and the watch username stay set. Leave Brave off (do not invent keys). No schema bump; NDJSON protocol stays 2. v0.0.45 gets its tag and Release from CI when this bump lands on main.
 - Needs operator action: (1) Update live checkout to the **release commit** (not a tip-orphan ahead of it). (2) Restart bridge + github watch via pidfile pattern with env + watch.env loaded. (3) Post a feature/version summary in the allowlisted main channel.
 - Rollback to the v0.0.44 tag: schema unchanged. That tag does not include ADMIN-3.c part 2 mutes or AGENT-17.a / GITHUB-9.a authorship fix.
-- Parked: #394 stays closed; COS HI capture and COMMUNITY-1..4 stay parked; drafts #411/#413/#393/#405 remain (Spec Sync red / not rebased).
+- Parked: #394 stays closed; COS HI capture and COMMUNITY-1..4 stay parked; drafts #411/#413 landed in 0.0.46; #393/#405 remain.
 
 ## 0.0.44
 
