@@ -76,6 +76,25 @@
         "REQ-agent-621",
         "REQ-plugins-621"
       ]
+    },
+    {
+      "timestamp": 1791332515,
+      "commit": "779493b18ada552ac64627bf793505e422977296",
+      "contract_digest": "78d38af2be4474b202f1d7efca4f510274ab0969aee29dd4b2a049150436029e",
+      "execution_digest": "37fea39b2cd7905ce2bf93c3a2d2cf9e3fac95d48d297c8166facc47e23393cc",
+      "workspace_digest": "ce063316d719fbe6b40a3ebca5dddd9fb6e5dd24f152d10f20788e877c13226e",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-621",
+        "REQ-plugins-621"
+      ]
     }
   ]
 }
