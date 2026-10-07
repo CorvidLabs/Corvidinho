@@ -5,7 +5,9 @@
  * and each declared team member (IDENTITY-8 / IDENTITY-10; community never)
  * get one short direct message about their own work: what changed (their
  * GitHub PRs and issues in allowlisted repos since the last briefing), what's
- * blocked (their blocked /work tasks), what needs them (PRs whose review is
+ * blocked (their /work tasks that stopped to ask a question since the last
+ * briefing — a task row stays `blocked` after its question was answered or
+ * lapsed, so an older one is never repeated), what needs them (PRs whose review is
  * requested from them, their schedules' open questions, and for the owner the
  * Approve cards waiting on them) and what it did for them (their /work tasks
  * and schedule runs that finished since the last briefing).
@@ -45,7 +47,9 @@
  *   briefings (IDENTITY-3).
  *
  * Driven by the scheduler tick (`SchedulerServiceOpts.briefings`), in the
- * Discord bridge only (the daemon has no DM path). Never throws.
+ * Discord bridge only (the daemon has no DM path), and only while the
+ * scheduler extra is on (PLUGIN-5 / PLUGIN-5.a: `[corvidinho.plugins]
+ * schedule = false` turns briefings off too; `enabled`). Never throws.
  */
 
 import type { Database } from "bun:sqlite";
@@ -277,7 +281,7 @@ export function briefingRecipients(opts: {
 export type BriefingFacts = {
   /** Their GitHub PRs and issues (allowlisted repos) changed since the last briefing. */
   changed: string[];
-  /** Their blocked /work tasks. */
+  /** Their /work tasks that stopped to ask a question since the last briefing. */
   blocked: string[];
   /** Review requests, their schedules' open questions, the owner's waiting cards. */
   needs: string[];
@@ -307,8 +311,12 @@ function placeholders(n: number): string {
  * The facts this data dir holds for one person: their /work tasks
  * (`discord_work_tasks.user_id`) and schedules (`schedules.created_by_user_id`)
  * by their declared Discord ids, and for the owner the pending Approve cards
- * (counts by kind only). Each part is read on its own; a part that cannot be
- * read is left out. Never throws.
+ * (counts by kind only). A /work task counts as blocked only when it stopped
+ * to ask since `since`: its row keeps `blocked` for good (an answer resumes
+ * the talk, not the row, and the ask's buttons lapse after ~30 minutes), so a
+ * task that blocked before the last briefing is not news and is never
+ * repeated. Each part is read on its own; a part that cannot be read is left
+ * out. Never throws.
  */
 export function readLocalBriefingFacts(
   db: Database,
@@ -331,11 +339,11 @@ export function readLocalBriefingFacts(
     const rows = db
       .query(
         `SELECT description, status FROM discord_work_tasks
-         WHERE user_id IN (${inIds}) AND status = 'blocked'
+         WHERE user_id IN (${inIds}) AND status = 'blocked' AND updated_at >= ?
          ORDER BY updated_at DESC LIMIT ${BRIEFING_ITEMS_MAX}`,
       )
-      .all(...ids) as Array<{ description: string; status: string }>;
-    for (const w of rows) f.blocked.push(`/work task waiting on a question: ${oneLine(w.description, 160)}`);
+      .all(...ids, since) as Array<{ description: string; status: string }>;
+    for (const w of rows) f.blocked.push(`/work task stopped to ask a question: ${oneLine(w.description, 160)}`);
   });
   read(() => {
     const rows = db
@@ -767,11 +775,13 @@ export function readBriefingRow(db: Database, personId: string): BriefingRow | n
 
 /**
  * Claim `day` (their local day) for one person, before anything is gathered
- * (IMMEDIATE, so of two tickers on one data dir only one claims it). A new
- * day always claims; the same day claims again only after a failed model
- * call or a compose a dead process left, at most BRIEFING_MAX_ATTEMPTS times
- * and BRIEFING_RETRY_MS apart. Returns where the briefing starts looking
- * (the last covered time, or null), or null when not claimed.
+ * (IMMEDIATE, so of two tickers on one data dir only one claims it). A later
+ * day always claims; an earlier one never does (a time zone moved west must
+ * not open a second briefing in one day); the same day claims again only
+ * after a failed model call or a compose a dead process left, at most
+ * BRIEFING_MAX_ATTEMPTS times and BRIEFING_RETRY_MS apart. Returns where the
+ * briefing starts looking (the last covered time, or null), or null when not
+ * claimed.
  */
 export function claimBriefingDay(
   db: Database,
@@ -789,7 +799,9 @@ export function claimBriefingDay(
         );
         return { since: null };
       }
-      if (row.day !== day) {
+      // `YYYY-MM-DD` compares as text.
+      if (day < row.day) return null;
+      if (day > row.day) {
         db.run(
           `UPDATE cos_briefings SET day = ?, status = 'composing', attempts = 1, claimed_at = ?,
              text = NULL, gathered_to = NULL WHERE id = ?`,
@@ -919,8 +931,14 @@ export type BriefingTickerOptions = {
   github?: BriefingGithub | null;
   /** The bridge's live mute set (DISCORD-6). */
   mutedUsers?: ReadonlySet<string>;
-  /** A briefing call stopped at a spend cap: tell the owner (once per owner-local day). */
+  /** A briefing call stopped at a spend cap: tell the owner (once per local day). */
   onSpendStop?: (ask: HumanAsk) => void;
+  /**
+   * PLUGIN-5 / PLUGIN-5.a — the scheduler extra, read at the start of every
+   * pass (the bridge: `[corvidinho.plugins] schedule`): false ⇒ the pass
+   * claims, writes and sends nothing; a throw counts as off. Unset ⇒ on.
+   */
+  enabled?: () => boolean;
   log?: BriefingLog;
 };
 
@@ -1036,7 +1054,18 @@ export function createBriefingTicker(opts: BriefingTickerOptions): BriefingTicke
     await deliver(r, slot.day, slot, send, now);
   };
 
+  const extraOn = (): boolean => {
+    if (!opts.enabled) return true;
+    try {
+      return opts.enabled() === true;
+    } catch {
+      return false;
+    }
+  };
+
   const runPass = async (now: number) => {
+    // PLUGIN-5.a: with the scheduler extra off, briefings are off too.
+    if (!extraOn()) return;
     if (!ready) {
       ensureBriefingTable(db);
       ready = true;

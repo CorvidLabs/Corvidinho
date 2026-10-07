@@ -2646,12 +2646,27 @@ export async function startBridge(
           },
         })
       : undefined;
+    // PLUGIN-5.a: schedules on/off, read at every tick; one log line per
+    // change (the start-up line above covers the first read), so an
+    // unreadable file is not logged again on every tick.
+    const schedulesState = trackExtraState(
+      () => loadExtrasToggles({ installRoot: config.projectRoot, env }).schedule,
+      (state, previous) => {
+        if (!previous) return;
+        const line = `[discord] scheduler ${formatExtraStateLog("schedule", state)}`;
+        if (state.on) console.log(line);
+        else console.warn(line);
+      },
+    );
     // COS-1/2 (#102): each working day, at the start of their working hours
     // in their time zone, the owner and each declared team member get one
     // short briefing DM about their own work (src/scheduler/briefing.ts):
     // DM only (the gateway's sendDm), written by one read-tier model call
-    // under the spend caps; a cap stop goes to the owner's spend DM. Off in
-    // a dry run unless a test passes its seams.
+    // under the spend caps; a cap stop goes to the owner's spend DM, and an
+    // 80% warning (recorded by the call's guard) goes out with the next
+    // tick's spend DM pass (SAFE-14.a / SAFE-15). Off while the scheduler
+    // extra is off (PLUGIN-5 / PLUGIN-5.a), and off in a dry run unless a
+    // test passes its seams.
     const briefingSeams = opts.briefings === false ? null : opts.briefings;
     briefings =
       db && opts.briefings !== false && (briefingSeams || !config.dryRun)
@@ -2671,27 +2686,17 @@ export async function startBridge(
               }),
             github: briefingSeams && "github" in briefingSeams ? (briefingSeams.github ?? null) : createBriefingGithub(env),
             onSpendStop: (ask) => void spendDm.deliver({ stop: { ask } }),
+            enabled: () => schedulesState().on,
             log: consoleBriefingLog,
           })
         : undefined;
-    // PLUGIN-5.a: schedules on/off, read at every tick; one log line per
-    // change (the start-up line above covers the first read), so an
-    // unreadable file is not logged again on every tick.
-    const schedulesState = trackExtraState(
-      () => loadExtrasToggles({ installRoot: config.projectRoot, env }).schedule,
-      (state, previous) => {
-        if (!previous) return;
-        const line = `[discord] scheduler ${formatExtraStateLog("schedule", state)}`;
-        if (state.on) console.log(line);
-        else console.warn(line);
-      },
-    );
     scheduler = new SchedulerService({
       store: scheduleStore,
       agent,
       allowlist: config.allowlist,
       // PLUGIN-5.a: only the schedules part of the tick is gated; cards,
-      // stuck-ask DMs, schedule asks, spend DMs and the backup keep running.
+      // stuck-ask DMs, schedule asks, spend DMs and the backup keep running
+      // (the briefings read the same switch themselves, `enabled` above).
       schedulesEnabled: () => schedulesState().on,
       pollIntervalMs: opts.schedulerPollIntervalMs,
       ...(opts.schedulerNow ? { now: opts.schedulerNow } : {}),

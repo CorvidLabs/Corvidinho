@@ -23,8 +23,10 @@
  * claims its night in SQLite, so two tickers on one data dir back up once.
  * COS-1/2 (#102): the daily briefing DMs (src/scheduler/briefing.ts) ride
  * the bridge's tick (`briefings`, after the backup); each person's day is
- * claimed in SQLite, so nobody gets two in a day. Like the backup, they are
- * not schedules: the PLUGIN-5.a schedule toggle does not gate them.
+ * claimed in SQLite, so nobody gets two in a day. They are not schedules,
+ * so the tick hands them its clock whatever `schedulesEnabled` says; the
+ * briefing ticker reads the same PLUGIN-5.a scheduler switch itself (the
+ * bridge's `enabled`) and does nothing while it is off.
  * SAFE-12 / SAFE-13 (#71): a schedule's text is its creator's words. On every
  * tick the creator's role is resolved again; for anyone but the owner the
  * stored name / description / prompt are scanned (a hit runs nothing, pauses
@@ -446,8 +448,9 @@ export type SchedulerServiceOpts = {
   backup?: Pick<BackupTicker, "tick">;
   /**
    * COS-1/2: the daily briefing DMs, run from each tick after the backup
-   * with the tick's clock (one pass at a time; never throws). The bridge
-   * wires it; the daemon has no DM path.
+   * with the tick's clock (one pass at a time; never throws; it reads the
+   * PLUGIN-5.a scheduler switch itself). The bridge wires it; the daemon
+   * has no DM path.
    */
   briefings?: Pick<BriefingTicker, "tick">;
   /**
@@ -615,7 +618,8 @@ export class SchedulerService {
     try {
       const now = this.nowFn();
       // PLUGIN-5.a: with schedules turned off nothing is re-read, scanned or
-      // claimed; the delivery pass, spend DMs, backup and briefings below still run.
+      // claimed; the delivery pass, spend DMs, backup and briefings below still
+      // run (the briefing ticker checks the switch itself).
       const due = this.schedulesOn() ? this.dueSchedules(now) : [];
       for (const schedule of due) {
         if (this.running.size >= this.maxConcurrent) {

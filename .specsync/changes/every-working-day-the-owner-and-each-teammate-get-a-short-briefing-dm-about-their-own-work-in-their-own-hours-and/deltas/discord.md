@@ -43,12 +43,17 @@ tick of the Discord bridge.
   before anything is read, so a person never gets two in a day (also across
   two tickers on one data dir). The same day SHALL be claimed again only for
   a `failed` model call or a `composing` row a dead process left, 30 minutes
-  after the last claim and at most 3 times a day. A `sending` row (a DM
+  after the last claim and at most 3 times a day; a local day earlier than
+  the row's (their time zone moved west) SHALL never be claimed, so a zone
+  change never opens a second briefing in one day. A `sending` row (a DM
   attempt started) SHALL never be sent again; a `sent`, `skipped`, `budget`
   or `expired` day SHALL never be claimed again.
 - What (COS-2; that person only, MEMORY-ACL). `readLocalBriefingFacts` SHALL
-  read, by the person's declared Discord ids only: their blocked `/work`
-  tasks (what's blocked); their schedules' open blocking questions
+  read, by the person's declared Discord ids only: their `/work` tasks that
+  stopped to ask since the last briefing (`blocked` with `updated_at` since
+  then; what's blocked — the row keeps `blocked` after the ask is answered
+  or lapses, so an older one SHALL NOT be repeated); their schedules' open
+  blocking questions
   (`ask_blocking = 1`, not closed; what needs them); their `/work` tasks and
   schedule runs that ended `completed` / `failed` since the last briefing
   (what it did for them); and for the owner only, the number of pending,
@@ -73,7 +78,8 @@ tick of the Discord bridge.
   instructions; user = the person's display name, local date and zone and
   the facts inside `fenceUntrustedData` (SAFE-12). The fetch SHALL go
   through `createSpendGuard` over the shared ledger (SAFE-8 / SAFE-14,
-  AUTONOMY-8.a worst-case reserve, 80% warnings recorded). A cap stop SHALL
+  AUTONOMY-8.a worst-case reserve, 80% warnings recorded and DMed to the
+  owner by the bridge's next spend DM pass, SAFE-15). A cap stop SHALL
   return `spend-cap` with its ask and raise no card; the ticker SHALL mark
   the day `budget` and hand the stop to `onSpendStop` at most once per day
   (the bridge: the owner's spend DM, SAFE-14.a). A failed call SHALL mark it
@@ -87,8 +93,13 @@ tick of the Discord bridge.
   their hours, logged once per person and day. Log lines carry person ids
   and days, never the text.
 - Wiring. `SchedulerServiceOpts.briefings` (`tick(now)`) SHALL be called on
-  every tick after the backup with the tick's clock, also while schedules
-  are turned off (PLUGIN-5.a). One pass runs at a time. The bridge SHALL
+  every tick after the backup with the tick's clock (`schedulesEnabled` does
+  not gate the call). One pass runs at a time. The ticker SHALL read
+  `BriefingTickerOptions.enabled` (PLUGIN-5 / PLUGIN-5.a; the bridge: the
+  `[corvidinho.plugins] schedule` switch of REQ-discord-157, re-read each
+  pass) at the start of every pass: off, or a throw, ⇒ the pass SHALL claim,
+  write and send nothing (a written DM still waiting expires once its day
+  is over); back on, the next one due goes out. The bridge SHALL
   build the ticker over its DB with the declared people re-read each pass,
   `config.owner`, its mute set, the gateway `sendDm`, the composer and the
   Octokit GitHub reads (`GITHUB_TOKEN` / `GH_TOKEN`), not in a dry run
@@ -99,7 +110,11 @@ tick of the Discord bridge.
 
 Acceptance Criteria
 - Tofu (team; `Europe/Oslo`, `08:30-16:30`) gets nothing at 08:25 Oslo and exactly one DM at 08:35 on a Wednesday, to Tofu's Discord id, `📋 Your briefing for Wednesday 2026-10-07 (only you get this)` plus the model's text; the one model call goes to the read tier's `/chat/completions` with no tools, the persona rules and the briefing instructions, and its fenced facts hold Tofu's PR, assigned issue, blocked task, review request, schedule question, finished task and schedule runs — never Bob's task, an old task, an off-allowlist or denied repo, an item whose author or reviewer id is not Tofu's, or the owner's Approve cards (`tests/cos.briefing.test.ts`).
-- Later ticks the same day, and a second ticker on the same DB, send nothing more; Thursday sends one more covering only what is new; Saturday and Sunday send nothing.
+- Later ticks the same day, and a second ticker on the same DB, send nothing more; Thursday sends one more covering only what is new (the open schedule question, not the task that stopped to ask on Wednesday nor the finished one); Saturday and Sunday send nothing.
+- A `/work` task that stopped to ask two hours earlier is told once ("/work task stopped to ask a question: …"); the next two days, with its row still `blocked` and nothing new, are `skipped` with no model call; one that stopped three days before the first briefing is never told.
+- With `enabled` false nothing is claimed, called or sent; back on, the day's briefing goes out; a throwing `enabled` counts as off. Through `startBridge` with `[corvidinho.plugins] schedule = false` in the allowlist file, ten ticks send nothing and claim nothing; rewriting the file sends the day's DM without a restart.
+- Tofu briefed on Thursday 2026-10-08 in Auckland and then moved to Los Angeles (Wednesday 2026-10-07 there) gets no second DM; Friday in Los Angeles gets the next one; the claim refuses an earlier day.
+- Through `startBridge` with a $0.05 cap and a reply reported at 300k prompt tokens, the owner gets one `Spend warning (SAFE-8)` DM next to Tofu's briefing.
 - Bob (team, no zone or hours) and the owner (`America/New_York`) get theirs at 09:05 New York, not at 08:55; Bob's facts hold only Bob's; the owner's hold `1 forget Approve card waiting in your DMs` and never the card's title; with no zone on the owner's entry Bob's comes at 09:05 UTC.
 - Nothing to say: no model call, no DM, the day `skipped`.
 - A reply holding a GitHub token and `@everyone` is stored and sent with `[redacted:github-token]` and `@everyone` defanged (a zero-width space after the `@`); the stored text is dropped once sent.
@@ -107,7 +122,7 @@ Acceptance Criteria
 - With a spend cap of 0 no model call is made, nothing is sent, both rows are `budget`, and the spend stop is handed over once.
 - A failed model call is retried 30 minutes later and then sent; the claim allows at most 3 attempts and never reclaims a sent day; the next day starts where the last one looked.
 - No DM path: nothing claimed or written. No owner: nobody. Deny-listed, muted, community and clashing ids: nobody.
-- `SchedulerService.tick` hands the briefings its clock on every tick with schedules turned off; through `startBridge` (dry run with seams, file DB, owner + team in the allowlist file) the DM goes out once through the gateway's `sendDm` and nothing is posted to a channel.
+- `SchedulerService.tick` hands the briefings its clock on every tick, also with `schedulesEnabled` false (the ticker reads the switch itself); through `startBridge` (dry run with seams, file DB, owner + team in the allowlist file) the DM goes out once through the gateway's `sendDm` and nothing is posted to a channel.
 
 ## Modified
 

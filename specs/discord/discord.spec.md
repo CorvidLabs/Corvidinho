@@ -1034,7 +1034,8 @@ Daily briefings (COS-1 / COS-2 / COS-2.a, REQ-discord-102):
 `src/scheduler/briefing.ts` exports `createBriefingTicker(opts)` →
 `BriefingTicker` (`tick(now)`, `settle(timeoutMs?)`, `stop()`;
 `BriefingTickerOptions`: `db`, `allowlist`, `people()`, `owner()`,
-`sendDm()`, `compose`, `github?`, `mutedUsers?`, `onSpendStop?`, `log?`),
+`sendDm()`, `compose`, `github?`, `mutedUsers?`, `onSpendStop?`, `enabled?`,
+`log?`),
 `createBriefingComposer({ env?, db?, fetchImpl?, personaRoot?,
 onSpendWarning?, timeoutMs? })` → `BriefingCompose` (`BriefingComposeInput`
 → `BriefingComposeResult`: `ok` + text, `spend-cap` + ask, or `failed`),
@@ -1074,7 +1075,9 @@ working hours in their zone (`timezone` / `working_hours` on their
 owner's declared zone, else UTC, and 09:00–17:00), never outside those hours.
 The day is claimed in `cos_briefings` (module-owned, no schema version)
 before anything is read; a DM whose send started is never sent again. The
-facts are that person's only: their blocked and finished `/work` tasks,
+facts are that person's only: their `/work` tasks that stopped to ask or
+finished since the last briefing (a `blocked` row stays `blocked`, so an
+older one is never repeated),
 their schedule runs and open schedule questions (by their Discord ids), the
 owner's pending Approve card counts (owner only), and GitHub PRs / issues /
 review requests in allowlisted repos matched by their numeric id; no facts ⇒
@@ -1083,8 +1086,11 @@ facts fenced as data) under the spend guard writes it; a cap stop raises no
 card, skips the day and goes to the owner's spend DM once that day; the
 reply is scrubbed, mass mentions defanged and cut, and held scrubbed only
 until sent. DM only, through the bridge's gateway `sendDm`; no DM path ⇒
-nothing claimed. The bridge runs it on every scheduler tick (not gated by
-PLUGIN-5.a), not in a dry run without seams; the daemon never sends one.
+nothing claimed. The bridge runs it on every scheduler tick, and the ticker
+itself reads the PLUGIN-5.a scheduler switch (`[corvidinho.plugins] schedule
+= false`, or an unreadable switch, ⇒ nothing claimed, written or sent); not
+in a dry run without seams; the daemon never sends one. A local day earlier
+than the last claimed one (a time zone moved west) is never claimed.
 
 A run a limit I set stopped (AGENT-12, REQ-discord-125) shows it only as
 `stopped=turn-cap` / `stopped=idle-timeout` at the end of the answer's footer

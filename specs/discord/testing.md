@@ -1799,17 +1799,22 @@ hours, `list` shows `tz … · hours …`, a new person declared with a zone;
 invalid values refused (`denied`, file unchanged); a non-owner refused; a
 JSON plan keeps the entry's other keys.
 
-`tests/cos.briefing.test.ts` (17): hours from the person, else the owner's
+`tests/cos.briefing.test.ts` (22): hours from the person, else the owner's
 zone and 09:00, else UTC; Monday–Friday slot within the hours (Oslo,
 New York, UTC, a UTC time that is already Thursday in Oslo, weekend);
 recipients owner + team only, deny-listed, muted, clashing and no-owner
 excluded; Tofu's one DM at 08:35 Oslo through the fake DM send with the
 fixed header and the fake LLM's text, the one read-tier no-tools call's
-fenced facts holding only Tofu's items (their PR, assigned issue, blocked
-task, review request, schedule question, finished task and runs) and none of
-Bob's, old, off-allowlist, denied, other-id or owner-only items; never twice
+fenced facts holding only Tofu's items (their PR, assigned issue, a task
+that stopped to ask today, review request, schedule question, finished task
+and runs) and none of Bob's, old (a task that stopped to ask days ago
+included), off-allowlist, denied, other-id or owner-only items; never twice
 a day (later ticks and a second ticker), the next working day covers only
-what is new, nothing at the weekend; Bob and the owner at 09:05 New York,
+what is new, nothing at the weekend; a task that stopped to ask is told
+once and the following days are skipped; a time zone moved west never
+opens a second briefing the same day (the claim refuses an earlier day);
+with the scheduler switch off (`enabled` false or throwing) nothing is
+claimed, called or sent, back on the DM goes out; Bob and the owner at 09:05 New York,
 the owner's own Approve card count without its title; nothing to say →
 skipped, no call; a token and `@everyone` in the reply scrubbed and
 defanged at rest and in the DM, text dropped once sent; a refused DM retried
@@ -1819,11 +1824,18 @@ min later; no DM path → nothing claimed; the claim rules (once a day, dead
 compose reclaimed ≤3 times, sent never reclaimed, next day starts at
 `covered_to`); `readGithubBriefingFacts` reads nothing without an id, a
 login or an allowed repo and reports a failed read; `SchedulerService.tick`
-calls `briefings.tick(now)` with schedules off; `startBridge` (dry run with
-seams) sends exactly one DM through the gateway `sendDm` and no channel post.
+calls `briefings.tick(now)` with schedules off (the ticker checks the switch
+itself); `startBridge` (dry run with seams) sends exactly one DM through the
+gateway `sendDm` and no channel post, sends nothing with `[corvidinho.plugins]
+schedule = false` in its allowlist file until the file is rewritten, and DMs
+the owner the 80% spend warning a briefing call crossed (SAFE-15).
 
 Fail on base (85871fa4): with every modified source from the base both files
 fail to load; with the branch's `people.ts` only, the three `/admin people
 add` cases fail; with the branch's `people.ts`, `execute.ts` and
 `briefing.ts` and the base's `service.ts`, `bridge.ts` and `scrub.ts`, the
-tick, bridge and scrub cases fail. Restored, 24 of 24 pass.
+tick, bridge and scrub cases fail. Restored, 24 of 24 pass. Review fixes:
+with the first branch head's (d2404368) `briefing.ts` and `bridge.ts`, the
+cases for the task that stopped to ask, the scheduler switch (ticker and
+bridge), the time zone moved west and the seed / Thursday / claim rules
+fail (15 pass, 7 fail); restored, 29 of 29 pass.

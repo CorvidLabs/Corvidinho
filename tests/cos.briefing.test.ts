@@ -105,11 +105,18 @@ function memDb(): Database {
 
 function seed(db: Database, now: number): void {
   const q = (sql: string, args: Array<string | number | null>) => db.run(sql, args);
-  // Tofu's own work: one blocked, one done since yesterday.
+  // Tofu's own work: one that stopped to ask since yesterday, one done since yesterday.
   q(
     `INSERT INTO discord_work_tasks (id, description, user_id, channel_id, status, created_at, updated_at)
      VALUES (?, ?, ?, 'c', ?, ?, ?)`,
-    ["w1", "Fix the flaky login test", TOFU_DC, "blocked", now - 3 * DAY, now - 3 * DAY],
+    ["w1", "Fix the flaky login test", TOFU_DC, "blocked", now - 3 * 3600_000, now - 2 * 3600_000],
+  );
+  // Stopped to ask days ago: its row keeps `blocked` for good (an answer
+  // resumes the talk, not the row), so it is not news.
+  q(
+    `INSERT INTO discord_work_tasks (id, description, user_id, channel_id, status, created_at, updated_at)
+     VALUES (?, ?, ?, 'c', ?, ?, ?)`,
+    ["w0", "Old stuck task", TOFU_DC, "blocked", now - 3 * DAY, now - 3 * DAY],
   );
   q(
     `INSERT INTO discord_work_tasks (id, description, user_id, channel_id, status, created_at, updated_at)
@@ -240,6 +247,7 @@ function setup(opts: {
   muted?: Set<string>;
   cfg?: AllowlistConfig;
   onSpendStop?: (ask: HumanAsk) => void;
+  enabled?: () => boolean;
 } = {}) {
   const db = opts.db ?? memDb();
   const llm = opts.llm ?? fakeLlm();
@@ -259,6 +267,7 @@ function setup(opts: {
     github: opts.github === undefined ? fakeGithub() : opts.github,
     ...(opts.muted ? { mutedUsers: opts.muted } : {}),
     ...(opts.onSpendStop ? { onSpendStop: opts.onSpendStop } : {}),
+    ...(opts.enabled ? { enabled: opts.enabled } : {}),
     log: (level, event, fields) => logs.push(`${level} ${event} ${JSON.stringify(fields ?? {})}`),
   });
   const tick = async (now: number) => {
@@ -354,7 +363,7 @@ describe("the daily briefing DM (COS-1 / COS-2)", () => {
     // What changed / blocked / needs them / did for them — theirs.
     expect(prompt).toContain('PR corvidlabs/corvidinho#7 "Tofu\'s PR: faster tests" (open)');
     expect(prompt).toContain('issue corvidlabs/corvidinho#11 "Assigned issue"');
-    expect(prompt).toContain("/work task waiting on a question: Fix the flaky login test");
+    expect(prompt).toContain("/work task stopped to ask a question: Fix the flaky login test");
     expect(prompt).toContain("your review is requested on PR corvidlabs/corvidinho#9");
     expect(prompt).toContain('schedule "Nightly triage" waits for your answer: Which repo should I triage?');
     expect(prompt).toContain("/work task completed: Ship the Oslo release notes");
@@ -363,6 +372,7 @@ describe("the daily briefing DM (COS-1 / COS-2)", () => {
     for (const notTheirs of [
       "Bob's secret project plan",
       "Ancient history task",
+      "Old stuck task",
       "Off-allowlist PR",
       "Denied repo PR",
       "Impostor PR",
@@ -393,12 +403,14 @@ describe("the daily briefing DM (COS-1 / COS-2)", () => {
     expect(other.dms).toEqual([]);
 
     // Thursday 08:35 Oslo: a new day. Since the last briefing only the open
-    // ask and blocked task remain (the finished work was already covered).
+    // schedule question remains (the finished work and the task that stopped
+    // to ask were already told).
     await s.tick(wed(6, 35) + DAY);
     const tofu = s.dms.filter((d) => d.userId === TOFU_DC);
     expect(tofu).toHaveLength(2);
     const thursday = s.llm.calls.at(-1)!.body.messages[1]!.content;
-    expect(thursday).toContain("Fix the flaky login test");
+    expect(thursday).toContain("Which repo should I triage?");
+    expect(thursday).not.toContain("Fix the flaky login test");
     expect(thursday).not.toContain("Ship the Oslo release notes");
     // Saturday and Sunday: nothing.
     await s.tick(wed(6, 35) + 3 * DAY);
@@ -574,6 +586,84 @@ describe("the daily briefing DM (COS-1 / COS-2)", () => {
     expect(claimBriefingDay(db, "tofu", "2026-10-07", wed(12))).toBeNull();
     // The next day claims, starting where the last one looked.
     expect(claimBriefingDay(db, "tofu", "2026-10-08", wed(9) + DAY)).toEqual({ since: wed(9) });
+    // An earlier local day (their time zone moved west) never claims.
+    expect(claimBriefingDay(db, "tofu", "2026-10-07", wed(10) + DAY)).toBeNull();
+    expect(readBriefingRow(db, "tofu")).toMatchObject({ day: "2026-10-08", attempts: 1 });
+  });
+
+  test("a /work task that stopped to ask is told once, not every day after (its row stays blocked)", async () => {
+    const db = memDb();
+    const now = wed(6, 35);
+    db.run(
+      `INSERT INTO discord_work_tasks (id, description, user_id, channel_id, status, created_at, updated_at)
+       VALUES ('wb', 'Migrate the CI cache', ?, 'c', 'blocked', ?, ?)`,
+      [TOFU_DC, now - 3 * 3600_000, now - 2 * 3600_000],
+    );
+    const s = setup({ db, github: null });
+    await s.tick(now);
+    expect(s.dms.map((d) => d.userId)).toEqual([TOFU_DC]);
+    expect(s.llm.calls[0]!.body.messages[1]!.content).toContain(
+      "/work task stopped to ask a question: Migrate the CI cache",
+    );
+    // Thursday and Friday: the row still says blocked, but there is nothing new — skipped.
+    await s.tick(now + DAY);
+    await s.tick(now + 2 * DAY);
+    expect(s.llm.calls).toHaveLength(1);
+    expect(s.dms).toHaveLength(1);
+    expect(readBriefingRow(db, "tofu")).toMatchObject({ status: "skipped", day: "2026-10-09" });
+  });
+
+  test("with the scheduler extra off nothing is claimed, written or sent; back on, the day's briefing goes out (PLUGIN-5.a)", async () => {
+    const db = memDb();
+    ensureBriefingTable(db);
+    seed(db, wed(6, 35));
+    let on = false;
+    const s = setup({ db, enabled: () => on });
+    await s.tick(wed(6, 35));
+    expect(s.llm.calls).toHaveLength(0);
+    expect(s.dms).toEqual([]);
+    expect(readBriefingRow(db, "tofu")).toBeNull();
+    on = true;
+    await s.tick(wed(6, 40));
+    expect(s.dms.map((d) => d.userId)).toEqual([TOFU_DC]);
+    // A switch that cannot be read counts as off.
+    const db2 = memDb();
+    ensureBriefingTable(db2);
+    seed(db2, wed(6, 35));
+    const t = setup({
+      db: db2,
+      enabled: () => {
+        throw new Error("config-unreadable");
+      },
+    });
+    await t.tick(wed(6, 35));
+    expect(t.llm.calls).toHaveLength(0);
+    expect(t.dms).toEqual([]);
+    expect(readBriefingRow(db2, "tofu")).toBeNull();
+  });
+
+  test("a time zone moved west never opens a second briefing the same day", async () => {
+    const db = memDb();
+    seed(db, wed(20, 30));
+    const o = {
+      db,
+      github: null,
+      peopleText: PEOPLE_TOML.replace('timezone = "Europe/Oslo"', 'timezone = "Pacific/Auckland"'),
+    };
+    const s = setup(o);
+    const tofu = () => s.dms.filter((d) => d.userId === TOFU_DC);
+    // 20:30 UTC on Wednesday is 09:30 on Thursday 2026-10-08 in Auckland.
+    await s.tick(wed(20, 30));
+    expect(tofu()).toHaveLength(1);
+    expect(readBriefingRow(db, "tofu")).toMatchObject({ day: "2026-10-08", status: "sent" });
+    // The owner moves Tofu to Los Angeles: 21:00 UTC is 14:00 on Wednesday there.
+    o.peopleText = PEOPLE_TOML.replace('timezone = "Europe/Oslo"', 'timezone = "America/Los_Angeles"');
+    await s.tick(wed(21, 0));
+    expect(tofu()).toHaveLength(1);
+    expect(readBriefingRow(db, "tofu")).toMatchObject({ day: "2026-10-08", status: "sent" });
+    // Friday 08:35 in Los Angeles: the next one.
+    await s.tick(Date.UTC(2026, 9, 9, 15, 35));
+    expect(tofu()).toHaveLength(2);
   });
 });
 
@@ -629,64 +719,142 @@ describe("rides the scheduler tick (COS-1 on the scheduler, not a new loop)", ()
   });
 
   test("the bridge sends the DM through the gateway's DM path only — never a channel post", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "corvidinho-briefing-bridge-"));
-    tmpDirs.push(dir);
-    const file = join(dir, "allowlist.toml");
-    writeFileSync(
-      file,
-      `[discord]\nchannels = ["chan-1"]\n\n[owner]\ndiscord_id = "${OWNER_DC}"\n${PEOPLE_TOML}`,
-    );
-    const db = openCorvidinhoDb({ path: join(dir, "corvidinho.db") });
-    dbs.push(db);
-    seed(db, wed(6, 35));
-    const dms: Dm[] = [];
-    const replies: unknown[] = [];
     const prompts: string[] = [];
     const compose: BriefingCompose = async ({ recipient, facts }) => {
       prompts.push(`${recipient.personId}: ${JSON.stringify(facts)}`);
       return { ok: true, text: `Briefing for ${recipient.personId}` };
     };
-    const idleAgent = {
-      runChat: async () => ({ ok: true, body: "" }),
-    } as unknown as AgentClient;
-    const result = await startBridge({
-      env: {
-        DISCORD_BOT_TOKEN: "fake",
-        DISCORD_CHANNEL_IDS: "chan-1",
-        CORVIDINHO_DISCORD_DRY_RUN: "1",
-        CORVIDINHO_ALLOWLIST_FILE: file,
-        CORVIDINHO_OWNER_DISCORD_ID: OWNER_DC,
-      },
-      db,
-      projectRoot: dir,
-      skipProtocolCheck: true,
-      thinkingOutbound: memoryThinkingOutbound(),
-      agent: idleAgent,
-      schedulerPollIntervalMs: 20,
-      schedulerNow: () => wed(6, 35),
-      briefings: { compose, github: null },
-      gatewayFactory: async (_cfg, handlers) => {
-        handlers.reply = async (o) => {
-          replies.push(o);
-          return { messageId: `bot_${replies.length}` };
-        };
-        handlers.sendDm = async (o) => {
-          dms.push(o);
-          return { channelId: "dm", messageId: `dm_${dms.length}` };
-        };
-        return createNullGateway();
-      },
-    } as Parameters<typeof startBridge>[0]);
-    if (!result.ok) throw new Error("bridge did not start");
-    const end = Date.now() + 3000;
-    while (dms.length === 0 && Date.now() < end) await Bun.sleep(20);
+    const b = await startBriefingBridge({ briefings: { compose, github: null } });
+    await b.waitForDms(1);
     await Bun.sleep(100); // several more ticks: still one
-    await result.stop();
-    expect(dms).toEqual([
+    await b.stop();
+    expect(b.dms).toEqual([
       { userId: TOFU_DC, content: "📋 Your briefing for Wednesday 2026-10-07 (only you get this)\nBriefing for tofu" },
     ]);
-    expect(replies).toEqual([]);
+    expect(b.replies).toEqual([]);
     expect(prompts).toHaveLength(1);
     expect(prompts[0]).toContain("Fix the flaky login test");
   });
+
+  test("the bridge's scheduler switch turns briefings off too, re-read every tick (PLUGIN-5 / PLUGIN-5.a)", async () => {
+    let calls = 0;
+    const compose: BriefingCompose = async ({ recipient }) => {
+      calls += 1;
+      return { ok: true, text: `Briefing for ${recipient.personId}` };
+    };
+    const b = await startBriefingBridge({ briefings: { compose, github: null }, plugins: "schedule = false" });
+    await Bun.sleep(200); // ten ticks with the scheduler off
+    expect(b.dms).toEqual([]);
+    expect(calls).toBe(0);
+    ensureBriefingTable(b.db);
+    expect(readBriefingRow(b.db, "tofu")).toBeNull();
+    // Back on (the file rewritten, no restart): the day's briefing goes out.
+    b.writeAllowlist("");
+    await b.waitForDms(1);
+    await b.stop();
+    expect(b.dms.map((d) => d.userId)).toEqual([TOFU_DC]);
+    expect(calls).toBe(1);
+  });
+
+  test("the bridge hands an 80% spend warning a briefing call crosses to the owner's DM (SAFE-15)", async () => {
+    // One call reported at 300k prompt tokens: about $0.045 of a $0.05 cap.
+    const llm = fakeLlm("Morning! Here is your day.");
+    const big: typeof llm.fetchImpl = async (input, init) => {
+      const r = await llm.fetchImpl(input, init);
+      const body = (await r.json()) as Record<string, unknown>;
+      body.usage = { prompt_tokens: 300_000, completion_tokens: 50, total_tokens: 300_050 };
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    };
+    const b = await startBriefingBridge({
+      briefings: { fetchImpl: big, github: null },
+      env: {
+        CORVIDINHO_LLM_API_KEY: "test-key",
+        CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
+        CORVIDINHO_LLM_MODEL: "gpt-4o-mini",
+        [SPEND_CAP_ENV]: "0.05",
+      },
+    });
+    await b.waitForDms(2);
+    await b.stop();
+    expect(llm.calls).toHaveLength(1);
+    const tofu = b.dms.filter((d) => d.userId === TOFU_DC);
+    expect(tofu).toHaveLength(1);
+    expect(tofu[0]!.content).toContain("Morning! Here is your day.");
+    const owner = b.dms.filter((d) => d.userId === OWNER_DC);
+    expect(owner).toHaveLength(1);
+    expect(owner[0]!.content).toContain("Spend warning (SAFE-8)");
+    expect(owner[0]!.content).toContain("$0.05 daily cap");
+  });
 });
+
+/**
+ * A dry-run bridge on a file DB at Wednesday 08:35 in Oslo (only Tofu due),
+ * owner + team declared in its allowlist file, a fast scheduler tick and a
+ * gateway that records DMs and channel posts.
+ */
+async function startBriefingBridge(opts: {
+  briefings: NonNullable<Parameters<typeof startBridge>[0]>["briefings"];
+  /** Lines of a `[corvidinho.plugins]` table in the allowlist file. */
+  plugins?: string;
+  env?: NodeJS.ProcessEnv;
+}) {
+  const dir = mkdtempSync(join(tmpdir(), "corvidinho-briefing-bridge-"));
+  tmpDirs.push(dir);
+  const file = join(dir, "allowlist.toml");
+  const writeAllowlist = (plugins: string) =>
+    writeFileSync(
+      file,
+      `[discord]\nchannels = ["chan-1"]\n\n${plugins ? `[corvidinho.plugins]\n${plugins}\n\n` : ""}` +
+        `[owner]\ndiscord_id = "${OWNER_DC}"\n${PEOPLE_TOML}`,
+    );
+  writeAllowlist(opts.plugins ?? "");
+  const db = openCorvidinhoDb({ path: join(dir, "corvidinho.db") });
+  dbs.push(db);
+  seed(db, wed(6, 35));
+  const dms: Dm[] = [];
+  const replies: unknown[] = [];
+  const idleAgent = {
+    runChat: async () => ({ ok: true, body: "" }),
+  } as unknown as AgentClient;
+  const result = await startBridge({
+    env: {
+      DISCORD_BOT_TOKEN: "fake",
+      DISCORD_CHANNEL_IDS: "chan-1",
+      CORVIDINHO_DISCORD_DRY_RUN: "1",
+      CORVIDINHO_ALLOWLIST_FILE: file,
+      CORVIDINHO_OWNER_DISCORD_ID: OWNER_DC,
+      ...opts.env,
+    },
+    db,
+    projectRoot: dir,
+    skipProtocolCheck: true,
+    thinkingOutbound: memoryThinkingOutbound(),
+    agent: idleAgent,
+    schedulerPollIntervalMs: 20,
+    schedulerNow: () => wed(6, 35),
+    briefings: opts.briefings,
+    gatewayFactory: async (_cfg, handlers) => {
+      handlers.reply = async (o) => {
+        replies.push(o);
+        return { messageId: `bot_${replies.length}` };
+      };
+      handlers.sendDm = async (o) => {
+        dms.push(o);
+        return { channelId: "dm", messageId: `dm_${dms.length}` };
+      };
+      return createNullGateway();
+    },
+  } as Parameters<typeof startBridge>[0]);
+  if (!result.ok) throw new Error("bridge did not start");
+  return {
+    db,
+    dms,
+    replies,
+    writeAllowlist,
+    async waitForDms(n: number) {
+      const end = Date.now() + 3000;
+      while (dms.length < n && Date.now() < end) await Bun.sleep(20);
+    },
+    stop: () => result.stop(),
+  };
+}

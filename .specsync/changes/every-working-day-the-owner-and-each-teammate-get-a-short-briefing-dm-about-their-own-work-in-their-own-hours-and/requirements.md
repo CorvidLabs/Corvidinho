@@ -29,7 +29,9 @@ artifact: requirements
   owner changes people, audited), SAFE-5 (audit), SAFE-6 (scrub), SAFE-8 /
   14 / 14.a / AUTONOMY-8.a (spend caps, owner-only spend details), SAFE-12
   (external text fenced), PERSONA-1..3, DISCORD-6 / DISCORD-DENY (mute and
-  deny win), PLUGIN-5.a (the schedule toggle gates schedules only).
+  deny win), PLUGIN-5 / PLUGIN-5.a (briefings are an autonomous extra on the
+  scheduler: the scheduler switch turns them off too; the service still
+  gates only the schedules part of its tick, REQ-discord-157 unchanged).
 - Added: REQ-discord-102 (briefings), REQ-agent-102 (the exported no-tools
   completion transport). Modified: REQ-discord-036 (the people keys and
   `/admin people add` options).

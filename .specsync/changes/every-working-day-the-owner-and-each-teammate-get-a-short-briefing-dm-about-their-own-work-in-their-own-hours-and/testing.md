@@ -6,7 +6,7 @@ artifact: testing
 # Testing
 
 `tests/identity.briefing-hours.test.ts` (7 tests) and
-`tests/cos.briefing.test.ts` (17 tests). Fixtures only: temp allowlist
+`tests/cos.briefing.test.ts` (22 tests). Fixtures only: temp allowlist
 files, in-memory or temp-file SQLite, a fixed clock (Wednesday 2026-10-07),
 a fake LLM (the provider fetch: records each request, answers with a
 chat-completions body), a fake GitHub (search answers by query, requested
@@ -33,7 +33,17 @@ Fail-on-base proof (base 85871fa4):
   (the base tick never calls `briefings.tick`), the bridge case (no DM: the
   base bridge builds no ticker) and the scrub case (`cos_briefings` not in
   `SCRUB_TARGETS`).
-- Restored: 24 of 24 pass; the related suites (`identity.*`,
+- Review fixes (swap-in against the first branch head d2404368, its
+  `src/scheduler/briefing.ts` and `src/discord/bridge.ts` with the new
+  tests): 15 pass, 7 fail — a `/work` task that stopped to ask days ago was
+  told again every day ("waiting on a question", never skipped), the
+  scheduler switch had no effect on the ticker or through `startBridge`, a
+  time zone moved west opened a second briefing the same day (and the claim
+  took the earlier day), and the seed / Thursday / claim cases that pin
+  those rules. The 80% spend warning case passes on both heads (the
+  warning was already recorded and DMed on the next tick; kept as
+  coverage). Restored: 22 of 22.
+- Restored: 29 of 29 pass; the related suites (`identity.*`,
   `discord.admin*`, `scheduler.*`, `store.scrub`, `ops.backup*`,
   `discord.slash*`; 355 tests) pass, as does the full `bun test`.
 
@@ -45,7 +55,9 @@ Fail-on-base proof (base 85871fa4):
 | `REQ-discord-036` | `tests/identity.briefing-hours.test.ts` ("owner sets and changes them …", "an invalid time zone or hours is refused …", "a non-owner cannot set them …", "the plan writes only that person …") | `/admin people add person:tofu timezone:europe/oslo hours:8:30-16:30` writes `timezone = "Europe/Oslo"` and `working_hours = "08:30-16:30"` inside `[people.tofu]` (header comment and unread `team` key kept, file head verbatim), `admin-people-add` `started` + `ok`, live on the next read; the same zone is `No change … (time zone Europe/Oslo, hours 08:30-16:30)`; a new hours value reads `08:30-16:30 → 10:00-18:00`; `list` shows `tz Europe/Oslo · hours 10:00-18:00`; a new person can be declared with a zone; bad zone and hours refused, `denied` twice, file unchanged; a non-owner gets `not authorized`; a JSON plan keeps the entry's other key. Fail on base. |
 | `REQ-discord-102` | `tests/cos.briefing.test.ts` ("their declared zone and hours; else the owner's zone and 9am; else UTC and 9am", "Monday to Friday in their zone …", "owner and team only …") | Tofu: `Europe/Oslo` 08:30–16:30 from the person; Bob: `America/New_York` (owner's) 09:00–17:00 default; neither: UTC 09:00; 06:25Z not due, 06:30Z due, 14:30Z over, 23:30Z is Thursday in Oslo, Saturday and Sunday never; recipients leif (owner) / tofu / bob, never ada (community); deny-listed Bob and muted Tofu out; an id on two people out; no owner → nobody. |
 | `REQ-discord-102` | `tests/cos.briefing.test.ts` ("Tofu gets one DM at the start of their hours in Oslo, about Tofu only, written by the model") | Nothing at 08:25; at 08:35 exactly one DM to Tofu's id with the fixed header and the model's text; one call to `https://llm.test/v1/chat/completions`, model `gpt-4o-mini`, no `tools`, system with the briefing instructions and PERSONA-3 rules, user with the fenced facts: Tofu's PR #7, assigned issue #11, blocked task, review request #9, schedule question, finished task, 2 schedule runs — and none of Bob's task, a 30-day-old task, the off-allowlist and denied repos, impostor PR #8 (author id 9999), PR #10 (reviewer 9999) or the owner's Approve card; GitHub searched with Tofu's login only, since 24 h back; the row `sent`, text null, `covered_to` = now. |
-| `REQ-discord-102` | `tests/cos.briefing.test.ts` ("never twice a day …", "the claim is once per person per local day …") | Ticks at 06:36 and 12:00 and a second ticker on the same DB send nothing more; Thursday sends one that keeps the blocked task and drops the already-covered finished task; weekend nothing; claim → null within the day, a dead compose reclaimed after 30 min up to 3 attempts, a sent day never reclaimed, the next day returns `since` = the last `covered_to`. |
+| `REQ-discord-102` | `tests/cos.briefing.test.ts` ("never twice a day …", "the claim is once per person per local day …") | Ticks at 06:36 and 12:00 and a second ticker on the same DB send nothing more; Thursday sends one that keeps the open schedule question and drops the already-told task that stopped to ask and the finished task; weekend nothing; claim → null within the day, a dead compose reclaimed after 30 min up to 3 attempts, a sent day never reclaimed, the next day returns `since` = the last `covered_to`, an earlier day → null. |
+| `REQ-discord-102` | `tests/cos.briefing.test.ts` ("a /work task that stopped to ask is told once …", "with the scheduler extra off …", "a time zone moved west never opens a second briefing the same day") | A task blocked two hours before is told once as "stopped to ask a question", then Thursday and Friday are `skipped` with no call; `enabled` false → no row, no call, no DM, back on → the DM; a throwing `enabled` → nothing; Tofu briefed for Thursday in Auckland then moved to Los Angeles (Wednesday there) gets no second DM, Friday in Los Angeles gets one. All fail on the first branch head. |
+| `REQ-discord-102` | `tests/cos.briefing.test.ts` ("the bridge's scheduler switch turns briefings off too …", "the bridge hands an 80% spend warning …") | `startBridge` with `[corvidinho.plugins] schedule = false`: ten ticks, no DM, no compose, no row; the file rewritten → one DM to Tofu, no restart (fails on the first branch head). A $0.05 cap and a reply at 300k prompt tokens → Tofu's DM plus one owner DM `Spend warning (SAFE-8)` … `$0.05 daily cap`. |
 | `REQ-discord-102` | `tests/cos.briefing.test.ts` ("without a zone: the owner's declared zone and 9am; without the owner's zone: UTC and 9am") | At 08:55 New York neither Bob nor the owner; at 09:05 both (and Tofu, 15:05 Oslo); Bob's prompt holds only `Bob refactor done` and `(their time zone America/New_York)`; the owner's holds `1 forget Approve card waiting in your DMs`, not the card's title or Bob's task; with no zone on the owner's entry Bob's comes at 09:05 UTC, not 08:55. |
 | `REQ-discord-102` | `tests/cos.briefing.test.ts` ("nothing to say: the day is skipped …", "no DM path yet: nothing is claimed or written") | No facts → no model call, no DM, row `skipped`, no call on the next tick; no `sendDm` → no call and no row. |
 | `REQ-discord-102` | `tests/cos.briefing.test.ts` ("the model's text is scrubbed and mass mentions defanged …", "a DM that does not go out is retried …, then dropped …") | A reply with a `ghp_…` token and `@everyone`: held `pending` without either, `cos_briefings` in `SCRUB_TARGETS` and a re-scrub changes nothing; after the 15-minute wait the DM carries `[redacted:github-token]` and the defanged mention and the text is dropped. A refused DM is tried once in the wait, logged once, `expired` with text null at 16:31 Oslo, never re-written. Scrub case fails on base. |

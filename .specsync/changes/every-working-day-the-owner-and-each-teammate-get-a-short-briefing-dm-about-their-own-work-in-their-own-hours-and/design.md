@@ -24,7 +24,9 @@ artifact: design
   Mon–Fri, [start, end)) → `claimBriefingDay` (IMMEDIATE claim of the local
   day in `cos_briefings`) → `readLocalBriefingFacts` (their `/work` tasks,
   schedule runs and open schedule questions by their Discord ids; the
-  owner's pending Approve card counts) + `readGithubBriefingFacts` (Octokit
+  owner's pending Approve card counts; a `/work` task counts as blocked only
+  when it stopped to ask since the last briefing, because its row keeps
+  `blocked` for good) + `readGithubBriefingFacts` (Octokit
   issue search by login, kept only on allowlisted repos and their numeric
   ids) → empty ⇒ `skipped` → `createBriefingComposer` (one read-tier
   no-tools `chatCompletions` call through `createSpendGuard`; persona +
@@ -33,7 +35,8 @@ artifact: design
   `sent` (text dropped, `covered_to` advanced) or back to `pending` (retry
   every 15 min within hours) → `expired` past the hours.
 - **At most once**: the claim precedes every read, `sending` is never
-  retried, a `sent` day is never reclaimed; only a failed model call or a
+  retried, a `sent` day is never reclaimed, an earlier local day (a time
+  zone moved west) is never claimed; only a failed model call or a
   compose a dead process left (30 min old) is reclaimed, three times a day.
   A crash after the DM went out but before `sent` is recorded leaves
   `sending` (no second DM).
@@ -44,8 +47,11 @@ artifact: design
   DM other cap stops use (SAFE-14.a). Warnings are recorded in the ledger
   (the bridge's next tick DMs them).
 - **Tick**: `SchedulerServiceOpts.briefings` called after the backup each
-  tick (one pass at a time, fire-and-forget, never throws), also while
-  schedules are off. Bridge wiring next to the backup ticker; off in a dry
+  tick (one pass at a time, fire-and-forget, never throws); the service does
+  not gate the call (REQ-discord-157 unchanged), the ticker reads the
+  PLUGIN-5.a scheduler switch itself (`enabled`; the bridge passes the same
+  `[corvidinho.plugins] schedule` tracker its scheduler reads) and does
+  nothing while it is off. Bridge wiring next to the backup ticker; off in a dry
   run unless `StartBridgeOptions.briefings` seams are passed (tests); `stop()`
   aborts a call in flight. The daemon gets no ticker (no DM path).
 - **Transport**: `chatCompletions` / `Completion` exported from

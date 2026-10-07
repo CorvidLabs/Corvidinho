@@ -146,7 +146,7 @@ With `CORVIDINHO_BACKUP_DIR` set, the bridge or daemon tick copies `corvidinho.d
 
 ## Daily briefings
 
-Every working day the owner and each declared team member get one short DM about their own work — what changed on GitHub, what's blocked, what needs them, what it did for them — at the start of their working hours in their time zone (COS-1/2/2.a). Set a person's `timezone` and `working_hours` in their `[people.<id>]` entry or with `/admin people add`; without them it uses the owner's time zone (else UTC) and 09:00. Sent by the running Discord bridge only, written by one read-tier model call under the spend caps; days with nothing to say are skipped. Details: [`docs/discord.md`](docs/discord.md#daily-briefings-cos-1--cos-2--cos-2a-102).
+Every working day the owner and each declared team member get one short DM about their own work — what changed on GitHub, what's blocked, what needs them, what it did for them — at the start of their working hours in their time zone (COS-1/2/2.a). Set a person's `timezone` and `working_hours` in their `[people.<id>]` entry or with `/admin people add`; without them it uses the owner's time zone (else UTC) and 09:00. Sent by the running Discord bridge only, written by one read-tier model call under the spend caps; days with nothing to say are skipped; `[corvidinho.plugins] schedule = false` turns them off with the scheduler (PLUGIN-5.a). Details: [`docs/discord.md`](docs/discord.md#daily-briefings-cos-1--cos-2--cos-2a-102).
 
 ## Fledge lanes
 

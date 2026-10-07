@@ -142,8 +142,8 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   `_READ`; it counts toward the spend caps, and at a cap that day's briefing is skipped), the
   running bridge (the daemon sends none) and DMs open to the bot (same rule as the cards below).
   GitHub parts need the person's `github_ids` and an allowlisted repo; `GITHUB_TOKEN` raises the
-  search rate limit. Days with nothing to say send nothing. See [`discord.md`](discord.md)
-  "Daily briefings".
+  search rate limit. Days with nothing to say send nothing. `[corvidinho.plugins] schedule = false`
+  (E.11) turns them off with the scheduler. See [`discord.md`](discord.md) "Daily briefings".
 - No owner, or a Discord id that is not a snowflake ⇒ **nobody is ADMIN** (IDENTITY-3).
   `doctor` shows `owner: configured: no`.
 - An owner who is muted (`/mute`, `DISCORD_MUTED_USER_IDS`) or on `[discord].deny_users` is not ADMIN.
@@ -927,7 +927,7 @@ ignored, with one `[operator] AGENT-12: …` line, and the default is used.
 ```toml
 [corvidinho.plugins]
 work = false       # /work, and a reply or button press that would resume a /work talk
-schedule = false   # every /schedule subcommand, and schedule runs in the bridge and the daemon
+schedule = false   # every /schedule subcommand, schedule runs in the bridge and the daemon, and the daily briefings
 ```
 
 (`plugins.work = false` or `plugins = { work = false }` under `[corvidinho]` is the same key.)
