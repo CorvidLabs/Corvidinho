@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "named-personas-are-their-own-files-in-personas-with-name-model-and-skill-tags-the-owner-can-run-a-task-as-one-and-a",
+  "implementation_commit": "0d10d490e801943765de97e7af13ca82cdafeea1",
+  "implementation_tree": "7f62c5a39e8e12addc30163071cb0f113f04c238",
+  "contract_digest": "ed2a5b73ada20f209c1c7053b1de7492ecf5c69aae39f81a30ed13e107808648",
+  "workspace_digest": "7be57d80485946e680166502ad781fc0be487def5b8e1d3cc5a4906f19590022",
+  "closing_digest": "3e1386148a2f8ccbac595ea1cd15833a990407230d27f49cbcf1da0b067cf6e3",
+  "review_digest": "e9b133a41f9efc53ba5b0243b529dbb24f1c8231dbf6f46d7646a2213cfa9bc3",
+  "finalization_digest": "4dbf687fa193d1cbcceffb72a285023d4bed50129ab381c19260bcf7bb2957c8",
+  "timestamp": 1791386237,
+  "note": "tip-orphan archive after #410 squash (same class as #414/#415)"
+}

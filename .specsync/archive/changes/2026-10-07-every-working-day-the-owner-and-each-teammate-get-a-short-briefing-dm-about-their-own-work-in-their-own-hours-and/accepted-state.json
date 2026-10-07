@@ -7,11 +7,11 @@
   "title": "Every working day the owner and each teammate get a short briefing DM about their own work, in their own hours and timezone (COS-1, COS-2, COS-2.a; #102)",
   "description": "Every working day the owner and each teammate get a short briefing DM about their own work, in their own hours and timezone (COS-1, COS-2, COS-2.a; #102)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "a74ad96ce7cf05e5b6727417755611e0be1cffa2",
   "created_at": 1791352563,
-  "updated_at": 1791360648,
+  "updated_at": 1791386448,
   "affected_specs": [
     "discord",
     "agent"
