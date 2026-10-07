@@ -708,11 +708,10 @@ export function makeGithubPrMergeCommand(deps: SelfMergeDeps = {}): PluginComman
   return {
     name: SELF_MERGE_TOOL,
     description:
-      "Squash-merge its own Corvidinho PR, only when the owner asks (GITHUB-7 / GITHUB-7.a): " +
-      "`<number> --repo CorvidLabs/Corvidinho --sha <head sha>` (squash only). Refused unless it opened the PR from its own talk/… " +
-      "branch with its own token, the PR is not a draft and a person marked it ready, no gate file changed (.github, fledge.toml, .fledge, hi/, " +
-      "AGENTS.md, CODEOWNERS …), smoke and spec-sync passed at that head and GitHub's branch protection, reviews and " +
-      "CODEOWNERS allow it; then the owner's Approve card (with the one-time code). Never marks a draft ready",
+      "Squash-merge its own Corvidinho PR when the owner asks (GITHUB-7 / GITHUB-7.a): " +
+      "`<number> --repo CorvidLabs/Corvidinho --sha <head sha>`. Only its own talk/… PR a person marked ready, " +
+      "no gate file changed (.github, fledge.toml, hi/, AGENTS.md …), smoke and spec-sync green at that head and " +
+      "GitHub allows it; then the owner's Approve card with the one-time code. Never marks a draft ready",
     dangerous: true,
     mutating: true,
     minTier: 1,
