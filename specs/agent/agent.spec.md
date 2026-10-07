@@ -504,6 +504,14 @@ provider's host, any other line as is — WATCH's `watchPublicFailureLine` is
 it). For a worker that failed, `DelegateChildOutcome.summary` is that line
 and `resultText` is unset.
 
+Chat completion transport (REQ-agent-102): `src/agent/execute.ts` exports
+`chatCompletions({ provider, fetchImpl, messages, tools, signal, timeoutMs,
+onUsage? })` → `Completion` (one OpenAI-compatible request; `tools` sent
+only when given; `failure: null` for a spend-cap stop or the caller's
+abort), used unchanged by the tool loop, the GITHUB-9 reviewer's
+`complete` and the daily briefing composer (COS-1, REQ-discord-102,
+`src/scheduler/briefing.ts`), each through its own spend-capped fetch.
+
 Second-model review in the tool loop (REQ-agent-092, GITHUB-9 / GITHUB-9.a):
 `createTaskExecute` hands every `runPlugin` call of its tool loop a
 `PrReviewRun` (`env`, `authors()`: every model its chain called, AGENT-11
@@ -1757,5 +1765,6 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-10-05 | in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2: In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause) |
 | 2026-10-06 | work-schedule-and-the-scheduler-can-be-turned-off-in-corvidinho-plugins-and-existing-installs-stay-on-plugin-5-5-a: /work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a) |
 | 2026-10-06 | the-specsync-check-tool-the-verify-lane-s-spec-check-step-starts-without-my-cloud-credentials-and-its-output-is: The specsync-check tool (the verify lane's spec-check step) starts without my cloud credentials and its output is scrubbed (SAFE-21.b follow-up to #373) |
+| 2026-10-07 | every-working-day-the-owner-and-each-teammate-get-a-short-briefing-dm-about-their-own-work-in-their-own-hours-and: Every working day the owner and each teammate get a short briefing DM about their own work, in their own hours and timezone (COS-1, COS-2, COS-2.a; #102) |
 | 2026-10-07 | named-personas-are-their-own-files-in-personas-with-name-model-and-skill-tags-the-owner-can-run-a-task-as-one-and-a: Named personas are their own files in personas/ with name, model and skill tags; the owner can run a task as one and a lead's delegate picks one by skill tag; team and community can't pick one (AUTONOMOUS-2.a, AUTONOMOUS-5.a) |
 | 2026-10-07 | my-own-memory-forget-and-override-by-id-ask-me-on-a-dm-card-with-approve-and-a-one-time-code-and-an-override-shows-the: My own memory forget and override by id ask me on a DM card with Approve and a one-time code, and an override shows the new text word for word (SAFE-18.a) |

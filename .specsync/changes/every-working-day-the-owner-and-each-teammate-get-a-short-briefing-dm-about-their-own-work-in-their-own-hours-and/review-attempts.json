@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "every-working-day-the-owner-and-each-teammate-get-a-short-briefing-dm-about-their-own-work-in-their-own-hours-and",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "071f27513fd24479c5361170805d42b562d4efcb",
+      "contract_digest": "5c9488c6a6a80433b09f37eb36e761f468896bafce1477180072faef5b621cb8",
+      "execution_digest": "f79a957ea96207f910f6a487f1b3b83eb4b5c0d26119163a90bf2e61cccacc94",
+      "workspace_digest": "08bec0b2108a8da13e52dc0dce8e24b29b26e3cf858e1580c15109db0b11aadd",
+      "timestamp": 1791360939
+    }
+  ]
+}

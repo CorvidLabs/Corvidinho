@@ -13,7 +13,9 @@
  *         discord_ids = ["123456789012345678"]          "discord_ids": ["1234…"],
  *         github_logins = ["tofu-dev"]                  "github_logins": ["tofu-dev"],
  *         github_ids = ["4242"]                         "github_ids": ["4242"],
- *         role = "team"                                 "role": "team" } } }
+ *         role = "team"                                 "role": "team",
+ *         timezone = "Europe/Oslo"                      "timezone": "Europe/Oslo",
+ *         working_hours = "08:30-16:30"                 "working_hours": "08:30-16:30" } } }
  *
  * Singular keys (`discord_id`, `github_login`, `github_id`, `nickname`) are
  * read too, as the `[owner]` section spells them. Values stay on one line.
@@ -46,6 +48,13 @@
  * - Only the owner changes the list and the roles: by editing the file on the
  *   VM, or with owner-only, audited `/admin people …` (ADMIN-3.a / ADMIN-3.b).
  *   Chat and the model have no writer (IDENTITY-6 / IDENTITY-8).
+ * - Briefing hours (COS-2 / COS-2.a, #102): optional `timezone` (an IANA
+ *   time zone name such as Europe/Oslo, stored in its canonical spelling)
+ *   and `working_hours` (`HH:MM-HH:MM`, 24 h, start before end, one day) on
+ *   each person, read by the daily briefing (src/scheduler/briefing.ts).
+ *   Neither ever matches anyone. A value that is not one of those makes the
+ *   entry unreadable (skipped whole, like any other bad value). Set with
+ *   `/admin people add` (audited) or in the file.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -108,6 +117,10 @@ export type DeclaredPerson = {
   githubIds: string[];
   /** Declared role as written (IDENTITY-8); absent ⇒ community. */
   role?: PersonRole;
+  /** COS-2.a: IANA time zone (canonical spelling); absent ⇒ the owner's, else UTC. */
+  timezone?: string;
+  /** COS-2.a: working hours `HH:MM-HH:MM` (normalized); absent ⇒ from 9am. */
+  workingHours?: string;
 };
 
 export type PeopleParseResult = {
@@ -189,18 +202,77 @@ export function validGithubLogin(raw: string | undefined | null): string | undef
 /** GitHub numeric id as digits, else undefined (shared with the `[owner]` reader). */
 export { normalizeGithubId };
 
+const TIMEZONE_NAME_RE = /^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+){0,2}$/;
+
+/**
+ * COS-2.a — an IANA time zone name (`Europe/Oslo`, `America/New_York`,
+ * `UTC`), any case, in its canonical spelling; undefined for anything else
+ * (offsets such as `+02:00`, abbreviations the runtime does not know, junk).
+ */
+export function normalizePersonTimezone(raw: string | undefined | null): string | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  const t = String(raw).trim();
+  if (!t || t.length > 64 || !TIMEZONE_NAME_RE.test(t)) return undefined;
+  try {
+    const canonical = new Intl.DateTimeFormat("en-US", { timeZone: t }).resolvedOptions().timeZone;
+    return canonical && TIMEZONE_NAME_RE.test(canonical) ? canonical : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const WORKING_HOURS_RE = /^([01]?\d|2[0-3]):([0-5]\d)\s*-\s*([01]?\d|2[0-3]):([0-5]\d)$/;
+
+/** COS-2.a — working hours as minutes after local midnight, start before end. */
+export type WorkingHours = { startMinute: number; endMinute: number };
+
+/**
+ * COS-2.a — `HH:MM-HH:MM` (24 h, start before end within one day) as
+ * minutes, else undefined. `9:00-17:30` reads as 09:00-17:30.
+ */
+export function parseWorkingHours(raw: string | undefined | null): WorkingHours | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  const m = String(raw).trim().match(WORKING_HOURS_RE);
+  if (!m) return undefined;
+  const startMinute = Number(m[1]) * 60 + Number(m[2]);
+  const endMinute = Number(m[3]) * 60 + Number(m[4]);
+  return startMinute < endMinute ? { startMinute, endMinute } : undefined;
+}
+
+/** `HH:MM` of minutes after midnight. */
+export function formatClockMinutes(minutes: number): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(Math.floor(minutes / 60))}:${p(minutes % 60)}`;
+}
+
+/** COS-2.a — working hours in their stored spelling (`09:00-17:30`), else undefined. */
+export function normalizeWorkingHours(raw: string | undefined | null): string | undefined {
+  const h = parseWorkingHours(raw);
+  return h ? `${formatClockMinutes(h.startMinute)}-${formatClockMinutes(h.endMinute)}` : undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Parsing (TOML subset + JSON)
 
 /** DeclaredPerson fields read from the file. */
-export type PersonField = "display" | "role" | "nicknames" | "discordIds" | "githubLogins" | "githubIds";
+export type PersonField =
+  | "display"
+  | "role"
+  | "timezone"
+  | "workingHours"
+  | "nicknames"
+  | "discordIds"
+  | "githubLogins"
+  | "githubIds";
 type Field = PersonField;
 /** Fields holding one string, never a list. */
-const SINGLE_FIELDS: ReadonlySet<Field> = new Set<Field>(["display", "role"]);
+const SINGLE_FIELDS: ReadonlySet<Field> = new Set<Field>(["display", "role", "timezone", "workingHours"]);
 
 const KEY_FIELD: Record<string, Field> = {
   display: "display",
   role: "role",
+  timezone: "timezone",
+  working_hours: "workingHours",
   nickname: "nicknames",
   nicknames: "nicknames",
   discord_id: "discordIds",
@@ -215,7 +287,7 @@ const KEY_FIELD: Record<string, Field> = {
 export const PERSON_KEYS: ReadonlySet<string> = new Set(Object.keys(KEY_FIELD));
 
 /** Directory field each `/admin people link|unlink` kind edits. */
-export const LINK_FIELD: Record<PersonLinkKind, Exclude<Field, "display" | "role">> = {
+export const LINK_FIELD: Record<PersonLinkKind, Exclude<Field, "display" | "role" | "timezone" | "workingHours">> = {
   discord: "discordIds",
   github: "githubLogins",
   github_id: "githubIds",
@@ -390,6 +462,23 @@ function validatePerson(r: RawPerson, issues: string[]): DeclaredPerson | null {
       return null;
     }
     p.role = role;
+  }
+  if (v.timezone) {
+    // COS-2.a: one IANA zone name; anything else is unreadable (skipped whole).
+    const tz = v.timezone.length === 1 ? normalizePersonTimezone(v.timezone[0]) : undefined;
+    if (!tz) {
+      issues.push(`${where}: timezone must be one IANA time zone name such as Europe/Oslo — skipped`);
+      return null;
+    }
+    p.timezone = tz;
+  }
+  if (v.workingHours) {
+    const hours = v.workingHours.length === 1 ? normalizeWorkingHours(v.workingHours[0]) : undefined;
+    if (!hours) {
+      issues.push(`${where}: working_hours must be HH:MM-HH:MM (24 h, start before end) such as 09:00-17:00 — skipped`);
+      return null;
+    }
+    p.workingHours = hours;
   }
   p.nicknames = uniq(
     (v.nicknames ?? []).map((n) => cleanPersonLabel(n)).filter((n): n is string => !!n),

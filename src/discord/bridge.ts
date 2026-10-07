@@ -134,7 +134,7 @@ import {
 import { isOwnerDiscord, loadOwnerConfig } from "../identity/owner.ts";
 import { createFailureOwnerDm, failedRunReply } from "./failure-reason.ts";
 import { formatTaskPlumbing } from "../agent/task-summary.ts";
-import { loadLlmEnv } from "../agent/execute.ts";
+import { loadLlmEnv, type FetchLike } from "../agent/execute.ts";
 import { providerNotice } from "../agent/providers.ts";
 import {
   componentChannelAllowlisted,
@@ -199,6 +199,15 @@ import {
   type InflightReply,
 } from "./inflight-replies.ts";
 import { type BackupTicker, consoleBackupLog, createBackupTicker } from "../store/backup.ts";
+import {
+  consoleBriefingLog,
+  createBriefingComposer,
+  createBriefingGithub,
+  createBriefingTicker,
+  type BriefingCompose,
+  type BriefingGithub,
+  type BriefingTicker,
+} from "../scheduler/briefing.ts";
 import {
   openCorvidinhoDb,
   resolveContextWindowTokens,
@@ -303,6 +312,20 @@ export type StartBridgeOptions = {
   schedulerPollIntervalMs?: number;
   /** Scheduler (and nightly backup) clock override (tests). */
   schedulerNow?: () => number;
+  /**
+   * COS-1/2 (#102) — the daily briefing DMs on the scheduler tick. Unset: on
+   * with a DB, off in a dry run (no model call, no GitHub read). Given
+   * (tests): on with a DB, with these seams — `compose` (the model call),
+   * else `fetchImpl` for the default composer; `github` (null ⇒ no GitHub
+   * part), else the live Octokit reads. `false`: off.
+   */
+  briefings?:
+    | false
+    | {
+        compose?: BriefingCompose;
+        fetchImpl?: FetchLike;
+        github?: BriefingGithub | null;
+      };
   /**
    * SAFE-18..20: the Approve/Deny card engine's poll interval (default
    * APPROVAL_POLL_MS; ≤ 0 ⇒ no poll; tests).
@@ -2601,6 +2624,7 @@ export async function startBridge(
 
   let scheduler: SchedulerService | null = null;
   let backup: BackupTicker | undefined;
+  let briefings: BriefingTicker | undefined;
   if (!opts.disableScheduler) {
     // OPS-1/2 (#68): nightly backup + restore test on the scheduler tick
     // (CORVIDINHO_BACKUP_DIR; off when unset). A failure tells the owner once
@@ -2637,12 +2661,45 @@ export async function startBridge(
         else console.warn(line);
       },
     );
+    // COS-1/2 (#102): each working day, at the start of their working hours
+    // in their time zone, the owner and each declared team member get one
+    // short briefing DM about their own work (src/scheduler/briefing.ts):
+    // DM only (the gateway's sendDm), written by one read-tier model call
+    // under the spend caps; a cap stop goes to the owner's spend DM, and an
+    // 80% warning (recorded by the call's guard) goes out with the next
+    // tick's spend DM pass (SAFE-14.a / SAFE-15). Off while the scheduler
+    // extra is off (PLUGIN-5 / PLUGIN-5.a), and off in a dry run unless a
+    // test passes its seams.
+    const briefingSeams = opts.briefings === false ? null : opts.briefings;
+    briefings =
+      db && opts.briefings !== false && (briefingSeams || !config.dryRun)
+        ? createBriefingTicker({
+            db,
+            allowlist: config.allowlist,
+            people: declaredPeople,
+            owner: () => config.owner ?? null,
+            sendDm: () => sendDmRef.fn,
+            mutedUsers,
+            compose:
+              briefingSeams?.compose ??
+              createBriefingComposer({
+                env,
+                db,
+                ...(briefingSeams?.fetchImpl ? { fetchImpl: briefingSeams.fetchImpl } : {}),
+              }),
+            github: briefingSeams && "github" in briefingSeams ? (briefingSeams.github ?? null) : createBriefingGithub(env),
+            onSpendStop: (ask) => void spendDm.deliver({ stop: { ask } }),
+            enabled: () => schedulesState().on,
+            log: consoleBriefingLog,
+          })
+        : undefined;
     scheduler = new SchedulerService({
       store: scheduleStore,
       agent,
       allowlist: config.allowlist,
       // PLUGIN-5.a: only the schedules part of the tick is gated; cards,
-      // stuck-ask DMs, schedule asks, spend DMs and the backup keep running.
+      // stuck-ask DMs, schedule asks, spend DMs and the backup keep running
+      // (the briefings read the same switch themselves, `enabled` above).
       schedulesEnabled: () => schedulesState().on,
       pollIntervalMs: opts.schedulerPollIntervalMs,
       ...(opts.schedulerNow ? { now: opts.schedulerNow } : {}),
@@ -2666,6 +2723,8 @@ export async function startBridge(
           }
         : {}),
       backup,
+      // COS-1/2: the daily briefing DMs (none in a dry run without seams).
+      ...(briefings ? { briefings } : {}),
       // SAFE-12/13 (#71): a tick resolves the creator's role with the live
       // mute set, and its injection refusal lands on the bridge's trail.
       mutedUsers,
@@ -2824,6 +2883,9 @@ export async function startBridge(
       // OPS-1: no further backup notice is taken; one in flight is waited
       // for below, and handed back if it outlasts the grace (never lost).
       backup?.stop();
+      // COS-1: no further briefing is started; a model call in flight is
+      // aborted (that day's briefing is retried by the next start).
+      briefings?.stop();
       if (scheduler) {
         // REQ-discord-346: like the daemon, a schedule run still going is
         // recorded failed and its agent tree killed, then gets a short
@@ -2843,6 +2905,8 @@ export async function startBridge(
         await scheduler.settleAskDelivery(ABANDONED_SETTLE_MS);
       }
       await backup?.settle(ABANDONED_SETTLE_MS);
+      // COS-1: a briefing DM in flight gets the same short grace.
+      await briefings?.settle(ABANDONED_SETTLE_MS);
       // AGENT-16.a: a stuck WATCH ask's DM in flight gets the same grace,
       // then is handed back for the next start.
       await watchAsks?.settle(ABANDONED_SETTLE_MS);

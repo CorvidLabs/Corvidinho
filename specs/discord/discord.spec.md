@@ -129,6 +129,9 @@ files:
   - src/scheduler/store.ts
   - src/scheduler/service.ts
   - src/scheduler/index.ts
+  - src/scheduler/briefing.ts
+  - tests/cos.briefing.test.ts
+  - tests/identity.briefing-hours.test.ts
   - tests/discord.schedule.test.ts
   - tests/scheduler.cron.test.ts
   - tests/scheduler.service.test.ts
@@ -367,7 +370,12 @@ role: undeclared or no `role` key ⇒ community, IDENTITY-8/12),
 `normalizeDiscordUserId`, `normalizeGithubId`, `validGithubLogin`,
 `cleanPersonLabel`, `PERSON_ID_RE`, `OWNER_PERSON_ID`, `PERSON_KEYS`,
 `LINK_FIELD` and the `DeclaredPerson` / `PeopleDirectory` / `ResolvedPerson`
-types. Owner (`src/identity/owner.ts`): `OwnerRecord.githubId` from
+types; briefing hours (COS-2.a, REQ-discord-102): `DeclaredPerson.timezone` /
+`workingHours` from the `timezone` / `working_hours` keys,
+`normalizePersonTimezone` (IANA name → canonical spelling, else undefined),
+`parseWorkingHours` → `WorkingHours` (`startMinute` / `endMinute`),
+`normalizeWorkingHours`, `formatClockMinutes`; `PeopleAdminRequest.timezone`
+/ `hours` and `PeopleAdminPlan.timezoneChanged` / `hoursChanged` (`add`). Owner (`src/identity/owner.ts`): `OwnerRecord.githubId` from
 `[owner] github_id` (file only), `normalizeGithubId` (shared with people),
 `isOwnerGithub(owner, githubId)` (the numeric id only, IDENTITY-7.a).
 `/admin people link github:` lookup (REQ-discord-367,
@@ -1054,7 +1062,67 @@ exports `holdSlashReply(opts)`; `SchedulerOutbound.post` takes
 `modelText?: boolean`; `plugins/discord/send-file.ts` exports
 `sendFileMustAsk(ctx)` (the command's `mustAsk`).
 
+Daily briefings (COS-1 / COS-2 / COS-2.a, REQ-discord-102):
+`src/scheduler/briefing.ts` exports `createBriefingTicker(opts)` →
+`BriefingTicker` (`tick(now)`, `settle(timeoutMs?)`, `stop()`;
+`BriefingTickerOptions`: `db`, `allowlist`, `people()`, `owner()`,
+`sendDm()`, `compose`, `github?`, `mutedUsers?`, `onSpendStop?`, `enabled?`,
+`log?`),
+`createBriefingComposer({ env?, db?, fetchImpl?, personaRoot?,
+onSpendWarning?, timeoutMs? })` → `BriefingCompose` (`BriefingComposeInput`
+→ `BriefingComposeResult`: `ok` + text, `spend-cap` + ask, or `failed`),
+`createBriefingGithub(env)` → `BriefingGithub` (`search(query)` →
+`BriefingGithubItem[]`, `requestedReviewerIds(repo, number)`),
+`briefingRecipients` → `BriefingRecipient[]`, `briefingHoursFor` →
+`BriefingHours`, `briefingSlot` → `BriefingSlot`, `localClock` →
+`LocalClock`, `readLocalBriefingFacts`, `readGithubBriefingFacts`,
+`BriefingFacts` / `emptyBriefingFacts` / `briefingIsEmpty`,
+`renderBriefingFacts`, `cleanBriefingText`, `formatBriefingDm`,
+`formatBriefingHours`, the `cos_briefings` store (`BRIEFING_TABLE_SQL`,
+`ensureBriefingTable`, `readBriefingRow` → `BriefingRow`, `BriefingStatus`,
+`claimBriefingDay`, `recordBriefingSkipped` / `Pending` / `Failed` /
+`Budget` / `Sent`, `takeBriefingToSend`, `releaseBriefingSend`,
+`expireBriefing`), `consoleBriefingLog` / `BriefingLog` /
+`BriefingLogLevel`, `BRIEFING_SYSTEM_INSTRUCTIONS` and the limits
+`BRIEFING_DEFAULT_START_MINUTE` (09:00), `BRIEFING_DEFAULT_END_MINUTE`
+(17:00), `BRIEFING_FALLBACK_TIME_ZONE` (UTC), `BRIEFING_FIRST_LOOKBACK_MS`
+(24 h), `BRIEFING_MAX_LOOKBACK_MS` (7 d), `BRIEFING_MAX_ATTEMPTS` (3),
+`BRIEFING_RETRY_MS` (30 min), `BRIEFING_DM_RETRY_MS` (15 min),
+`BRIEFING_ITEMS_MAX` (8), `BRIEFING_TEXT_MAX` (1700),
+`BRIEFING_LLM_TIMEOUT_MS` (2 min), `BRIEFING_REVIEW_CHECKS_MAX` (10),
+`BRIEFING_GITHUB_TIMEOUT_MS` (15 s); `src/scheduler/index.ts` re-exports the
+ticker, composer, GitHub reads, recipients, hours and slot.
+`SchedulerServiceOpts.briefings` (`Pick<BriefingTicker, "tick">`);
+`StartBridgeOptions.briefings` (`false`, or test seams `{ compose?,
+fetchImpl?, github? }`).
+
 ## Invariants
+
+Daily briefings (COS-1 / COS-2 / COS-2.a, REQ-discord-102): every working
+day (Monday to Friday in their zone) the owner and each declared team member
+— never community or anyone undeclared, deny-listed, muted or on a clashing
+id, and nobody without an owner — get at most one DM, at the start of their
+working hours in their zone (`timezone` / `working_hours` on their
+`[people.<id>]` entry, set in the file or with `/admin people add`; else the
+owner's declared zone, else UTC, and 09:00–17:00), never outside those hours.
+The day is claimed in `cos_briefings` (module-owned, no schema version)
+before anything is read; a DM whose send started is never sent again. The
+facts are that person's only: their `/work` tasks that stopped to ask or
+finished since the last briefing (a `blocked` row stays `blocked`, so an
+older one is never repeated),
+their schedule runs and open schedule questions (by their Discord ids), the
+owner's pending Approve card counts (owner only), and GitHub PRs / issues /
+review requests in allowlisted repos matched by their numeric id; no facts ⇒
+skipped, no model call. One read-tier no-tools model call (persona, rules,
+facts fenced as data) under the spend guard writes it; a cap stop raises no
+card, skips the day and goes to the owner's spend DM once that day; the
+reply is scrubbed, mass mentions defanged and cut, and held scrubbed only
+until sent. DM only, through the bridge's gateway `sendDm`; no DM path ⇒
+nothing claimed. The bridge runs it on every scheduler tick, and the ticker
+itself reads the PLUGIN-5.a scheduler switch (`[corvidinho.plugins] schedule
+= false`, or an unreadable switch, ⇒ nothing claimed, written or sent); not
+in a dry run without seams; the daemon never sends one. A local day earlier
+than the last claimed one (a time zone moved west) is never claimed.
 
 A run a limit I set stopped (AGENT-12, REQ-discord-125) shows it only as
 `stopped=turn-cap` / `stopped=idle-timeout` at the end of the answer's footer
@@ -1758,6 +1826,7 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-10-05 | where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts: Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts) |
 | 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
 | 2026-10-06 | work-schedule-and-the-scheduler-can-be-turned-off-in-corvidinho-plugins-and-existing-installs-stay-on-plugin-5-5-a: /work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a) |
+| 2026-10-07 | every-working-day-the-owner-and-each-teammate-get-a-short-briefing-dm-about-their-own-work-in-their-own-hours-and: Every working day the owner and each teammate get a short briefing DM about their own work, in their own hours and timezone (COS-1, COS-2, COS-2.a; #102) |
 | 2026-10-07 | named-personas-are-their-own-files-in-personas-with-name-model-and-skill-tags-the-owner-can-run-a-task-as-one-and-a: Named personas are their own files in personas/ with name, model and skill tags; the owner can run a task as one and a lead's delegate picks one by skill tag; team and community can't pick one (AUTONOMOUS-2.a, AUTONOMOUS-5.a) |
 | 2026-10-07 | my-own-memory-forget-and-override-by-id-ask-me-on-a-dm-card-with-approve-and-a-one-time-code-and-an-override-shows-the: My own memory forget and override by id ask me on a DM card with Approve and a one-time code, and an override shows the new text word for word (SAFE-18.a) |
 | 2026-10-07 | once-a-session-question-s-buttons-expire-the-session-stops-waiting-and-my-next-message-runs-normally-a-schedule-s: Once a session question's buttons expire the session stops waiting and my next message runs normally; a schedule's questions still wait until answered (AUTONOMY-6.b) |

@@ -32,6 +32,7 @@ bun src/cli.ts daemon
 | Refuses a second daemon on the same data dir | Restart itself: restarts are systemd's `Restart=` |
 | Stops cleanly on SIGTERM / SIGINT | Heartbeats, `/status` uptime per part, crash DMs (draft OPS-3..5) |
 | Takes the nightly backup and the weekly restore test when `CORVIDINHO_BACKUP_DIR` is set (OPS-1/2, below) | Tell the owner on Discord itself: a failure's notice waits for a bridge tick |
+| | Send the daily briefing DMs (COS-1/2): only the running bridge sends them, on its own tick |
 
 Schedules are still created, paused, resumed and deleted from Discord
 (`/schedule`, ADMIN only). The daemon picks up those changes on its next tick.
