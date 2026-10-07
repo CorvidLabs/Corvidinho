@@ -7,11 +7,11 @@
   "title": "ADMIN-3.c part 2: as owner I can mute and unmute with /admin mutes add|remove; /mute and /unmute are audited aliases of the same helper",
   "description": "ADMIN-3.c part 2: as owner I can mute and unmute with /admin mutes add|remove; /mute and /unmute are audited aliases of the same helper",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "8aa502a19e5877444afe54944869bffb02953b5d",
   "created_at": 1791335871,
-  "updated_at": 1791389670,
+  "updated_at": 1791389685,
   "affected_specs": [
     "discord"
   ],
