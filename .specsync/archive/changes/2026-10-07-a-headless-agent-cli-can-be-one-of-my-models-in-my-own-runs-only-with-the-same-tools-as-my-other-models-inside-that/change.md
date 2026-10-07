@@ -1,9 +1,8 @@
 ---
 id: a-headless-agent-cli-can-be-one-of-my-models-in-my-own-runs-only-with-the-same-tools-as-my-other-models-inside-that
-state: implementing
+state: accepted
 type: feature
-base_commit: b53cc4679baee4355db339e22f7929095b81d0a1
----
+base_commit: b53cc4679baee4355db339e22f7929095b81d0a1---
 
 # A headless agent CLI can be one of my models, in my own runs only, with the same tools as my other models, inside that talk's own worktree; other runs skip it and use my next model (AGENT-13, AGENT-13.a)
 

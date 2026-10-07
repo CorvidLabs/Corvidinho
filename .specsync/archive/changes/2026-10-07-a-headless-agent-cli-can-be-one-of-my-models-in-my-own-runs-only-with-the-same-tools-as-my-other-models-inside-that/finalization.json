@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "change_id": "a-headless-agent-cli-can-be-one-of-my-models-in-my-own-runs-only-with-the-same-tools-as-my-other-models-inside-that",
+  "implementation_commit": "d5eddf92306392c01674172e794f6daa5e6167b3",
+  "contract_digest": "7576f4b9fdd695b8a3b625a2ddf747f35c165cf4a9e1829b82cb2fc98e03eb19",
+  "workspace_digest": "91cef6d5c9801327a8d519f167f32475bde0f27bf41b3a477f0b67129dccb4e4",
+  "closing_digest": null,
+  "review_digest": "91cef6d5c9801327a8d519f167f32475bde0f27bf41b3a477f0b67129dccb4e4",
+  "finalization_digest": "tip-orphan-manual",
+  "timestamp": 1791392575,
+  "note": "tip-orphan archive after #413 squash (same class as #420\u2013#425)"
+}

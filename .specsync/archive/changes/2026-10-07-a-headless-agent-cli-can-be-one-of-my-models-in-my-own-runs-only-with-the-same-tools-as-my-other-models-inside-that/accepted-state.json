@@ -7,11 +7,11 @@
   "title": "A headless agent CLI can be one of my models, in my own runs only, with the same tools as my other models, inside that talk's own worktree; other runs skip it and use my next model (AGENT-13, AGENT-13.a)",
   "description": "A headless agent CLI can be one of my models, in my own runs only, with the same tools as my other models, inside that talk's own worktree; other runs skip it and use my next model (AGENT-13, AGENT-13.a)",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "b53cc4679baee4355db339e22f7929095b81d0a1",
   "created_at": 1791351642,
-  "updated_at": 1791392568,
+  "updated_at": 1791392575,
   "affected_specs": [
     "agent",
     "plugins",
