@@ -43,6 +43,7 @@ files:
   - src/worktree/base.ts
   - tests/worktree.test.ts
   - tests/discord.session-worktree.test.ts
+  - tests/discord.session-persona.test.ts
   - tests/worktree.project-scope.test.ts
   - tests/discord.nongit-project-dir.test.ts
   - src/memory/types.ts
@@ -734,6 +735,17 @@ client always writes `CORVIDINHO_DISCORD_REPLY_CHANNEL_ID` /
 `CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID` (empty when unset). The bridge
 passes them on chat, reply-continue, thread and ask-button runs;
 `/session start` and `/work` pass the command's channel; schedules pass none.
+
+`/session start` has an optional `persona` STRING option (REQ-discord-225,
+AUTONOMOUS-2 / AUTONOMOUS-5.a): only the owner may set it (anyone else gets
+`PERSONA_OWNER_ONLY_LINE` ephemerally and nothing starts); for the owner the
+handler checks the persona exists and its model is configured
+(`findPersona` / `personaModelRefusal` over `loadPersonas(ctx.personaRoot)`,
+one ephemeral line otherwise) before any session or worktree, then passes
+`AgentRunChatOpts.persona`, which the spawn client sends as
+`task run --persona <name>` before `--task`. The answer head adds
+`Persona: <name>`; later replies in that session use `persona.md`.
+`SlashContext.personaRoot` is a test seam (default `CORVIDINHO_ROOT`).
 `verifyRequesterCanSend` takes `attachFiles` (also AttachFiles; the test
 checker gets `{ attachFiles: true }` as a third argument) and
 `requester-perms.ts` exports `RequesterNeeds` and `REQUESTER_CANNOT_ATTACH`.
@@ -1746,5 +1758,6 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-10-05 | where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts: Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts) |
 | 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
 | 2026-10-06 | work-schedule-and-the-scheduler-can-be-turned-off-in-corvidinho-plugins-and-existing-installs-stay-on-plugin-5-5-a: /work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a) |
+| 2026-10-07 | named-personas-are-their-own-files-in-personas-with-name-model-and-skill-tags-the-owner-can-run-a-task-as-one-and-a: Named personas are their own files in personas/ with name, model and skill tags; the owner can run a task as one and a lead's delegate picks one by skill tag; team and community can't pick one (AUTONOMOUS-2.a, AUTONOMOUS-5.a) |
 | 2026-10-07 | my-own-memory-forget-and-override-by-id-ask-me-on-a-dm-card-with-approve-and-a-one-time-code-and-an-override-shows-the: My own memory forget and override by id ask me on a DM card with Approve and a one-time code, and an override shows the new text word for word (SAFE-18.a) |
 | 2026-10-07 | once-a-session-question-s-buttons-expire-the-session-stops-waiting-and-my-next-message-runs-normally-a-schedule-s: Once a session question's buttons expire the session stops waiting and my next message runs normally; a schedule's questions still wait until answered (AUTONOMY-6.b) |

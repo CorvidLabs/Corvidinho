@@ -114,6 +114,12 @@ export type AgentRunChatOpts = {
    * always written, never inherited).
    */
   replyPublicThread?: boolean;
+  /**
+   * AUTONOMOUS-2 / 5.a: the named persona the owner picked for this run
+   * (`/session start persona:`), passed as `task run --persona`; the run
+   * re-checks that its actor is the owner. Omitted ⇒ persona.md.
+   */
+  persona?: string;
 };
 
 export type AgentClient = {
@@ -178,6 +184,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       replyChannelId,
       replyParentChannelId,
       replyPublicThread,
+      persona,
     }) {
       if (signal?.aborted) {
         return { ok: false, sessionId, summary: "interrupted before start", exitCode: 130 };
@@ -189,6 +196,8 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         // SESSION-WORKTREE-1.a (REQ-cli-122): the run works in the cwd given
         // here, never in a new worktree of its own.
         "--here",
+        // AUTONOMOUS-2 / 5.a: the owner's persona pick (a validated label).
+        ...(persona ? ["--persona", persona] : []),
         "--task",
         prompt,
         "--output",

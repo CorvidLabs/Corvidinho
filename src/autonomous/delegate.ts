@@ -25,6 +25,10 @@
  * - a lead in a ROLES-CHAT role session gets a non-ADMIN worker (read/chat
  *   tools only, ROLES-CHAT-2/3); a lead outside one (local CLI) gets a worker
  *   outside one too, so the worker never has more power than the lead;
+ * - AUTONOMOUS-5.a: a `--skill` that matches a named persona's skill tags
+ *   (src/agent/personas.ts; the first by name) runs the worker as that
+ *   persona — its model and voice — through {@link DELEGATE_PERSONA_ENV};
+ *   the worker keeps every limit above, and with no match it runs as before;
  * - a worker inherits the lead's turn cap and idle timeout
  *   (CORVIDINHO_MAX_TURNS / CORVIDINHO_IDLE_TIMEOUT_MS, AGENT-12), the
  *   lead's idle watchdog is held while it runs, and a worker a limit stopped
@@ -89,6 +93,13 @@ export const DELEGATE_DEPTH_ENV = "CORVIDINHO_DELEGATE_DEPTH";
  * only on a worker spawn, read only at depth > 0), never an operator setting.
  */
 export const DELEGATE_AUTHORS_ENV = "CORVIDINHO_DELEGATE_AUTHORS";
+/**
+ * Env var carrying the named persona a lead picked for its worker by skill
+ * tag (AUTONOMOUS-5.a): the persona's name. Internal (set only on a worker
+ * spawn, always overwritten or removed there, read only at depth > 0), never
+ * an operator setting; the worker loads that persona's file itself.
+ */
+export const DELEGATE_PERSONA_ENV = "CORVIDINHO_DELEGATE_PERSONA";
 /** Most author labels passed to (or read back from) a worker. */
 export const DELEGATE_AUTHORS_MAX = 32;
 /** Workers can be started at most this many levels below the lead. */
@@ -140,6 +151,17 @@ export function delegateAuthorsFromEnv(env: NodeJS.ProcessEnv = process.env): st
     if (label && !out.includes(label)) out.push(label);
   }
   return out;
+}
+
+/**
+ * The persona a worker's lead picked for it ({@link DELEGATE_PERSONA_ENV}),
+ * or undefined: at depth 0 (a top-level run never takes it from env), when
+ * unset, or when it is not a persona label.
+ */
+export function delegatePersonaFromEnv(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  if (delegateDepthFromEnv(env) <= 0) return undefined;
+  const raw = (env[DELEGATE_PERSONA_ENV] ?? "").trim().toLowerCase();
+  return SKILL_RE.test(raw) ? raw : undefined;
 }
 
 /**
@@ -334,6 +356,8 @@ export function buildDelegateSpawn(opts: {
   baseEnv?: NodeJS.ProcessEnv;
   /** GITHUB-9: the lead's change authors (entry labels). */
   authors?: readonly string[];
+  /** AUTONOMOUS-5.a: the named persona the lead picked by skill tag. */
+  persona?: string;
 }): { cmd: string[]; env: Record<string, string> } {
   const cmd = buildCorvidinhoArgv(opts.bin, [
     "task",
@@ -370,6 +394,12 @@ export function buildDelegateSpawn(opts: {
     .slice(0, DELEGATE_AUTHORS_MAX);
   if (authors.length > 0) env[DELEGATE_AUTHORS_ENV] = authors.join(",");
   else delete env[DELEGATE_AUTHORS_ENV];
+  // AUTONOMOUS-5.a: the persona the lead picked for this worker, never an
+  // inherited one (a worker of a persona worker runs in persona.md's voice
+  // unless its own lead picked one).
+  const persona = (opts.persona ?? "").trim().toLowerCase();
+  if (SKILL_RE.test(persona)) env[DELEGATE_PERSONA_ENV] = persona;
+  else delete env[DELEGATE_PERSONA_ENV];
   // Workers never act as ADMIN or complete a human SAFE-4 confirm (the
   // CORVIDINHO_ACTING_* keys were dropped above). A lead in a role session
   // gets a non-ADMIN worker: read/chat tools only (ROLES-CHAT-2/3).
@@ -617,6 +647,8 @@ export async function runDelegateChild(opts: {
   timeoutMs?: number;
   /** GITHUB-9: the lead's change authors, passed to the worker. */
   authors?: readonly string[];
+  /** AUTONOMOUS-5.a: run the worker as this named persona. */
+  persona?: string;
 }): Promise<DelegateChildOutcome> {
   if (opts.signal?.aborted) {
     return {
