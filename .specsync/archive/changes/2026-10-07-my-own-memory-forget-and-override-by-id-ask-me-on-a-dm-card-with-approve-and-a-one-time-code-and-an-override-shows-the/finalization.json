@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "my-own-memory-forget-and-override-by-id-ask-me-on-a-dm-card-with-approve-and-a-one-time-code-and-an-override-shows-the",
+  "implementation_commit": "4a6fbfcfda42ae5107a05beaeb63c8d66e50d003",
+  "implementation_tree": "19026cc4b5db910a42f3f93fb3cb07aba74e1a86",
+  "contract_digest": "2da1deb5a173b1cc91e33f79568fa69e63785a7fd2dbcbc8c37adf1f9b093ea7",
+  "workspace_digest": "7be57d80485946e680166502ad781fc0be487def5b8e1d3cc5a4906f19590022",
+  "closing_digest": "b8a22f4f3ce1a0ec94d4fc657be987f3bb724f27c97b838803e03cf99dc57823",
+  "review_digest": "d0acf557ad7ed765322d319da1523fd556969fc70fa196dfe0f05a7d7b053b9c",
+  "finalization_digest": "778d225528a9404d2d3233488004811c8d89ddfac177463216deee6ff0687d08",
+  "timestamp": 1791386009,
+  "note": "tip-orphan archive after #409 squash (same class as #414/#415); discord.spec.md keeps deleted confirm.ts as planned mapping so acceptance ownership resolves"
+}
