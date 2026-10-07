@@ -133,6 +133,13 @@
         "discord": "9c968a7fa05bc0c0ac9c5e91d2dd7b9ad0d3ca1edd3734b2d0e40417cd3b53fd",
         "plugins": "a8123901befedb346648d9173d51cb9569b50859fd4f36350c5fa7e0ededa187"
       }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1791386237,
+      "digest": "3e1386148a2f8ccbac595ea1cd15833a990407230d27f49cbcf1da0b067cf6e3",
+      "note": "Same-PR finalization closing digest"
     }
   ],
   "reopenings": []
