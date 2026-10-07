@@ -41,3 +41,16 @@ artifact: design
 - **Out of scope (stated as residual):** a shell alias for the binary and
   bash extended globs (`@(…)` with `extglob` on); neither is in the two
   findings.
+- **Review of this follow-up.** Bash's brace expansion makes several words
+  of one pattern, and none of an empty one, so a brace pattern is split into
+  its words before anything is read (each still a pattern; past the caps it
+  may be any words, so the subcommand and the step too). `xargs`'s options
+  are read as getopt reads them: a replace string may be any word (`check`,
+  `status`), so a word holding it where the subcommand or step belongs
+  refuses, the command `-rI R` names counts as a command word, and a word
+  holding it is also read as the script a shell `-c` runs, with the
+  replace string as an expansion in both quoting contexts (two passes, at
+  most two levels deep). A word that expands only before its last `/` names
+  specsync by its basename. `[`'s glob flag no longer hides it from the
+  never-run list. Residual: a script `xargs` builds wholly from its input
+  (`xargs -I X sh -c X`), which no reading of the text can see.

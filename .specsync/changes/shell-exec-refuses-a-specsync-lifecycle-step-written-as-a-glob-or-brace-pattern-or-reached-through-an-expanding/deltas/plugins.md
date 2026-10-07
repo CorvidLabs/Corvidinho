@@ -78,6 +78,30 @@ flag, config key or schema.
   `grep -l specsync "$f"`, `xargs grep -l specsync`), which are read only
   for a `change` step as before. Residual (stated, not checked): a shell
   alias for the binary and a bash extended glob (`@(…)` with `extglob` on).
+- Since the review of the follow-up to #372, a brace pattern SHALL first be
+  split into the words bash's brace expansion makes of it, each still read
+  as a pattern (`{specsync,change} approve c1` is `specsync`, `change`,
+  `approve`, `c1`; an empty word, as in `{,}`, is dropped as bash drops
+  it), and one past the caps (more than 64 words, or longer than 1024
+  characters) SHALL be read as any words, so as the subcommand and its step
+  too. A word that expands only before its last `/` SHALL name `specsync`
+  by the literal basename after it (`"$HOME"/.cargo/bin/specsync "$@"`).
+  `xargs`'s options SHALL be read as GNU getopt reads them (`-I R`, `-IR`,
+  `-rI R`, `-i[R]`, `--replace[=R]` and its abbreviations; `-i` and
+  `--replace` mean `{}`): the command they name SHALL count as a command
+  word; a word holding a replace string where the subcommand or the step
+  belongs SHALL refuse with step null whatever it reads
+  (`xargs -I check specsync check approve c1`,
+  `xargs -I status specsync change status c1`; for the subcommand, with the
+  two exceptions above, so `xargs -I{} grep -l specsync {}` runs); and a
+  word holding one
+  SHALL also be read as the script a shell `-c` runs, with the replace
+  string as an expansion (outside quotes, and closing a single quote it
+  sits in), so `xargs -I X sh -c 'specsync X'` SHALL refuse with step null
+  while `xargs -I{} sh -c 'wc -l {}'` still runs. `[` SHALL count as a
+  command that never runs its arguments. Residual (stated, not checked): a
+  script `xargs` builds wholly from its input (`xargs -I X sh -c X`, or
+  input that closes the script's own quotes).
 
 Acceptance Criteria
 - In a SpecSync repo, a plain folder and on Corvidinho with the run's own change right after a green lane, `specsync change approve|review|finalize|ship c1` through `shell-exec` returns exit 2 with `shell-exec refused (AGENT-18.a): …` and `HUMAN_LIFECYCLE_LINE`; nothing is spawned, `state.json` is unchanged, no `approvals.json` / `review.json` is written and nothing moves to `.specsync/archive`.
@@ -88,3 +112,4 @@ Acceptance Criteria
 - Through `shell-exec`, from a folder holding files named `specsync`, `change` and `approve`: `spec*ync` / `specsyn?` / `[s]pecsync` / `env spec*` / `bunx spec*` with a lifecycle step, `specsync c?ange approve c1`, `specsync change appr*ve|appro?e|[a]pprove c1`, and `bash -c` with `{approve,}` or `{specsync,}` return exit 2 naming AGENT-18.a with nothing spawned (follow-up to #372).
 - Through `shell-exec`: a function forwarding `"$@"`, `set --` then `"$@"`, `change${IFS}approve`, `specsync $S c1`, `… | xargs specsync`, `xargs -n3 specsync` and `xargs -I X specsync X approve c1` return exit 2 with step null and nothing spawned (follow-up to #372).
 - `firstLifecycleStep` returns null for quoted pattern characters, `cp * "$dest"`, `ls * specsync`, `git ls-files | xargs grep -l specsync`, `grep -rn specsync "$f"`, `specsync change status "$ID"`, `xargs specsync change status` / `check` and `$X "$Y"`; the three new tests fail on the base sources and pass after (follow-up to #372).
+- Through `shell-exec`: `bash -c` with `{specsync,change} approve c1` or `env {specsync,change} approve c1` (step null) or `specsync change {,} approve c1` (step `approve`), `xargs -I check specsync check approve c1`, `xargs -I status specsync change status c1`, `xargs --replace=show` / `xargs -rI show` with `specsync change show c1`, and `xargs -I X sh -c 'specsync X'` return exit 2 naming AGENT-18.a with nothing spawned; `firstLifecycleStep` returns null for `xargs -I X specsync change status X`, `xargs -I X sh -c 'specsync change status X'`, `xargs -I{} sh -c 'wc -l {}'`, `xargs -I{} grep -l specsync {}` and `[ "$a" = specsync -o "$b" = x ]`; the new test fails on the follow-up's first head (109ec35) and on main, and passes after (review of the follow-up to #372).

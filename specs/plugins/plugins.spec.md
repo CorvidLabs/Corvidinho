@@ -806,16 +806,29 @@ word that is no `specsync` subcommand: a replace string); a command word
 that expands, or a pattern that may be `xargs`, counts as `xargs` for the
 words after it. A `specsync` that is only an argument of a command that
 never runs its arguments (`echo`, `grep`, `rg`, `cat`, `ls` …:
-`grep -l specsync "$f"`, `xargs grep -l specsync`) is read only for a
-`change` step. Read-only `specsync change
+`grep -l specsync "$f"`, `xargs grep -l specsync`, and `[`) is read only
+for a `change` step. A brace pattern is first split into the words bash
+makes of it (`{specsync,change} approve c1` is four words; `{,}` is none),
+and one past the caps may be any words; a word that expands only before
+its last `/` names specsync by its basename (`"$HOME"/.cargo/bin/specsync`).
+`xargs`'s options are read as getopt reads them: a word holding its replace
+string (`-I R`, `-rI R`, `-i`, `--replace[=R]`) where the subcommand or the
+step belongs refuses whatever it reads (`xargs -I check specsync check
+approve c1`; for the subcommand, not under a never-run command, so
+`xargs -I{} grep -l specsync {}` runs), and one a shell `-c` runs as a
+script is read with it as an
+expansion (`xargs -I X sh -c 'specsync X'` refuses; `xargs -I{} sh -c
+'wc -l {}'` runs). Read-only `specsync change
 status|list|show|check|ship-status|…` and `specsync check` still run.
 AGENT-18.a residuals: code an interpreter runs (`bun -e`, `node -e`,
 `python -c`, a script handed to `node` / `python`, the `node-exec` /
 `python-exec` / `cargo-exec` runners) that spawns specsync itself is not
 parsed; neither are package-manager scripts, `make` / `just` recipes and git
 aliases (which AUTONOMY-9 does read), nor a copy of the binary under another
-name or a link made by the same command, a shell alias for it, or a bash
-extended glob (`@(…)` with `extglob` on).
+name or a link made by the same command, a shell alias for it, a bash
+extended glob (`@(…)` with `extglob` on), or a script `xargs` builds wholly
+from its input (`xargs -I X sh -c X`, or input that closes the script's own
+quotes).
 
 SAFE-21.a (REQ-plugins-495): the child env is the runners' env
 (`runnerChildEnv`): the verify lane's scrub, no `CDPATH` / `OLDPWD`, and no

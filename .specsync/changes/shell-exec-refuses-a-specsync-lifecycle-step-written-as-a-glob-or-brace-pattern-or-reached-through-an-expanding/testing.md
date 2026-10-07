@@ -32,9 +32,23 @@ the 3 new tests fail and the 11 earlier ones pass; run one by one through
 `specsync` with `change approve|review|finalize|ship c1` (or `bunx`).
 Restored: 14 of 14 pass.
 
+Review of this follow-up (a 4th test, same describe): through `shell-exec`,
+`bash -c` with `{specsync,change} approve c1`, `env {specsync,change}
+approve c1` or `specsync change {,} approve c1`, `xargs -I check specsync
+check approve c1`, `xargs -I status specsync change status c1`,
+`xargs --replace=show` / `-rI show` with `specsync change show c1`, and
+`xargs -I X sh -c 'specsync X'`: exit 2, AGENT-18.a, nothing spawned;
+`firstLifecycleStep` unit cases for brace splits (and past the caps), every
+`xargs` replace-string spelling, a `-c` script it fills in, a path that
+expands before its last `/`, and what still runs. On the first head
+(109ec35) each of those `shell-exec` cases spawned the fake `specsync` with
+`change approve c1`; with 109ec35's `sdd-lifecycle.ts` swapped in the new
+test fails, and with main's two sources the 4 tests of the describe fail.
+Restored: 15 of 15 pass.
+
 ## Requirement evidence
 
 | Requirement | Test | Evidence |
 |---|---|---|
-| `REQ-plugins-1818` (modified) | `tests/shell.sdd-lifecycle.test.ts` (3 new tests; the 11 earlier ones unchanged) | patterns and expanding / xargs subcommands refused with nothing spawned; read-only and never-run commands still run. Fail on base. |
+| `REQ-plugins-1818` (modified) | `tests/shell.sdd-lifecycle.test.ts` (4 new tests; the 11 earlier ones unchanged) | patterns and expanding / xargs subcommands refused with nothing spawned; read-only and never-run commands still run. Fail on base. |
 | all | full `bun test`, `fledge lanes run verify --non-interactive` | run on this branch before push. |

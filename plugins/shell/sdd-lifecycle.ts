@@ -17,27 +17,37 @@
  * npm-style `specsync@<version>` too), so every exec wrapper (`env`,
  * `timeout`, `nohup`, `xargs`, `sudo` …), package runner (`bunx`, `npx` …)
  * and `find -exec` in front of it is covered; also at a command word that is
- * a link to the specsync binary, or that expands (`$S change approve c1`).
+ * a link to the specsync binary, at a word that expands only before its last
+ * `/` and whose basename is `specsync` (`"$HOME"/.cargo/bin/specsync`), or at
+ * a command word that expands (`$S change approve c1`).
  * A glob or brace pattern (an unquoted `*`, `?`, `[`, `{`: `spec*ync`,
  * `appr?ve`, `fin{alize,}`) is read as every word it may stand for, so one
- * that may be `specsync`, `change` or a step counts as it. Its `change`
+ * that may be `specsync`, `change` or a step counts as it; a brace pattern is
+ * first split into the words bash makes of it (`{specsync,change}` is two
+ * words, `{,}` none). Its `change`
  * subcommand's step is read past SpecSync's options, failing closed: a word
  * right after an option may be the option's value or the step, so a
  * lifecycle step there counts; a step that expands, or one `xargs` supplies
  * from its input, refuses. So does a subcommand that expands or is a
  * pattern (`specsync "$@"`, `change${IFS}approve`, a function forwarding its
  * arguments), and one `xargs` supplies (`… | xargs specsync`, a replace
- * string); a command word that expands may be `xargs`. Those subcommand
- * rules skip an expanding command word's arguments and a `specsync` that is
- * only an argument of a command that never runs its arguments
- * (`grep -l specsync "$f"`).
+ * string); a command word that expands may be `xargs`. `xargs`'s options are
+ * read as getopt reads them, so a word holding its replace string
+ * (`-I check`, `--replace=show`) is input wherever the subcommand or step
+ * belongs, and a word holding it that a shell `-c` would run as a script
+ * (`xargs -I X sh -c 'specsync X'`) is read with it as an expansion. Those
+ * subcommand rules skip an expanding command word's arguments and a
+ * `specsync` that is only an argument of a command that never runs its
+ * arguments (`grep -l specsync "$f"`).
  *
  * Residual (stated in the spec): code an interpreter runs (`bun -e`,
  * `node -e`, `python -c`, a script handed to `node` / `python`, the
  * `node-exec` / `python-exec` / `cargo-exec` runners) that spawns specsync
  * itself is not parsed; neither are package-manager scripts, make / just
  * recipes and git aliases, a copy of the binary under another name, a shell
- * alias for it, or a bash extended glob (`@(…)` with `extglob` on).
+ * alias for it, a bash extended glob (`@(…)` with `extglob` on), or a script
+ * `xargs` builds wholly from its input (`xargs -I X sh -c X`, or input that
+ * closes the script's own quotes).
  */
 
 import { realpathSync } from "node:fs";
@@ -110,6 +120,94 @@ function baseName(v: string): string {
 const MAX_PATTERN = 1024;
 /** Most words a brace pattern is expanded to; past it, it may stand for anything. */
 const MAX_BRACE_WORDS = 64;
+
+/**
+ * A brace pattern the check does not expand (longer than MAX_PATTERN, or
+ * more than MAX_BRACE_WORDS words): it may stand for any words, so for the
+ * subcommand and the step after it as well.
+ */
+function overCap(w: Word): boolean {
+  if (!w.glob || !w.value.includes("{")) return false;
+  return w.value.length > MAX_PATTERN || braceWords(w.value) == null;
+}
+
+/**
+ * The words bash's brace expansion splits `w` into, each still read as a
+ * pattern (`{specsync,change}` is two words, `specsync` and `change`; an
+ * empty one, `{,}`, is dropped as bash drops it). A piece expands when `w`
+ * does and the piece holds a `$` or backtick. `w` itself when it holds no
+ * brace alternatives, or is past the caps (see {@link overCap}).
+ */
+function braceSplit(w: Word): Word[] {
+  if (!w.glob || !w.value.includes("{") || w.value.length > MAX_PATTERN) return [w];
+  const pieces = braceWords(w.value);
+  if (pieces == null || (pieces.length === 1 && pieces[0] === w.value)) return [w];
+  return pieces
+    .filter((p) => p !== "")
+    .map((p) => ({ value: p, expands: w.expands && /[$`]/.test(p), start: w.start, glob: true }));
+}
+
+/**
+ * GNU xargs's options (getopt `+0a:E:e::i::I:l::L:n:prs:txP:d:`): short ones
+ * that take an argument (the rest of the word, else the next word), those
+ * whose argument can only be attached, and long ones that take the next word.
+ */
+const XARGS_ARG = "aEILnsPd";
+const XARGS_ATTACHED = "eil";
+const XARGS_LONG_ARG = [
+  "--arg-file", "--delimiter", "--max-args", "--max-chars", "--max-procs", "--process-slot-var",
+];
+
+/**
+ * The `xargs` at `k`, read as getopt reads it: the strings it replaces with
+ * its input (`-I R`, `-IR`, `-i[R]`, `--replace[=R]`, a long option's
+ * abbreviation too; `-i` and `--replace` mean `{}`), and the index of the
+ * command it runs (-1 when none).
+ */
+function xargsRead(words: readonly Word[], k: number): { replace: string[]; command: number } {
+  const replace: string[] = [];
+  let m = k + 1;
+  for (; m < words.length; m++) {
+    const v = words[m]!.value;
+    if (v === "--") {
+      m++;
+      break;
+    }
+    if (!v.startsWith("-") || v === "-") break;
+    if (v.startsWith("--")) {
+      const eq = v.indexOf("=");
+      const name = eq < 0 ? v : v.slice(0, eq);
+      if (name.length > 2 && "--replace".startsWith(name)) {
+        replace.push(eq < 0 ? "{}" : v.slice(eq + 1));
+      } else if (eq < 0 && name.length > 2 && XARGS_LONG_ARG.some((o) => o.startsWith(name))) {
+        m++;
+      }
+      continue;
+    }
+    for (let j = 1; j < v.length; j++) {
+      const ch = v[j]!;
+      const rest = v.slice(j + 1);
+      if (XARGS_ARG.includes(ch)) {
+        const arg = rest !== "" ? rest : words[++m]?.value;
+        if (ch === "I" && arg != null) replace.push(arg);
+        break;
+      }
+      if (XARGS_ATTACHED.includes(ch)) {
+        if (ch === "i") replace.push(rest !== "" ? rest : "{}");
+        break;
+      }
+    }
+  }
+  return { replace, command: m < words.length ? m : -1 };
+}
+
+/** The `xargs` in front of an invocation: null for none, else the strings they replace with input. */
+type Feed = { replace: readonly string[] } | null;
+
+/** A word an `xargs` in front fills in from its input: it holds one of their replace strings. */
+function filled(w: Word, fed: Feed): boolean {
+  return fed != null && fed.replace.some((r) => w.value.includes(r));
+}
 
 /**
  * The words bash's brace expansion makes of `p`: `{a,b}` alternatives (nested
@@ -230,8 +328,17 @@ function patternMatch(
   part: (v: string) => string = (v) => v,
 ): PatternMatch {
   if (w.expands || !w.glob) return "no";
-  if (w.value.length > MAX_PATTERN) return "text";
-  const words = braceWords(w.value);
+  return patternValueMatch(w.value, names, part);
+}
+
+/** {@link patternMatch} on a pattern's text. */
+function patternValueMatch(
+  value: string,
+  names: readonly string[],
+  part: (v: string) => string = (v) => v,
+): PatternMatch {
+  if (value.length > MAX_PATTERN) return "text";
+  const words = braceWords(value);
   if (words == null) return "text";
   let found: PatternMatch = "no";
   for (const word of words) {
@@ -261,9 +368,16 @@ function programName(value: string): string {
  * `specsync`, `/usr/bin/specsync`, `./bin/specsync`, `specsync@6.0.0`,
  * `@scope/specsync@1`, and an option's value (`--bin=specsync`); for a
  * pattern (`spec*ync`, `./spec{sync,}`), how it may stand for one of them.
+ * A word that expands only before its last `/` (`"$HOME"/.cargo/bin/specsync`,
+ * `"$D/spec*ync"`) names it by the literal basename after that `/`.
  */
 function namesSpecsync(w: Word): PatternMatch {
-  if (w.expands) return "no";
+  if (w.expands) {
+    const base = programName(w.value);
+    if (!w.value.includes("/") || /[$`]/.test(base)) return "no";
+    if (w.glob) return patternValueMatch(base, ["specsync"]);
+    return base === "specsync" ? "text" : "no";
+  }
   if (w.glob) return patternMatch(w, ["specsync"], programName);
   return programName(w.value) === "specsync" ? "text" : "no";
 }
@@ -304,9 +418,10 @@ type Verdict = { step: string | null; unread: string | null };
 function stepAfterChange(
   words: readonly Word[],
   j: number,
-  fed: boolean,
+  fed: Feed,
   literalOnly: boolean,
 ): Verdict | null {
+  if (overCap(words[j]!)) return { step: null, unread: "its step is a pattern the shell expands" };
   let afterOpt = false;
   for (let m = j + 1; m < words.length; m++) {
     const w = words[m]!;
@@ -317,6 +432,9 @@ function stepAfterChange(
     if (!w.expands && !w.glob && STEPS.has(w.value)) return { step: w.value, unread: null };
     if (mayBe(w, HUMAN_LIFECYCLE_STEPS)) {
       return { step: null, unread: "its step is a pattern the shell expands" };
+    }
+    if (fed && !literalOnly && filled(w, fed)) {
+      return { step: null, unread: "xargs fills in its step from input" };
     }
     if (afterOpt) {
       afterOpt = false;
@@ -336,16 +454,20 @@ function stepAfterChange(
  * null: every `change` the subcommand scan reaches (past options and what
  * may be their values) is read. With `strictSub`, a word there that expands
  * or is a pattern may be `change` and its step (`"$@"`,
- * `change${IFS}approve`, `{change,approve}`), and under `xargs` the input
- * may supply the subcommand, so those fail closed.
+ * `change${IFS}approve`, `{change,approve}`), a program word past the brace
+ * caps may hold them too, and under `xargs` the input may supply the
+ * subcommand (any word holding a replace string it names), so those fail
+ * closed.
  */
 function invocationStep(
   words: readonly Word[],
   k: number,
-  fed: boolean,
+  fed: Feed,
   literalOnly: boolean,
   strictSub: boolean,
 ): Verdict | null {
+  const subPattern = { step: null, unread: "its subcommand is a pattern the shell expands" };
+  if (strictSub && overCap(words[k]!)) return subPattern;
   let afterOpt = false;
   for (let m = k + 1; m < words.length; m++) {
     const w = words[m]!;
@@ -354,8 +476,9 @@ function invocationStep(
       continue;
     }
     if (strictSub && w.expands) return { step: null, unread: "its subcommand expands" };
-    if (strictSub && w.glob) {
-      return { step: null, unread: "its subcommand is a pattern the shell expands" };
+    if (strictSub && w.glob) return subPattern;
+    if (strictSub && filled(w, fed)) {
+      return { step: null, unread: "xargs fills in its subcommand from input" };
     }
     if (mayBe(w, ["change"])) {
       const v = stepAfterChange(words, m, fed, literalOnly);
@@ -385,12 +508,41 @@ function show(words: readonly Word[], k: number): string {
   return `\`${t}\``;
 }
 
-function commandStep(cmd: SimpleCommand, root: string): LifecycleStep | null {
-  const words = cmd.words;
-  if (cmd.start >= words.length) return null;
+/** `words` past `start` split as bash's brace expansion splits them (see {@link braceSplit}). */
+function braceSplitWords(words: readonly Word[], start: number): Word[] {
+  const out = words.slice(0, start);
+  for (let k = start; k < words.length; k++) out.push(...braceSplit(words[k]!));
+  return out;
+}
+
+/** How deep a word `xargs` fills in is re-read as a script (`xargs -I X sh -c '… X …'`). */
+const MAX_FILLED_DEPTH = 2;
+
+/**
+ * A word holding an `xargs` replace string, read as the script a shell `-c`
+ * would run (`xargs -I X sh -c 'specsync X'`), with the replace string as an
+ * expansion (outside quotes, and closing a single quote it sits in): the
+ * lifecycle step that reading refuses, else null.
+ */
+function filledScriptStep(w: Word, fed: Feed, root: string, depth: number): Verdict | null {
+  if (fed == null || depth >= MAX_FILLED_DEPTH || !filled(w, fed)) return null;
+  for (const input of ["$__xargs_input", "'$__xargs_input'"]) {
+    let text = w.value;
+    for (const r of fed.replace) if (r !== "") text = text.split(r).join(input);
+    const f = lifecycleStepAt(text, root, depth + 1);
+    if (f) return { step: f.step, unread: f.step ? null : "xargs fills in a script it runs from input" };
+  }
+  return null;
+}
+
+function commandStep(cmd: SimpleCommand, root: string, depth: number): LifecycleStep | null {
+  if (cmd.start >= cmd.words.length) return null;
+  const words = braceSplitWords(cmd.words, cmd.start);
   const chain = commandChain(words, cmd.start).map((l) => l.k);
   const links = new Set(chain);
-  let fed = false; // an `xargs` in front: it appends words from its input
+  // An `xargs` in front: it appends words from its input, or fills in the
+  // words holding its replace strings.
+  let fed = null as Feed;
   for (let k = cmd.start; k < words.length; k++) {
     const w = words[k]!;
     const link = links.has(k);
@@ -405,14 +557,27 @@ function commandStep(cmd: SimpleCommand, root: string): LifecycleStep | null {
       // An argument of a command that never runs its arguments
       // (`grep -l specsync "$f"`) is only read for a literal `change` step.
       const owner = link ? undefined : words[chain.filter((j) => j < k).at(-1) ?? -1];
-      const asText = owner != null && !owner.expands && !owner.glob && NEVER_RUN.has(baseName(owner.value));
+      const asText =
+        owner != null &&
+        !owner.expands &&
+        (!owner.glob || owner.value === "[") &&
+        NEVER_RUN.has(baseName(owner.value));
       const v = invocationStep(words, k, fed, literalOnly, !literalOnly && !asText);
       if (v) return { ...v, text: show(words, k), script: cmd.script };
     }
+    const script = filledScriptStep(w, fed, root, depth);
+    if (script) return { ...script, text: show(words, k), script: cmd.script };
     // `xargs` appends words from its input to the words after it; so may a
-    // pattern that may be it, and a command word that expands.
+    // pattern that may be it, and a command word that expands. Its options
+    // are read as getopt reads them: the words holding a replace string
+    // (`-I R`) are input, and for an `xargs` (or a pattern that may be it)
+    // the command they name runs.
     const xargs = namesXargs(w);
-    if (xargs === "text" || (link && (xargs === "wild" || w.expands))) fed = true;
+    if (xargs === "text" || (link && (xargs === "wild" || w.expands))) {
+      const read = xargsRead(words, k);
+      fed = { replace: [...(fed?.replace ?? []), ...read.replace] };
+      if (xargs !== "no" && read.command >= 0) links.add(read.command);
+    }
   }
   return null;
 }
@@ -423,10 +588,13 @@ function commandStep(cmd: SimpleCommand, root: string): LifecycleStep | null {
  * Synchronous; no repo check: the shell refuses these in every repo.
  */
 export function firstLifecycleStep(cmd: string, root: string): LifecycleStep | null {
-  const rootAbs = resolve(root);
+  return lifecycleStepAt(cmd, resolve(root), 0);
+}
+
+function lifecycleStepAt(cmd: string, rootAbs: string, depth: number): LifecycleStep | null {
   let found = null as LifecycleStep | null;
   forEachSimpleCommand(cmd, rootAbs, (c) => {
-    found = commandStep(c, rootAbs);
+    found = commandStep(c, rootAbs, depth);
     return found ? "lifecycle" : null;
   });
   return found;

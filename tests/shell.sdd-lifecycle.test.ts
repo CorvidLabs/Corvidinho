@@ -468,7 +468,12 @@ describe("glob / brace patterns and an expanding or xargs-fed subcommand refuse 
     expect(read("spec*ync change approve c1")).toEqual({ step: "approve", unread: null });
     expect(read("./specsyn? change approve c1")).toEqual({ step: "approve", unread: null });
     expect(read("/usr/bin/[s]pecsync change review c1")).toEqual({ step: "review", unread: null });
-    expect(read("spec{sync,} change finalize c1")).toEqual({ step: "finalize", unread: null });
+    // bash splits a brace pattern into words: `specsync spec change …`, whose
+    // subcommand is the pattern's second word.
+    expect(read("spec{sync,} change finalize c1")).toEqual({
+      step: null,
+      unread: "its subcommand is a pattern the shell expands",
+    });
     expect(read("{x,specsync} change ship c1")).toEqual({ step: "ship", unread: null });
     expect(read("npx spec*@6 change approve c1")).toEqual({ step: "approve", unread: null });
     expect(read("cargo run --bin=spec* -- change approve c1")).toEqual({ step: "approve", unread: null });
@@ -554,6 +559,78 @@ describe("glob / brace patterns and an expanding or xargs-fed subcommand refuse 
       '$X "$Y"',
       '$X change "$Y"',
       "$X * c1",
+    ]) {
+      expect({ c, r: read(c) }).toEqual({ c, r: null });
+    }
+  });
+
+  test("a brace pattern splits into words, xargs's replace string is input wherever it stands, and a -c script it fills in is read", async () => {
+    const repo = sddRepo();
+    for (const [command, step] of [
+      ["touch spawned; bash -c '{specsync,change} approve c1'", null],
+      ["touch spawned; bash -c 'env {specsync,change} approve c1'", null],
+      ["touch spawned; bash -c 'specsync change {,} approve c1'", "approve"],
+      ["touch spawned; echo change | xargs -I check specsync check approve c1", null],
+      ["touch spawned; echo approve | xargs -I status specsync change status c1", null],
+      ["touch spawned; echo approve | xargs --replace=show specsync change show c1", null],
+      ["touch spawned; echo approve | xargs -rI show specsync change show c1", null],
+      ["touch spawned; echo 'change approve c1' | xargs -I X sh -c 'specsync X'", null],
+    ] as const) {
+      await expectRefused(command, repo, step);
+    }
+    const { firstLifecycleStep } = await import("../plugins/shell/sdd-lifecycle.ts");
+    const read = (c: string) => {
+      const f = firstLifecycleStep(c, repo);
+      return f && { step: f.step, unread: f.unread };
+    };
+    const subPattern = { step: null, unread: "its subcommand is a pattern the shell expands" };
+    const stepPattern = { step: null, unread: "its step is a pattern the shell expands" };
+    const many = Array.from({ length: 70 }, (_, i) => `a${i}`).join(",");
+    for (const [c, r] of [
+      // bash makes several words of one brace pattern, and none of `{,}`.
+      ["{specsync,change} approve c1", subPattern],
+      ["{specsync,change,approve} c1", subPattern],
+      ["sudo {specsync,change} approve c1", subPattern],
+      ["specsync change {,} approve c1", { step: "approve", unread: null }],
+      ["specsync {,} change approve c1", { step: "approve", unread: null }],
+      ["$X {change,approve} c1", stepPattern],
+      ["$X change {,} approve c1", { step: "approve", unread: null }],
+      // Past the brace caps a pattern may stand for any words.
+      [`{specsync,${many}} c1`, subPattern],
+      [`$X {change,${many}} c1`, stepPattern],
+      // A replace string xargs's options name is input, whatever word holds it.
+      ["echo change | xargs -I check specsync check approve c1", { step: null, unread: "xargs fills in its subcommand from input" }],
+      ["xargs -I status specsync change status c1", { step: null, unread: "xargs fills in its step from input" }],
+      ["xargs -Ishow specsync change show c1", { step: null, unread: "xargs fills in its step from input" }],
+      ["xargs -0 -I show specsync change show c1", { step: null, unread: "xargs fills in its step from input" }],
+      ["xargs -rI show specsync change show c1", { step: null, unread: "xargs fills in its step from input" }],
+      ["xargs --replace=show specsync change show c1", { step: null, unread: "xargs fills in its step from input" }],
+      ["xargs --rep=show specsync change show c1", { step: null, unread: "xargs fills in its step from input" }],
+      ["xargs -ishow specsync change show c1", { step: null, unread: "xargs fills in its step from input" }],
+      ["xargs -i specsync change x{}x c1", { step: null, unread: "xargs fills in its step from input" }],
+      ["xargs -rI echo specsync echo approve c1", { step: null, unread: "xargs fills in its subcommand from input" }],
+      // ... and a script a shell -c runs with it is read with it as an expansion.
+      ["xargs -I X sh -c 'specsync X'", { step: null, unread: "xargs fills in a script it runs from input" }],
+      ['xargs -I X bash -c "specsync \'X\'"', { step: null, unread: "xargs fills in a script it runs from input" }],
+      ["xargs -I X sh -c 'specsync change X c1'", { step: null, unread: "xargs fills in a script it runs from input" }],
+      // A path that expands only before its last `/` names specsync by its basename.
+      ['f() { "$HOME"/.cargo/bin/specsync "$@"; }; f change approve c1', { step: null, unread: "its subcommand expands" }],
+      ['"$D"/spec*ync "$@"', { step: null, unread: "its subcommand expands" }],
+    ] as const) {
+      expect({ c, r: read(c) }).toEqual({ c, r });
+    }
+    // Untouched: literal subcommands and steps, a script xargs fills in that
+    // runs no lifecycle step, a quoted pattern character, and `[`'s words.
+    for (const c of [
+      "echo c1 | xargs -I X specsync change status X",
+      "echo x | xargs -I X specsync check X",
+      "echo approve | xargs -I X sh -c 'specsync change status X'",
+      "find . -name '*.ts' | xargs -I{} sh -c 'wc -l {}'",
+      "ls | xargs -I{} sh -c 'echo {}; cat {}'",
+      "git ls-files | xargs -I{} grep -l specsync {}",
+      'f() { "$D/spec*ync" "$@"; }',
+      '[ "$a" = specsync -o "$b" = x ]',
+      "specsync change {new,x} c1",
     ]) {
       expect({ c, r: read(c) }).toEqual({ c, r: null });
     }
