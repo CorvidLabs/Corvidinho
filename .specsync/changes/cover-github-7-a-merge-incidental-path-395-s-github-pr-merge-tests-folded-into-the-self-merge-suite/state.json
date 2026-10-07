@@ -7,10 +7,11 @@
   "title": "Cover GITHUB-7.a merge incidental path: #395's github-pr-merge tests folded into the self-merge suite",
   "description": "Cover GITHUB-7.a merge incidental path: #395's github-pr-merge tests folded into the self-merge suite",
   "kind": "refactor",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "2a266292110511bbb8b551ea7664533b207f976e",
   "created_at": 1791332513,
-  "updated_at": 1791332526,
+  "updated_at": 1791332560,
   "affected_specs": [],
   "affected_paths": [
     "tests/github.merge.plugin.test.ts"
