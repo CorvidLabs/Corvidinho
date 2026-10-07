@@ -206,8 +206,12 @@ const DIRSTACK_WRITE = /^DIRSTACK(\[|\+?=)/;
 /** Literal target chars the shell would expand (glob / brace / $ / backtick). */
 const EXPANSION = /[$`*?[{]/;
 
-/** A word, its expansion flag, and where it starts in the tokenized text. */
-export type Word = { value: string; expands: boolean; start: number };
+/**
+ * A word, its expansion flag, and where it starts in the tokenized text.
+ * `glob` is set when it holds an unquoted `*`, `?`, `[` or `{`: a pattern
+ * the shell may expand (pathname or bash brace expansion).
+ */
+export type Word = { value: string; expands: boolean; start: number; glob?: boolean };
 /**
  * A redirection: `in` (`<`, `<&`), `out` (`>`, `>>`, `>|`, `>&`, `&>`), `rw`
  * (`<>`), `heredoc` (`<<`, `<<-`) or `herestring` (`<<<`).
@@ -345,7 +349,8 @@ function hereDocSubstitutions(
  * into fragments (one simple command each) at unquoted control operators
  * (`; & | newline ( )`), tokenizes each fragment into words + redirection
  * markers, and records whether a word carries a shell expansion (`$` /
- * `$(…)` / backtick). A `\`-newline outside single quotes is a line
+ * `$(…)` / backtick) and whether it holds an unquoted glob or brace
+ * character (`Word.glob`). A `\`-newline outside single quotes is a line
  * continuation (an escaped `\` before a newline is not), `#` at the start of a
  * word comments to the end of the line, and a here-doc body is data, apart
  * from the substitutions an unquoted one expands. Every command substitution
@@ -370,6 +375,7 @@ function tokenize(
   let pipeNext = false;
   let value = "";
   let expands = false;
+  let glob = false; // an unquoted `*`, `?`, `[` or `{` (see `Word.glob`)
   let quoted = false;
   let start = -1; // where the current word began; -1 between words
   let parens = 0; // bare `(` nesting inside a `$( )` body
@@ -393,10 +399,11 @@ function tokenize(
         });
         delimNext = null;
       }
-      cur.push({ word: { value, expands, start } });
+      cur.push({ word: glob ? { value, expands, start, glob } : { value, expands, start } });
     }
     value = "";
     expands = false;
+    glob = false;
     quoted = false;
     start = -1;
   };
@@ -582,6 +589,7 @@ function tokenize(
       if (start >= 0 && /^\d+$/.test(value)) {
         value = "";
         expands = false;
+        glob = false;
         quoted = false;
         start = -1;
       } else {
@@ -657,6 +665,7 @@ function tokenize(
     }
     beginWord(i);
     if (c === "$") expands = true;
+    if (c === "*" || c === "?" || c === "[" || c === "{") glob = true;
     value += c;
     i++;
   }

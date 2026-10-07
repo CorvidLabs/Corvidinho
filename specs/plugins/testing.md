@@ -745,6 +745,55 @@ the `bun -e` residual.
   read-only and settle cases pass on both. Restored: 11 of 11 pass.
 - `tests/agent.repo-ways.test.ts` (the `runTask` settle cases, REQ-agent-519)
   passes unchanged.
+- Follow-up to #372 (REQ-plugins-1818 modified), same file, "glob / brace
+  patterns and an expanding or xargs-fed subcommand refuse too" (3 tests):
+  through `shell-exec`, from a repo holding files named `specsync`,
+  `change` and `approve` (what pathname expansion turns the patterns into),
+  `spec*ync`, `specsyn?`, `[s]pecsync`, `env spec*`, `bunx spec*` with a
+  literal step, `specsync c?ange approve`, `specsync change appr*ve` /
+  `appro?e` / `[a]pprove`, and `bash -c` with `{approve,}` or
+  `{specsync,}` are refused like the cases above (step null where the step
+  or subcommand is a pattern); a function forwarding `"$@"`, `set --` then
+  `"$@"`, `change${IFS}approve`, `specsync $S c1` with `S='change approve'`,
+  `… | xargs specsync`, `xargs -n3 specsync` and `xargs -I X specsync X
+  approve c1` are refused with step null. A unit test of
+  `firstLifecycleStep` covers each pattern form (path, `@version`,
+  `--bin=`, brace alternatives and sequences, bracket expressions and POSIX
+  classes, a pattern after an option, `sh -c` / `eval` re-reads), the
+  expanding-subcommand and xargs reasons, and what still runs: quoted
+  pattern characters, `cp * "$dest"`, `ls * specsync`,
+  `git ls-files | xargs grep -l specsync`, `grep -rn specsync "$f"`,
+  `specsync change status "$ID"`, `xargs specsync change status` / `check`,
+  and an expanding command word's own arguments.
+- Fail on base (54d6a6c's `plugins/shell/sdd-lifecycle.ts` and
+  `plugins/shell/clamp.ts` swapped in): the 3 new tests fail, the 11 earlier
+  ones pass; run one by one through `shell-exec` on the base, every new
+  refused case spawns the fake `specsync` with `change <step> c1`. Restored:
+  14 of 14 pass.
+- Review of the follow-up to #372 (REQ-plugins-1818 modified again), same
+  describe, "a brace pattern splits into words, xargs's replace string is
+  input wherever it stands, and a -c script it fills in is read" (1 test):
+  through `shell-exec`, `bash -c` with `{specsync,change} approve c1`,
+  `env {specsync,change} approve c1` and `specsync change {,} approve c1`,
+  `xargs -I check specsync check approve c1`, `xargs -I status specsync
+  change status c1`, `xargs --replace=show` / `-rI show` with `specsync
+  change show c1`, and `xargs -I X sh -c 'specsync X'` are refused with
+  nothing spawned; `firstLifecycleStep` unit cases cover sudo and `$X` in
+  front of a split brace, a brace past the caps, `-Ishow`, `-0 -I`,
+  `--rep=` (an abbreviation), `-ishow`, `-i` with `{}`, `-rI echo`, a
+  double-quoted `-c` script with the replace string in single quotes, a
+  path that expands before its last `/`, and what still runs
+  (`xargs -I X specsync change status X`, `xargs -I X specsync check X`,
+  `xargs -I X sh -c 'specsync change status X'`, `xargs -I{} sh -c
+  'wc -l {}'`, `xargs -I{} grep -l specsync {}`,
+  `[ "$a" = specsync -o "$b" = x ]`). The earlier unit test now
+  reads `spec{sync,} change finalize c1` as bash does (`specsync spec …`:
+  the subcommand is a pattern).
+- Fail on the follow-up's first head (109ec35's `sdd-lifecycle.ts` swapped
+  in): the new test fails (each of its `shell-exec` cases spawns the fake
+  `specsync` with `change approve c1`), and so does the earlier unit test's
+  `spec{sync,}` case. On main's two sources: the 4 tests of this describe
+  fail, the 11 earlier ones pass. Restored: 15 of 15 pass.
 ## The hi/ refusal names the owner's card and hi-draft (REQ-plugins-520 modified; AGENT-18 hi drafts)
 
 `tests/agent.hi-guard.test.ts`: the `files-write` refusal under `hi/` now
