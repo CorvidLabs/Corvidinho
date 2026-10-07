@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-46-autonomous-7-a-daemon-schedule-dm-411-and-agent-13-13-a-headless-agent-cli-model-413-package-bump",
+  "implementation_commit": "135305c3a260ec51167f09fb79c827d36192527a",
+  "implementation_tree": null,
+  "contract_digest": null,
+  "workspace_digest": null,
+  "closing_digest": null,
+  "review_digest": null,
+  "finalization_digest": "tip-orphan-manual",
+  "timestamp": 1791393200,
+  "note": "tip-orphan archive after #427 squash (same class as #424/#425/#426)"
+}
