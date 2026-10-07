@@ -1802,3 +1802,37 @@ token (fails on main, which passed it), and a token only in the enriched
 prompt is not passed either (REQ-discord-128). `tests/discord.session-thread.test.ts`
 keeps the `humanText` check without the removed token helper.
 
+## Once a session question's buttons expire the session stops waiting; a schedule's questions still wait (REQ-discord-044 / 045 modified; AUTONOMY-6.b)
+
+`tests/discord.expired-asks.test.ts` (9 tests) pins both halves on the real
+~30-minute window: the system clock is frozen (`setSystemTime`) and moved to
+one minute inside and one minute past `ASK_BUTTON_TTL_MS`, never a
+hand-edited `expiresAt`.
+
+- Session half (REQ-discord-044): through `startBridge` (null gateway, owner
+  set, an agent whose first run asks a two-choice Choose question) the ask's
+  `expiresAt` is the ask time plus `ASK_BUTTON_TTL_MS`; at +29 min a thin
+  `ok` restates it with its Choose button and runs nothing; at +31 min a thin
+  `ok`, or a new request, runs the agent with no prior-question block, posts
+  no stub or Choose button for it and leaves no pending or open ask; a late
+  pick gets `ASK_CHOICE_EXPIRED`; a later `ok` runs too. The same for a reply
+  to a `/session start` or `/work` Choose answer, and across a bridge
+  restart on the same DB (the stored ask keeps its `expiresAt`).
+- Schedule half (REQ-discord-045): with a session ask and a schedule ask of
+  the same age at +31 min, the session Choose press gets
+  `ASK_CHOICE_EXPIRED`, the creator's chat message runs and leaves the
+  schedule ask open, and the schedule's Choose opens its choices and a pick
+  closes it. A manual `SchedulerService` (`*/5` schedule, both clocks moved)
+  skips the due run at +31 min and a day later (no run, one wait note, ask
+  open) and runs the next one with the owner's pick after it is answered.
+- `hi/autonomy.md` holds the captured text after AUTONOMY-6.a; three
+  `docs/discord.md` passages and the `docs/DISCORD-GO-LIVE.md` schedule
+  bullet cite AUTONOMY-6.b.
+
+Fail on base: with main (85871fa4)'s `docs/discord.md`,
+`docs/DISCORD-GO-LIVE.md`, `hi/autonomy.md` and `INTENT.md` swapped in, 7
+pass, 2 fail (the hi and doc citation cases). The behaviour cases pass on
+main: this records Leif's round-17 decision (keep as built). Mutation checks:
+skipping the expired-ask clear in the bridge's continue path fails the five
+session cases; letting `ScheduleStore.openAsk` / `openRunAsk` drop an ask 30
+minutes after its run fails both schedule cases. Restored: 9 of 9 pass.

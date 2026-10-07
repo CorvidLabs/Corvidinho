@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "once-a-session-question-s-buttons-expire-the-session-stops-waiting-and-my-next-message-runs-normally-a-schedule-s",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "eb5510f2c3564a6810bc95e24aa6b8808c78d725",
+      "contract_digest": "c1582eddc8fba5edd513fba2b5e1159946e20c39216dc9b2b51bd84072d52e7a",
+      "execution_digest": "11256b2fec94e6d019473e46d08d3a65f9016fe1ea897c5697734027da4eb647",
+      "workspace_digest": "23d6bf1fb358085ab633388425fe978af61c87246fc4568f661d902b121ba758",
+      "timestamp": 1791355453
+    },
+    {
+      "schema_version": 2,
+      "change_id": "once-a-session-question-s-buttons-expire-the-session-stops-waiting-and-my-next-message-runs-normally-a-schedule-s",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "868799ea429478f9416b5828e8eb8a4d3ed38740",
+      "contract_digest": "c1582eddc8fba5edd513fba2b5e1159946e20c39216dc9b2b51bd84072d52e7a",
+      "execution_digest": "11256b2fec94e6d019473e46d08d3a65f9016fe1ea897c5697734027da4eb647",
+      "workspace_digest": "23d6bf1fb358085ab633388425fe978af61c87246fc4568f661d902b121ba758",
+      "timestamp": 1791356449
+    },
+    {
+      "schema_version": 2,
+      "change_id": "once-a-session-question-s-buttons-expire-the-session-stops-waiting-and-my-next-message-runs-normally-a-schedule-s",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "89d2a650a21a7502c302b38beaf35f90cbb0b7b3",
+      "contract_digest": "c1582eddc8fba5edd513fba2b5e1159946e20c39216dc9b2b51bd84072d52e7a",
+      "execution_digest": "11256b2fec94e6d019473e46d08d3a65f9016fe1ea897c5697734027da4eb647",
+      "workspace_digest": "717af758dfa8982ea7fc3eb1552c5d0173e72702af57e1332c6051ca9e4a1c3a",
+      "timestamp": 1791357291
+    }
+  ]
+}

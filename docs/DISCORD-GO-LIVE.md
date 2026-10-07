@@ -191,7 +191,9 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   **Cancel**; after Continue the next due run's calls past a cap, or at an unknown price, ask on
   the spend card first) that the schedule's creator or the owner presses; a reply does not
   answer it, and the buttons do not expire while it is open. Until then the schedule's due runs are skipped (not made up) and one note says it
-  is waiting. A schedule with no channel sends its question and buttons to the owner by **direct
+  is waiting. A chat or slash question is different (AUTONOMY-6.b): its **Choose** buttons expire
+  after ~30 minutes, and then that session stops waiting on it and your next message runs normally;
+  a schedule's questions still wait until answered. A schedule with no channel sends its question and buttons to the owner by **direct
   message** (same DM rule as above). See [`discord.md`](discord.md) "Scheduled questions wait for
   an answer".
 - A scheduled run the bridge started can be stopped from Discord by the owner or the schedule's
@@ -651,10 +653,12 @@ Who is who in an allowlisted channel:
 - On GitHub (IDENTITY-12.a) a WATCH run gets the role of the person who triggered it, matched
   by their GitHub numeric user id in the people list (never a login): the owner's tools for the
   owner, the team's for a team member (not `/work` file edits), behind the same must-ask gate;
-  community for anyone else and for every assignment or review request. It never gets the
-  shell, runners, Fledge runs or a discovered Fledge plugin command, and secret-looking
-  paths stay hidden there for every role
-  ([`WATCH.md`](WATCH.md) "Roles on GitHub").
+  community for anyone else, for every assignment or review request, and for a comment or body
+  someone else edited (REQ-watch-1202). It never gets the shell, runners, Fledge runs or a
+  discovered Fledge plugin command, never writes the watcher's own checkout (file writes,
+  git branch / commit / push, SpecSync change steps, REQ-plugins-1202), and secret-looking
+  paths stay hidden there for every role; its audit rows and cards name `github:<id>`
+  (REQ-plugins-1203) ([`WATCH.md`](WATCH.md) "Roles on GitHub").
 - Schedules anyone but the owner created and `delegate` / `council` workers are
   community whoever triggered them. A schedule the owner created runs as the owner
   (DISCORD-SCHEDULE-1.a): their allowlisted tools and must-ask cards, never the shell,

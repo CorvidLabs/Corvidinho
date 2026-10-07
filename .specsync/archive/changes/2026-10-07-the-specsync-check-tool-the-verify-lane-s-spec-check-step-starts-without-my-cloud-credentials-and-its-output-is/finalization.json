@@ -1,12 +1,13 @@
 {
   "schema_version": 2,
   "change_id": "the-specsync-check-tool-the-verify-lane-s-spec-check-step-starts-without-my-cloud-credentials-and-its-output-is",
-  "implementation_commit": "064b768aec16743335a0aaa813f056a4f3dd9317",
-  "implementation_tree": "5f2d63335f57f8f7392804091c2e5311ddbb21f9",
+  "implementation_commit": "85871fa4ddcf5f13b8db51cacb336a5b55d7a279",
+  "implementation_tree": "5367ffa096a427ef0b6a4b69394d8f6fef066001",
   "contract_digest": "78d38af2be4474b202f1d7efca4f510274ab0969aee29dd4b2a049150436029e",
   "workspace_digest": "555b3b05241f24dc5a24b362f6c6ac24e9f327de3759c139d850972518c38269",
   "closing_digest": "25fe8e5911171bcd89434c7530f19a67e7bd106f60dfa30f889d0a0a0b949e61",
   "review_digest": "f6e65608adc35b6e88f85d0264401102573fc460065dfd7397e8ba4c10e000f7",
   "finalization_digest": "13a5bcf4647b9b91ed6d59db938fbdce3f115463e7fb33ad2e03dec95743ceb8",
-  "timestamp": 1791334483
+  "timestamp": 1791334483,
+  "note": "tip-orphan archive after #402 squash (same class as #366 / #400)"
 }

@@ -163,6 +163,7 @@ files:
   - tests/discord.ask-buttons.test.ts
   - tests/discord.ask-answer-modal.test.ts
   - tests/discord.ask-ephemeral.test.ts
+  - tests/discord.expired-asks.test.ts
   - tests/discord.ask-scrub-first.test.ts
   - src/discord/inflight-replies.ts
   - tests/discord.inflight-replies.test.ts
@@ -409,7 +410,10 @@ custom ids. Sessions persist their open asks in `discord_sessions.pending_ask`
 (with `askId` / `expiresAt` / options) is the newest, the one a thin reply
 restates and a free-text reply answers (a button `pendingAsk` past its
 timeout is cleared with `clearPendingAsk` before any reply but `cancel` is
-gated, so a thin reply never restates it — DISCORD-ASK-5), and `openAsks` holds earlier button
+gated, so a thin reply never restates it — DISCORD-ASK-5; once a session
+question's buttons expire the session stops waiting and the next message runs
+normally, while a schedule's questions still wait until answered —
+AUTONOMY-6.b), and `openAsks` holds earlier button
 asks a later ask did not replace — one JSON object when one ask is open, an
 array (oldest first, newest last) when several are. The stored question,
 option labels and option ids are secret-scrubbed (SAFE-6 / REQ-discord-066),
@@ -1304,6 +1308,18 @@ the announcements channel with no Approve card, no hold line and no wait,
 never counts toward the 20, and carries only the fixed REQ-discord-025
 template (no model call, no model text).
 
+Once a session question's buttons expire, the session stops waiting and the
+requester's next message runs normally; a schedule's questions still wait
+until answered (AUTONOMY-6.b, REQ-discord-044 / REQ-discord-045). A session's
+button ask (chat, `/work`, `/session start`) keeps the session waiting only
+for its ~30 minutes (`ASK_BUTTON_TTL_MS`, kept with the stored ask across a
+restart): past them the next message that is not a cancel drops it and runs
+as ordinary chat, with no prior-question block (only a thin reply, while an
+earlier button ask of the session is still live, restates that one instead,
+SESSION-MULTI-3). A schedule's ask has no expiry: its controls take presses and its
+schedule's due runs stay skipped until it is answered or cancelled
+(AUTONOMY-6.a, REQ-discord-606).
+
 ## Behavioral Examples
 
 ### Scenario: Its first public-thread replies wait for the owner's OK (AUTONOMY-10 / 10.a)
@@ -1731,3 +1747,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
 | 2026-10-06 | work-schedule-and-the-scheduler-can-be-turned-off-in-corvidinho-plugins-and-existing-installs-stay-on-plugin-5-5-a: /work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a) |
 | 2026-10-07 | my-own-memory-forget-and-override-by-id-ask-me-on-a-dm-card-with-approve-and-a-one-time-code-and-an-override-shows-the: My own memory forget and override by id ask me on a DM card with Approve and a one-time code, and an override shows the new text word for word (SAFE-18.a) |
+| 2026-10-07 | once-a-session-question-s-buttons-expire-the-session-stops-waiting-and-my-next-message-runs-normally-a-schedule-s: Once a session question's buttons expire the session stops waiting and my next message runs normally; a schedule's questions still wait until answered (AUTONOMY-6.b) |
