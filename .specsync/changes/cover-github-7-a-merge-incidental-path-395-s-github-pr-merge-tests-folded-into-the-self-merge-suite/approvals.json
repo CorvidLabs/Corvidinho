@@ -29,6 +29,36 @@
         }
       },
       "approved_delta_digests": {}
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791333389,
+      "digest": "2e11ab07729066dd3c6d2b7fbd90ae087198e33ab15351afd7126a6c80f4b079",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "cover-github-7-a-merge-incidental-path-395-s-github-pr-merge-tests-folded-into-the-self-merge-suite",
+        "title": "Cover GITHUB-7.a merge incidental path: #395's github-pr-merge tests folded into the self-merge suite",
+        "description": "Cover GITHUB-7.a merge incidental path: #395's github-pr-merge tests folded into the self-merge suite",
+        "kind": "refactor",
+        "affected_specs": [],
+        "affected_paths": [
+          "tests/github.merge.plugin.test.ts"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "#395's tests/github.merge.plugin.test.ts is removed because its cases now run against the one GITHUB-7.a gate in tests/github.self-merge.test.ts; REQ-plugins-099 (modified by the it-can-merge-its-own-corvidinho-pr change in this PR) and specs/plugins/testing.md already say where they went, so no new acceptance criteria or living-spec prose.",
+        "acceptance_criteria": [
+          "tests/github.merge.plugin.test.ts (#395) is gone and every one of its 12 cases runs in tests/github.self-merge.test.ts against the one GITHUB-7.a gate (kept where it still holds, updated where the stricter gate now refuses the PR); specsync change audit reports no uncovered meaningful path."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
     }
   ],
   "reopenings": []

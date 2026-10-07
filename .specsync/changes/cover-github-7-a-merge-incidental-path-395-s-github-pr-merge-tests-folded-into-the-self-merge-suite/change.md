@@ -1,6 +1,6 @@
 ---
 id: cover-github-7-a-merge-incidental-path-395-s-github-pr-merge-tests-folded-into-the-self-merge-suite
-state: implementing
+state: verifying
 type: refactor
 base_commit: 2a266292110511bbb8b551ea7664533b207f976e
 ---
