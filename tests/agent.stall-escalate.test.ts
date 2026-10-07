@@ -16,6 +16,7 @@ import { createTaskExecute } from "../src/agent/execute.ts";
 import { parseNdjsonLine } from "../src/agent/events-ndjson.ts";
 import { createStallNudgeGuard, stallMovedNote, stallStandsNote } from "../src/agent/loop-guards.ts";
 import {
+  entryLabel,
   modelChain,
   modelOrderFromEnv,
   moveToStronger,
@@ -33,6 +34,7 @@ import { buildDelegateSpawn } from "../src/autonomous/delegate.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { clearRegistry, register } from "../src/plugins/registry.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
+import { resolveReviewer } from "../src/work/review.ts";
 import { startFakeLlm, type FakeReply } from "./fixtures/fake-llm.ts";
 
 // Spelled out (not imported) so the loop tests read the same on the base.
@@ -309,6 +311,40 @@ describe("tool loop: after the nudge it moves to the next stronger model in the 
       { model: "fake-strong", promptTokens: 200, completionTokens: 20, totalTokens: 220 },
     ]);
     expect(answered.at(-1)).toBe("fake-strong");
+  });
+
+  test("GITHUB-9.a: the model it moved from changed nothing, so it is no author and reviews the change", async () => {
+    registerWriter();
+    const env = { CORVIDINHO_LLM_MODEL: "fake-weak,fake-strong", [ORDER]: "fake-weak,fake-strong" };
+    const { exec, bodies } = makeExec(env, {
+      "fake-weak": ["Done."],
+      "fake-strong": [{ toolCalls: [{ name: "touch-file" }] }, "Fixed the typo in README.md."],
+    });
+    const r = await run(exec);
+    expect(bodies.map((b) => b.model)).toEqual(["fake-weak", "fake-weak", "fake-strong", "fake-strong"]);
+    expect(r.filesChanged).toEqual(["README.md"]);
+    // Only the stronger model wrote the change; the weak one is the second model.
+    expect(exec.review.authors()).toEqual(["fake-strong"]);
+    const reviewer = resolveReviewer({ ...BASE_ENV, ...env }, exec.review.authors());
+    expect(reviewer ? entryLabel(reviewer.entry) : null).toBe("fake-weak");
+  });
+
+  test("GITHUB-9.a: a lead's author stays an author after the move (a worker's run)", async () => {
+    registerWriter();
+    const env = {
+      CORVIDINHO_LLM_MODEL: "fake-weak,fake-strong",
+      [ORDER]: "fake-weak,fake-strong",
+      CORVIDINHO_DELEGATE_DEPTH: "1",
+      CORVIDINHO_DELEGATE_AUTHORS: "fake-weak",
+    };
+    const { exec, bodies } = makeExec(env, {
+      "fake-weak": ["Done."],
+      "fake-strong": [{ toolCalls: [{ name: "touch-file" }] }, "Fixed the typo in README.md."],
+    });
+    await run(exec);
+    expect(bodies.map((b) => b.model)).toEqual(["fake-weak", "fake-weak", "fake-strong", "fake-strong"]);
+    expect([...exec.review.authors()].sort()).toEqual(["fake-strong", "fake-weak"]);
+    expect(resolveReviewer({ ...BASE_ENV, ...env }, exec.review.authors())).toBeNull();
   });
 
   test("a plan after the nudge moves too; the rest of the run (a verify retry) stays on the stronger model", async () => {

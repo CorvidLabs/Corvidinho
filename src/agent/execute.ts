@@ -846,10 +846,17 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
   // over), its delegate workers' and, in a worker, its lead's — so the
   // second-model reviewer of a PR it opens is none of them.
   const authors = new Set<string>(delegateDepthFromEnv(env) > 0 ? delegateAuthorsFromEnv(env) : []);
+  // AGENT-17 / GITHUB-9.a: authors a move to a stronger model never drops —
+  // the lead's, its workers' and each failover's (only a reply counts less).
+  const keptAuthors = new Set<string>(authors);
   const noteFallback = (hop: ModelFallback) => {
     fallbacks.push(hop);
     authors.add(hop.from);
-    if (hop.via) authors.add(hop.to);
+    keptAuthors.add(hop.from);
+    if (hop.via) {
+      authors.add(hop.to);
+      keptAuthors.add(hop.to);
+    }
     emit(opts.onEvent, { type: "Text", text: modelFallbackEventText(hop) });
     opts.onModelFallback?.(hop);
   };
@@ -862,7 +869,14 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
     onFallback: noteFallback,
     escalate: (kind) => {
       const next = moveToStronger(chain, order);
-      if (next.ok) movedTo = { from: next.from, to: next.to, kind };
+      if (next.ok) {
+        movedTo = { from: next.from, to: next.to, kind };
+        // GITHUB-9.a: a move only follows a run that changed nothing, so the
+        // stalled model wrote none of the change (and none was recorded yet):
+        // it is no author, and may be the second-model reviewer. A later
+        // reply from it makes it one again (`onModel`).
+        if (!keptAuthors.has(next.from)) authors.delete(next.from);
+      }
       return next;
     },
     onModel: (model) => {
@@ -876,7 +890,10 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
       }
     },
     onWorkerModels: (labels) => {
-      for (const m of labels) authors.add(m);
+      for (const m of labels) {
+        authors.add(m);
+        keptAuthors.add(m);
+      }
     },
   };
   // GITHUB-9: what github-pr-create gets for the second-model review — the
