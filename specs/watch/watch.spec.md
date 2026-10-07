@@ -1,6 +1,6 @@
 ---
 module: watch
-version: 31
+version: 32
 status: draft
 files:
   - src/watch/types.ts
@@ -417,3 +417,4 @@ WATCH poll-first thin (#19, 2026-09-26, corvid-agent): mention/review_request/is
 | 2026-10-01 | a-failed-watch-run-s-public-comment-and-kept-turn-name-the-model-call-s-status-but-not-the-provider-s-host-the-account: A failed WATCH run's public comment and kept turn name the model call's status but not the provider's host (the account's resource name, a private gateway or an Ollama server's address); the [watch] run failed log line keeps the host |
 | 2026-10-01 | a-failed-delegate-worker-or-council-voice-hands-its-lead-one-plain-failure-line-the-worker-s-result-error-without-the: A failed delegate worker or council voice hands its lead one plain failure line (the worker's result error without the provider's host, the no-provider notice, or the exit code), never the worker's summary or stderr, which for a model failure is the provider's raw error body |
 | 2026-10-06 | on-github-the-owner-and-team-i-ve-declared-get-their-role-s-tools-behind-the-must-ask-gate-strangers-stay-community: On GitHub the owner and team I've declared get their role's tools behind the must-ask gate; strangers stay community (IDENTITY-12.a) |
+| 2026-10-07 | admin-3-c-part-1-as-owner-i-can-change-the-deny-lists-and-the-github-repo-allow-lists-with-admin-deny-and-admin-github: ADMIN-3.c part 1: as owner I can change the deny lists and the GitHub repo allow lists with /admin deny and /admin github; every change is audited and github watch re-reads the allowlist every poll |

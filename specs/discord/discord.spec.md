@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 100
+version: 101
 status: draft
 files:
   - src/discord/types.ts
@@ -1741,3 +1741,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-10-05 | where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts: Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts) |
 | 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
 | 2026-10-06 | work-schedule-and-the-scheduler-can-be-turned-off-in-corvidinho-plugins-and-existing-installs-stay-on-plugin-5-5-a: /work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a) |
+| 2026-10-07 | admin-3-c-part-1-as-owner-i-can-change-the-deny-lists-and-the-github-repo-allow-lists-with-admin-deny-and-admin-github: ADMIN-3.c part 1: as owner I can change the deny lists and the GitHub repo allow lists with /admin deny and /admin github; every change is audited and github watch re-reads the allowlist every poll |
