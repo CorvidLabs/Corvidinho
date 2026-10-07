@@ -1,6 +1,6 @@
 ---
 id: named-personas-are-their-own-files-in-personas-with-name-model-and-skill-tags-the-owner-can-run-a-task-as-one-and-a
-state: implementing
+state: verifying
 type: feature
 base_commit: 322750c9fad40a1d1b2113ab9b45dcc268a97980
 ---
