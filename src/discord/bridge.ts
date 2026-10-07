@@ -29,8 +29,9 @@
  * MEMORY-7.a: a run's private replies (private notes, a profile, the owner's
  * view of someone's memory) go to the asker by DM only (private-reply.ts).
  * AGENT-6: each run is recorded with its session and a continued run gets the
- * earlier turns replayed ahead of the new message (session-thread.ts),
- * condensed at about 80% of the model's window (SESSION-5/6); an expired
+ * earlier turns replayed ahead of the new message (session-thread.ts); the
+ * run condenses them at about 80% of its model's window with a model-written
+ * summary the bridge keeps with the session (SESSION-5/5.a/6); an expired
  * session's conversation is kept 30 days so a reply resumes it (SESSION-3.a,
  * AGENT-6.a; src/store/conversation.ts).
  * PLUGIN-5 / PLUGIN-5.a (REQ-discord-157): `[corvidinho.plugins]` `work` /
@@ -158,7 +159,7 @@ import {
 } from "./permissions.ts";
 import { CORVIDINHO_PROTOCOL_VERSION } from "./protocol-version.ts";
 import { enforceProtocolVersionOrExit } from "./protocol-version.ts";
-import { SessionStore } from "./session-store.ts";
+import { SessionStore, type SessionReplay } from "./session-store.ts";
 import {
   RUN_STOP_ACK,
   RUN_STOP_NOTHING_RUNNING,
@@ -214,6 +215,7 @@ import {
   resolveSessionTtlMs,
 } from "../store/index.ts";
 import { formatErrorLine } from "../store/scrub.ts";
+import { type CondenseReport, extractiveFallbackLogLine } from "../store/conversation.ts";
 import { createScheduleRunStop } from "./schedule-stop.ts";
 import {
   appendAudit,
@@ -332,6 +334,26 @@ export type StartBridgeOptions = {
    */
   approvalPollMs?: number;
 };
+
+/**
+ * SESSION-5.a / SESSION-6: keep what a run's condensing did to the
+ * conversation it was handed (`replay`) with the session — its summary and
+ * the turns it folded. An extractive summary (the model's summary call
+ * failed) is said in the bridge log.
+ */
+function keepCondensed(
+  store: SessionStore,
+  session: SessionStub,
+  replay: SessionReplay | undefined,
+  result: { conversation?: CondenseReport },
+): void {
+  const report = result.conversation;
+  if (!replay || !report) return;
+  store.applyCondensed(session, replay, report);
+  if (report.by === "extractive") {
+    console.warn(`[discord] ${extractiveFallbackLogLine(report)} (session ${session.id})`);
+  }
+}
 
 function memoryThinkingOutbound(): ThinkingOutbound & {
   /** `components`: the progress message's Stop button (AGENT-3.a), when it had one. */
@@ -503,7 +525,8 @@ export async function startBridge(
       ttlMs,
       defaultProjectRoot: config.projectRoot,
       allowlist: config.allowlist,
-      // SESSION-5: condense at about 80% of the model's window.
+      // The fallback window (sizes the turn-cap summary); the run condenses
+      // at about 80% of its own model's window (SESSION-5.a).
       contextWindowTokens: resolveContextWindowTokens(env),
     });
   const workStore = opts.workStore ?? new WorkStore({ db });
@@ -1333,12 +1356,15 @@ export async function startBridge(
         // AGENT-6 (REQ-discord-072): the session's earlier turns, oldest first,
         // go ahead of the new message and any pending-ask block, so a continued
         // run keeps the thread. A new session has none (one resumed after the
-        // TTL begins from its retained conversation, SESSION-3.a). At about 80%
-        // of the model's window the oldest turns are condensed into the
-        // session's summary, the task and latest instruction kept word for word
-        // (SESSION-5/6). The human's own words (before enrichment) join the
+        // TTL begins from its retained conversation, SESSION-3.a). The run gets
+        // the same conversation (`replay`): at about 80% of its model's window,
+        // counting the whole prompt, it folds the oldest turns and the model
+        // writes their summary, the task and latest instruction kept word for
+        // word (SESSION-5/5.a); the bridge keeps that with the session
+        // (SESSION-6). The human's own words (before enrichment) join the
         // thread now, so a run that throws or a bridge that dies mid-run still
         // keeps the request.
+        const replay = store.replayFor(session);
         agentPrompt = store.threadPrompt(session, agentPrompt);
         store.recordTurn(session, "human", prompt);
 
@@ -1484,6 +1510,8 @@ export async function startBridge(
               replyChannelId: channelId,
               ...(msg.threadId ? { replyParentChannelId: msg.channelId } : {}),
               replyPublicThread,
+              // SESSION-5.a: the replayed conversation, for the run to condense.
+              ...(replay ? { conversation: replay } : {}),
               onStatus: (u) => {
                 void thinking.update({
                   tool: u.tool,
@@ -1507,6 +1535,9 @@ export async function startBridge(
           await thinking.fail(failed);
           throw err;
         }
+        // SESSION-5.a / SESSION-6: what the run's condensing did stays with
+        // the session (its summary and the turns it folded).
+        keepCondensed(store, session, replay, result);
 
         // AGENT-3: the bridge is stopping and the run was killed. Nothing is
         // posted; the row stays, so the next start marks this reply
@@ -2157,7 +2188,9 @@ export async function startBridge(
         // AGENT-6 (REQ-discord-072): the earlier turns (the original request
         // included) go ahead of the answered question, as on a chat reply; the
         // answer (a pick or an Answer form submit) joins the thread as the run
-        // starts. SESSION-5/6: condensed at about 80% of the window, as in chat.
+        // starts. SESSION-5/5.a/6: the run condenses them at about 80% of its
+        // model's window, as in chat.
+        const replay = store.replayFor(session);
         const agentPrompt = store.threadPrompt(
           session,
           `${priorBlock}\n\nHuman answer:\n${spoken}`,
@@ -2256,6 +2289,8 @@ export async function startBridge(
               replyChannelId: channelId,
               ...(session.threadId ? { replyParentChannelId: session.channelId } : {}),
               replyPublicThread,
+              // SESSION-5.a: the replayed conversation, for the run to condense.
+              ...(replay ? { conversation: replay } : {}),
               onStatus: (u) => {
                 void thinking.update({
                   tool: u.tool,
@@ -2283,6 +2318,8 @@ export async function startBridge(
           }
           throw err;
         }
+        // SESSION-5.a / SESSION-6: as on a chat run.
+        keepCondensed(store, session, replay, result);
 
         // AGENT-3: the bridge is stopping and the run was killed. Nothing is
         // posted; the row stays, so the next start marks this reply

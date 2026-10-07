@@ -6,6 +6,7 @@
  * protocol lockstep (DISCORD-10).
  */
 
+import type { CondenseReport } from "../store/conversation.ts";
 import type {
   AgentTokenUsage,
   HumanAsk,
@@ -198,6 +199,13 @@ export type AgentSpawnResult = {
    * reason (`failureReasonFor`); never posted as is. Absent on success.
    */
   stderrTail?: string;
+  /**
+   * SESSION-5.a: what the run's condensing did to the conversation the
+   * bridge replayed (validated against it: summary scrubbed and bounded,
+   * folded indexes inside the replay and never a pinned turn). The bridge
+   * keeps it with the session (`SessionStore.applyCondensed`, SESSION-6).
+   */
+  conversation?: CondenseReport;
   /**
    * Verify facts from the child's `result` frame (AGENT-4); absent when no
    * frame parsed. /work ships a PR only from a verified tree (REQ-discord-088).

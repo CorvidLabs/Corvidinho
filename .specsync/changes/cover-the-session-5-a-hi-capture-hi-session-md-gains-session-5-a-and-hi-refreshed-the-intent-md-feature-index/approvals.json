@@ -1,0 +1,36 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791333787,
+      "digest": "5a67469c6673c489a4e72643f368d00ae942da41fe89b98946ab739a555bb016",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "cover-the-session-5-a-hi-capture-hi-session-md-gains-session-5-a-and-hi-refreshed-the-intent-md-feature-index",
+        "title": "Cover the SESSION-5.a hi capture: hi/session.md gains SESSION-5.a and hi refreshed the INTENT.md feature index",
+        "description": "Cover the SESSION-5.a hi capture: hi/session.md gains SESSION-5.a and hi refreshed the INTENT.md feature index",
+        "kind": "documentation",
+        "affected_specs": [],
+        "affected_paths": [
+          "INTENT.md",
+          "hi/session.md"
+        ],
+        "no_spec_change": true,
+        "no_spec_change_rationale": "The SESSION-5.a criterion was captured with the hi CLI from Leif's confirmed 2026-09-28 interview (round 16) in its own commit before the implementing change's base; hi/session.md gains the one sub-criterion and hi regenerated the INTENT.md feature index counts. No living spec text changes here: the behaviour and its requirements are the SESSION-5.a change (REQ-agent-473, REQ-cli-473, REQ-discord-472, REQ-watch-472).",
+        "acceptance_criteria": [
+          "hi/session.md holds SESSION-5.a under SESSION-5 with Leif's confirmed text exactly ('Each model I configure has its own context window; at about 80% of it, a model writes the summary of older turns, and the current task and my latest instructions stay word for word.'), captured with the hi CLI; INTENT.md's feature index is the one hi regenerated; hi check passes."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {}
+    }
+  ],
+  "reopenings": []
+}

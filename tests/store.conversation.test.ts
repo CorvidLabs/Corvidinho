@@ -310,7 +310,14 @@ describe("SessionStore keeps a conversation past its session (AGENT-6.a / MEMORY
       store.recordTurn(live, "human", `my request ${i} ${"x".repeat(300)}`);
       store.recordTurn(live, "agent", `my answer ${i} ${"y".repeat(300)}`);
     }
-    store.threadPrompt(live, "next");
+    // SESSION-5.a: a run condensed it; its model-written summary is kept with the session.
+    store.applyCondensed(live, store.replayFor(live)!, {
+      summary: "- Summary: my earlier requests",
+      folded: [1, 2, 3, 4],
+      by: "model",
+      model: "fake-model",
+      windowTokens: 1024,
+    });
     expect(store.summaryFor(live)).not.toBe("");
     const theirs = store.create({ channelId: "c", userId: "u2" });
     store.recordTurn(theirs, "human", "their request");
@@ -405,7 +412,14 @@ github_logins = ["tofu-dev"]
       store.recordTurn(live, "human", `my request ${i} ${"x".repeat(300)}`);
       store.recordTurn(live, "agent", `my answer ${i} ${"y".repeat(300)}`);
     }
-    store.threadPrompt(live, "next");
+    // SESSION-5.a: a run condensed it; its model-written summary is kept with the session.
+    store.applyCondensed(live, store.replayFor(live)!, {
+      summary: "- Summary: my earlier requests",
+      folded: [1, 2, 3, 4],
+      by: "model",
+      model: "fake-model",
+      windowTokens: 1024,
+    });
     expect(store.summaryFor(live)).not.toBe("");
     const theirs = store.create({ channelId: "c", userId: KYN });
     store.recordTurn(theirs, "human", "their request");

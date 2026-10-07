@@ -2299,21 +2299,25 @@ summary (when any) and earlier turns, oldest first, in one labelled block
 (`SESSION_THREAD_HEADER` … `SESSION_THREAD_FOOTER`, turns labelled
 `Human:` / `You (Corvidinho):`) ahead of the new message and any
 pending-ask block, before identity and memory are added
-(`SessionStore.threadPrompt`). The block's size SHALL follow the model's
-window: at about 80% of it the oldest turns are condensed into the summary
-(REQ-discord-472). An agent turn SHALL be clipped to
+(`SessionStore.threadPrompt`), whole: the bridge folds nothing, and the
+run that gets the same conversation (`task run --task-stdin`) condenses it
+at about 80% of its model's own window, the whole prompt counted, with a
+model-written summary (SESSION-5.a, REQ-discord-472, REQ-agent-473). An agent turn SHALL be clipped to
 `SESSION_THREAD_TURN_MAX_CHARS` (1500) and a human turn to
 `SESSION_THREAD_HUMAN_TURN_MAX_CHARS` (8000: a whole Discord message or
-6000-char slash option, and a whole WATCH event prompt). As a transport safety net, a block still over
-`SESSION_THREAD_BUDGET_CHARS` (32000) SHALL keep the session's opening
-request and as many of the newest turns as fit, and the turns between SHALL
-be replaced by one `(N earlier turns omitted)` marker. The
+6000-char slash option, and a whole WATCH event prompt). No transport
+ceiling SHALL cut the block (the 32000-char ceiling of a `--task` argument
+is gone, REQ-cli-473); only a caller that passes an explicit `budgetChars`
+to `formatSessionThread` gets the session's opening request and as many of
+the newest turns as fit, the turns between replaced by one
+`(N earlier turns omitted)` marker. The
 block SHALL open with a `[Corvidinho …]` header and hold no blank line
 (blank lines inside a turn are collapsed), so Planning module selection
 leaves the whole block out and earlier turns or the header never pick a
 module the new message does not name (REQ-agent-004). A clipped turn SHALL
-never end on half a surrogate pair. The condensing is extractive (each
-folded turn becomes one short point of its own words); no model call. A
+never end on half a surrogate pair. The summary is written by the run's
+model (one `- Summary: …` line), or extractive (each folded turn one short
+point of its own words) when that call fails (REQ-agent-473). A
 session keeps at most `SESSION_THREAD_MAX_TURNS` (200) turns: past it the
 oldest turn after the opening request is folded into the summary.
 
@@ -2331,10 +2335,11 @@ user (SESSION-MULTI-1), so no other user's run SHALL ever see its turns.
 Turn text SHALL be passed through `scrubSecrets` before it is kept or
 replayed, and `discord_session_turns.content` SHALL be listed in
 `SCRUB_TARGETS` (SAFE-6). The run's `humanText` (the only source of SAFE-4
-confirm tokens) SHALL stay the current message only. No new config key, CLI
-flag or slash command; the one optional env var is the model's window
-(`CORVIDINHO_LLM_CONTEXT_TOKENS`, REQ-discord-472). CLI `task run` is
-unchanged; WATCH keeps its own thread conversation (REQ-watch-472).
+confirm tokens) SHALL stay the current message only. No new config key or
+slash command; a model's window is `kind:model=TOKENS` on its entry, else
+the optional `CORVIDINHO_LLM_CONTEXT_TOKENS` (REQ-discord-472), and a run
+with a replayed conversation gets it on stdin (`task run --task-stdin`,
+REQ-cli-473); WATCH keeps its own thread conversation (REQ-watch-472).
 
 Acceptance Criteria
 - A reply to the bot's answer continues the session with `resume: true`, and its prompt holds the earlier request and answer, oldest first, before the new message; `humanText` is the new message only.
@@ -2345,7 +2350,7 @@ Acceptance Criteria
 - `planningSelectionText` of a continued run's prompt is the new message only: the block's header and earlier turns (multi-paragraph answers included) pick no module, and a module the new message names still counts; a turn clipped next to an emoji never ends on half a surrogate pair.
 - A button pick's resumed run carries the original request (not only the question and the label); a later reply carries the request, the question, the picked label and the answer.
 - A spend-cap stop keeps the human's request in the thread; the next prompt holds no spend-cap text and no pending-ask block.
-- A thread past the 32000-char block ceiling renders within it: the opening request right after the header, one marker whose count is exactly the turns left out, then the newest turns ending with the newest answer; one huge agent turn is clipped at 1500, a 4000-char human turn is kept whole and one past 8000 is clipped.
+- A thread past 32000 chars renders whole (no ceiling); past an explicit `budgetChars` it keeps the opening request right after the header, one marker whose count is exactly the turns left out, then the newest turns ending with the newest answer; one huge agent turn is clipped at 1500, a 4000-char human turn is kept whole and one past 8000 is clipped.
 - A new @mention after the soft TTL starts a new session whose prompt holds no earlier turn; ending or expiring a session deletes its live turn rows (memory and DB); orphan rows left by an older build are swept on load.
 - Past 200 turns the oldest turn after the opening request is folded into the session's summary (stored with the session), not lost.
 - Another user's session in the same channel (by @mention or by replying with the ping to my answer) never sees my turns, and my continuation never sees theirs.
@@ -3123,27 +3128,31 @@ Acceptance Criteria
 Long Discord conversations SHALL be condensed, kept and resumed
 (SESSION-5, SESSION-6, SESSION-3.a, AGENT-6.a; issue #72).
 
-Condensing (SESSION-5). Before each run on a session,
-`SessionStore.threadPrompt(session, prompt)` SHALL measure the prompt the
-bridge sends for the conversation — the replay block (REQ-discord-072) plus
-a blank line plus the new message and any pending-ask block — in characters.
-When it reaches 80% of the model's context window (tokens × 4 chars, the
-chars/4 estimate of PLUGIN-6) it SHALL fold the oldest turns into the
-session's summary, one at a time, until the prompt is under that budget. The
-window SHALL be `CORVIDINHO_LLM_CONTEXT_TOKENS` when it is a positive integer
-(raised to 1024), else 8192 tokens (`CONTEXT_WINDOW_DEFAULT_TOKENS`); the
-budget SHALL never pass 32000 characters (`CONVERSATION_PROMPT_MAX_CHARS`),
-because the prompt reaches the agent as one process argument. The session's
-opening human turn (the current task) and its newest human turn (its latest
-instruction) SHALL never be folded, and the new message SHALL never be
-touched, so all three reach the model word for word (secret-scrubbed,
-SAFE-6; in the replay a line that opens like a Corvidinho block or a turn
-label is marked `(quoted)`, SAFE-12). A folded turn SHALL become one summary point
-`- Human: …` / `- You (Corvidinho): …` holding its own opening words
-(at most 160 characters); no model call. The summary SHALL stay within a
+Condensing (SESSION-5, SESSION-5.a, REQ-agent-473). Before each run on a
+session, `SessionStore.threadPrompt(session, prompt)` SHALL put the session's
+summary and its recorded turns, whole and oldest first, in the replay block
+(REQ-discord-072) ahead of the new message and any pending-ask block, and
+SHALL fold nothing: no transport ceiling cuts the block. The bridge SHALL
+hand the run the same conversation (`SessionStore.replayFor(session)` →
+`AgentRunChatOpts.conversation`; chat and ask answers), which the spawn
+client sends with the task on stdin (`task run --task-stdin`, REQ-cli-473).
+The run SHALL measure the whole prompt its model will see and, at 80% of
+that model's own window (`kind:model=TOKENS` on its entry, else
+`CORVIDINHO_LLM_CONTEXT_TOKENS` when it is a positive integer, raised to
+1024, else 8192 tokens; 4 chars per token), fold the oldest turns and have
+that model write their summary (REQ-agent-473). The session's opening human
+turn (the current task) and its newest human turn (its latest instruction)
+SHALL never be folded, and the new message SHALL never be touched, so all
+three reach the model word for word (secret-scrubbed, SAFE-6; in the replay
+a line that opens like a Corvidinho block or a turn label is marked
+`(quoted)`, SAFE-12). A model's summary is one point `- Summary: …`; when
+its call fails, the extractive fold stands in: a folded turn becomes one
+summary point `- Human: …` / `- You (Corvidinho): …` holding its own
+opening words (at most 160 characters). The summary SHALL stay within a
 third of the budget (500–6000 characters): past it older points are
 shortened to 80 characters and then left out, a first line
-`(N earlier points left out)` counting them; when only the pinned turns
+`(N earlier points left out)` counting them, a model's line kept ahead of
+them and never shortened or left out for a point; when only the pinned turns
 are left and the prompt is still over, the summary gives way, never the
 pinned words. In the block the opening human turn comes first, then the
 label `Condensed summary of earlier turns (…)` and the points, then the
@@ -3154,16 +3163,30 @@ like a Corvidinho block or a turn label marked `(quoted)`; words a turn held
 inside an untrusted-data fence (`fenceUntrustedData`, e.g. a WATCH issue or
 comment body) SHALL stay inside that fence's own open and end markers in its
 summary point (the markers do not count against the 160 characters) and in
-a clipped turn (its end marker put back), and a summary point holding a fence
-SHALL be left out whole rather than shortened inside it.
+a clipped turn (its end marker put back), a summary point holding a fence
+SHALL be left out whole rather than shortened inside it, and a model's
+summary of fenced text is itself fenced (source `model-summary`).
 
-Stored with the session (SESSION-6). A fold SHALL store the summary with
-the session — in its `conversation_threads` record (schema v13), scrubbed —
-and rewrite the session's `discord_session_turns` rows to the kept turns.
-After a bridge restart the live session SHALL load its summary, so its
-next prompt picks up from the summary instead of the folded turns; a run with
-a smaller window (another model) SHALL condense further from that summary
-to 80% of its own window.
+Stored with the session (SESSION-6). The run's report (`CondenseReport`,
+checked by `condenseReportFromUnknown` against the replay it was handed:
+summary scrubbed and bounded, folded indexes inside the replay and never a
+pinned turn) SHALL be kept with the session by
+`SessionStore.applyCondensed(session, replay, report)`: the folded turns
+leave the live thread, the session's `discord_session_turns` rows are
+rewritten to the kept turns, and the report's summary — a point the store
+added while the run ran (a turn past the per-session cap) kept after it — is
+stored in the session's `conversation_threads` record (schema v13),
+scrubbed. A session that ended while its run ran is left alone, and so is
+one whose thread was cleared while it ran (an approved forget-me,
+MEMORY-ACL-6: its opening turn is gone), so a summary of forgotten turns is
+never stored again. An
+extractive report SHALL be kept the same way and logged as one
+`[discord] SESSION-5.a: <model> did not write the summary (<reason>); kept
+the extractive summary of N condensed turns (session <id>)` warning. After a
+bridge restart the live session SHALL load its summary, so its next prompt
+picks up from the summary instead of the folded turns; a run on a model with
+a smaller window SHALL condense further from that summary to 80% of its own
+window.
 
 Kept 30 days per thread (AGENT-6.a). When a session idles past the soft
 TTL (also one found expired when the store loads after a restart) or ends,
@@ -3229,9 +3252,9 @@ on thread, session and `updated_at`), keeping every existing row (a DB at v12
 keeps its forget requests); re-running it changes nothing.
 
 Acceptance Criteria
-- `CORVIDINHO_LLM_CONTEXT_TOKENS` sets the window (unset or not a positive integer → 8192; below 1024 → 1024); the condense budget is `floor(window × 0.8) × 4` characters, never past 32000.
-- A prompt under the budget replays every turn with no summary; at the budget the oldest turns fold into `- Human:` / `- You (Corvidinho):` points until the prompt is under it, the opening request, the newest human turn and the new message word for word; with nothing left to fold the pinned turns stay and the summary gives way.
-- The summary is stored with the session (`conversation_threads.summary`, scrubbed) and the turn rows are the kept turns; after a restart the next prompt is the same (summary, no folded turn); with a smaller window it condenses further from that summary to 80% of that window.
+- `kind:model=TOKENS` sets a model's window, else `CORVIDINHO_LLM_CONTEXT_TOKENS` (unset or not a positive integer → 8192; below 1024 → 1024); the condense budget is `floor(window × 0.8) × 4` characters of the whole prompt, with no ceiling.
+- `condenseConversation` under the budget folds nothing; at it the oldest turns fold into `- Human:` / `- You (Corvidinho):` points (the extractive fallback) until the prompt is under it, the opening request, the newest human turn and the new message word for word; with nothing left to fold the pinned turns stay and the summary gives way.
+- The reported summary is stored with the session (`conversation_threads.summary`, scrubbed) and the turn rows are the kept turns; after a restart the next prompt is the same (summary, no folded turn); a run on a smaller window condenses further from that summary to 80% of that window.
 - Past 200 turns the oldest turn after the opening request is folded into the summary.
 - After the soft TTL, the user's reply to the session's answer starts a new session (new id, `resume: false`, `humanText` the new message) whose prompt holds the earlier request and answer (and the summary when there was one); a second reply to the old answer continues that new session; a plain message in its thread does the same without a mention.
 - Another user's reply to my expired answer, or message in my thread, never gets my conversation; a deny-listed or muted user, or a message from a channel that is not allowlisted, gets no run.
@@ -3243,6 +3266,11 @@ Acceptance Criteria
 - A v12 DB migrates to v13 keeping its rows and its forget requests, and a v11 DB goes through v12 to v13; `rescrubDatabase` re-scrubs `conversation_threads.summary` and `turns`.
 - An approved forget-me deletes the person's retained records (Discord ids, a declared person's GitHub logins, threads they commented on) with their memory, nobody else's; the running bridge's `forgetTurnsOfUsers` drops their live summary and records, and their next prompt replays nothing.
 - A fenced turn folded into a summary point keeps its words between that fence's own markers; a summary over its cap leaves a fenced point out whole; replayed turns and summary points quote fake block lines and turn labels, and a turn clipped inside its fence gets its end marker back.
+- `threadPrompt` replays every recorded turn whole whatever the fallback window, and `replayFor` is exactly the conversation in that block (`tests/session.condense.test.ts`).
+- `applyCondensed` drops the folded turns from the thread and its rows, stores the model's summary scrubbed, keeps a point the store added meanwhile after it, leaves an ended session alone, and stores nothing for a thread forgotten while its run ran (no summary, no record, no rows); after a restart the prompt is the same and picks up from the summary. A report with an empty summary is not one.
+- Through the bridge the eighth run gets every earlier turn as its conversation and the ninth prompt carries the reported model summary after the task, with the latest instruction word for word and the folded steps gone; an extractive report is kept and logged with its reason (`tests/discord.session-resume.test.ts`).
+- A reply after the TTL resumes from the model-written summary the bridge kept, and the resumed run gets it in its conversation (SESSION-3.a).
+- Forget, retention and resume behave as before (`tests/store.conversation.test.ts`, `tests/discord.session-resume.test.ts`).
 
 ### REQ-discord-1016
 

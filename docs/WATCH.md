@@ -137,9 +137,16 @@ gets one comment of its own saying so). See
   conversation (`conversation_threads`, schema v13; scrubbed, last 20 turns
   plus a condensed summary). A follow-up on the same issue or PR — also after
   the session's TTL — gets it replayed ahead of the new event in a
-  `[Corvidinho earlier conversation on this GitHub issue or PR …]` block,
-  condensed at about 80% of the model's window (`CORVIDINHO_LLM_CONTEXT_TOKENS`,
-  default 8192; the thread's opening and latest request word for word). It is
+  `[Corvidinho earlier conversation on this GitHub issue or PR …]` block, and
+  the run gets the same conversation (on stdin, `task run --task-stdin`): when
+  its whole prompt reaches about 80% of its model's own window
+  (`kind:model=TOKENS` on the model's entry, else
+  `CORVIDINHO_LLM_CONTEXT_TOKENS`, default 8192) it folds the oldest turns and
+  that model writes their summary (SESSION-5.a; the summary call counts toward
+  the spend caps; if it fails, the extractive summary is kept and the watcher
+  log says `[watch] SESSION-5.a: … did not write the summary …`). The thread's
+  opening and latest request stay word for word, and the thread keeps the
+  summary the run reports. It is
   purged 30 days after its last update; forgetting a person deletes the
   threads they started or commented on (by GitHub login, and by numeric id
   for threads kept from now on).

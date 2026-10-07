@@ -4,7 +4,9 @@
  * empty ends with "no changes, nothing to verify" (REQ-agent-003 / 085).
  * Reads the `task run --here --output ndjson` event stream (AGENT-8, #73;
  * --here: the run works in the watcher's cwd, never a worktree of its own,
- * REQ-cli-122).
+ * REQ-cli-122). A run that carries the thread's replayed conversation gets
+ * it, with its task, on stdin (`--task-stdin`, SESSION-5.a) and hands back
+ * what condensing it did as `conversation`.
  * Sets the commenter's GitHub login / numeric id and the thread's repo for
  * the memory plugins (MEMORY-8, REQ-watch-067); no Discord actor
  * (REQ-watch-008). IDENTITY-12.a (REQ-watch-1201): stamps the role the
@@ -33,6 +35,8 @@ import { askFromUnknown } from "../agent/ask.ts";
 import { formatModelFallbackLog, modelFallbackFromUnknown } from "../agent/providers.ts";
 import { ACTING_SURFACE_ENV } from "../agent/shell-gate.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
+import { taskPayloadJson } from "../agent/condense.ts";
+import { condenseReportFromUnknown, type ConversationReplay } from "../store/conversation.ts";
 import type { ModelFallback } from "../agent/types.ts";
 import { stopReasonFromUnknown } from "../agent/limits.ts";
 import { injectionNoticeFromUnknown } from "../agent/untrusted.ts";
@@ -67,6 +71,13 @@ export type AgentRunChatOpts = {
    * re-resolves the role from the GitHub id at every call.
    */
   actingRole?: PersonRole;
+  /**
+   * SESSION-5.a (REQ-watch-472): the thread's conversation replayed into
+   * `prompt`. When set, the task and it go to the run on stdin
+   * (`task run --task-stdin`) and the run condenses it against its model's
+   * window; its report comes back as `conversation`.
+   */
+  conversation?: ConversationReplay;
 };
 
 export type AgentClient = {
@@ -91,7 +102,7 @@ export function warnWatchModelFallback(hops: ModelFallback[], sessionId: string)
 
 export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient {
   return {
-    async runChat({ prompt, sessionId, onStatus, actingGithubLogin, actingGithubId, repo, actingRole }) {
+    async runChat({ prompt, sessionId, onStatus, actingGithubLogin, actingGithubId, repo, actingRole, conversation }) {
       // IDENTITY-12.a: the trigger's role, stamped like a Discord run's (fail closed).
       const role: PersonRole = actingRole === "owner" || actingRole === "team" ? actingRole : "community";
       const cmd = buildCorvidinhoArgv(opts.bin, [
@@ -100,13 +111,15 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         // SESSION-WORKTREE-1.a (REQ-cli-122): the run works in the cwd given
         // here, never in a new worktree of its own.
         "--here",
-        "--task",
-        prompt,
+        // SESSION-5.a: a run with a replayed conversation reads its task and
+        // the conversation on stdin, so no argument-size limit caps it.
+        ...(conversation ? ["--task-stdin"] : ["--task", prompt]),
         "--output",
         "ndjson",
       ]);
       const proc = Bun.spawn(cmd, {
         cwd: opts.cwd,
+        ...(conversation ? { stdin: new Blob([taskPayloadJson(prompt, conversation)]) } : {}),
         stdout: "pipe",
         stderr: "pipe",
         env: {
@@ -158,6 +171,8 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       // `watchFailureReason` only — never the provider's reply body.
       const failed = exitCode !== 0;
       const failureReason = failed ? failureReasonFromUnknown(result?.error) : undefined;
+      // SESSION-5.a: what condensing did, checked against the replay sent.
+      const condensed = conversation ? condenseReportFromUnknown(result?.conversation, conversation) : undefined;
       return {
         ok: exitCode === 0,
         sessionId,
@@ -168,6 +183,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         ...(stopReason ? { stopReason } : {}),
         ...(failureReason ? { failureReason } : {}),
         ...(failed && stderrTail ? { stderrTail } : {}),
+        ...(condensed ? { conversation: condensed } : {}),
       };
     },
   };

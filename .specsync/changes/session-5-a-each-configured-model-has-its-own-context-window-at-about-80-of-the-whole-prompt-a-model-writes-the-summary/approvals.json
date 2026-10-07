@@ -1,0 +1,159 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791333681,
+      "digest": "2aad39872f2854dbe69cbabd9f0c4ab3d7aff63305469afa25465efec75c8490",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "session-5-a-each-configured-model-has-its-own-context-window-at-about-80-of-the-whole-prompt-a-model-writes-the-summary",
+        "title": "SESSION-5.a: each configured model has its own context window; at about 80% of the whole prompt a model writes the summary of older turns, the task and latest instruction stay word for word",
+        "description": "SESSION-5.a: each configured model has its own context window; at about 80% of the whole prompt a model writes the summary of older turns, the task and latest instruction stay word for word",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "watch"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "CHANGELOG.md",
+          "STATUS.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/WATCH.md",
+          "docs/discord.md",
+          "specs/agent/agent.spec.md",
+          "specs/agent/requirements.md",
+          "specs/agent/testing.md",
+          "specs/cli/cli.spec.md",
+          "specs/cli/requirements.md",
+          "specs/cli/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/requirements.md",
+          "specs/discord/testing.md",
+          "specs/watch/requirements.md",
+          "specs/watch/testing.md",
+          "specs/watch/watch.spec.md",
+          "src/agent/condense.ts",
+          "src/agent/execute.ts",
+          "src/agent/providers.ts",
+          "src/agent/types.ts",
+          "src/cli.ts",
+          "src/discord/agent-client.ts",
+          "src/discord/bridge.ts",
+          "src/discord/session-store.ts",
+          "src/discord/session-thread.ts",
+          "src/discord/types.ts",
+          "src/store/conversation.ts",
+          "src/watch/agent-client.ts",
+          "src/watch/poller.ts",
+          "src/watch/types.ts",
+          "tests/agent.condense.test.ts",
+          "tests/discord.session-resume.test.ts",
+          "tests/discord.session-thread.unit.test.ts",
+          "tests/session.condense.test.ts",
+          "tests/store.conversation.test.ts",
+          "tests/watch.conversation.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "SESSION-5.a (captured in this PR with hi from Leif's 2026-09-28 interview, round 16): each configured model has its own context window (kind:model=TOKENS on its AGENT-13 entry, never part of the model id; CORVIDINHO_LLM_CONTEXT_TOKENS, default 8192, for an entry with none); a Discord (chat, ask answer) or WATCH run gets its replayed conversation on stdin (task run --task-stdin, no 32,000-char argument ceiling) and, when the whole prompt it sends (system prompt, tools, persona, project instructions, memory and identity blocks, conversation, new message) reaches 80% of the current model's window, folds the oldest turns and that model writes their summary in one no-tools call through the run's spend guard (counts toward every cap, never failed over); the task and the latest instruction are never folded or sent to the summary call and stay word for word; a failed summary call keeps the extractive summary and says so in the run and the bridge log; the bridge stores the reported summary with the session (SESSION-6, SESSION-3.a resume) and drops the folded turns. Fake-LLM tests prove per-model window, whole-prompt trigger, model-written summary, pinned verbatim, fallback, spend; they fail on the base sources."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "a338448669e2338420ae4af42e89e8eb667e614cf4cfb91a86e42b688f3b8cab",
+        "cli": "53bb05503afcbcbe6da4a0ab5e05ef0bd1122942fc26d2733765765e5b4e6bcb",
+        "discord": "4d0585744adbd97f05615f15273a5a6587633a376b30bcdb860f6fae591d5c78",
+        "watch": "6e74dbea7591844162402d016dabb08b20b97cf78742db75eef1fe9b7dff0af8"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791335610,
+      "digest": "2aad39872f2854dbe69cbabd9f0c4ab3d7aff63305469afa25465efec75c8490",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "session-5-a-each-configured-model-has-its-own-context-window-at-about-80-of-the-whole-prompt-a-model-writes-the-summary",
+        "title": "SESSION-5.a: each configured model has its own context window; at about 80% of the whole prompt a model writes the summary of older turns, the task and latest instruction stay word for word",
+        "description": "SESSION-5.a: each configured model has its own context window; at about 80% of the whole prompt a model writes the summary of older turns, the task and latest instruction stay word for word",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "watch"
+        ],
+        "affected_paths": [
+          ".env.example",
+          "CHANGELOG.md",
+          "STATUS.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/WATCH.md",
+          "docs/discord.md",
+          "specs/agent/agent.spec.md",
+          "specs/agent/requirements.md",
+          "specs/agent/testing.md",
+          "specs/cli/cli.spec.md",
+          "specs/cli/requirements.md",
+          "specs/cli/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/requirements.md",
+          "specs/discord/testing.md",
+          "specs/watch/requirements.md",
+          "specs/watch/testing.md",
+          "specs/watch/watch.spec.md",
+          "src/agent/condense.ts",
+          "src/agent/execute.ts",
+          "src/agent/providers.ts",
+          "src/agent/types.ts",
+          "src/cli.ts",
+          "src/discord/agent-client.ts",
+          "src/discord/bridge.ts",
+          "src/discord/session-store.ts",
+          "src/discord/session-thread.ts",
+          "src/discord/types.ts",
+          "src/store/conversation.ts",
+          "src/watch/agent-client.ts",
+          "src/watch/poller.ts",
+          "src/watch/types.ts",
+          "tests/agent.condense.test.ts",
+          "tests/discord.session-resume.test.ts",
+          "tests/discord.session-thread.unit.test.ts",
+          "tests/session.condense.test.ts",
+          "tests/store.conversation.test.ts",
+          "tests/watch.conversation.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "SESSION-5.a (captured in this PR with hi from Leif's 2026-09-28 interview, round 16): each configured model has its own context window (kind:model=TOKENS on its AGENT-13 entry, never part of the model id; CORVIDINHO_LLM_CONTEXT_TOKENS, default 8192, for an entry with none); a Discord (chat, ask answer) or WATCH run gets its replayed conversation on stdin (task run --task-stdin, no 32,000-char argument ceiling) and, when the whole prompt it sends (system prompt, tools, persona, project instructions, memory and identity blocks, conversation, new message) reaches 80% of the current model's window, folds the oldest turns and that model writes their summary in one no-tools call through the run's spend guard (counts toward every cap, never failed over); the task and the latest instruction are never folded or sent to the summary call and stay word for word; a failed summary call keeps the extractive summary and says so in the run and the bridge log; the bridge stores the reported summary with the session (SESSION-6, SESSION-3.a resume) and drops the folded turns. Fake-LLM tests prove per-model window, whole-prompt trigger, model-written summary, pinned verbatim, fallback, spend; they fail on the base sources."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "b4b14304299f39020d9f9c35516927a1ef99a7556cf6e44db00d6849c115a352",
+        "cli": "53bb05503afcbcbe6da4a0ab5e05ef0bd1122942fc26d2733765765e5b4e6bcb",
+        "discord": "c27ebbc8bb9c5e277da9f967874d0bc74f250b2ac9d87a38089d5d897cb4b030",
+        "watch": "6e74dbea7591844162402d016dabb08b20b97cf78742db75eef1fe9b7dff0af8"
+      }
+    }
+  ],
+  "reopenings": []
+}

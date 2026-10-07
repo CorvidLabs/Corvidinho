@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 87
+version: 88
 status: draft
 files:
   - src/cli.ts
@@ -394,3 +394,4 @@ Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), 
 | 2026-10-07 | release-0-0-46-autonomous-7-a-daemon-schedule-dm-411-and-agent-13-13-a-headless-agent-cli-model-413-package-bump: Release 0.0.46: AUTONOMOUS-7.a daemon schedule DM (#411) and AGENT-13/13.a headless agent CLI model (#413). Package bump, CHANGELOG fold, STATUS rows, version fixtures; CI tags v0.0.46 on land. |
 | 2026-10-07 | with-only-the-daemon-running-and-no-bridge-a-scheduled-run-s-question-still-reaches-me-by-dm-autonomous-7-a: With only the daemon running and no bridge, a scheduled run's question still reaches me by DM (AUTONOMOUS-7.a): `corvidinho daemon` DMs the owner each pending schedule ask over Discord's REST API with the bot token while no bridge runs, `daemon.started` carries `ownerDm` (REQ-cli-707; REQ-cli-098 modified) |
 | 2026-10-07 | a-headless-agent-cli-can-be-one-of-my-models-in-my-own-runs-only-with-the-same-tools-as-my-other-models-inside-that: A headless agent CLI can be one of my models, in my own runs only, with the same tools as my other models, inside that talk's own worktree; other runs skip it and use my next model (AGENT-13, AGENT-13.a) |
+| 2026-10-07 | session-5-a-each-configured-model-has-its-own-context-window-at-about-80-of-the-whole-prompt-a-model-writes-the-summary: SESSION-5.a: each configured model has its own context window; at about 80% of the whole prompt a model writes the summary of older turns, the task and latest instruction stay word for word |

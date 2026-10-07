@@ -36,6 +36,8 @@ import {
 import type { ModelFallback, ModelUsage, TaskWorkspaceReport } from "./agent/types.ts";
 import type { InjectionNotice } from "./agent/untrusted.ts";
 import { startWorkspaceDiff } from "./agent/workspace-diff.ts";
+import { readTaskStdin } from "./agent/condense.ts";
+import type { CondenseReport, ConversationReplay } from "./store/conversation.ts";
 import { delegateDepthFromEnv, delegatePersonaFromEnv } from "./autonomous/delegate.ts";
 import { actingSurface } from "./agent/shell-gate.ts";
 import { workReviewHook } from "./work/review.ts";
@@ -134,12 +136,15 @@ Usage:
                                     Run a typed plugin command (args after -- reach it verbatim)
   corvidinho specsync <list|read|check|brief|coverage|score|change-list|ship-status> [...]
                                     SpecSync agent tools (SPECSYNC-1..6; local binary)
-  corvidinho task run [--task TEXT] [--tier read|tool|code] [--max-retries N]
+  corvidinho task run [--task TEXT | --task-stdin] [--tier read|tool|code] [--max-retries N]
                     [--output text|json|ndjson] [--json] [--here] [--persona NAME]
                                     LLM tool loop (plugins) when key set; prove-before-done verify gate (AGENT-3/4/5):
                                     always on, runs the verify lane when the run's real git diff changed (AGENT-14/15)
                                     --json = --output json (one result); ndjson = live event stream
                                     for bridges, one versioned frame per line (AGENT-8 / CLI-7)
+                                    --task-stdin reads the task, and the conversation a bridge replayed into it,
+                                    as one JSON object on stdin; the run condenses that conversation at ~80% of
+                                    its model's window, the whole prompt counted, and the model writes the summary (SESSION-5.a)
                                     In a git repo it works in its own new worktree made from HEAD (uncommitted and
                                     untracked files are not in it); a clean one is removed at the end, one with
                                     changes is kept and named. --here runs it in this checkout (SESSION-WORKTREE-1.a)
@@ -174,7 +179,10 @@ Env / allowlists (ALLOW-4; default-deny, never Merlin BASIC):
   CORVIDINHO_LLM_MODEL                                  required: the model, as openai:<model>, ollama:<model>, anthropic:<model> or a
                                                         headless agent CLI, cli:<program> [args] (bare = OpenAI-compatible); no built-in
                                                         default (AGENT-13). A cli: entry runs only in my own code-tier runs with
-                                                        shell-exec allowlisted, in that talk's worktree; other runs skip it (AGENT-13.a)
+                                                        shell-exec allowlisted, in that talk's worktree; other runs skip it (AGENT-13.a);
+                                                        an entry may end in =TOKENS, that model's own context window (SESSION-5.a)
+  CORVIDINHO_LLM_CONTEXT_TOKENS                         optional window of a model whose entry sets none (default 8192, min 1024):
+                                                        a replayed conversation is condensed at ~80% of the window (SESSION-5)
   CORVIDINHO_LLM_API_KEY / OPENAI_API_KEY               key for openai: models (never commit)
   CORVIDINHO_LLM_BASE_URL                               endpoint for openai: models (default https://api.openai.com/v1)
   OLLAMA_HOST                                           Ollama server for ollama: models (default 127.0.0.1:11434; no key)
@@ -817,7 +825,7 @@ async function pluginsRun(
 }
 
 const TASK_RUN_USAGE =
-  "usage: corvidinho task run [--task TEXT] [--tier read|tool|code] [--max-retries N] [--output text|json|ndjson] [--json] [--here] [--persona NAME]";
+  "usage: corvidinho task run [--task TEXT | --task-stdin] [--tier read|tool|code] [--max-retries N] [--output text|json|ndjson] [--json] [--here] [--persona NAME]";
 
 /**
  * AUTONOMOUS-2 / AUTONOMOUS-5.a: `--persona NAME` (or `--persona=NAME`) from
@@ -841,6 +849,22 @@ export function parseTaskPersona(args: readonly string[]): string | null | undef
     if (m) value = m[1]!.trim() || null;
   }
   return value;
+}
+
+/**
+ * SESSION-5.a (REQ-cli-473): `--task-stdin` is read only from `task run`'s
+ * own args (`rest` after `task run`, which never holds the `--task` value)
+ * before the first `--`, like `--here`: the run reads its task, and the
+ * conversation replayed into it, as one JSON object on stdin
+ * (`src/agent/condense.ts`), so no process-argument limit caps the prompt
+ * below the model's window.
+ */
+export function parseTaskStdin(args: readonly string[]): boolean {
+  for (const a of args) {
+    if (a === "--") return false;
+    if (a === "--task-stdin") return true;
+  }
+  return false;
 }
 
 /**
@@ -909,6 +933,8 @@ async function taskRun(opts: {
   output: TaskOutputMode;
   maxRetries: number | undefined;
   taskText: string | undefined;
+  /** SESSION-5.a: the conversation replayed into the task (`--task-stdin`). */
+  conversation?: ConversationReplay;
   tier: CapabilityTier | undefined;
   nonInteractive: boolean;
   /** SESSION-WORKTREE-1.a: run in this checkout instead of a new worktree. */
@@ -1046,6 +1072,7 @@ async function taskRunIn(
   opts: {
     maxRetries: number | undefined;
     taskText: string | undefined;
+    conversation?: ConversationReplay;
     tier: CapabilityTier | undefined;
     nonInteractive: boolean;
     persona?: string;
@@ -1133,6 +1160,13 @@ async function taskRunIn(
     onPrivateReply: (text) => {
       if (!privateReplies.includes(text)) privateReplies.push(text);
     },
+    // SESSION-5.a (REQ-cli-473): the conversation replayed into the task is
+    // condensed against the whole prompt and the model's own window; what
+    // that did rides the result (--json / ndjson) for the bridge to keep.
+    ...(opts.conversation ? { conversation: opts.conversation } : {}),
+    onCondensed: (report) => {
+      condensed = report;
+    },
   });
   // GITHUB-9 (REQ-cli-092): an owner or team /work run's verified tree is
   // reviewed by a second model in bounded rounds (their own counter, not the
@@ -1145,6 +1179,7 @@ async function taskRunIn(
   let injection: InjectionNotice | undefined;
   const privateReplies: string[] = [];
   let answeredBy: string | undefined;
+  let condensed: CondenseReport | undefined;
   let usageByModel: ModelUsage[] | undefined;
   const modelFallback: ModelFallback[] = [];
   let result: TaskResult;
@@ -1185,6 +1220,7 @@ async function taskRunIn(
   if (answeredBy) result.model = answeredBy;
   if (usageByModel && usageByModel.length > 0) result.usageByModel = usageByModel;
   if (modelFallback.length > 0) result.modelFallback = modelFallback;
+  if (condensed) result.conversation = condensed;
 
   if (ndjson) {
     ndjson.result(result);
@@ -1496,10 +1532,27 @@ export async function main(argv: string[]): Promise<number> {
         console.error(`--persona needs a name\n${TASK_RUN_USAGE}\n`);
         return 1;
       }
+      // SESSION-5.a (REQ-cli-473): the task and its replayed conversation
+      // on stdin, never together with --task.
+      let task = taskText;
+      let conversation: ConversationReplay | undefined;
+      if (parseTaskStdin(rest.slice(2))) {
+        if (taskText !== undefined) {
+          console.error(`--task and --task-stdin cannot be used together\n${TASK_RUN_USAGE}\n`);
+          return 1;
+        }
+        const payload = await readTaskStdin(Bun.stdin.stream());
+        if ("error" in payload) {
+          return reportCliError(new Error(payload.error), { json: output !== "text" });
+        }
+        task = payload.task;
+        conversation = payload.conversation;
+      }
       return taskRun({
         output,
         maxRetries,
-        taskText,
+        taskText: task,
+        ...(conversation ? { conversation } : {}),
         tier,
         nonInteractive,
         here: parseTaskHere(rest.slice(2)),

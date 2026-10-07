@@ -3,6 +3,7 @@
  * Lean: OpenAI-compatible tool loop; no Trust/attest.
  */
 
+import type { CondenseReport } from "../store/conversation.ts";
 import type { RepoWays } from "./repo-ways.ts";
 import type { InjectionNotice } from "./untrusted.ts";
 
@@ -254,6 +255,15 @@ export type TaskResult = {
    * protocol change). Absent on every other run.
    */
   review?: TaskReview;
+  /**
+   * SESSION-5.a (REQ-agent-473 / REQ-cli-473): what condensing the replayed
+   * conversation did — the new summary (written by the model, or the
+   * extractive one when its call failed), the folded turns' indexes, the
+   * model and its window. The bridge keeps it with the session (SESSION-6).
+   * Absent when the run got no conversation or nothing was folded. Additive:
+   * no protocol change.
+   */
+  conversation?: CondenseReport;
 };
 
 /** GITHUB-9: how a run's second-model review ended (`TaskResult.review`). */

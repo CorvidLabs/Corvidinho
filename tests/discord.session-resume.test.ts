@@ -4,9 +4,11 @@
  * user's reply to one of its answers, or their message in its thread, starts a
  * new session that begins from the old one's summary instead of getting no
  * answer — after the channel, actor and mute gates; the conversation is kept
- * 30 days (restarts included) and then purged; a long chat is condensed at
- * about 80% of the configured window with the task and latest instruction
- * word for word.
+ * 30 days (restarts included) and then purged; the run gets the replayed
+ * conversation and condenses it at about 80% of its model's window
+ * (SESSION-5.a, tests/agent.condense.test.ts), and the bridge keeps the
+ * model-written summary it reports, the task and latest instruction word for
+ * word.
  */
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -22,7 +24,7 @@ import { SessionStore } from "../src/discord/session-store.ts";
 import type { InboundMessage } from "../src/discord/types.ts";
 import {
   CONVERSATION_RETENTION_MS,
-  condenseBudgetChars,
+  formatConversationBlock,
   SUMMARY_LABEL,
 } from "../src/store/conversation.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
@@ -44,7 +46,22 @@ afterEach(async () => {
   for (const c of cleanups.splice(0)) c();
 });
 
-type Call = Pick<AgentRunChatOpts, "prompt" | "humanText" | "sessionId" | "resume" | "actingUserId">;
+type Call = Pick<AgentRunChatOpts, "prompt" | "humanText" | "sessionId" | "resume" | "actingUserId"> & {
+  /** SESSION-5.a: the conversation the bridge handed the run (absent on base sources). */
+  conversation?: Replay;
+};
+
+type Replay = { header: string; footer: string; summary: string; turns: Array<{ role: "human" | "agent"; content: string }> };
+
+/** What a run's condensing reports back (SESSION-5.a). */
+type Report = {
+  summary: string;
+  folded: number[];
+  by: "model" | "extractive";
+  model: string;
+  windowTokens: number;
+  reason?: string;
+};
 
 type Clock = { now: number };
 
@@ -56,19 +73,35 @@ function tempDir(prefix: string): string {
 
 async function bridgeWith(
   reply: (n: number) => string,
-  opts: { db: Database; clock: Clock; projectRoot: string; env?: Record<string, string> },
+  opts: {
+    db: Database;
+    clock: Clock;
+    projectRoot: string;
+    env?: Record<string, string>;
+    /** SESSION-5.a: what the (fake) run's condensing reports for call n. */
+    condense?: (n: number, conversation: Replay) => Report | undefined;
+  },
 ) {
   const calls: Call[] = [];
   const agent: AgentClient = {
     async runChat(o) {
+      const conversation = (o as { conversation?: Replay }).conversation;
       calls.push({
         prompt: o.prompt,
         humanText: o.humanText,
         sessionId: o.sessionId,
         resume: o.resume,
         actingUserId: o.actingUserId,
+        ...(conversation ? { conversation } : {}),
       });
-      return { ok: true, sessionId: o.sessionId, summary: reply(calls.length), exitCode: 0 };
+      const report = conversation ? opts.condense?.(calls.length, conversation) : undefined;
+      return {
+        ok: true,
+        sessionId: o.sessionId,
+        summary: reply(calls.length),
+        exitCode: 0,
+        ...(report ? { conversation: report } : {}),
+      };
     },
   };
   const sessionStore = new SessionStore({
@@ -203,13 +236,16 @@ describe("after the soft TTL a reply or a thread message resumes from the summar
     expect(call(calls, 1).prompt).toContain(ANSWER_1);
   });
 
-  test("the resumed conversation carries its condensed summary (SESSION-6)", async () => {
+  test("the resumed conversation carries its model-written summary (SESSION-6 / SESSION-5.a)", async () => {
     const { clock, db, projectRoot } = setup();
+    const MODEL_LINE = "- Summary: MODEL the codeword task went through requests 2 to 4";
     const { handlers, calls, outbound, store } = await bridgeWith((n) => `answer number ${n} ${"z".repeat(600)}`, {
       db,
       clock,
       projectRoot,
-      env: { CORVIDINHO_LLM_CONTEXT_TOKENS: "1024" },
+      // The sixth run condensed: answers 1-3 and requests 2-3 folded, a model wrote the summary.
+      condense: (n) =>
+        n === 6 ? { summary: MODEL_LINE, folded: [1, 2, 3, 4, 5], by: "model", model: "fake-model", windowTokens: 1024 } : undefined,
     });
     await handlers.onMessage(mention("m1", OWNER, OPENING));
     for (let i = 2; i <= 6; i += 1) {
@@ -218,15 +254,17 @@ describe("after the soft TTL a reply or a thread message resumes from the summar
       );
     }
     const live = store.get(call(calls, 5).sessionId)!;
-    const summary = store.summaryFor(live);
-    expect(summary).toContain("- You (Corvidinho): answer number 1");
+    expect(store.summaryFor(live)).toBe(MODEL_LINE);
     const lastAnswer = answerId(outbound, 5);
     clock.now += TTL_MS + 5_000;
     await handlers.onMessage(replyTo("m9", OWNER, "where were we?", lastAnswer));
     const p = call(calls, 6).prompt;
     expect(p).toContain(SUMMARY_LABEL);
-    expect(p).toContain("- You (Corvidinho): answer number 1");
+    expect(p).toContain(MODEL_LINE);
+    expect(p).not.toContain("answer number 1 ");
     expect(p).toContain(OPENING);
+    // The resumed run gets the same conversation, model summary included.
+    expect(call(calls, 6).conversation?.summary).toBe(MODEL_LINE);
   });
 
   test("another user's reply to my expired answer never gets my conversation", async () => {
@@ -388,70 +426,99 @@ describe("after the soft TTL a reply or a thread message resumes from the summar
   });
 });
 
-describe("a long chat is condensed at about 80% of the window (SESSION-5)", () => {
-  test("CORVIDINHO_LLM_CONTEXT_TOKENS sets the window; the task and latest instruction stay word for word", async () => {
-    const clock: Clock = { now: 1_000_000 };
-    const db = openCorvidinhoDb({ memory: true });
-    cleanups.push(() => db.close());
-    const projectRoot = tempDir("corvidinho-resume-proj-");
-    // No injected store: the bridge reads the window from its env.
-    const calls: Call[] = [];
-    const agent: AgentClient = {
-      async runChat(o) {
-        calls.push({ prompt: o.prompt, humanText: o.humanText, sessionId: o.sessionId, resume: o.resume });
-        return { ok: true, sessionId: o.sessionId, summary: `answer ${calls.length} ${"a".repeat(700)}`, exitCode: 0 };
-      },
-    };
-    const outbound = memoryThinkingOutbound();
-    const box: { handlers: GatewayHandlers | null } = { handlers: null };
-    const result = await startBridge({
-      env: {
-        DISCORD_BOT_TOKEN: "fake",
-        DISCORD_CHANNEL_IDS: CHAN,
-        CORVIDINHO_DISCORD_DRY_RUN: "1",
-        CORVIDINHO_ALLOWLIST_FILE: NO_ALLOWLIST,
-        CORVIDINHO_OWNER_DISCORD_ID: OWNER,
-        CORVIDINHO_LLM_CONTEXT_TOKENS: "2048",
-      },
-      projectRoot,
-      skipProtocolCheck: true,
-      disableScheduler: true,
-      thinkingOutbound: outbound,
-      thinkingDebounceMs: 0,
-      thinkingTickMs: 60_000,
-      agent,
+describe("a long chat is condensed by the run; the bridge keeps the model's summary (SESSION-5 / SESSION-5.a)", () => {
+  test("the run gets the whole conversation; the summary it reports replaces the folded turns, the task and latest instruction stay word for word", async () => {
+    const { clock, db, projectRoot } = setup();
+    const task = `TASK: ${"refactor the scheduler store ".repeat(40)}`.trim();
+    const latest = `LATEST: ${"only touch the cron parser ".repeat(30)}`.trim();
+    const MODEL_LINE = "- Summary: MODEL steps 2 to 5 refactored the store and its tests";
+    const { handlers, calls, outbound } = await bridgeWith((n) => `answer ${n} ${"a".repeat(700)}`, {
       db,
-      gatewayFactory: async (_cfg, handlers) => {
-        box.handlers = handlers;
-        handlers.reply = async () => ({ messageId: `r-${Math.random()}` });
-        return createNullGateway();
+      clock,
+      projectRoot,
+      // The eighth run's model condensed the turns between the task and the latest instruction.
+      condense: (n, c) => {
+        if (n !== 8) return undefined;
+        const latestAt = c.turns.findIndex((t) => t.content === latest);
+        const folded = Array.from({ length: latestAt - 1 }, (_, i) => i + 1);
+        return { summary: MODEL_LINE, folded, by: "model", model: "fake-model", windowTokens: 2048 };
       },
     });
-    if (result.ok !== true || !box.handlers) throw new Error("bridge did not start");
-    running.push(result);
-    const handlers = box.handlers;
-    const task = `TASK: ${"refactor the scheduler store ".repeat(40)}`.trim();
     await handlers.onMessage(mention("m1", OWNER, task));
     // Nine messages: under the DISCORD-6 rate limit (10 a minute).
-    for (let i = 2; i <= 7; i += 1) {
+    for (let i = 2; i <= 6; i += 1) {
       await handlers.onMessage(
         replyTo(`m${i}`, OWNER, `step ${i}: ${"details ".repeat(80)}`.trim(), answerId(outbound, i - 2)),
       );
     }
-    const latest = `LATEST: ${"only touch the cron parser ".repeat(30)}`.trim();
-    await handlers.onMessage(replyTo("m8", OWNER, latest, answerId(outbound, 6)));
+    await handlers.onMessage(replyTo("m7", OWNER, latest, answerId(outbound, 5)));
+    await handlers.onMessage(replyTo("m8", OWNER, "and the tests?", answerId(outbound, 6)));
     await handlers.onMessage(replyTo("m9", OWNER, "go on", answerId(outbound, 7)));
     expect(calls).toHaveLength(9);
 
+    // Nothing is folded in the bridge: the eighth run got every earlier turn,
+    // and its conversation is exactly the block in its prompt.
+    const eighth = call(calls, 7);
+    const sent = eighth.conversation!;
+    expect(sent.turns).toHaveLength(14);
+    expect(eighth.prompt).toContain(formatConversationBlock(sent, { header: sent.header, footer: sent.footer }));
+    expect(eighth.prompt).toContain(`step 2: ${"details ".repeat(80)}`.trim());
+
+    // The ninth prompt picks up from the model's summary.
     const last = call(calls, 8).prompt;
     const thread = last.slice(last.indexOf("[Corvidinho earlier conversation"));
-    expect(thread.length).toBeLessThan(condenseBudgetChars(2048));
     expect(thread).toContain(SUMMARY_LABEL);
+    expect(thread).toContain(MODEL_LINE);
     expect(thread).toContain(`Human: ${task}\n`);
     expect(thread).toContain(`Human: ${latest}\n`);
-    expect(thread).toContain("- Human: step 2:");
-    expect(thread).not.toContain(`step 2: ${"details ".repeat(80)}`.trim());
+    expect(thread).toContain("Human: and the tests?\n");
+    expect(thread).not.toContain("step 2:");
+    expect(thread).not.toContain("- Human: step 2:");
     expect(last.endsWith("go on")).toBe(true);
+    expect(call(calls, 8).conversation?.summary).toBe(MODEL_LINE);
+  });
+
+  test("an extractive summary (the model's call failed) is kept too, and said in the bridge log", async () => {
+    const { clock, db, projectRoot } = setup();
+    const warns: string[] = [];
+    const warn = console.warn;
+    console.warn = (...a: unknown[]) => {
+      warns.push(a.map(String).join(" "));
+    };
+    try {
+      const { handlers, calls, outbound } = await bridgeWith((n) => `answer ${n}`, {
+        db,
+        clock,
+        projectRoot,
+        condense: (n) =>
+          n === 3
+            ? {
+                summary: "- Human: second request\n- You (Corvidinho): answer 1",
+                folded: [1, 2],
+                by: "extractive",
+                model: "fake-model",
+                windowTokens: 2048,
+                reason: "HTTP 500",
+              }
+            : undefined,
+      });
+      await handlers.onMessage(mention("m1", OWNER, OPENING));
+      await handlers.onMessage(replyTo("m2", OWNER, "second request", answerId(outbound, 0)));
+      await handlers.onMessage(replyTo("m3", OWNER, "third request", answerId(outbound, 1)));
+      await handlers.onMessage(replyTo("m4", OWNER, "fourth", answerId(outbound, 2)));
+      const p = call(calls, 3).prompt;
+      expect(p).toContain("- You (Corvidinho): answer 1");
+      expect(p).not.toMatch(/\nYou \(Corvidinho\): answer 1\n/);
+      expect(
+        warns.some(
+          (w) =>
+            w.includes("SESSION-5.a: fake-model did not write the summary (HTTP 500)") &&
+            w.includes("extractive summary of 2 condensed turns"),
+        ),
+      ).toBe(true);
+    } finally {
+      console.warn = warn;
+    }
   });
 });
 

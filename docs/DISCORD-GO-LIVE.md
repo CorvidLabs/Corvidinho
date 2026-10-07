@@ -49,7 +49,8 @@ cp allowlist.example.toml ~/.config/corvidinho/allowlist.toml
 #   anthropic: ANTHROPIC_API_KEY
 #   CORVIDINHO_LLM_TIER=read|tool|code (default tool); CORVIDINHO_LLM_MODEL_READ/_TOOL/_CODE per tier
 #   optional AGENT-17.a: CORVIDINHO_LLM_MODEL_ORDER=<same entries, weakest first>   # move up after the nudge (E.9)
-# optional SESSION-5: CORVIDINHO_LLM_CONTEXT_TOKENS=8192   # model window; long chats condense at ~80% of it
+#   optional SESSION-5.a: an entry may end in =TOKENS, that model's own window, e.g. openai:gpt-4o-mini=128000
+# optional SESSION-5: CORVIDINHO_LLM_CONTEXT_TOKENS=8192   # window of a model with no =TOKENS; long chats condense at ~80% of it
 ```
 
 Repo templates (no secrets):

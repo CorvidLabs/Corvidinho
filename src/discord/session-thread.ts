@@ -1,16 +1,20 @@
 /**
  * AGENT-6 — a Discord session keeps its thread (DISCORD-2 / DISCORD-2.a;
  * REQ-discord-072), condensed at about 80% of the model's window
- * (SESSION-5/6; REQ-discord-472).
+ * (SESSION-5/5.a/6; REQ-discord-472).
  *
  * Every agent run on a session records the human's own words and the answer
  * the bridge posted. A continued run gets the session's condensed summary and
- * its earlier turns replayed, oldest first, in a labelled block ahead of the
- * new message. When that prompt reaches about 80% of the model's context
- * window, `SessionStore.threadPrompt` folds the oldest turns into the
- * summary (`src/store/conversation.ts`): the session's opening request (the
- * task) and its newest human turn (the latest instruction) stay word for word.
- * No env, flag or slash surface beyond the optional window size.
+ * its earlier turns replayed, whole and oldest first, in a labelled block
+ * ahead of the new message (`SessionStore.threadPrompt`), and the same
+ * conversation on stdin (`SessionStore.replayFor`). The run measures the
+ * whole prompt its model sees; at about 80% of that model's window it folds
+ * the oldest turns and a model writes their summary
+ * (`src/agent/condense.ts`): the session's opening request (the task) and
+ * its newest human turn (the latest instruction) stay word for word. The
+ * bridge keeps what the run did with the session
+ * (`SessionStore.applyCondensed`). No env, flag or slash surface beyond the
+ * optional window sizes.
  *
  * Live turns go when the session ends or idles past the soft TTL
  * (SESSION-2/3); its summary and last turns are then kept for 30 days per
@@ -33,7 +37,6 @@ import type { Database } from "bun:sqlite";
 import {
   AGENT_TURN_MAX_CHARS,
   clipTurnText,
-  CONVERSATION_PROMPT_MAX_CHARS,
   type ConversationRole,
   type ConversationTurn,
   formatConversationBlock,
@@ -47,13 +50,6 @@ export { clipTurnText };
 export type SessionTurnRole = ConversationRole;
 
 export type SessionTurn = ConversationTurn;
-
-/**
- * Ceiling on the whole replay block (header and footer included): the
- * transport cap on the conversation part of the prompt. Condensation keeps the
- * block well inside it; past it, middle turns become one count marker.
- */
-export const SESSION_THREAD_BUDGET_CHARS = CONVERSATION_PROMPT_MAX_CHARS;
 
 /** An agent turn is clipped to this before it is stored or replayed. */
 export const SESSION_THREAD_TURN_MAX_CHARS = AGENT_TURN_MAX_CHARS;
@@ -90,10 +86,11 @@ export function formatSessionThreadOmitted(count: number): string {
 /**
  * The replay block for `turns` (oldest first) and the session's condensed
  * `summary`, or "" when there are neither. Pure. One paragraph (no blank
- * line), opened by {@link SESSION_THREAD_HEADER}; the summary (when any) comes
- * first. Past `budgetChars` (default {@link SESSION_THREAD_BUDGET_CHARS}) the
- * opening turn and as many of the newest turns as fit are kept and anything
- * between is one omitted-count marker.
+ * line), opened by {@link SESSION_THREAD_HEADER}; the summary (when any)
+ * follows the opening request. Whole by default: no transport ceiling cuts it
+ * (the run condenses it against its model's window, SESSION-5.a). Past an
+ * explicit `budgetChars` the opening turn and as many of the newest turns as
+ * fit are kept and anything between is one omitted-count marker.
  */
 export function formatSessionThread(
   turns: ReadonlyArray<Pick<SessionTurn, "role" | "content">>,
@@ -104,7 +101,7 @@ export function formatSessionThread(
     {
       header: SESSION_THREAD_HEADER,
       footer: SESSION_THREAD_FOOTER,
-      budgetChars: opts.budgetChars ?? SESSION_THREAD_BUDGET_CHARS,
+      ...(opts.budgetChars !== undefined ? { budgetChars: opts.budgetChars } : {}),
     },
   );
 }
@@ -121,7 +118,7 @@ export function withSessionThread(
     {
       header: SESSION_THREAD_HEADER,
       footer: SESSION_THREAD_FOOTER,
-      budgetChars: opts.budgetChars ?? SESSION_THREAD_BUDGET_CHARS,
+      ...(opts.budgetChars !== undefined ? { budgetChars: opts.budgetChars } : {}),
     },
   );
 }

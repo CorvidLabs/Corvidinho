@@ -22,6 +22,15 @@
  * to the next model in that order that its tier's list has. Unset = no order,
  * so it never moves; nothing is ranked by price or benchmark.
  *
+ * SESSION-5.a: an entry may end in `=TOKENS`, that model's own context window
+ * (`openai:gpt-4o-mini=128000`, `ollama:qwen3:30b=32768`): a run condenses its
+ * conversation at about 80% of the window of the model its call goes to
+ * (src/agent/condense.ts). The suffix is not part of the model id; an entry
+ * without one uses the window set on another entry naming the same model (in
+ * any model key, the order included; `configuredWindowTokens`), else
+ * `CORVIDINHO_LLM_CONTEXT_TOKENS`, else 8192 tokens. The same entry format
+ * holds in every model key, the order included.
+ *
  * Each kind has its vendor endpoint (the endpoint of a provider the operator
  * chose, not a default model):
  * - `openai`: `CORVIDINHO_LLM_BASE_URL` (else `https://api.openai.com/v1`),
@@ -54,8 +63,11 @@ import type { AgentTokenUsage, ModelFallback, ModelUsage } from "./types.ts";
 export const PROVIDER_KINDS = ["openai", "ollama", "anthropic", "cli"] as const;
 export type ProviderKind = (typeof PROVIDER_KINDS)[number];
 
-/** One configured model: the provider kind and the model id sent as `body.model`. */
-export type ModelEntry = { kind: ProviderKind; model: string };
+/**
+ * One configured model: the provider kind, the model id sent as `body.model`
+ * and, when its entry sets one (`=TOKENS`, SESSION-5.a), its context window.
+ */
+export type ModelEntry = { kind: ProviderKind; model: string; windowTokens?: number };
 
 /** The `openai` kind's endpoint when `CORVIDINHO_LLM_BASE_URL` is unset. */
 export const OPENAI_BASE_URL = "https://api.openai.com/v1";
@@ -91,14 +103,29 @@ function isKind(s: string): s is ProviderKind {
   return (PROVIDER_KINDS as readonly string[]).includes(s);
 }
 
+/** SESSION-5.a: an entry's `=TOKENS` window suffix (digits only, at the end). */
+const ENTRY_WINDOW_RE = /\s*=\s*(\d{1,12})$/;
+
 /**
- * One entry: split on the first `:` only when the prefix is a kind
- * (case-insensitive); else the whole entry is an OpenAI-compatible model id.
- * Null for a blank entry or a kind with no model (`ollama:`).
+ * One entry: an optional `=TOKENS` suffix is the model's own context window
+ * (SESSION-5.a; a positive whole number, else no window of its own) and is
+ * not part of the model id. The rest splits on the first `:` only when the
+ * prefix is a kind (case-insensitive); else the whole of it is an
+ * OpenAI-compatible model id. Null for a blank entry or a kind with no model
+ * (`ollama:`).
  */
 export function parseModelEntry(raw: string): ModelEntry | null {
-  const s = raw.trim();
+  let s = raw.trim();
+  let windowTokens: number | undefined;
+  const w = ENTRY_WINDOW_RE.exec(s);
+  if (w) {
+    const n = Number(w[1]);
+    if (Number.isSafeInteger(n) && n > 0) windowTokens = n;
+    s = s.slice(0, w.index).trim();
+  }
   if (!s) return null;
+  const withWindow = (e: ModelEntry): ModelEntry =>
+    windowTokens !== undefined ? { ...e, windowTokens } : e;
   const i = s.indexOf(":");
   if (i > 0) {
     const prefix = s.slice(0, i).trim().toLowerCase();
@@ -106,10 +133,10 @@ export function parseModelEntry(raw: string): ModelEntry | null {
       let model = s.slice(i + 1).trim();
       // AGENT-13: a CLI command is argv split on whitespace; one space each.
       if (prefix === "cli") model = model.replace(/\s+/g, " ");
-      return model ? { kind: prefix, model } : null;
+      return model ? withWindow({ kind: prefix, model }) : null;
     }
   }
-  return { kind: "openai", model: s };
+  return withWindow({ kind: "openai", model: s });
 }
 
 /** An ordered, comma-separated list of entries; blanks are skipped. */

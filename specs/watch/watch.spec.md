@@ -1,6 +1,6 @@
 ---
 module: watch
-version: 32
+version: 33
 status: draft
 files:
   - src/watch/types.ts
@@ -438,3 +438,4 @@ WATCH poll-first thin (#19, 2026-09-26, corvid-agent): mention/review_request/is
 | 2026-10-06 | on-github-the-owner-and-team-i-ve-declared-get-their-role-s-tools-behind-the-must-ask-gate-strangers-stay-community: On GitHub the owner and team I've declared get their role's tools behind the must-ask gate; strangers stay community (IDENTITY-12.a) |
 | 2026-10-07 | admin-3-c-part-1-as-owner-i-can-change-the-deny-lists-and-the-github-repo-allow-lists-with-admin-deny-and-admin-github: ADMIN-3.c part 1: as owner I can change the deny lists and the GitHub repo allow lists with /admin deny and /admin github; every change is audited and github watch re-reads the allowlist every poll |
 | 2026-10-07 | on-github-a-text-someone-else-edited-never-gets-its-author-s-role-the-safe-13-owner-exemption-covers-only-text-the: On GitHub, a text someone else edited never gets its author's role, the SAFE-13 owner exemption covers only text the owner wrote, a WATCH run never writes the watcher's own checkout, and its audit rows name its GitHub trigger (IDENTITY-12.a follow-up to #374) |
+| 2026-10-07 | session-5-a-each-configured-model-has-its-own-context-window-at-about-80-of-the-whole-prompt-a-model-writes-the-summary: SESSION-5.a: each configured model has its own context window; at about 80% of the whole prompt a model writes the summary of older turns, the task and latest instruction stay word for word |

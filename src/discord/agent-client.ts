@@ -20,6 +20,8 @@ import {
 import { ACTING_SURFACE_ENV, type ActingSurface } from "../agent/shell-gate.ts";
 import type { ModelFallback, TaskReview } from "../agent/types.ts";
 import { buildCorvidinhoArgv } from "../agent/spawn-argv.ts";
+import { taskPayloadJson } from "../agent/condense.ts";
+import { condenseReportFromUnknown, type ConversationReplay } from "../store/conversation.ts";
 import { spendWarningFromUnknown } from "../agent/spend-notice.ts";
 import { injectionNoticeFromUnknown } from "../agent/untrusted.ts";
 import { stopReasonFromUnknown } from "../agent/limits.ts";
@@ -120,6 +122,14 @@ export type AgentRunChatOpts = {
    * re-checks that its actor is the owner. Omitted ⇒ persona.md.
    */
   persona?: string;
+  /**
+   * SESSION-5.a: the conversation replayed into `prompt` (the session's
+   * summary and turns, `SessionStore.replayFor`). When set, the task and it
+   * go to the run on stdin (`task run --task-stdin`, no argument-size limit)
+   * and the run condenses it against its model's window; its report comes
+   * back as `conversation`.
+   */
+  conversation?: ConversationReplay;
 };
 
 export type AgentClient = {
@@ -148,7 +158,8 @@ export function warnModelFallback(hops: ModelFallback[], sessionId: string): voi
 /**
  * Spawns: `<bin> task run --here --task <prompt> --output ndjson` (--here:
  * the run works in the given cwd, never a worktree of its own, REQ-cli-122;
- * no --no-verify;
+ * with a replayed `conversation`, `--task-stdin` and the task and
+ * conversation as one JSON object on stdin, SESSION-5.a; no --no-verify;
  * REQ-discord-085 / AGENT-4) and reads stdout line by line; the summary comes
  * from the `result` frame, uncut up to DISCORD_ANSWER_MAX (DISCORD-16; the
  * bridge splits it), with the last `usage` frame for the answer footer
@@ -185,6 +196,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       replyParentChannelId,
       replyPublicThread,
       persona,
+      conversation,
     }) {
       if (signal?.aborted) {
         return { ok: false, sessionId, summary: "interrupted before start", exitCode: 130 };
@@ -198,14 +210,16 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         "--here",
         // AUTONOMOUS-2 / 5.a: the owner's persona pick (a validated label).
         ...(persona ? ["--persona", persona] : []),
-        "--task",
-        prompt,
+        // SESSION-5.a: a run with a replayed conversation reads its task and
+        // the conversation on stdin, so no argument-size limit caps it.
+        ...(conversation ? ["--task-stdin"] : ["--task", prompt]),
         "--output",
         "ndjson",
       ]);
 
       const proc = Bun.spawn(cmd, {
         cwd: cwd ?? opts.cwd,
+        ...(conversation ? { stdin: new Blob([taskPayloadJson(prompt, conversation)]) } : {}),
         stdout: "pipe",
         stderr: "pipe",
         env: {
@@ -323,6 +337,8 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
       const stopReason = stopReasonFromUnknown(result?.stopReason);
       // GITHUB-9: how the run's second-model review ended (validated).
       const review = taskReviewFromUnknown(result?.review);
+      // SESSION-5.a: what condensing did, checked against the replay sent.
+      const condensed = conversation ? condenseReportFromUnknown(result?.conversation, conversation) : undefined;
       return {
         ok: exitCode === 0,
         sessionId,
@@ -339,6 +355,7 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
         ...(modelFallback ? { modelFallback } : {}),
         ...(failureReason ? { failureReason } : {}),
         ...(failed && stderrTail ? { stderrTail } : {}),
+        ...(condensed ? { conversation: condensed } : {}),
         // Verify facts for the /work PR gate (REQ-discord-088).
         ...(result
           ? {
