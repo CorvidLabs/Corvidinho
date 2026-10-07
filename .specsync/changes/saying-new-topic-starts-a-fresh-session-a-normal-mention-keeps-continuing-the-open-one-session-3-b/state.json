@@ -10,25 +10,21 @@
   "state": "verifying",
   "canonical_applied": true,
   "base_commit": "f51126e759c4c9dd27395b1d011cbca72bba4b1a",
-  "created_at": 1791248475,
-  "updated_at": 1791394256,
+  "created_at": 1791394307,
+  "updated_at": 1791394337,
   "affected_specs": [
     "discord"
   ],
   "affected_paths": [
-    "hi/session.md",
-    "INTENT.md",
     "src/discord/new-topic.ts",
-    "src/discord/message-router.ts",
-    "src/discord/types.ts",
-    "src/discord/session-store.ts",
     "src/discord/bridge.ts",
+    "src/discord/message-router.ts",
     "src/discord/run-control.ts",
+    "src/discord/session-store.ts",
+    "src/discord/types.ts",
     "tests/discord.new-topic.test.ts",
     "docs/discord.md",
-    "specs/discord/discord.spec.md",
-    "specs/discord/testing.md",
-    "specs/discord/requirements.md"
+    "hi/session.md"
   ],
   "no_spec_change": false,
   "no_spec_change_rationale": null,
