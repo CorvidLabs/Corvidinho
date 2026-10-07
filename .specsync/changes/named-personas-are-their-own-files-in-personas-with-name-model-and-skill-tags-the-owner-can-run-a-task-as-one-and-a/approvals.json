@@ -1,4 +1,72 @@
 {
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791351571,
+      "digest": "ed2a5b73ada20f209c1c7053b1de7492ecf5c69aae39f81a30ed13e107808648",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "named-personas-are-their-own-files-in-personas-with-name-model-and-skill-tags-the-owner-can-run-a-task-as-one-and-a",
+        "title": "Named personas are their own files in personas/ with name, model and skill tags; the owner can run a task as one and a lead's delegate picks one by skill tag; team and community can't pick one (AUTONOMOUS-2.a, AUTONOMOUS-5.a)",
+        "description": "Named personas are their own files in personas/ with name, model and skill tags; the owner can run a task as one and a lead's delegate picks one by skill tag; team and community can't pick one (AUTONOMOUS-2.a, AUTONOMOUS-5.a)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "cli",
+          "discord",
+          "plugins"
+        ],
+        "affected_paths": [
+          "INTENT.md",
+          "README.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "hi/autonomous.md",
+          "plugins/autonomous/commands.ts",
+          "plugins/files/commands.ts",
+          "plugins/files/protectedPaths.ts",
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/cli/cli.spec.md",
+          "specs/cli/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/testing.md",
+          "src/agent/execute.ts",
+          "src/agent/persona.ts",
+          "src/agent/personas.ts",
+          "src/agent/project-instructions.ts",
+          "src/autonomous/delegate.ts",
+          "src/cli.ts",
+          "src/discord/agent-client.ts",
+          "src/discord/command-handlers/session.ts",
+          "src/discord/slash-commands.ts",
+          "src/discord/slash-types.ts",
+          "tests/agent.personas.test.ts",
+          "tests/discord.session-persona.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "AUTONOMOUS-2.a and AUTONOMOUS-5.a (hi/autonomous.md, captured in this PR with hi from Leif's 2026-09-28 interview, round 17 on 2026-10-07) under AUTONOMOUS-2 and AUTONOMOUS-5; PERSONA-2 stays true. (1) Persona files: each named persona is its own file personas/<file>.md next to persona.md at Corvidinho's checkout root (CORVIDINHO_ROOT), with --- front matter name (short label), model (one AGENT-13 kind:model entry) and skills (tags), then its voice; loaded with the persona.md loader and rules (committed copy only in a git checkout, untracked refused as not committed, working-tree edits not loaded with one note, 8 KiB cap, symlinks out and binary refused, SAFE-6 scrubbed), read again every run, at most 32 files, a later file reusing a name refused; persona.md stays the default voice when no persona is picked (PERSONA-2). (2) Running as one: createTaskExecute({ persona: { name, by } }) puts the persona's voice in place of persona.md's (PERSONA-3 rules still after it) and its model at the head of the run tier's model chain with the tier's other configured models after it, so the SAFE-8 spend guard, the AGENT-11 fallback and notice and the AGENT-10 notice apply per model; a model that is not in CORVIDINHO_LLM_MODEL or a per-tier key, an unknown persona or a refused file fail the run with one plain line and no model call. (3) Who picks: the owner (or a local CLI run with no role session) via task run --persona NAME and the optional persona option of /session start (that run only); a team member or community user is refused with one line and nothing starts (bridge and task run both check); a lead's delegate --skill TAG runs its worker as the first persona by name whose skill tags hold TAG exactly (none = today's worker), passed only through CORVIDINHO_DELEGATE_PERSONA on the worker spawn (read only at depth > 0, never inherited); a matched persona whose model is not configured refuses the delegate call and spawns nothing; workers keep their tier, depth, community role and env limits; council voices are unchanged. (4) SAFE-2: files-write / files-edit / files-delete refuse any path in Corvidinho's own personas/ folder; a project's own personas/ directory is unaffected. Regression tests in tests/agent.personas.test.ts and tests/discord.session-persona.test.ts fail on main's sources and pass on the branch; docs (README, docs/discord.md, docs/DISCORD-GO-LIVE.md) and --help describe it."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "eccbbe9878613df9cb04b3b5a56afc51d4c4c4b97e769a2ae7de964b1ede1dba",
+        "cli": "06e2b246785d984f989308f458e9ae23a435bcaf0fa5322bae129f388ac19e4b",
+        "discord": "9c968a7fa05bc0c0ac9c5e91d2dd7b9ad0d3ca1edd3734b2d0e40417cd3b53fd",
+        "plugins": "b49061c13304741ccd3f9e0606e787b7f0408d9a8adfb35a4df2f4e1a70ed44a"
+      }
+    }
+  ],
   "reopenings": []
 }

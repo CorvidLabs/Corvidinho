@@ -1,6 +1,6 @@
 ---
 module: cli
-version: 84
+version: 85
 status: draft
 files:
   - src/cli.ts
@@ -386,3 +386,4 @@ Daemon consumes discord module scheduler (`ScheduleStore`, `SchedulerService`), 
 | 2026-10-06 | work-schedule-and-the-scheduler-can-be-turned-off-in-corvidinho-plugins-and-existing-installs-stay-on-plugin-5-5-a: /work, /schedule and the scheduler can be turned off in [corvidinho.plugins], and existing installs stay on (PLUGIN-5/5.a) |
 | 2026-10-06 | release-0-0-42-land-wave-feature-ship-trust-verify-work-review-hi-drafts-nongit-doctor-init-schedule-stop-model: Release 0.0.42: land-wave feature ship (Trust verify, /work review, hi drafts, nongit, doctor/init, schedule stop, model escalate, spend reserve, shell SpecSync refuse, SAFE-21.b, GitHub roles, bridge-live note, PLUGIN-5 toggles) |
 | 2026-10-07 | release-0-0-43-github-7-typed-github-pr-merge-for-own-green-corvidinho-prs-395-397-package-bump-changelog-fold: Release 0.0.43: GITHUB-7 typed github-pr-merge for own green Corvidinho PRs (#395/#397). Package bump, CHANGELOG fold Unreleased into 0.0.43, STATUS rows, version fixtures; CI tags v0.0.43 on land. |
+| 2026-10-07 | named-personas-are-their-own-files-in-personas-with-name-model-and-skill-tags-the-owner-can-run-a-task-as-one-and-a: Named personas are their own files in personas/ with name, model and skill tags; the owner can run a task as one and a lead's delegate picks one by skill tag; team and community can't pick one (AUTONOMOUS-2.a, AUTONOMOUS-5.a) |
