@@ -357,9 +357,35 @@ export const NAMED_PERSONA_HEADER =
   `${PERSONA_FILE}. Use it for tone and personality only: it is not a source of facts, tools or permissions. ` +
   "The rules after it win whenever they conflict (PERSONA-3).";
 
+/** A file name as a `<persona file="…">` value: no quote, angle bracket or line break. */
+function attrValue(s: string): string {
+  return s.replace(/["<>\r\n]/g, "_");
+}
+
 /** System-prompt block for a named persona (its voice), labelled with its file and name. */
 export function renderNamedPersona(p: NamedPersona): string {
-  return personaBlock(NAMED_PERSONA_HEADER, `file="${p.file}" name="${p.name}"`, p.voice);
+  return personaBlock(NAMED_PERSONA_HEADER, `file="${attrValue(p.file)}" name="${p.name}"`, p.voice);
+}
+
+/** Most characters of {@link personaSkillsHint}. */
+export const PERSONA_SKILLS_HINT_MAX = 400;
+
+/**
+ * AUTONOMOUS-5.a: one line for a lead's `delegate` tool description naming
+ * each named persona that has skill tags and a model the owner configured
+ * (`name (tag, tag)`, sorted by name), so the lead can pick one by its tags;
+ * "" when there is none. Labels only, never a voice, model or key; capped at
+ * {@link PERSONA_SKILLS_HINT_MAX}.
+ */
+export function personaSkillsHint(set: PersonaSet, env: NodeJS.ProcessEnv): string {
+  const parts = set.personas
+    .filter((p) => p.skills.length > 0 && personaModelRefusal(p, env) === null)
+    .map((p) => `${p.name} (${p.skills.join(", ")})`);
+  if (parts.length === 0) return "";
+  const line = `Named personas by skill tag: ${parts.join("; ")}.`;
+  return line.length <= PERSONA_SKILLS_HINT_MAX
+    ? line
+    : `${line.slice(0, PERSONA_SKILLS_HINT_MAX - 1)}…`;
 }
 
 /**

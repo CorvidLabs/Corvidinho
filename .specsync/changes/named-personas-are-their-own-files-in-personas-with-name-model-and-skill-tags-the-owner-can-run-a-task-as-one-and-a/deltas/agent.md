@@ -54,6 +54,11 @@ SAFE-6 scrubbed. They SHALL be read again for every run.
   persona's model followed by the tier's other configured models
   (`modelChainForTier`, the persona's own entry removed), every other key
   unchanged.
+- `personaSkillsHint(set, env)` (AUTONOMOUS-5.a) SHALL be one line,
+  `Named personas by skill tag: <name> (<tag>, …); …`, naming each persona
+  (sorted by name) that has skill tags and a model `personaModelRefusal`
+  accepts, labels only (never a voice, model or key), capped at
+  `PERSONA_SKILLS_HINT_MAX` (400) characters; "" when there is none.
 
 `createTaskExecute` SHALL accept `persona: { name, by: "owner" | "lead" }`.
 With it the run SHALL resolve the persona once (`resolveRunPersona`) and use
@@ -63,7 +68,8 @@ the persona's model like any configured model; an unpriced persona model's
 spend ask names `the model in personas/<file>.md`. Its system prompts SHALL
 start with `renderNamedPersona` (`NAMED_PERSONA_HEADER`, then the voice in a
 `<persona file="personas/<file>.md" name="<name>">` block it cannot close
-early) instead of `persona.md`, with the PERSONA-3 rules after it, and a
+early; a quote, angle bracket or line break in the file name is shown as
+`_`) instead of `persona.md`, with the PERSONA-3 rules after it, and a
 truncated or uncommitted file SHALL get one `Persona: personas/<file>.md (…)`
 note. Before anything else each attempt SHALL refuse, with one plain line as
 its summary and `failureReason`, an error result and no model call:
@@ -85,6 +91,7 @@ Acceptance Criteria
 - Front matter in each list form parses; each bad shape is refused with its reason (`tests/agent.personas.test.ts`).
 - A git checkout: committed files load, sorted by name; an untracked one is refused as not committed; a working-tree edit is not loaded and is flagged; a duplicate name, a bad file and dot / non-`.md` files are refused or skipped; a plain root reads its working tree; 34 files read 32 and skip 2.
 - `findPersona`, `personaForSkill` (exact tag, ties to the first by name, none = null), `configuredModelEntries`, `personaModelRefusal` and `personaRunEnv` give the documented results.
+- `personaSkillsHint` names only tagged personas with a configured model, in name order, without voice or model, and stops at 400 characters; a file name cannot break the `<persona>` label.
 - Through `createTaskExecute` and a mock provider, at read and tool tier: the persona's model is called first with its voice and no `persona.md` text, the rules after it; its model failing falls back to the tier's next model with the AGENT-11 note; an unconfigured model or unknown persona is one line and no call; team and community role sessions get `PERSONA_OWNER_ONLY_LINE` and no call, the owner's role session runs; a lead's pick at depth 0 is refused and runs at depth 1; a working-tree edit is not loaded (one note) and a committed one shows on the next run.
 - Fails on main's sources (the persona option is ignored) and passes on the branch.
 

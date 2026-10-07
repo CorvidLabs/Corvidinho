@@ -626,7 +626,8 @@ counts; a missing file, section or key, or any other value, means off.
   tier `code` they may get them; their workers are community like any worker.
 - `delegate --skill <tag>` runs its worker as the named persona whose skill tags hold that tag
   (first by name), with that persona's model and voice (AUTONOMOUS-5.a, E.8); no match runs a
-  plain worker as before. `council` voices keep the default voice.
+  plain worker as before. The tool's description lists each persona the lead can pick with its
+  skill tags (never its voice or model). `council` voices keep the default voice.
 - `ask-human` (AUTONOMY-1) is not behind this gate.
 
 ### E.6 Roles: owner, team, community (IDENTITY-8..12, ROLES-CHAT)

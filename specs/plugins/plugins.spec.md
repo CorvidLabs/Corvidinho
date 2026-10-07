@@ -641,7 +641,9 @@ runs the worker as that persona — its model and voice, through
 `CORVIDINHO_DELEGATE_PERSONA` on that worker's spawn only — and the data adds
 `persona` (null when none); a match whose model the owner did not configure
 is refused (exit 2, nothing spawned). With no skill or no match the worker
-runs as before. `council` is unchanged.
+runs as before. The `delegate` description ends with `personaSkillsHint`
+(the personas the lead can pick and their skill tags, re-read at most every
+5 s). `council` is unchanged.
 
 SAFE-2 / AUTONOMOUS-2.a (REQ-plugins-225): `files-write`, `files-edit` and
 `files-delete` refuse (exit 2) any target inside Corvidinho's own

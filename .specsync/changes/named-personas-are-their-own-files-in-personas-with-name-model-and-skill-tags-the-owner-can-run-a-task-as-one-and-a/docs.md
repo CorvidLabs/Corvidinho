@@ -9,8 +9,9 @@ artifact: docs
   "Named personas" paragraph (file format, model rule, who picks, delegate routing,
   loading and SAFE-2).
 - `docs/DISCORD-GO-LIVE.md`: E.8 renamed "Persona file … and named personas", new named
-  personas block; E.5 notes `delegate --skill` persona routing and that council voices keep
-  the default voice.
+  personas block; E.5 notes `delegate --skill` persona routing, that the tool lists the
+  personas the lead can pick with their skill tags, and that council voices keep the
+  default voice.
 - `docs/discord.md`: `/session start` row lists the optional owner-only `persona`.
 - `src/cli.ts` `--help` / `TASK_RUN_USAGE`: `[--persona NAME]` with a one-line note.
 - Specs: agent / cli / discord / plugins spec prose and files lists, module testing

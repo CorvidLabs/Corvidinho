@@ -605,7 +605,8 @@ Named personas (REQ-agent-225, AUTONOMOUS-2.a / AUTONOMOUS-5.a):
 `normalizePersonaName`, `findPersona`, `personaForSkill`,
 `configuredModelEntries`, `personaModelRefusal`, `personaRunEnv`,
 `resolveRunPersona`, `renderNamedPersona` / `NAMED_PERSONA_HEADER`,
-`namedPersonaWarning` and `PERSONA_OWNER_ONLY_LINE`, plus the
+`namedPersonaWarning`, `PERSONA_OWNER_ONLY_LINE` and `personaSkillsHint` /
+`PERSONA_SKILLS_HINT_MAX` (the `delegate` description's persona line), plus the
 `NamedPersona` / `PersonaSet` / `RunPersona` types. Each named persona is its
 own `personas/<file>.md` next to `persona.md` at `CORVIDINHO_ROOT` (front
 matter `name`, `model` — one AGENT-13 `kind:model` entry — and `skills`,

@@ -30,6 +30,7 @@ import {
   loadPersonas,
   personaForSkill,
   personaModelRefusal,
+  personaSkillsHint,
 } from "../../src/agent/personas.ts";
 import type {
   PluginCommand,
@@ -53,16 +54,35 @@ function refuse(error: string, exitCode = 2): PluginHandlerResult {
   return { ok: false, error, exitCode };
 }
 
+const DELEGATE_DESCRIPTION =
+  "Delegate one subtask to a worker agent (a child task run at your tier or lower) and get back its summary to synthesize into your answer. " +
+  'argv e.g. ["--skill","specsync","--task","List the specs that cover the agent loop"]; optional ["--tier","read|tool|code"] (never above yours). ' +
+  "A --skill that matches a named persona's skill tags runs the worker as that persona (its model and voice; AUTONOMOUS-5.a). " +
+  `Autonomous extra: only when the project enables [corvidinho.autonomous]; code tier; workers max ${MAX_DELEGATE_DEPTH} levels deep (AUTONOMOUS-1/5, SAFE-9).`;
+
+/** How long delegate's persona line is reused before `personas/` is read again. */
+const PERSONA_HINT_TTL_MS = 5_000;
+
 /** Build the `delegate` command; loadAutonomousPlugins registers the default. */
 export function createDelegateCommand(deps: DelegateCommandDeps = {}): PluginCommand {
   const limiter = deps.limiter ?? createDelegateLimiter();
+  // AUTONOMOUS-5.a: the lead sees which named personas it can pick and by
+  // which skill tags (`personaSkillsHint`), read from `personas/` at most
+  // every few seconds, so it can route a subtask by tag rather than guess.
+  let hint: { at: number; text: string } | null = null;
+  const personaHint = (): string => {
+    const now = Date.now();
+    if (!hint || now - hint.at >= PERSONA_HINT_TTL_MS) {
+      hint = { at: now, text: personaSkillsHint(loadPersonas(deps.personaRoot), deps.env ?? process.env) };
+    }
+    return hint.text;
+  };
   return {
     name: DELEGATE_COMMAND_NAME,
-    description:
-      "Delegate one subtask to a worker agent (a child task run at your tier or lower) and get back its summary to synthesize into your answer. " +
-      'argv e.g. ["--skill","specsync","--task","List the specs that cover the agent loop"]; optional ["--tier","read|tool|code"] (never above yours). ' +
-      "A --skill that matches a named persona's skill tags runs the worker as that persona (its model and voice; AUTONOMOUS-5.a). " +
-      `Autonomous extra: only when the project enables [corvidinho.autonomous]; code tier; workers max ${MAX_DELEGATE_DEPTH} levels deep (AUTONOMOUS-1/5, SAFE-9).`,
+    get description(): string {
+      const line = personaHint();
+      return line ? `${DELEGATE_DESCRIPTION} ${line}` : DELEGATE_DESCRIPTION;
+    },
     dangerous: false,
     mutating: true,
     minTier: DELEGATE_MIN_TIER,

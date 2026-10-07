@@ -1339,7 +1339,9 @@ prompt:
   working tree, 34 files → 32 read and 2 skipped;
 - `findPersona` / `personaForSkill` (exact tag, ties to the first by name) /
   `configuredModelEntries` / `personaModelRefusal` / `personaRunEnv` /
-  `renderNamedPersona`;
+  `renderNamedPersona` (a file name with a quote, `>` or a line break cannot
+  break its label) / `personaSkillsHint` (tagged personas with a configured
+  model only, no voice or model, 400-character cap);
 - `createTaskExecute({ persona })` at read and tool tier: the persona's model
   first with its voice and no `persona.md` text, rules after it; fallback to
   the tier's next model with the AGENT-11 note; an unconfigured model or

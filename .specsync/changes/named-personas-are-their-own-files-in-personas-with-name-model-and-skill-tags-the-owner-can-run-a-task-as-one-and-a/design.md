@@ -22,7 +22,9 @@ artifact: design
   = today's worker) → model check against the lead's env (refuse, nothing spawned) →
   `CORVIDINHO_DELEGATE_PERSONA` on that worker's spawn only (deleted otherwise, read only
   at depth > 0). Workers keep tier / depth / community role / env limits. `council`
-  unchanged.
+  unchanged. So the lead can pick by tag, `delegate`'s description ends with
+  `personaSkillsHint` (each persona with tags and a configured model: `name (tag, …)`,
+  labels only, 400-character cap), re-read at most every 5 s.
 - **SAFE-2.** Beyond the committed-copy load, the file tools refuse any target inside
   `realpath(CORVIDINHO_ROOT)/personas` (Corvidinho's own folder only, never a project's
   `personas/`).

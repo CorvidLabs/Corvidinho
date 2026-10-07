@@ -2674,7 +2674,10 @@ nothing; with a pick it SHALL run the worker as that persona (its model and
 voice: `runDelegateChild({ persona })`, REQ-agent-225), add
 `data.persona` (the name, else null) and label the result `[<skill> →
 persona <name>]`; with no skill or no match the worker SHALL run as before
-and an inherited `CORVIDINHO_DELEGATE_PERSONA` SHALL NOT reach it. Every
+and an inherited `CORVIDINHO_DELEGATE_PERSONA` SHALL NOT reach it. So the
+lead can pick by tag, the `delegate` description SHALL end with
+`personaSkillsHint` (REQ-agent-225) over those personas and the lead's env,
+read again at most every 5 s; with no such persona it is unchanged. Every
 other delegate gate and limit is unchanged; `council` is unchanged.
 
 SAFE-2 / AUTONOMOUS-2.a: `files-write`, `files-edit` and `files-delete` SHALL
@@ -2688,6 +2691,7 @@ Acceptance Criteria
 - `delegate --skill review` with personas `zeta` and `alpha` both tagged `review` spawns the worker with `CORVIDINHO_DELEGATE_PERSONA=alpha` and returns `data.persona = "alpha"` (`tests/agent.personas.test.ts`).
 - `--skill docs` (no match) and no skill spawn the worker with no `CORVIDINHO_DELEGATE_PERSONA`, even when the lead's env has one, and `data.persona` null.
 - A match whose model is not configured is refused and no worker starts.
+- The `delegate` description lists `alpha (review); zeta (review)` and not the persona whose model is not configured; with no personas it carries no persona line.
 - With cwd at Corvidinho's checkout, `files-write` (relative and absolute), `files-edit` and `files-delete` of `personas/<file>` are refused with `refused (SAFE-2)` and nothing is written; `files-write personas/x.md` in another project succeeds.
 - Fails on main's sources and passes on the branch.
 
