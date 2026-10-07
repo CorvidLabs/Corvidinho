@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "shell-exec-refuses-a-specsync-lifecycle-step-written-as-a-glob-or-brace-pattern-or-reached-through-an-expanding",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "170ec9f0db6cc4dac6fbeca1ff166ebdd7107b1d",
+      "contract_digest": "e1edd4657e6627bf438085111b0bec9fec2d0a1cc56e7ce230c419ea81dea478",
+      "execution_digest": "e468ea05f9d09eac6fd72244adf2a011c07a32c3a5a352aa060aa2c5aa6460a6",
+      "workspace_digest": "3beb003a2f8f83c172acabf3eab34ad7b58f7362d961a1073db3ca1209ef441b",
+      "timestamp": 1791387497
+    }
+  ]
+}

@@ -1,0 +1,104 @@
+{
+  "timestamp": 1791387496,
+  "commit": "170ec9f0db6cc4dac6fbeca1ff166ebdd7107b1d",
+  "contract_digest": "e1edd4657e6627bf438085111b0bec9fec2d0a1cc56e7ce230c419ea81dea478",
+  "execution_digest": "e468ea05f9d09eac6fd72244adf2a011c07a32c3a5a352aa060aa2c5aa6460a6",
+  "workspace_digest": "3beb003a2f8f83c172acabf3eab34ad7b58f7362d961a1073db3ca1209ef441b",
+  "acceptance_input_digest": "dfe7b9b65183e39fa7c79f435f592b5b5fb16f8d0d4a1c4bd69a15ceeee9bee7",
+  "acceptance_manifest": {
+    "schema_version": 1,
+    "entries": [
+      {
+        "path": "plugins/shell/clamp.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "f929452ea517bfc16e69b880253709b99734f4d99aa3ef9556bc9e9c8c9ea298",
+        "entry_digest": "d5645d3d62ca8e96509394da3cd4fcf5cb2e5b13999516e7ffa7c2afc4441f57",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "plugins/shell/sdd-lifecycle.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "1ab71e654f694593feeb1cbc557b557c11f23e6deb239db6ece91d11a1bf534f",
+        "entry_digest": "559ad6069a79d0cf9b35d53d70c949fd1e39f9204fd3853eb1e8bceca3f54733",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/context.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "bde5693042c3127e0d04336a6911b85bc5eff9f0b432d42c71ac5544e6d98a73",
+        "entry_digest": "3484832e2b821051fe802d8fc90c872354b6d9f68a08d917a4d9109e3bc3772c",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/plugins.spec.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "a0f2cebb155b8a955847f0722acdf1acbbc7faa73ca6c981df49e8766639a1b3",
+        "entry_digest": "23410f0c9cf60ab60fbb9c25b024d37fd2a4b49e9a391f8d64d9f871879719f8",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/requirements.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "c25f653943e0bc41b6443c830923d710cd574327578592cd3a72375d883c7d43",
+        "entry_digest": "43c0dfade7aca31caaee34f802eb10f7dc1f416febe6375c681e8f29f46ad2bc",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/tasks.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "4fbcf0b7f5af3942f58ab90d5f38ebb0cf4fcd9d77112db6011bc147a6c45bcd",
+        "entry_digest": "c304de7eefe1a9a16d20288d10416125717ec528ef4ddc52ecbf82108e53e9ca",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "specs/plugins/testing.md",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "a2a4e01127c859909fc509e225b46c70074b49457f3d72e8b2a51487dc4a8eaf",
+        "entry_digest": "e7c586bb359514ee31c8ef732566bdd31b7d3b1897700873b80fb052b9133a02",
+        "owners": [
+          "plugins"
+        ]
+      },
+      {
+        "path": "tests/shell.sdd-lifecycle.test.ts",
+        "kind": "file",
+        "mode": 33188,
+        "payload_digest": "63d1d131442458c34520101e40eeb86457526b5a4240e471d77f1bd978a8f761",
+        "entry_digest": "656163f653ca27ed1c4366eab17c8ff80f90b8c86d5f94ab8a236a6de0742be8",
+        "owners": [
+          "@exact:test"
+        ]
+      }
+    ]
+  },
+  "passed": true,
+  "commands": [
+    {
+      "command": "specsync check --spec plugins",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": [
+    "REQ-plugins-1818"
+  ]
+}
