@@ -3,7 +3,9 @@
  * `/admin mutes remove` (ADMIN-3.c part 2), served by the same audited helper
  * (`applyMuteChange` in ./admin.ts — SAFE-5 rows `admin-mutes-add|remove`,
  * fail closed without a trail).
- * Permission floor enforced in slash-dispatch via minPermission ADMIN.
+ * Permission floor enforced in slash-dispatch via minPermission ADMIN, and
+ * re-checked at handler time by the helper (ADMIN-4: a caller who is not
+ * ADMIN gets `not authorized` and an `admin-mutes-*` `denied` row).
  * DISCORD-6 / IDENTITY-2: /mute never targets the invoker or the configured
  * owner — a muted owner is not ADMIN, so /unmute would be refused until the
  * bridge restarts.

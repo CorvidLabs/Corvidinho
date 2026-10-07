@@ -19,4 +19,6 @@ artifact: requirements
   restart; reply points to `/admin deny add user:`.
 - **REQ-discord-011** (modified): `/admin mutes` owner-only like every
   `/admin` subcommand; `/mute` / `/unmute` keep their ADMIN floor and are
-  aliases (fixtures wire `recordAudit`).
+  aliases (fixtures wire `recordAudit`); the helper re-checks ADMIN at
+  handler time (ADMIN-4); the stale "admin user or admin role" bullet now
+  reads owner-only (IDENTITY-2).

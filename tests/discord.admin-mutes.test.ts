@@ -31,6 +31,7 @@ import {
 } from "../src/discord/command-handlers/admin.ts";
 import {
   handleMuteCommand,
+  handleUnmuteCommand,
   MUTE_SELF_OR_OWNER_REFUSED,
 } from "../src/discord/command-handlers/mute.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
@@ -51,6 +52,7 @@ const OWNER_ID = "100000000000000001";
 const MEMBER = "200000000000000002";
 const PEER = "300000000000000003";
 const CHAN = "400000000000000004";
+const OTHER = "500000000000000005";
 
 const tmpDirs: string[] = [];
 function tmp(prefix: string): string {
@@ -295,6 +297,40 @@ describe("/admin mutes add|remove (ADMIN-3.c part 2)", () => {
     expect(brief(f.db)).toEqual([["admin-mutes-remove", MEMBER, "denied"]]);
   });
 
+  test("the /mute and /unmute aliases re-check ADMIN at handler time like /admin mutes: not authorized, denied row, no mute state told", async () => {
+    // Past the dispatcher floor (a handler reached directly): the helper
+    // itself refuses a caller who is not ADMIN, before the no-op check.
+    const f = fixture({ muted: [PEER] });
+    const mute = slash("mute", MEMBER, { user: OTHER });
+    await handleMuteCommand(f.ctx, mute);
+    expect(mute.replies[0]).toEqual({ content: NOT_AUTHORIZED, ephemeral: true });
+    const dup = slash("mute", MEMBER, { user: PEER });
+    await handleMuteCommand(f.ctx, dup);
+    expect(dup.replies[0]).toEqual({ content: NOT_AUTHORIZED, ephemeral: true });
+    const unmute = slash("unmute", MEMBER, { user: PEER });
+    await handleUnmuteCommand(f.ctx, unmute);
+    expect(unmute.replies[0]).toEqual({ content: NOT_AUTHORIZED, ephemeral: true });
+    // No owner configured: nobody is ADMIN (IDENTITY-3), the helper included.
+    const noOwner = fixture({ owner: null });
+    const orphan = slash("mute", PEER, { user: MEMBER });
+    await handleMuteCommand(noOwner.ctx, orphan);
+    expect(orphan.replies[0]).toEqual({ content: NOT_AUTHORIZED, ephemeral: true });
+    expect(noOwner.muted.size).toBe(0);
+
+    expect([...f.muted]).toEqual([PEER]);
+    expect(brief(f.db)).toEqual([
+      ["admin-mutes-add", MEMBER, "denied"],
+      ["admin-mutes-add", MEMBER, "denied"],
+      ["admin-mutes-remove", MEMBER, "denied"],
+    ]);
+    // The same digest as the /admin handler re-check's denied row.
+    const viaAdmin = fixture();
+    await handleAdminCommand(viaAdmin.ctx, adminMutes("add", MEMBER, PEER));
+    expect(rows(f.db)[0]!.args_digest).toBe(rows(viaAdmin.db)[0]!.args_digest);
+    expect(rows(f.db)[0]!.args_digest).toBe(argsDigest(["mutes", "add"]));
+    expect(brief(noOwner.db)).toEqual([["admin-mutes-add", PEER, "denied"]]);
+  });
+
   test("no change writes no row: a mute already in place, an unmute of someone not muted, no user given", async () => {
     const f = fixture({ muted: [MEMBER] });
     const dup = adminMutes("add", OWNER_ID, MEMBER);
@@ -316,6 +352,8 @@ describe("/admin mutes add|remove (ADMIN-3.c part 2)", () => {
     await handleSlashInteraction(f.ctx, ix);
     expect(f.muted.has(MEMBER)).toBe(false);
     expect(ix.replies[0]?.content).toContain("DISCORD_MUTED_USER_IDS, so the next restart mutes them again");
+    // The tool layer reads that env, so their runs keep community tools until it changes.
+    expect(ix.replies[0]?.content).toContain("the tool layer (which reads that env) still gives their runs community tools");
   });
 
   test("/admin config show counts mutes and names /admin mutes add|remove as updatable (in memory until restart)", async () => {

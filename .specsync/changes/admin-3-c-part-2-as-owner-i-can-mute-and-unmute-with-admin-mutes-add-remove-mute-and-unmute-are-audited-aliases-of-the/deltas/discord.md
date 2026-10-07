@@ -62,8 +62,10 @@ an unmute of someone not muted or a missing user SHALL change nothing and
 write no row. Mutes SHALL stay in memory until a restart (the
 `DISCORD_MUTED_USER_IDS` seed still applies at start); the mute reply SHALL
 say so and point to `/admin deny add user:` for a lasting block, and an
-unmute of a seeded id SHALL say the next restart mutes them again. No new
-env var, config key, table, column or slash command name.
+unmute of a seeded id SHALL say the next restart mutes them again and that
+until then the tool layer, which reads that env, still gives their runs
+community tools. No new env var, config key, table, column or slash command
+name.
 
 Acceptance Criteria
 - Default window 60s / max 10; env override for window/max + muted seed.
@@ -102,12 +104,18 @@ subcommand: the dispatcher floor, then the `/admin` handler's own re-check,
 which appends an `admin-mutes-add|remove` `denied` row for a caller it
 refuses. `/mute` and `/unmute` keep their ADMIN floor and SHALL be aliases of
 `/admin mutes add|remove` (the same audited helper, REQ-discord-010), so a
-fixture context that runs them SHALL wire `recordAudit`.
+fixture context that runs them SHALL wire `recordAudit`. The helper SHALL
+re-check ADMIN itself at handler time (ADMIN-4), after the owner / caller
+refusal and before the no-op check, so a caller who is not ADMIN gets
+`not authorized` and one `admin-mutes-add|remove` `denied` row (args digest
+of the route only, as the `/admin` re-check's) on every spelling, the set is
+unchanged and the reply never says whether someone is muted.
 
 Acceptance Criteria
 - Non-admin `/mute`/`/unmute` → not authorized; mute set unchanged.
-- Admin user or admin role → mute/unmute mutates in-memory set.
+- The owner (the only ADMIN, IDENTITY-2) → mute/unmute mutates the in-memory set; admin user or role lists grant nothing.
 - Channel allowlist refuse still wins before permission re-check.
 - Empty admin lists ⇒ no ADMIN; secrets out of repo; no ProcessManager.
 - Non-owner `/admin mutes add|remove` → not authorized at dispatch (no row); at the `/admin` handler re-check → not authorized with an `admin-mutes-*` `denied` row; the mute set unchanged.
+- A non-owner who reaches the `/mute` / `/unmute` handler (past the dispatcher floor), or anyone when no owner is configured, gets `not authorized` and one `admin-mutes-*` `denied` row with the same args digest as the `/admin` re-check's — also for a target already muted — and the mute set is unchanged.
 - With `recordAudit` wired, the owner's `/mute` / `/unmute` (dispatcher, admin re-auth and owner fixtures) mutate the in-memory set as before.

@@ -1943,7 +1943,7 @@ session cases; letting `ScheduleStore.openAsk` / `openRunAsk` drop an ask 30
 minutes after its run fails both schedule cases. Restored: 9 of 9 pass.
 ## /admin mutes and the /mute /unmute aliases (REQ-discord-010/011 modified, ADMIN-3.c part 2)
 
-- `tests/discord.admin-mutes.test.ts` (11 cases; in-memory SQLite audit, the
+- `tests/discord.admin-mutes.test.ts` (12 cases; in-memory SQLite audit, the
   real `/admin` handler, slash dispatcher and a dry-run bridge with a fake
   gateway; no token, no network):
   - Body: `/admin mutes add|remove` each take one required USER `user`;
@@ -1962,8 +1962,13 @@ minutes after its run fails both schedule cases. Restored: 9 of 9 pass.
     aliases with `audit log unavailable (SAFE-5)`; the set is unchanged.
   - Non-owner: refused at dispatch (`not authorized`, no row) and at the
     `/admin` handler re-check (`denied` row).
+  - The `/mute` / `/unmute` handlers re-check ADMIN themselves: a non-owner
+    who reaches them (and anyone with no owner configured) gets
+    `not authorized` and one `denied` row with the `/admin` re-check's
+    digest, even for a target already muted; the set is unchanged.
   - No change (already muted, not muted) and a missing user write no row.
-  - Unmuting a `DISCORD_MUTED_USER_IDS` seed says a restart mutes them again.
+  - Unmuting a `DISCORD_MUTED_USER_IDS` seed says a restart mutes them again
+    and that the tool layer still gives their runs community tools until then.
   - `/admin config show` counts mutes and lists `/admin mutes add|remove` as
     updatable, in memory until restart.
   - Bridge: an owner's `/admin mutes add` refuses the member's next @mention
@@ -1976,5 +1981,7 @@ minutes after its run fails both schedule cases. Restored: 9 of 9 pass.
   with the `mutes` group (`add`, `remove`).
 - Fail on base (`origin/claude/m4-admin-lists-a2` 8aa502a, admin-lists-a):
   with its `src/discord/command-handlers/{admin,mute}.ts` and
-  `src/discord/slash-commands.ts` swapped in, all 11 cases of
-  `tests/discord.admin-mutes.test.ts` fail; restored, 11 of 11 pass.
+  `src/discord/slash-commands.ts` swapped in, all 12 cases of
+  `tests/discord.admin-mutes.test.ts` fail; restored, 12 of 12 pass. With
+  the first pushed head's (c0cae98) `admin.ts` swapped in, the handler-time
+  re-check case and the seed-note case fail; restored, they pass.

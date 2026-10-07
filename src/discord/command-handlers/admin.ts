@@ -601,9 +601,12 @@ async function applyListChange(
 /**
  * ADMIN-3.c (part 2) — the one audited mute helper behind `/admin mutes
  * add|remove` and its aliases `/mute` / `/unmute` (`command` names the one
- * used, for replies). The callers gate ADMIN: the dispatcher floor, and
- * `/admin` re-checks it too. A mute of the owner or of the caller is refused
- * (`denied`): a muted owner is not ADMIN and could not undo it until a
+ * used, for replies). ADMIN is gated by the dispatcher floor, and `/admin`
+ * re-checks it; the helper re-checks it too (ADMIN-4), so every spelling
+ * refuses a caller who is not ADMIN at handler time with the same `denied`
+ * row (`["mutes", op]`, the `/admin` re-check's digest) and never tells them
+ * whether someone is muted. A mute of the owner or of the caller is refused
+ * first (`denied`): a muted owner is not ADMIN and could not undo it until a
  * restart. SAFE-5 as the list routes: `started` before the change — no
  * trail wired, or a trail that throws, refuses with the set unchanged —
  * then `ok`; a mute already in place or an unmute of someone not muted
@@ -629,6 +632,14 @@ export async function applyMuteChange(
   if (op === "add" && (target === interaction.userId.trim() || isOwnerDiscord(ctx.owner, target))) {
     auditSoft(ctx, auditEntry(interaction, action, "denied", args));
     await interaction.reply({ content: MUTE_SELF_OR_OWNER_REFUSED, ephemeral: true });
+    return;
+  }
+  // ADMIN-4 / DISCORD-7: the helper re-checks ADMIN itself, so `/mute` and
+  // `/unmute` refuse at handler time exactly like `/admin mutes` — before the
+  // no-op check, which would tell a non-owner whether someone is muted.
+  if (!isAdmin(ctx, interaction)) {
+    auditSoft(ctx, auditEntry(interaction, action, "denied", ["mutes", op]));
+    await interaction.reply({ content: NOT_AUTHORIZED, ephemeral: true });
     return;
   }
   const set = ctx.mutedUsers ?? new Set<string>();
@@ -668,7 +679,9 @@ export async function applyMuteChange(
         ]
       : [`✅ ${command}: unmuted ${who}.`];
   if (op === "remove" && envMutedIds(ctx).includes(target)) {
-    lines.push(`Note: ${who} is in DISCORD_MUTED_USER_IDS, so the next restart mutes them again — change the VM env to make this last.`);
+    lines.push(
+      `Note: ${who} is in DISCORD_MUTED_USER_IDS, so the next restart mutes them again, and until then the tool layer (which reads that env) still gives their runs community tools — change the VM env to make this last.`,
+    );
   }
   lines.push(`Audit: #${startedSeq} started${okSeq !== undefined ? ` · #${okSeq} ok` : " · ok row not recorded (see bridge log)"}.`);
   await interaction.reply({ content: lines.join("\n"), ephemeral: true });
