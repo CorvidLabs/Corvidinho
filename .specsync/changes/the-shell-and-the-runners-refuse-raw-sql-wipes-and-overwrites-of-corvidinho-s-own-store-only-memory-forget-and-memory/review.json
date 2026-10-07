@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "the-shell-and-the-runners-refuse-raw-sql-wipes-and-overwrites-of-corvidinho-s-own-store-only-memory-forget-and-memory",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "d2f67300a5ef85e6c2ab235ef0ec3956cd8a60ad",
+  "contract_digest": "3a174379565fca696f9caeb43861613cc448075af0be44f0e4ca50774f66146d",
+  "execution_digest": "920efb918fb03a93e6ddce85223c33ea7320c69bf36504abbf153ff2a5258e5c",
+  "workspace_digest": "531444996b3263d8bc8e4aaedc6f924a808dbe785cc61651723c6c6c50ac0bfe",
+  "timestamp": 1791387464
+}
