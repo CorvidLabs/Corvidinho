@@ -28,7 +28,8 @@ Constraints found while fixing it:
   `record_scoped_review_with_verdict`), and it only runs on a change in
   `verifying`. This change is archived. The honest record is therefore
   written by hand, with SpecSync's field names but no provenance and a
-  `note` that says what happened. SpecSync's default `change audit` does
+  `note` that says what happened, who recorded it (#406) and where the
+  replaced record came from (#389). SpecSync's default `change audit` does
   not load archive integrity. This archive's `finalization.json` already
   failed SpecSync's own review digest check before this fix
   (`review_digest` is the execution digest).
@@ -36,9 +37,13 @@ Constraints found while fixing it:
   writes it. 318 of them came from `specsync change review` (ledger format,
   own timestamp). 14 were written by tip-orphan scripts with the review in
   the finalization's second: 13 as a bare list, and #370's ledger rewrapped
-  by #397. This change corrects only #375's record, because only #375 has had
-  a post-merge review. The other 13 are listed in the test as known pre-fix
-  archives until their own reviews run.
+  by #397. This change corrects only #375's record, whose post-merge review
+  passed the merged commit. The other 13 keep their records and are listed
+  in the test as known pre-fix archives until each is corrected on its own:
+  the post-merge reviews of #370, #372, #373 and #374 found defects that
+  follow-up PRs fix (#401, #403, #402, #398), so a pass for those merged
+  commits would not be true, and for the others no review is recorded in
+  this repository.
 - The tip-orphan script is not in this repository; #375 deleted
   `land-one.sh`. The repo-side guard is the test: a new archive whose
   review is stamped in its finalization's second fails `bun test`.

@@ -12,8 +12,9 @@ artifact: testing
    (f0c12538), with verdict pass and a reviewer claim. It is not stamped in
    the finalization's second. `review-attempts.json` is a ledger (not a bare
    list) whose last entry equals `review.json`.
-2. Every `required_check` named in either file is a job id or `name:`
-   defined by some workflow. `SpecSync scoped review` is not.
+2. Every `required_check` named in either file is a workflow name, job id
+   or job `name:` defined by some workflow (step names are not checks).
+   `SpecSync scoped review` is none of these.
 3. No archive outside the 13 known pre-fix tip-orphan archives has a review
    stamped in its finalization's second.
 

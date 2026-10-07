@@ -6,5 +6,5 @@
   "pull_request": 375,
   "implementation_commit": "f0c125383ff7ae21f35acf9cb57f1d0f758ddaae",
   "timestamp": 1791333939,
-  "note": "Recorded after PR #375 merged, by its post-merge review. No review ran before the merge. The record this replaces was written by the tip-orphan script (land-one.sh) at the finalization timestamp and claimed a 'SpecSync scoped review' GitHub Actions check that no workflow in this repository defines. This record claims no CI check. Its only confirmed finding was the earlier record itself."
+  "note": "Post-merge review of PR #375, which ran after #375 merged. No review ran before the merge. PR #406 recorded it; the timestamp is when it was recorded. The record this replaces was written by the tip-orphan script (land-one.sh) in PR #389 at the finalization timestamp and claimed a 'SpecSync scoped review' GitHub Actions check that no workflow in this repository defines. This record claims no CI check. The review's only confirmed finding was that earlier record."
 }

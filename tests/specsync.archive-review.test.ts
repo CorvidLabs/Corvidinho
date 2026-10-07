@@ -23,10 +23,13 @@ const MERGED_375 = "f0c125383ff7ae21f35acf9cb57f1d0f758ddaae";
 
 /**
  * Archives a tip-orphan script wrote before this fix, each with a review
- * stamped in the same second as its finalization. None of them has had a
- * review yet, so each keeps its record until one runs. Every other archive's
- * review was recorded by `specsync change review`, at its own time, and a new
- * archive with a review stamped in its finalization's second fails here.
+ * stamped in the same second as its finalization. Each keeps its record
+ * until it is corrected on its own. The post-merge reviews of #370, #372,
+ * #373 and #374 found defects that follow-up PRs fix, so a pass for those
+ * merged commits would not be true; for the others no review is recorded in
+ * this repository. Every other archive's review was recorded by
+ * `specsync change review`, at its own time, and a new archive with a review
+ * stamped in its finalization's second fails here.
  */
 const SCRIPTED_BEFORE_FIX = new Set([
   "2026-10-06-after-the-one-nudge-a-stalled-run-moves-to-the-next-stronger-model-in-the-order-i-set-and-says-so-agent-17-agent-17-a",
@@ -56,7 +59,10 @@ function readJson<T>(dir: string, file: string): T {
   return JSON.parse(readFileSync(join(ARCHIVE, dir, file), "utf8")) as T;
 }
 
-/** Job ids and every `name:` value across the repo's workflows: the check names CI can report. */
+/**
+ * Workflow names, job ids and job `name:` values across the repo's workflows:
+ * the check names CI can report. Step names are not checks, so they are left out.
+ */
 function workflowCheckNames(): Set<string> {
   const names = new Set<string>();
   for (const file of readdirSync(WORKFLOWS).filter((f) => /\.ya?ml$/.test(f))) {
@@ -66,7 +72,7 @@ function workflowCheckNames(): Set<string> {
       else if (/^\S/.test(line)) inJobs = false;
       const job = inJobs ? /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(line) : null;
       if (job?.[1]) names.add(job[1]);
-      const name = /^\s*(?:-\s+)?name:\s*["']?(.*?)["']?\s*$/.exec(line);
+      const name = (inJobs ? /^ {4}name:\s*["']?(.*?)["']?\s*$/ : /^name:\s*["']?(.*?)["']?\s*$/).exec(line);
       if (name?.[1]) names.add(name[1]);
     }
   }
