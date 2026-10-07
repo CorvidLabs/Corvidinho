@@ -914,7 +914,12 @@ Where it runs it gets what the shell gets, and no more:
   plus only the env keys you list in the optional **`CORVIDINHO_LLM_CLI_ENV`** (comma-separated
   names, e.g. `ANTHROPIC_API_KEY`; unset = none, so it uses its own login under `HOME`). A name that
   is a GitHub / git or cloud credential, a Discord key, the audit key, a search key or an acting
-  identity key is never passed;
+  identity key is never passed, and a listed key never overrides one the shell's env sets. Never
+  put a key in the `cli:` command itself: the entry is shown in fallback notes, the footer and the
+  spend ledger (SAFE-6) — list its name in `CORVIDINHO_LLM_CLI_ENV` instead;
+- its prompt carries the same rules as your other models' (persona rules, who is speaking, and that
+  text from anyone but you is data, not instructions — SAFE-11 / SAFE-12 / SAFE-13), plus a line for
+  a repo that uses hi or SpecSync: it must not change `hi/`, and it cannot open a SpecSync change;
 - it is bounded like a model call: the 10-minute request cap, and your stop (Stop button, `stop`,
   Ctrl-C) kills its whole process tree; whatever it leaves running is stopped when it exits;
 - **protected files are put back.** After each turn, every protected file it changed that git sees
