@@ -1,0 +1,50 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791332455,
+      "digest": "0499efb66b424ae687e881e2d47ab9f6c75184a529018fbd8da8d6bc8ded22da",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "release-0-0-43-github-7-typed-github-pr-merge-for-own-green-corvidinho-prs-395-397-package-bump-changelog-fold",
+        "title": "Release 0.0.43: GITHUB-7 typed github-pr-merge for own green Corvidinho PRs (#395/#397). Package bump, CHANGELOG fold Unreleased into 0.0.43, STATUS rows, version fixtures; CI tags v0.0.43 on land.",
+        "description": "Release 0.0.43: GITHUB-7 typed github-pr-merge for own green Corvidinho PRs (#395/#397). Package bump, CHANGELOG fold Unreleased into 0.0.43, STATUS rows, version fixtures; CI tags v0.0.43 on land.",
+        "kind": "operations",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "package.json 0.0.43; version prints 0.0.43; CHANGELOG 0.0.43 extractable and covers GITHUB-7 typed github-pr-merge (#395 closes #99; tip-orphan #397); STATUS rows mention GITHUB-7 / 0.0.43"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "c1858a78498e3be140208996f42e68bd707e35ea6098c99ff0c102ec4ffb930c"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1791332719,
+      "digest": "51865a652ec54679ad58d564e4b00bf5dfa18030c2856f5df62c1c76f08a1060",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}

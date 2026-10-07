@@ -16,8 +16,8 @@ describe("readPackageVersion / VERSION", () => {
     const fromFile = readPackageVersion(
       join(import.meta.dir, "..", "package.json"),
     );
-    expect(fromFile).toBe("0.0.42");
-    expect(VERSION).toBe("0.0.42");
+    expect(fromFile).toBe("0.0.43");
+    expect(VERSION).toBe("0.0.43");
   });
 
   test("returns 0.0.0 for missing file", () => {
