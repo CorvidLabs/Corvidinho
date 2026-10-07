@@ -121,7 +121,8 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   `[warn] people-github`); `github_login` is only used to @mention the owner there.
   The display name is shown in `doctor`, `/status` and `/admin config show`; ids are never printed.
 - Declared people (IDENTITY-13/14): add `[people.<id>]` sections to the same file
-  (`display`, `nicknames`, `discord_ids`, `github_logins`, `github_ids`; template in
+  (`display`, `nicknames`, `discord_ids`, `github_logins`, `github_ids`, optional `timezone` /
+  `working_hours` for the daily briefing; template in
   [`allowlist.example.toml`](../allowlist.example.toml)) or use `/admin people add|link|unlink|remove`
   (owner-only, SAFE-5 audited). Matched on Discord ids and GitHub numeric ids only, never names
   or GitHub logins (IDENTITY-7 / IDENTITY-7.a); an entry with `github_logins` but no `github_ids`
@@ -132,6 +133,17 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   (no `role` = community), or use `/admin people role` (owner-only, SAFE-5 audited). The owner
   is always owner; anyone undeclared is community. Only the owner and team can start `/work`
   (IDENTITY-11.a), so with no owner and nobody declared as team nobody can. See E.6.
+- Daily briefings (COS-1/2/2.a): every working day the owner and each `team` member get one
+  short **direct message** about their own work (what changed on GitHub, what's blocked, what
+  needs them, what it did for them) at the start of their working hours in their time zone —
+  `timezone` / `working_hours` on their entry, or `/admin people add person:<id> timezone:<zone>
+  hours:<HH:MM-HH:MM>`; without them the owner's time zone (set `timezone` on the person entry
+  that holds your Discord id; else UTC) and 09:00. Needs a model (`CORVIDINHO_LLM_MODEL` or
+  `_READ`; it counts toward the spend caps, and at a cap that day's briefing is skipped), the
+  running bridge (the daemon sends none) and DMs open to the bot (same rule as the cards below).
+  GitHub parts need the person's `github_ids` and an allowlisted repo; `GITHUB_TOKEN` raises the
+  search rate limit. Days with nothing to say send nothing. `[corvidinho.plugins] schedule = false`
+  (E.11) turns them off with the scheduler. See [`discord.md`](discord.md) "Daily briefings".
 - No owner, or a Discord id that is not a snowflake ⇒ **nobody is ADMIN** (IDENTITY-3).
   `doctor` shows `owner: configured: no`.
 - An owner who is muted (`/mute`, `DISCORD_MUTED_USER_IDS`) or on `[discord].deny_users` is not ADMIN.
@@ -624,6 +636,10 @@ counts; a missing file, section or key, or any other value, means off.
   ADMIN, so they never get `delegate` or `council`. A schedule the owner created, and a WATCH
   run the owner's own comment triggered (IDENTITY-12.a), are ADMIN, so with the gate on and the
   tier `code` they may get them; their workers are community like any worker.
+- `delegate --skill <tag>` runs its worker as the named persona whose skill tags hold that tag
+  (first by name), with that persona's model and voice (AUTONOMOUS-5.a, E.8); no match runs a
+  plain worker as before. The tool's description lists each persona the lead can pick with its
+  skill tags (never its voice or model). `council` voices keep the default voice.
 - `ask-human` (AUTONOMY-1) is not behind this gate.
 
 ### E.6 Roles: owner, team, community (IDENTITY-8..12, ROLES-CHAT)
@@ -768,13 +784,14 @@ Free-text columns in `corvidinho.db` and every string value in the daemon's log 
 scrubbed for secrets before they are written (SAFE-6). The audit chain stores an args digest,
 never the args.
 
-### E.8 Persona file (PERSONA-1..3)
+### E.8 Persona file (PERSONA-1..3) and named personas (AUTONOMOUS-2.a / 5.a)
 
 Corvidinho's voice is `persona.md` at the root of the corvidinho checkout whose `src/cli.ts`
 runs the task (`CORVIDINHO_BIN`; by default the checkout the bridge, WATCH and daemon run from),
 never the project a run works in. Every run reads it again (chat, slash commands, `/work`,
 schedules, WATCH, `task run`, delegate and council workers), so the next turn after an update
-uses the new text; no restart and no setting. It goes into the system prompt first, and
+uses the new text; no restart and no setting. A run as a named persona (below) uses that
+persona's file instead. It goes into the system prompt first, and
 Corvidinho's rules follow it and win (one message per turn, no spam, no unchecked claims).
 Fixed-text bot posts (the bridge-live note, `/status`, error and spend lines) do not go through
 the model and keep their text. The bridge-live note in the `/announce` channel is written in the
@@ -791,6 +808,28 @@ changelog bullet list (PERSONA-1.a); editing `persona.md` does not change it.
   file, for example "working-tree changes not loaded". It is a `Text` event in the run's output:
   `bun src/cli.ts task run` prints it on stderr and `--json` / NDJSON carry it; the bridges and
   WATCH do not post it to Discord or GitHub.
+
+**Named personas (AUTONOMOUS-2.a, AUTONOMOUS-5.a).** `persona.md` stays the default voice. Each
+named persona is its own file in `personas/` next to it (same checkout, same rules: committed
+copy only, 8 KiB, scrubbed, read again every run), with front matter `name`, `model` (one
+`kind:model` entry you configured in `CORVIDINHO_LLM_MODEL` or a per-tier key) and `skills`
+(tags), then its voice. No setting or restart.
+
+- Run as one: `bun src/cli.ts task run --persona <name> --task "…"`, or `/session start` with
+  the optional `persona` option (that one run). Owner only: a team member or community user who
+  sets it gets one private line and nothing starts; a role-session `task run --persona` from
+  anyone else is refused the same way.
+- The run uses the persona's voice instead of `persona.md` and calls its model first, then the
+  tier's other configured models (AGENT-11 fallback with its note). Spend caps and the
+  no-provider notice apply per model; an unpriced persona model's spend card names
+  `the model in personas/<file>.md`.
+- `delegate --skill <tag>` (E.5) runs the worker as the first persona by name whose `skills`
+  hold that tag exactly; no match runs a plain worker. The worker keeps its limits (tier, depth,
+  community role, no tokens).
+- An unknown persona, a refused file or a model you did not configure: one plain line naming
+  the persona, file and model label (never a key value), nothing called.
+- The agent's file tools refuse to write, edit or delete in Corvidinho's own `personas/`
+  folder (SAFE-2); a project's own `personas/` directory is unaffected.
 
 ### E.9 Models: you configure them; there is no default (AGENT-13, AGENT-10)
 
@@ -917,7 +956,7 @@ ignored, with one `[operator] AGENT-12: …` line, and the default is used.
 ```toml
 [corvidinho.plugins]
 work = false       # /work, and a reply or button press that would resume a /work talk
-schedule = false   # every /schedule subcommand, and schedule runs in the bridge and the daemon
+schedule = false   # every /schedule subcommand, schedule runs in the bridge and the daemon, and the daily briefings
 ```
 
 (`plugins.work = false` or `plugins = { work = false }` under `[corvidinho]` is the same key.)

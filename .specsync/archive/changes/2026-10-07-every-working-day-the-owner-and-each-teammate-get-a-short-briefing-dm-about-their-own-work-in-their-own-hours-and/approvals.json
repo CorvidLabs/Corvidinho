@@ -1,0 +1,132 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791352592,
+      "digest": "5c9488c6a6a80433b09f37eb36e761f468896bafce1477180072faef5b621cb8",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "every-working-day-the-owner-and-each-teammate-get-a-short-briefing-dm-about-their-own-work-in-their-own-hours-and",
+        "title": "Every working day the owner and each teammate get a short briefing DM about their own work, in their own hours and timezone (COS-1, COS-2, COS-2.a; #102)",
+        "description": "Every working day the owner and each teammate get a short briefing DM about their own work, in their own hours and timezone (COS-1, COS-2, COS-2.a; #102)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "discord"
+        ],
+        "affected_paths": [
+          "AGENTS.md",
+          "INTENT.md",
+          "README.md",
+          "STATUS.md",
+          "allowlist.example.toml",
+          "docs/DAEMON.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "hi/cos.md",
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "src/agent/execute.ts",
+          "src/discord/admin-people.ts",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/admin.ts",
+          "src/discord/slash-commands.ts",
+          "src/identity/people.ts",
+          "src/scheduler/briefing.ts",
+          "src/scheduler/index.ts",
+          "src/scheduler/service.ts",
+          "src/store/scrub.ts",
+          "tests/cos.briefing.test.ts",
+          "tests/identity.briefing-hours.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "COS-1, COS-2 and COS-2.a (hi/cos.md, captured in this change's PR from Leif's 2026-09-28 interview record, round 17): every working day (Monday to Friday in their time zone) the owner and each declared team member get one short briefing DM about their own work - what changed (their GitHub PRs and issues in allowlisted repos since the last briefing, matched by their numeric GitHub id), what's blocked (their blocked /work tasks), what needs them (review requests, their schedules' open questions, the owner's waiting Approve cards) and what it did for them (their /work tasks and schedule runs finished since the last briefing) - at the start of their working hours in their time zone; zone and hours come from optional timezone / working_hours keys on the declared person (settable with the audited /admin people add), and without them the owner's declared zone (else UTC) and 09:00. Days with nothing to say are skipped; never twice a day (cos_briefings claim); DM only through the bridge's sendDm; written by one read-tier no-tools model call bounded to that person's facts, scrubbed, under the spend caps (a cap stop skips the day and goes to the owner's spend DM). Tests tests/cos.briefing.test.ts and tests/identity.briefing-hours.test.ts (fake LLM, fake clock, fake GitHub, fake DM) fail on the base and pass on the branch."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "61809ed7acbaa6a0a2f35be9afc5d755689dd76f8a3f67fef13ccf57af313878",
+        "discord": "4340c76da3e8c5f1a7265d641bc86459ade3addfeb341c440caf740d941e51db"
+      }
+    },
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791354031,
+      "digest": "5c9488c6a6a80433b09f37eb36e761f468896bafce1477180072faef5b621cb8",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "every-working-day-the-owner-and-each-teammate-get-a-short-briefing-dm-about-their-own-work-in-their-own-hours-and",
+        "title": "Every working day the owner and each teammate get a short briefing DM about their own work, in their own hours and timezone (COS-1, COS-2, COS-2.a; #102)",
+        "description": "Every working day the owner and each teammate get a short briefing DM about their own work, in their own hours and timezone (COS-1, COS-2, COS-2.a; #102)",
+        "kind": "feature",
+        "affected_specs": [
+          "agent",
+          "discord"
+        ],
+        "affected_paths": [
+          "AGENTS.md",
+          "INTENT.md",
+          "README.md",
+          "STATUS.md",
+          "allowlist.example.toml",
+          "docs/DAEMON.md",
+          "docs/DISCORD-GO-LIVE.md",
+          "docs/discord.md",
+          "hi/cos.md",
+          "specs/agent/agent.spec.md",
+          "specs/agent/testing.md",
+          "specs/discord/discord.spec.md",
+          "specs/discord/testing.md",
+          "src/agent/execute.ts",
+          "src/discord/admin-people.ts",
+          "src/discord/bridge.ts",
+          "src/discord/command-handlers/admin.ts",
+          "src/discord/slash-commands.ts",
+          "src/identity/people.ts",
+          "src/scheduler/briefing.ts",
+          "src/scheduler/index.ts",
+          "src/scheduler/service.ts",
+          "src/store/scrub.ts",
+          "tests/cos.briefing.test.ts",
+          "tests/identity.briefing-hours.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "COS-1, COS-2 and COS-2.a (hi/cos.md, captured in this change's PR from Leif's 2026-09-28 interview record, round 17): every working day (Monday to Friday in their time zone) the owner and each declared team member get one short briefing DM about their own work - what changed (their GitHub PRs and issues in allowlisted repos since the last briefing, matched by their numeric GitHub id), what's blocked (their blocked /work tasks), what needs them (review requests, their schedules' open questions, the owner's waiting Approve cards) and what it did for them (their /work tasks and schedule runs finished since the last briefing) - at the start of their working hours in their time zone; zone and hours come from optional timezone / working_hours keys on the declared person (settable with the audited /admin people add), and without them the owner's declared zone (else UTC) and 09:00. Days with nothing to say are skipped; never twice a day (cos_briefings claim); DM only through the bridge's sendDm; written by one read-tier no-tools model call bounded to that person's facts, scrubbed, under the spend caps (a cap stop skips the day and goes to the owner's spend DM). Tests tests/cos.briefing.test.ts and tests/identity.briefing-hours.test.ts (fake LLM, fake clock, fake GitHub, fake DM) fail on the base and pass on the branch."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "agent": "61809ed7acbaa6a0a2f35be9afc5d755689dd76f8a3f67fef13ccf57af313878",
+        "discord": "b42b441c9657180a8bffa80f2ccae61cbb306faa33e063fd946c0a1e411c848e"
+      }
+    },
+    {
+      "gate": "finalization",
+      "actor": "specsync:finalization",
+      "timestamp": 1791386448,
+      "digest": "853069cf531910f4f3d1f30bf930c3f212b4d4476173c653db6c30aa8c9fa806",
+      "note": "Same-PR finalization closing digest"
+    }
+  ],
+  "reopenings": []
+}
