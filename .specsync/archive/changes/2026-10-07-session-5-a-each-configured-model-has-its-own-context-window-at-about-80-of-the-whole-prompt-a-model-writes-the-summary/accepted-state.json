@@ -7,7 +7,7 @@
   "title": "SESSION-5.a: each configured model has its own context window; at about 80% of the whole prompt a model writes the summary of older turns, the task and latest instruction stay word for word",
   "description": "SESSION-5.a: each configured model has its own context window; at about 80% of the whole prompt a model writes the summary of older turns, the task and latest instruction stay word for word",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "6a5abf862b0c8d102239afde563bc9b6073b70dd",
   "created_at": 1791331991,

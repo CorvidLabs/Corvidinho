@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "session-5-a-each-configured-model-has-its-own-context-window-at-about-80-of-the-whole-prompt-a-model-writes-the-summary",
+  "implementation_commit": "defe37915633a81b2b8276dd564f852cfeb592b3",
+  "implementation_tree": null,
+  "contract_digest": null,
+  "workspace_digest": null,
+  "closing_digest": null,
+  "review_digest": null,
+  "finalization_digest": "tip-orphan-manual",
+  "timestamp": 1791394000,
+  "note": "tip-orphan archive after #405 squash (same class as #424\u2013#428)"
+}
