@@ -12,7 +12,11 @@
  * request, is community.
  * REQ-watch-067 (MEMORY-8/9): before each run the commenter's declared
  * person's memory and the thread repo's project memory are searched for the
- * comment and prepended, and the run acts for the commenter's GitHub ids.
+ * comment and prepended, and the run acts for the commenter's GitHub ids —
+ * only when nobody else edited the comment or body (REQ-watch-1202,
+ * `watchActingGithub`; an assignment or review request acts for its actor's
+ * login, an edited text for nobody). Edit and rename lookups are made only
+ * for events not yet handled (`needsLookup`).
  * REQ-watch-472 (AGENT-6.a / SESSION-5): each run on an issue or PR is kept
  * with that thread's condensed conversation (30 days, scrubbed), and a
  * follow-up on the same issue or PR gets it replayed ahead of the new event,
@@ -81,7 +85,13 @@ import {
   parseGithubRateLimit,
 } from "./rate-limit.ts";
 import { enrichWatchPromptWithMemories } from "./memory-inject.ts";
-import { gateEvent, routeEvent, watchInjectionVerdict, watchTriggerRole } from "./router.ts";
+import {
+  gateEvent,
+  routeEvent,
+  watchActingGithub,
+  watchInjectionVerdict,
+  watchTriggerRole,
+} from "./router.ts";
 import { INJECTION_AUDIT_ACTION, type InjectionReason } from "../agent/untrusted.ts";
 import { providerNotice } from "../agent/providers.ts";
 import { appendAudit, argsDigest, auditKeyFromEnv } from "../audit/index.ts";
@@ -471,6 +481,8 @@ export async function startWatchPoller(
             client: searchClient,
             repos: config.repos,
             mentionUsername: config.mentionUsername,
+            // REQ-watch-1202: edit / rename lookups only for ids not yet handled.
+            needsLookup: (id) => !processed.has(id) && !deniedIds.has(id),
           });
     } catch (err) {
       const waitMs = applyRateLimitBackoff(err);
@@ -654,12 +666,28 @@ export async function startWatchPoller(
         }
         let prompt = withConversationBlock(action.prompt, conversation, blockOpts);
 
+        // REQ-watch-1202 (MEMORY-8 / SAFE-5): who the run acts for — the
+        // sender of a text nobody else edited, an assignment's or review
+        // request's actor (login only), else nobody.
+        const acting = watchActingGithub(event);
+
         // MEMORY-9: search memory for this comment before the run, so the
         // model has it before it could say it doesn't know (no model call).
         // The memory blocks go ahead of the replayed conversation, as on
         // Discord (the thread block is added before identity and memory).
+        // Only the acting person's profile (REQ-watch-1202): none for a text
+        // someone else edited, or an assignment or review request.
         try {
-          const mem = enrichWatchPromptWithMemories(prompt, memoryStore, { event, people });
+          const mem = enrichWatchPromptWithMemories(prompt, memoryStore, {
+            event: {
+              sender: event.sender,
+              ...(acting.id !== undefined ? { senderId: acting.id } : {}),
+              repo: event.repo,
+              title: event.title,
+              body: event.body,
+            },
+            people,
+          });
           if (mem.injected) {
             prompt = mem.prompt;
             log(`[watch] memory inject: ${mem.count} recalled for @${event.sender}${mem.declared ? "" : " (project only)"}`);
@@ -682,9 +710,10 @@ export async function startWatchPoller(
             prompt,
             sessionId: action.session.id,
             resume: action.kind === "continue_session",
-            // MEMORY-8: the commenter (GitHub API ids) and the thread's repo.
-            actingGithubLogin: event.sender,
-            ...(event.senderId !== undefined ? { actingGithubId: event.senderId } : {}),
+            // MEMORY-8 / SAFE-5: who triggered it (GitHub API ids; nobody for
+            // a text someone else edited, REQ-watch-1202) and the thread's repo.
+            ...(acting.login !== undefined ? { actingGithubLogin: acting.login } : {}),
+            ...(acting.id !== undefined ? { actingGithubId: acting.id } : {}),
             repo: event.repo,
             // IDENTITY-12.a: the declared role of whoever triggered the run
             // (by GitHub numeric id; an assignment or review request is

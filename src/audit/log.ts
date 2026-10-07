@@ -24,7 +24,7 @@ export type AuditOutcome = "started" | "ok" | "error" | "denied";
 export type AuditEntryInput = {
   /** Plugin/command name, e.g. "memory-forget". */
   action: string;
-  /** Acting principal (Discord user id) or "local". */
+  /** Acting principal: Discord user id, `github:<id or login>` on WATCH, or "local". */
   actor: string;
   /** Where it came from: "discord:<session>", "watch:<session>", "cli". */
   surface: string;
@@ -204,14 +204,31 @@ export function formatAuditLine(v: AuditVerify): string {
   return `Audit: ${v.count} entries · chain OK (${mode})`;
 }
 
-/** Actor/surface for a plugin run, from the bridge-set env only. */
+/**
+ * Actor/surface for a plugin run, from the bridge-set env only. The actor is
+ * the acting Discord user id; on a GitHub (WATCH) run with no Discord actor
+ * (REQ-plugins-1203) it is `github:<numeric id>` of the person who triggered
+ * it (`CORVIDINHO_ACTING_GITHUB_ID`), else `github:<login>`, else
+ * `github:(unknown)` — never `local`, which is the local CLI only. The
+ * must-ask gate keys its requester and earlier denials on it too.
+ */
 export function auditContextFromEnv(env: NodeJS.ProcessEnv = process.env): {
   actor: string;
   surface: string;
 } {
-  const actor = env.CORVIDINHO_ACTING_DISCORD_USER_ID?.trim() || "local";
   const discord = env.CORVIDINHO_DISCORD_SESSION_ID?.trim();
   const watch = env.CORVIDINHO_WATCH_SESSION_ID?.trim();
+  const actor =
+    env.CORVIDINHO_ACTING_DISCORD_USER_ID?.trim() || (watch ? githubAuditActor(env) : "local");
   const surface = discord ? `discord:${discord}` : watch ? `watch:${watch}` : "cli";
   return { actor, surface };
+}
+
+/** The GitHub trigger of a WATCH run as an audit actor (REQ-plugins-1203). */
+function githubAuditActor(env: NodeJS.ProcessEnv): string {
+  const id = env.CORVIDINHO_ACTING_GITHUB_ID?.trim() ?? "";
+  if (/^[1-9][0-9]{0,19}$/.test(id)) return `github:${id}`;
+  const login = env.CORVIDINHO_ACTING_GITHUB_LOGIN?.trim().toLowerCase() ?? "";
+  if (/^[a-z0-9](?:[a-z0-9-]{0,38})$/.test(login)) return `github:${login}`;
+  return "github:(unknown)";
 }

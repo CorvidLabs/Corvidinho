@@ -33,6 +33,12 @@
  * community; so is anyone undeclared. A Discord run never uses the GitHub
  * keys.
  *
+ * SESSION-WORKTREE-1 on GitHub (REQ-plugins-1202): a WATCH run works in the
+ * watcher's own checkout (`task run --here`, the checkout every spawn's
+ * binary runs from) and has no worktree of its own, so the tools that write
+ * that checkout ({@link WATCH_CHECKOUT_WRITE_TOOLS}) are refused there for
+ * every role, the owner's included (`watchCheckoutWriteRefused`).
+ *
  * DISCORD-SCHEDULE-1.a: a schedule the owner created runs as the owner (the
  * scheduler stamps the ADMIN bit only for the live owner's own schedule, and
  * the ADMIN re-check above still applies at every call); anyone else's
@@ -103,6 +109,44 @@ const SURFACE_ENV = "CORVIDINHO_ACTING_SURFACE";
  */
 export function isWatchRunEnv(env: NodeJS.ProcessEnv = process.env): boolean {
   return (env[SURFACE_ENV] ?? "").trim().toLowerCase() === "watch";
+}
+
+/**
+ * REQ-plugins-1202: tools that write the local checkout or its git state —
+ * file writes, edits and deletes, branch creation, commits and pushes, and
+ * the SpecSync change steps that write `.specsync/` — which a WATCH run never
+ * runs: it works in the watcher's own checkout (the one every WATCH, Discord
+ * and daemon spawn's binary runs from), not a worktree of its own. The
+ * shell, runners and Fledge runs are already off there (SAFE-3.a).
+ */
+export const WATCH_CHECKOUT_WRITE_TOOLS: ReadonlySet<string> = new Set([
+  "files-write",
+  "files-edit",
+  "files-delete",
+  "git-branch-create",
+  "git-commit",
+  "git-push",
+  "specsync-change-new",
+  "specsync-change-answer",
+  "specsync-change-approve",
+  "specsync-change-finalize",
+]);
+
+/** Why a WATCH run's checkout write is refused (REQ-plugins-1202). */
+export function watchCheckoutWriteRefusal(name: string): string {
+  return `Denied: plugin "${name}" writes the watcher's own checkout, and a GitHub (WATCH) run has no worktree of its own, so it never runs there, whoever triggered it (SESSION-WORKTREE-1).`;
+}
+
+/**
+ * REQ-plugins-1202: true when `name` writes the local checkout and this is a
+ * WATCH run (surface stamp `watch` or a WATCH session id), for every role.
+ */
+export function watchCheckoutWriteRefused(
+  env: NodeJS.ProcessEnv,
+  name: string,
+): boolean {
+  if (!WATCH_CHECKOUT_WRITE_TOOLS.has(name)) return false;
+  return isWatchRunEnv(env) || (env.CORVIDINHO_WATCH_SESSION_ID ?? "").trim() !== "";
 }
 
 /**

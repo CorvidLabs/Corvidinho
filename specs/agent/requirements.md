@@ -2973,4 +2973,21 @@ Acceptance Criteria
 - `personaSkillsHint` names only tagged personas with a configured model, in name order, without voice or model, and stops at 400 characters; a file name cannot break the `<persona>` label.
 - Through `createTaskExecute` and a mock provider, at read and tool tier: the persona's model is called first with its voice and no `persona.md` text, the rules after it; its model failing falls back to the tier's next model with the AGENT-11 note; an unconfigured model or unknown persona is one line and no call; team and community role sessions get `PERSONA_OWNER_ONLY_LINE` and no call, the owner's role session runs; a lead's pick at depth 0 is refused and runs at depth 1; a working-tree edit is not loaded (one note) and a committed one shows on the next run.
 - Fails on main's sources (the persona option is ignored) and passes on the branch.
+### REQ-agent-183
+
+My own memory forget and override by id ask me on a DM card with Approve and
+a one-time code (SAFE-18.a, captured in this change's PR from Leif's
+2026-09-28 interview, round 17). What the tool loop tells the model about
+them SHALL match: the argv description `toolDefForEntry` gives every
+`memory-*` tool (`src/agent/tools.ts`) SHALL say that forget / override
+need `--id` (override also the new text), ask the owner on a DM card and
+wait, and that there are no confirm tokens; it SHALL NOT mention
+`--confirm`. The tool loop runs `memory-forget` / `memory-override`
+through `runPlugin` like any tool, so a call waits for the owner's card
+(REQ-plugins-183) and its tool result reports the outcome. Nothing else in
+the tool definitions changes.
+
+Acceptance Criteria
+- `toolDefForEntry` for a `memory-*` tool names the DM card and no `--confirm`.
+- A fake model's `memory-forget` call through `createTaskExecute` waits for the owner's card and its `ToolResult` reports the forget once approved with the code.
 

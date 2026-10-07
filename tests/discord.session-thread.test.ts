@@ -21,7 +21,6 @@ import { memoryThinkingOutbound, startBridge } from "../src/discord/bridge.ts";
 import { createNullGateway, type GatewayHandlers } from "../src/discord/gateway.ts";
 import { SessionStore } from "../src/discord/session-store.ts";
 import type { SlashInteraction } from "../src/discord/slash-types.ts";
-import { extractConfirmTokens } from "../src/memory/confirm.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
 import { teamPeopleFile } from "./fixtures/team-people.ts";
 
@@ -460,14 +459,12 @@ describe("session thread stays inside its session (SESSION-3 / SESSION-MULTI-1 /
     expect(back.prompt).not.toContain("answer number 2");
   });
 
-  test("confirm tokens come only from the current message, never from replayed turns", async () => {
-    const tokenish = `mc1.1700000000000.abc123.${"f".repeat(64)}`;
-    expect(extractConfirmTokens(tokenish)).toEqual([tokenish]);
+  test("the human's own words come only from the current message, never from replayed turns", async () => {
     const { handlers, calls, outbound } = await bridgeWith(() => "noted");
-    await handlers.onMessage(mention("m1", OWNER, `confirm ${tokenish}`));
+    await handlers.onMessage(mention("m1", OWNER, "remember PELICAN"));
     await handlers.onMessage(replyTo("m2", OWNER, "and now the next step", answerId(outbound, 0)));
-    expect(call(calls, 0).humanText).toBe(`confirm ${tokenish}`);
+    expect(call(calls, 0).humanText).toBe("remember PELICAN");
     expect(call(calls, 1).humanText).toBe("and now the next step");
-    expect(extractConfirmTokens(call(calls, 1).humanText ?? "")).toEqual([]);
+    expect(call(calls, 1).humanText).not.toContain("PELICAN");
   });
 });

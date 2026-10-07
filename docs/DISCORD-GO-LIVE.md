@@ -191,7 +191,9 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   **Cancel**; after Continue the next due run's calls past a cap, or at an unknown price, ask on
   the spend card first) that the schedule's creator or the owner presses; a reply does not
   answer it, and the buttons do not expire while it is open. Until then the schedule's due runs are skipped (not made up) and one note says it
-  is waiting. A schedule with no channel sends its question and buttons to the owner by **direct
+  is waiting. A chat or slash question is different (AUTONOMY-6.b): its **Choose** buttons expire
+  after ~30 minutes, and then that session stops waiting on it and your next message runs normally;
+  a schedule's questions still wait until answered. A schedule with no channel sends its question and buttons to the owner by **direct
   message** (same DM rule as above). See [`discord.md`](discord.md) "Scheduled questions wait for
   an answer".
 - A scheduled run the bridge started can be stopped from Discord by the owner or the schedule's
@@ -297,8 +299,8 @@ inside that talk's own worktree, and in a local `corvidinho task run` inside the
 | `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere) without GitHub or git credentials (SAFE-21.a) or cloud credentials (SAFE-21.b), and `plugins list` names any that are not loaded; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
 | `shell-exec` | true | 2 | true | an operator runs `corvidinho plugins run shell-exec` non-interactively (cwd clamped to the project, `env -C` and symlinks included, SAFE-3; refuses `sed -i` / `>` edits, downloads piped into a shell, deletes outside the worktree and secret reads, saying why, SAFE-21; refuses `specsync change approve` / `review` / `finalize` / `ship` in every repo, also behind a wrapper, `bunx` / `npx`, a path, `sh -c` or an in-root script (`shell-exec refused (AGENT-18.a): …`): a human approves, reviews and finalizes, and on Corvidinho only the run's own settle step after a green lane does, never the shell, AGENT-18.a; starts without GitHub or git credentials, so pushes, PRs and merges go only through the typed GitHub tools, SAFE-21.a; 10 minute timeout, 64 KiB output cap, output scrubbed); the model gets it only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
 | `node-exec` / `python-exec` / `cargo-exec` | true | 2 | true | an operator runs `corvidinho plugins run <name>` non-interactively; each is registered only when `node` / `python3` (else `python`) / `cargo` is on PATH (PLUGIN-4), runs that binary with argv only (no shell) starting in the project dir (a start dir, not a clamp: the code it runs can `chdir` elsewhere) without GitHub or git credentials (SAFE-21.a), and `plugins list` names any that are not loaded; the model gets them only in the owner's own chat, `/session start`, `/work` or ask answer, inside that talk's own worktree, or a local `task run` in the worktree it made for itself, at code tier (SAFE-3.a) |
-| `memory-forget` | true | 1 | true | the owner's chat should forget memories on request, or an operator runs `corvidinho plugins run memory-forget` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
-| `memory-override` | true | 1 | true | the owner's chat should correct memories on request, or an operator runs `corvidinho plugins run memory-override` non-interactively with the acting env set (two-phase confirm, SAFE-4), see [`discord.md`](discord.md) Memory |
+| `memory-forget` | true | 1 | true | the owner's chat should forget memories on request; each forget asks the owner on a DM Approve card with a one-time code (SAFE-18.a, the SAFE-4 two-phase confirm) and only the running bridge delivers it, so `corvidinho plugins run memory-forget` on the box refuses — see [`discord.md`](discord.md) Memory |
+| `memory-override` | true | 1 | true | the owner's chat should correct memories on request; each override asks the owner on a DM Approve card with a one-time code that shows the new text word for word (SAFE-18.a), and only the running bridge delivers it — see [`discord.md`](discord.md) Memory |
 | `files-delete` | true | 2 | true | an operator runs `corvidinho plugins run files-delete` non-interactively (SAFE-2 protected paths always refused; in a repo that uses hi, everything under `hi/` too, AGENT-18) |
 | `github-issue-create` / `github-issue-comment` / `github-pr-review` | true | 1 | true | the owner's runs should open issues, comment or review PRs (GITHUB-1/3), or an operator runs `corvidinho plugins run <name>` non-interactively; team members' Discord runs get `github-issue-comment` and `github-pr-review` too, on GITHUB-6-allowlisted repos only (IDENTITY-10, E.6) |
 | `discord-post-message` | true | 1 | true | an operator runs `corvidinho plugins run discord-post-message` non-interactively to post to an allowlisted channel (DISCORD-5/8); in the owner's runs the model can post too, and only where the owner could post themselves (the DISCORD-8 check is for the acting user; needs Server Members Intent). Every post, the operator's included, first waits for the owner's OK on a DM Approve card (AUTONOMY-10.a; needs the bridge running and an owner configured) |
@@ -655,10 +657,12 @@ Who is who in an allowlisted channel:
 - On GitHub (IDENTITY-12.a) a WATCH run gets the role of the person who triggered it, matched
   by their GitHub numeric user id in the people list (never a login): the owner's tools for the
   owner, the team's for a team member (not `/work` file edits), behind the same must-ask gate;
-  community for anyone else and for every assignment or review request. It never gets the
-  shell, runners, Fledge runs or a discovered Fledge plugin command, and secret-looking
-  paths stay hidden there for every role
-  ([`WATCH.md`](WATCH.md) "Roles on GitHub").
+  community for anyone else, for every assignment or review request, and for a comment or body
+  someone else edited (REQ-watch-1202). It never gets the shell, runners, Fledge runs or a
+  discovered Fledge plugin command, never writes the watcher's own checkout (file writes,
+  git branch / commit / push, SpecSync change steps, REQ-plugins-1202), and secret-looking
+  paths stay hidden there for every role; its audit rows and cards name `github:<id>`
+  (REQ-plugins-1203) ([`WATCH.md`](WATCH.md) "Roles on GitHub").
 - Schedules anyone but the owner created and `delegate` / `council` workers are
   community whoever triggered them. A schedule the owner created runs as the owner
   (DISCORD-SCHEDULE-1.a): their allowlisted tools and must-ask cards, never the shell,

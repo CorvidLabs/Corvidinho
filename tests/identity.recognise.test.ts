@@ -356,7 +356,7 @@ describe("GitHub WATCH recognises declared people (IDENTITY-14 / IDENTITY-7)", (
 
   test("the owner is recognised by [owner] github_id, never the login; strangers are marked undeclared; no people ⇒ prompt as before", () => {
     const withId = buildPeopleDirectory(parsePeopleToml(PEOPLE), { ...OWNER, githubId: "8268288" });
-    const owner = formatWatchIdentityBlock({ sender: "0xLeif", senderId: 8268288 }, withId)!;
+    const owner = formatWatchIdentityBlock({ sender: "0xLeif", senderId: 8268288, textEditorIds: [] }, withId)!;
     expect(owner).toContain("- declared_person: owner");
     expect(owner).toContain("- display_name: Leif");
     // IDENTITY-12.a: the owner's own comment gives the run the owner's tools, behind the must-ask gate.

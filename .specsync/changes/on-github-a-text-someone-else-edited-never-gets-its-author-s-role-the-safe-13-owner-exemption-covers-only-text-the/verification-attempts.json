@@ -1,0 +1,401 @@
+{
+  "schema_version": 1,
+  "attempts": [
+    {
+      "timestamp": 1791331435,
+      "commit": "ae108bf1932b3168afbf6217df6f863eea78a741",
+      "contract_digest": "3c6fbe8babded9c98e4d1ebe19f81d777d2aff55bdfd7d4542f52954f5f83c3d",
+      "execution_digest": "9dff6eb3855a636ebb9c9e6adb934049f677bb3fc2c57c3c5686d53a209b2d92",
+      "workspace_digest": "43d5741ca3de7ce250d562edaf1556b78643589bb38e26d285c854974068a859",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord --spec plugins --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-1201",
+        "REQ-plugins-1202",
+        "REQ-plugins-1203",
+        "REQ-watch-071",
+        "REQ-watch-1201",
+        "REQ-watch-1202"
+      ]
+    },
+    {
+      "timestamp": 1791331439,
+      "commit": "8c0dab779e5be6009c8d0f30e1b34566c144fe46",
+      "contract_digest": "3c6fbe8babded9c98e4d1ebe19f81d777d2aff55bdfd7d4542f52954f5f83c3d",
+      "execution_digest": "9dff6eb3855a636ebb9c9e6adb934049f677bb3fc2c57c3c5686d53a209b2d92",
+      "workspace_digest": "43d5741ca3de7ce250d562edaf1556b78643589bb38e26d285c854974068a859",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord --spec plugins --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-1201",
+        "REQ-plugins-1202",
+        "REQ-plugins-1203",
+        "REQ-watch-071",
+        "REQ-watch-1201",
+        "REQ-watch-1202"
+      ]
+    },
+    {
+      "timestamp": 1791333443,
+      "commit": "d652b12dba47a571c2cb49e58dc062773655498a",
+      "contract_digest": "bd0e919b73220caa2ee7879ca78a67c423802b0c2dd8ac22786474061379f8f2",
+      "execution_digest": "5be5b14b93bce0f0725b293378fe1086dbec654920d89d8982fbdae93692e1ea",
+      "workspace_digest": "a87ea62f7476df5d2d367f4f19466b5a86c0e623099f5a675f9736605efa890e",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord --spec plugins --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-1201",
+        "REQ-plugins-1202",
+        "REQ-plugins-1203",
+        "REQ-watch-067",
+        "REQ-watch-071",
+        "REQ-watch-1016",
+        "REQ-watch-1201",
+        "REQ-watch-1202"
+      ]
+    },
+    {
+      "timestamp": 1791333449,
+      "commit": "1d1b0d6220c74ba70566ec868a3195e8cce84743",
+      "contract_digest": "bd0e919b73220caa2ee7879ca78a67c423802b0c2dd8ac22786474061379f8f2",
+      "execution_digest": "5be5b14b93bce0f0725b293378fe1086dbec654920d89d8982fbdae93692e1ea",
+      "workspace_digest": "a87ea62f7476df5d2d367f4f19466b5a86c0e623099f5a675f9736605efa890e",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord --spec plugins --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-1201",
+        "REQ-plugins-1202",
+        "REQ-plugins-1203",
+        "REQ-watch-067",
+        "REQ-watch-071",
+        "REQ-watch-1016",
+        "REQ-watch-1201",
+        "REQ-watch-1202"
+      ]
+    },
+    {
+      "timestamp": 1791355992,
+      "commit": "84a7f7bba77115b0770e6f5cf271877ad64d2842",
+      "contract_digest": "bd0e919b73220caa2ee7879ca78a67c423802b0c2dd8ac22786474061379f8f2",
+      "execution_digest": "5be5b14b93bce0f0725b293378fe1086dbec654920d89d8982fbdae93692e1ea",
+      "workspace_digest": "a98290ddded19e1958bb94ac5c7aa948d780b04807c13971a46489967ce3e368",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord --spec plugins --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-1201",
+        "REQ-plugins-1202",
+        "REQ-plugins-1203",
+        "REQ-watch-067",
+        "REQ-watch-071",
+        "REQ-watch-1016",
+        "REQ-watch-1201",
+        "REQ-watch-1202"
+      ]
+    },
+    {
+      "timestamp": 1791355998,
+      "commit": "14ca268549f53324589fe16b8520cf966ba1b7c2",
+      "contract_digest": "bd0e919b73220caa2ee7879ca78a67c423802b0c2dd8ac22786474061379f8f2",
+      "execution_digest": "5be5b14b93bce0f0725b293378fe1086dbec654920d89d8982fbdae93692e1ea",
+      "workspace_digest": "a98290ddded19e1958bb94ac5c7aa948d780b04807c13971a46489967ce3e368",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord --spec plugins --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-1201",
+        "REQ-plugins-1202",
+        "REQ-plugins-1203",
+        "REQ-watch-067",
+        "REQ-watch-071",
+        "REQ-watch-1016",
+        "REQ-watch-1201",
+        "REQ-watch-1202"
+      ]
+    },
+    {
+      "timestamp": 1791356003,
+      "commit": "dba25a870253ea556ec56fc9077ef9311bf5dab0",
+      "contract_digest": "bd0e919b73220caa2ee7879ca78a67c423802b0c2dd8ac22786474061379f8f2",
+      "execution_digest": "5be5b14b93bce0f0725b293378fe1086dbec654920d89d8982fbdae93692e1ea",
+      "workspace_digest": "a98290ddded19e1958bb94ac5c7aa948d780b04807c13971a46489967ce3e368",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord --spec plugins --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-1201",
+        "REQ-plugins-1202",
+        "REQ-plugins-1203",
+        "REQ-watch-067",
+        "REQ-watch-071",
+        "REQ-watch-1016",
+        "REQ-watch-1201",
+        "REQ-watch-1202"
+      ]
+    },
+    {
+      "timestamp": 1791356009,
+      "commit": "9072a93e25be6a34c92e452df491753239c97316",
+      "contract_digest": "bd0e919b73220caa2ee7879ca78a67c423802b0c2dd8ac22786474061379f8f2",
+      "execution_digest": "5be5b14b93bce0f0725b293378fe1086dbec654920d89d8982fbdae93692e1ea",
+      "workspace_digest": "a98290ddded19e1958bb94ac5c7aa948d780b04807c13971a46489967ce3e368",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord --spec plugins --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-1201",
+        "REQ-plugins-1202",
+        "REQ-plugins-1203",
+        "REQ-watch-067",
+        "REQ-watch-071",
+        "REQ-watch-1016",
+        "REQ-watch-1201",
+        "REQ-watch-1202"
+      ]
+    },
+    {
+      "timestamp": 1791356943,
+      "commit": "873a5302f5ccbe43f064c88b9e3a35ac497f88ff",
+      "contract_digest": "bd0e919b73220caa2ee7879ca78a67c423802b0c2dd8ac22786474061379f8f2",
+      "execution_digest": "5be5b14b93bce0f0725b293378fe1086dbec654920d89d8982fbdae93692e1ea",
+      "workspace_digest": "717af758dfa8982ea7fc3eb1552c5d0173e72702af57e1332c6051ca9e4a1c3a",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord --spec plugins --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-1201",
+        "REQ-plugins-1202",
+        "REQ-plugins-1203",
+        "REQ-watch-067",
+        "REQ-watch-071",
+        "REQ-watch-1016",
+        "REQ-watch-1201",
+        "REQ-watch-1202"
+      ]
+    },
+    {
+      "timestamp": 1791356952,
+      "commit": "83d954756f83ba4220fddd9c86ca01d256b88446",
+      "contract_digest": "bd0e919b73220caa2ee7879ca78a67c423802b0c2dd8ac22786474061379f8f2",
+      "execution_digest": "5be5b14b93bce0f0725b293378fe1086dbec654920d89d8982fbdae93692e1ea",
+      "workspace_digest": "717af758dfa8982ea7fc3eb1552c5d0173e72702af57e1332c6051ca9e4a1c3a",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord --spec plugins --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-1201",
+        "REQ-plugins-1202",
+        "REQ-plugins-1203",
+        "REQ-watch-067",
+        "REQ-watch-071",
+        "REQ-watch-1016",
+        "REQ-watch-1201",
+        "REQ-watch-1202"
+      ]
+    },
+    {
+      "timestamp": 1791356992,
+      "commit": "2e3f5e5e0c82526b4d01ce2da7247991fa67669b",
+      "contract_digest": "bd0e919b73220caa2ee7879ca78a67c423802b0c2dd8ac22786474061379f8f2",
+      "execution_digest": "5be5b14b93bce0f0725b293378fe1086dbec654920d89d8982fbdae93692e1ea",
+      "workspace_digest": "717af758dfa8982ea7fc3eb1552c5d0173e72702af57e1332c6051ca9e4a1c3a",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord --spec plugins --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-1201",
+        "REQ-plugins-1202",
+        "REQ-plugins-1203",
+        "REQ-watch-067",
+        "REQ-watch-071",
+        "REQ-watch-1016",
+        "REQ-watch-1201",
+        "REQ-watch-1202"
+      ]
+    },
+    {
+      "timestamp": 1791357001,
+      "commit": "d153703dbc3f53c09544587bd9efef1c2e5dfff1",
+      "contract_digest": "bd0e919b73220caa2ee7879ca78a67c423802b0c2dd8ac22786474061379f8f2",
+      "execution_digest": "5be5b14b93bce0f0725b293378fe1086dbec654920d89d8982fbdae93692e1ea",
+      "workspace_digest": "717af758dfa8982ea7fc3eb1552c5d0173e72702af57e1332c6051ca9e4a1c3a",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord --spec plugins --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-1201",
+        "REQ-plugins-1202",
+        "REQ-plugins-1203",
+        "REQ-watch-067",
+        "REQ-watch-071",
+        "REQ-watch-1016",
+        "REQ-watch-1201",
+        "REQ-watch-1202"
+      ]
+    },
+    {
+      "timestamp": 1791357842,
+      "commit": "32ce1d103da7d6a65df651cd45907085704a327c",
+      "contract_digest": "bd0e919b73220caa2ee7879ca78a67c423802b0c2dd8ac22786474061379f8f2",
+      "execution_digest": "5be5b14b93bce0f0725b293378fe1086dbec654920d89d8982fbdae93692e1ea",
+      "workspace_digest": "ea6401b6a581a874a41c7534c1d5e95de31a41cda360434d9a07f9854f07bdd1",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord --spec plugins --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-1201",
+        "REQ-plugins-1202",
+        "REQ-plugins-1203",
+        "REQ-watch-067",
+        "REQ-watch-071",
+        "REQ-watch-1016",
+        "REQ-watch-1201",
+        "REQ-watch-1202"
+      ]
+    },
+    {
+      "timestamp": 1791357853,
+      "commit": "1c83425441ec44216474a315bd6650be6172ac5f",
+      "contract_digest": "bd0e919b73220caa2ee7879ca78a67c423802b0c2dd8ac22786474061379f8f2",
+      "execution_digest": "5be5b14b93bce0f0725b293378fe1086dbec654920d89d8982fbdae93692e1ea",
+      "workspace_digest": "ea6401b6a581a874a41c7534c1d5e95de31a41cda360434d9a07f9854f07bdd1",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord --spec plugins --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-1201",
+        "REQ-plugins-1202",
+        "REQ-plugins-1203",
+        "REQ-watch-067",
+        "REQ-watch-071",
+        "REQ-watch-1016",
+        "REQ-watch-1201",
+        "REQ-watch-1202"
+      ]
+    },
+    {
+      "timestamp": 1791357923,
+      "commit": "ad97f9f0dcad120c7eedc29da1470ceb553115c3",
+      "contract_digest": "bd0e919b73220caa2ee7879ca78a67c423802b0c2dd8ac22786474061379f8f2",
+      "execution_digest": "5be5b14b93bce0f0725b293378fe1086dbec654920d89d8982fbdae93692e1ea",
+      "workspace_digest": "ea6401b6a581a874a41c7534c1d5e95de31a41cda360434d9a07f9854f07bdd1",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord --spec plugins --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-1201",
+        "REQ-plugins-1202",
+        "REQ-plugins-1203",
+        "REQ-watch-067",
+        "REQ-watch-071",
+        "REQ-watch-1016",
+        "REQ-watch-1201",
+        "REQ-watch-1202"
+      ]
+    },
+    {
+      "timestamp": 1791357935,
+      "commit": "18309f404f11ec3351d81318457fa028a05a169b",
+      "contract_digest": "bd0e919b73220caa2ee7879ca78a67c423802b0c2dd8ac22786474061379f8f2",
+      "execution_digest": "5be5b14b93bce0f0725b293378fe1086dbec654920d89d8982fbdae93692e1ea",
+      "workspace_digest": "ea6401b6a581a874a41c7534c1d5e95de31a41cda360434d9a07f9854f07bdd1",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec discord --spec plugins --spec watch",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-plugins-1201",
+        "REQ-plugins-1202",
+        "REQ-plugins-1203",
+        "REQ-watch-067",
+        "REQ-watch-071",
+        "REQ-watch-1016",
+        "REQ-watch-1201",
+        "REQ-watch-1202"
+      ]
+    }
+  ]
+}
