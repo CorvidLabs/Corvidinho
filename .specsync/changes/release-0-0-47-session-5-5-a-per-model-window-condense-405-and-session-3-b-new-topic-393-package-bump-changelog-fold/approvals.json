@@ -1,0 +1,45 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "Corvid Agent",
+      "timestamp": 1791394839,
+      "digest": "72605a8c082866a08f478dda16c1f7097f1fe52fb890c77e6da265e6dbf948f3",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "release-0-0-47-session-5-5-a-per-model-window-condense-405-and-session-3-b-new-topic-393-package-bump-changelog-fold",
+        "title": "Release 0.0.47: SESSION-5/5.a per-model window condense (#405) and SESSION-3.b new topic (#393). Package bump, CHANGELOG fold, STATUS rows, version fixtures; CI tags v0.0.47 on land.",
+        "description": "Release 0.0.47: SESSION-5/5.a per-model window condense (#405) and SESSION-3.b new topic (#393). Package bump, CHANGELOG fold, STATUS rows, version fixtures; CI tags v0.0.47 on land.",
+        "kind": "operations",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "specs/cli/cli.spec.md",
+          "specs/cli/requirements.md",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "package.json 0.0.47; version prints 0.0.47; CHANGELOG 0.0.47 extractable covering SESSION-5/5.a (#405) and SESSION-3.b (#393) with tip-orphans #429/#430; STATUS rows mention 0.0.47; CI tags v0.0.47 on land"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "71115a2f9a21c0e876f0555015494dac84806ae7b96e070ce4ea8bb53fbb3abd"
+      }
+    }
+  ],
+  "reopenings": []
+}

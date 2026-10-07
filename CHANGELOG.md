@@ -2,8 +2,15 @@
 
 ## Unreleased
 
-- **Saying 'new topic' starts a fresh session; a normal @mention keeps the open one** — SESSION-3.b (in flight).
-- **Each model gets its own window; at about 80% a model writes the summary and the task stays pinned word for word** — SESSION-5 / SESSION-5.a (in flight).
+
+## 0.0.47
+
+### Added
+- **SESSION-5 / SESSION-5.a** (#405): per-model `=TOKENS` context windows; condense at ~80% of the model window; `--task-stdin`; `src/agent/condense.ts`. Tip-orphan #429.
+- **SESSION-3.b** (#393): only `/session start` or a leading "new topic" phrase starts a fresh Discord session; a normal @mention keeps continuing the open one (`src/discord/new-topic.ts`). Tip-orphan #430.
+
+### Changed
+- Package version `0.0.47`; STATUS rows; REQ-cli-439.
 
 ## 0.0.46
 
