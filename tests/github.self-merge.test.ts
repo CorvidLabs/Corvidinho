@@ -7,6 +7,11 @@
  * A fake GitHub client (no network, no token), a temp data dir and allowlist
  * file, the real must-ask gate and card store (the owner's answer comes from
  * the test hook, or the bridge's real card engine), the real SAFE-5 chain.
+ *
+ * The last block carries over #395's GITHUB-7 cases
+ * (`tests/github.merge.plugin.test.ts`, its `mergeOwnGreenPr`): the ones
+ * that still hold under GITHUB-7.a as they were, the ones whose PR the
+ * stricter gate now refuses on GITHUB-7.a fixtures.
  */
 import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -18,6 +23,7 @@ import {
   SELF_MERGE_REPO,
   TALK_BRANCH_RE,
   checkSelfMerge,
+  isCorvidinhoRepoSlug,
   makeGithubPrMergeCommand,
   selfMergeCallerRefusal,
   selfMergeGatePath,
@@ -31,7 +37,7 @@ import { createApprovalCards, mustAskApprovalKinds } from "../src/discord/approv
 import { parseApproveCardCustomId } from "../src/discord/approve-card.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { MUST_ASK_MERGE_KIND, MUST_ASK_POLICY, setMustAskNotifier, setMustAskTestHooks } from "../src/plugins/must-ask.ts";
-import { clearRegistry, get, register, unregister } from "../src/plugins/registry.ts";
+import { clearRegistry, get, list, register, unregister } from "../src/plugins/registry.ts";
 import { runPlugin } from "../src/plugins/run.ts";
 import type { PluginCommand } from "../src/plugins/types.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
@@ -803,5 +809,161 @@ describe("GITHUB-7.a: the merge card on the bridge's card engine needs Approve +
     expect(card).toContain("Merge its own PR — only when you ask (GITHUB-7.a)");
     expect(card).toContain(`${SELF_MERGE_REPO}#12 at ${HEAD}`);
     db.close();
+  });
+});
+
+describe("GITHUB-7 cases carried over from #395 (tests/github.merge.plugin.test.ts), under the GITHUB-7.a gate", () => {
+  /** #395's base PR: a feature branch, no person's ready, only a `ci` check, no mergeable_state. */
+  function pr395(gh: Gh): void {
+    gh.pr.head.ref = "feat/x";
+    gh.pr.mergeable_state = undefined;
+    gh.events = [];
+    gh.runs = [{ name: "ci", status: "completed", conclusion: "success", app: "github-actions", head_sha: HEAD }];
+  }
+
+  test("isCorvidinhoRepoSlug matches CorvidLabs/Corvidinho without case (kept)", () => {
+    expect(isCorvidinhoRepoSlug("CorvidLabs", "Corvidinho")).toBe(true);
+    expect(isCorvidinhoRepoSlug("corvidlabs", "corvidinho")).toBe(true);
+    expect(isCorvidinhoRepoSlug("acme", "widget")).toBe(false);
+    expect(isCorvidinhoRepoSlug("CorvidLabs", "other")).toBe(false);
+  });
+
+  test("own green Corvidinho PR: squash, no admin or bypass field (updated: a GITHUB-7.a-green PR and the owner's Approve)", async () => {
+    const gh = greenGh();
+    useFake(gh);
+    answer("approved");
+    const r = await runPlugin({ name: TOOL, args: ARGS, nonInteractive: true, allowlist: [TOOL], json: true });
+    expect(r.ok).toBe(true);
+    expect((r.data as { merged: boolean; sha: string }).merged).toBe(true);
+    expect((r.data as { sha: string }).sha).toBe(MERGED);
+    const params = merges(gh)[0]!.params as Record<string, unknown>;
+    expect(params.merge_method).toBe("squash");
+    for (const k of Object.keys(params)) expect(k).not.toMatch(/admin|bypass/i);
+  });
+
+  test("the PR #395 would have merged (feature branch, no person's ready, only a `ci` check) is refused now (updated)", async () => {
+    const gh = greenGh();
+    pr395(gh);
+    expect(reasonOf(await verdictFor(gh))).toBe("not-own-branch");
+    gh.pr.head.ref = TALK;
+    expect(reasonOf(await verdictFor(gh))).toBe("not-marked-ready");
+    gh.events = [{ event: "ready_for_review", actor: LEIF }];
+    expect(reasonOf(await verdictFor(gh))).toBe("ci-smoke-missing");
+    gh.runs = greenGh().runs;
+    expect(reasonOf(await verdictFor(gh))).toBe("not-mergeable");
+  });
+
+  test("dry run passes the guards and does not call pulls.merge (kept)", async () => {
+    const gh = greenGh();
+    useFake(gh);
+    process.env.CORVIDINHO_GITHUB_DRY_RUN = "1";
+    const r = await runPlugin({ name: TOOL, args: ARGS, nonInteractive: true, allowlist: [TOOL] });
+    expect(r.ok).toBe(true);
+    expect((r.data as { dryRun: boolean; mergeMethod: string }).dryRun).toBe(true);
+    expect((r.data as { mergeMethod: string }).mergeMethod).toBe("squash");
+    expect(merges(gh)).toEqual([]);
+  });
+
+  test("refuses outside Corvidinho with no GitHub call (kept)", async () => {
+    const gh = greenGh();
+    const v = await verdictFor(gh, ["1", "--repo", "acme/widget", "--sha", HEAD]);
+    expect(reasonOf(v)).toBe("not-corvidinho");
+    expect(v.ok ? undefined : v.result.exitCode).toBe(2);
+    expect(v.ok ? "" : v.result.error).toContain("outside Corvidinho a human still merges");
+    expect(gh.calls).toEqual([]);
+  });
+
+  test("refuses someone else's PR (kept); a matching id with another login is not its own either", async () => {
+    const gh = greenGh();
+    gh.pr.user = { login: "0xLeif", id: 1 };
+    const v = await verdictFor(gh);
+    expect(reasonOf(v)).toBe("foreign-author");
+    expect(v.ok ? undefined : v.result.exitCode).toBe(2);
+    expect(v.ok ? "" : v.result.error).toContain("never merges someone else's PR");
+    gh.pr.user = { login: "someone-else", id: ME.id };
+    expect(reasonOf(await verdictFor(gh))).toBe("foreign-author");
+  });
+
+  test("refuses when CI is not green: a failing `ci` check at the head (updated: smoke and spec-sync green too)", async () => {
+    const gh = greenGh();
+    gh.runs.push({ name: "ci", status: "completed", conclusion: "failure", app: "github-actions", head_sha: HEAD });
+    const v = await verdictFor(gh);
+    expect(reasonOf(v)).toBe("ci-red");
+    expect(v.ok ? "" : v.result.error).toContain("CI is not green");
+  });
+
+  test("refuses draft / not mergeable / mergeability unknown / closed (updated: each names its own reason)", async () => {
+    const cases: [(gh: Gh) => void, string][] = [
+      [(gh) => (gh.pr.draft = true), "draft"],
+      [(gh) => (gh.pr.mergeable = false), "not-mergeable"],
+      [(gh) => (gh.pr.mergeable = null), "not-mergeable"],
+      [(gh) => (gh.pr.state = "closed"), "not-open"],
+    ];
+    for (const [change, reason] of cases) {
+      const gh = greenGh();
+      change(gh);
+      const v = await verdictFor(gh);
+      expect(reasonOf(v)).toBe(reason);
+      expect(v.ok ? undefined : v.result.exitCode).toBe(2);
+      expect(merges(gh)).toEqual([]);
+    }
+  });
+
+  test("surfaces a GitHub merge API error (branch protection) without a bypass retry (kept)", async () => {
+    const gh = greenGh();
+    gh.merge = new Error('Required status check "ci" is expected.');
+    useFake(gh);
+    answer("approved");
+    const r = await runPlugin({ name: TOOL, args: ARGS, nonInteractive: true, allowlist: [TOOL] });
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("Required status check");
+    expect(merges(gh)).toHaveLength(1);
+  });
+
+  test("listed as dangerous minTier 1 (kept), and mutating", () => {
+    loadBuiltins();
+    const entry = list().find((e) => e.name === TOOL);
+    expect(entry).toBeDefined();
+    expect(entry!.dangerous).toBe(true);
+    expect(entry!.minTier).toBe(1);
+    expect(entry!.mutating).toBe(true);
+  });
+
+  test("non-interactive without CORVIDINHO_ALLOWLIST denies (SAFE-1) (kept)", async () => {
+    process.env.CORVIDINHO_GITHUB_DRY_RUN = "1";
+    const r = await runPlugin({ name: TOOL, args: ["99", "--repo", SELF_MERGE_REPO], nonInteractive: true, allowlist: [] });
+    expect(r.ok).toBe(false);
+    expect(r.exitCode).toBe(2);
+    expect(r.error).toContain("SAFE-1");
+  });
+
+  test("the registered builtin refuses outside Corvidinho before any GitHub client (updated: names --sha, which the gate now needs)", async () => {
+    process.env.CORVIDINHO_GITHUB_DRY_RUN = "1";
+    const r = await runPlugin({ name: TOOL, args: ["1", "--repo", "acme/other", "--sha", HEAD], nonInteractive: true, allowlist: [TOOL] });
+    expect(r.ok).toBe(false);
+    expect(r.exitCode).toBe(2);
+    expect(r.error).toContain("outside Corvidinho a human still merges");
+    expect(r.auditDenied).toBe("not-corvidinho");
+  });
+
+  test("usage error when the PR number is missing (kept)", async () => {
+    process.env.CORVIDINHO_GITHUB_DRY_RUN = "1";
+    const r = await runPlugin({ name: TOOL, args: ["--repo", SELF_MERGE_REPO], nonInteractive: true, allowlist: [TOOL] });
+    expect(r.ok).toBe(false);
+    expect(r.exitCode).toBe(1);
+    expect(r.error).toContain("usage: github-pr-merge");
+  });
+
+  test("#395's --method: squash is accepted, merge and rebase are not offered (usage, no GitHub call)", async () => {
+    const gh = greenGh();
+    expect((await verdictFor(gh, [...ARGS, "--method", "squash"])).ok).toBe(true);
+    expect((await verdictFor(gh, [...ARGS, "--method=SQUASH"])).ok).toBe(true);
+    for (const m of ["merge", "rebase", ""]) {
+      const fresh = greenGh();
+      const v = await verdictFor(fresh, [...ARGS, "--method", m]);
+      expect(reasonOf(v)).toBe("usage");
+      expect(v.ok ? undefined : v.result.exitCode).toBe(1);
+      expect(fresh.calls).toEqual([]);
+    }
   });
 });

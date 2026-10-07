@@ -20,8 +20,8 @@
  *   human still merges (GITHUB-7);
  * - the PR is open, its head is a `talk/…` branch of a Corvidinho talk
  *   ({@link TALK_BRANCH_RE}) in the same repo, and its author is the token's
- *   own user (author id == the token's user id): it merges only PRs it opened
- *   from its own talk branches with its own token;
+ *   own user (author id and login == the token's user id and login): it
+ *   merges only PRs it opened from its own talk branches with its own token;
  * - the PR is not a draft, its own token never marked it ready, and the last
  *   to mark it ready was a person (not its own token, not an app) (it never
  *   marks its own /work draft ready, and this tool has no way to; a PR it
@@ -47,7 +47,9 @@
  * whole gate again and squash-merges through the normal merge API with the
  * expected head sha (`pulls.merge`, never an admin or bypass flag), titled
  * with the PR title; the reply names the merge sha (a run stopped before
- * that call merges nothing). Every attempt leaves a
+ * that call merges nothing). Squash is the only method (`--method squash` is
+ * accepted, `merge` / `rebase` are refused), so a self-merge is one commit
+ * on main titled `<title> (#N)`. Every attempt leaves a
  * SAFE-5 row: `denied` under `github-pr-merge:<reason>`, or `started` then
  * `ok` / `error` (src/plugins/run.ts).
  */
@@ -78,6 +80,20 @@ export const SELF_MERGE_TOOL = "github-pr-merge";
 
 /** The only repo it merges in (GITHUB-7: outside Corvidinho a human still merges). */
 export const SELF_MERGE_REPO = CORVIDINHO_REPO;
+
+/** True when OWNER/REPO is Corvidinho itself ({@link SELF_MERGE_REPO}), compared without case. */
+export function isCorvidinhoRepoSlug(owner: string, repo: string): boolean {
+  return `${owner}/${repo}`.toLowerCase() === SELF_MERGE_REPO.toLowerCase();
+}
+
+/** True when a `full_name` (`OWNER/REPO`) is Corvidinho itself. */
+function isCorvidinhoFullName(fullName: string | undefined | null): boolean {
+  const parts = splitOwnerRepo(fullName ?? "");
+  return parts !== null && isCorvidinhoRepoSlug(parts.owner, parts.name);
+}
+
+/** The only merge method it uses: one commit on main per PR, titled `<title> (#N)`. */
+export const SELF_MERGE_METHOD = "squash" as const;
 
 /** The check runs that make CI green at the head (GITHUB-7.a), as the repo's workflows name them. */
 export const SELF_MERGE_CHECKS = ["smoke", "spec-sync"] as const;
@@ -337,14 +353,16 @@ function isApiResult(c: SelfMergeOctokit | ApiResult): c is ApiResult {
 
 // ------------------------------------------------------------------ gate
 
-/** Parsed `<number> --repo OWNER/REPO --sha <head sha>`. */
+/** Parsed `<number> --repo OWNER/REPO --sha <head sha> [--method squash]`. */
 type MergeArgs = { number: number; repo: string; sha: string };
 
-const USAGE = "usage: github-pr-merge <number> --repo OWNER/REPO --sha <the PR's 40-hex head sha>";
+const USAGE =
+  "usage: github-pr-merge <number> --repo OWNER/REPO --sha <the PR's 40-hex head sha> [--method squash]";
 
 function parseArgs(args: readonly string[]): MergeArgs | string {
   let repo: string | undefined;
   let sha: string | undefined;
+  let method: string | undefined;
   const pos: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
@@ -352,11 +370,16 @@ function parseArgs(args: readonly string[]): MergeArgs | string {
     else if (a.startsWith("--repo=")) repo = a.slice("--repo=".length);
     else if (a === "--sha") sha = args[++i];
     else if (a.startsWith("--sha=")) sha = a.slice("--sha=".length);
+    else if (a === "--method") method = args[++i] ?? "";
+    else if (a.startsWith("--method=")) method = a.slice("--method=".length);
     else if (a.startsWith("-")) return `unexpected option ${JSON.stringify(a)} (${USAGE})`;
     else pos.push(a);
   }
   if (pos.length !== 1 || !/^[1-9]\d{0,8}$/.test(pos[0]!)) return USAGE;
   if (!repo?.trim()) return USAGE;
+  if (method !== undefined && method.trim().toLowerCase() !== SELF_MERGE_METHOD) {
+    return `it only squash-merges (one commit on main titled "<title> (#N)"); --method ${JSON.stringify(method)} is not offered (${USAGE})`;
+  }
   const s = sha?.trim().toLowerCase() ?? "";
   if (!SHA_RE.test(s)) {
     return `name the head sha you mean, all 40 hex characters (github-ci-status <number> --repo OWNER/REPO prints it) (${USAGE})`;
@@ -458,7 +481,7 @@ export async function checkSelfMerge(
   if (caller) {
     return { ok: false, result: refused(caller.code, `${caller.why}; it merges only when the owner asks in their own run`) };
   }
-  if (parsed.repo.toLowerCase() !== SELF_MERGE_REPO.toLowerCase()) {
+  if (!isCorvidinhoFullName(parsed.repo)) {
     return {
       ok: false,
       result: refused(
@@ -488,7 +511,7 @@ export async function checkSelfMerge(
         result: refused("token-unknown", `could not tell whose token this is (${errText(e)}), so it can't tell its own PRs; ${LEAVE}`, at),
       };
     }
-    if (typeof me?.id !== "number") {
+    if (typeof me?.id !== "number" || !(me.login ?? "").trim()) {
       return { ok: false, result: refused("token-unknown", `could not tell whose token this is; ${LEAVE}`, at) };
     }
     const pr = (await c.rest.pulls.get({ owner, repo: name, pull_number: n })).data;
@@ -496,10 +519,11 @@ export async function checkSelfMerge(
     if (pr.state !== "open" || pr.merged) {
       return { ok: false, result: refused("not-open", `${where} is not open`, at) };
     }
-    if ((pr.base?.repo?.full_name ?? "").toLowerCase() !== SELF_MERGE_REPO.toLowerCase()) {
+    if (!isCorvidinhoFullName(pr.base?.repo?.full_name)) {
       return { ok: false, result: refused("not-corvidinho", `${where} is not a ${SELF_MERGE_REPO} PR; outside Corvidinho a human still merges (GITHUB-7)`, at) };
     }
-    if (pr.user?.id !== me.id) {
+    // GITHUB-7: its own PR only — the author's id and login are the token's.
+    if (pr.user?.id !== me.id || (pr.user?.login ?? "").toLowerCase() !== me.login.trim().toLowerCase()) {
       return {
         ok: false,
         result: refused("foreign-author", `${where} was opened by ${pr.user?.login ?? "someone else"}, not by its own token (${me.login}); it never merges someone else's PR (GITHUB-7)`, at),
@@ -666,7 +690,7 @@ export function makeGithubPrMergeCommand(deps: SelfMergeDeps = {}): PluginComman
     name: SELF_MERGE_TOOL,
     description:
       "Squash-merge its own Corvidinho PR, only when the owner asks (GITHUB-7 / GITHUB-7.a): " +
-      "`<number> --repo CorvidLabs/Corvidinho --sha <head sha>`. Refused unless it opened the PR from its own talk/… " +
+      "`<number> --repo CorvidLabs/Corvidinho --sha <head sha>` (squash only). Refused unless it opened the PR from its own talk/… " +
       "branch with its own token, the PR is not a draft and a person marked it ready, no gate file changed (.github, fledge.toml, .fledge, hi/, " +
       "AGENTS.md, CODEOWNERS …), smoke and spec-sync passed at that head and GitHub's branch protection, reviews and " +
       "CODEOWNERS allow it; then the owner's Approve card (with the one-time code). Never marks a draft ready",
@@ -701,7 +725,7 @@ export function makeGithubPrMergeCommand(deps: SelfMergeDeps = {}): PluginComman
       if (githubDryRun(env)) {
         return {
           ok: true,
-          data: { dryRun: true, repo: f.repo, number: f.number, sha: f.sha, commitTitle, mergeMethod: "squash" },
+          data: { dryRun: true, repo: f.repo, number: f.number, sha: f.sha, commitTitle, mergeMethod: SELF_MERGE_METHOD },
           message: scrubSecrets(`dry run: would squash-merge PR #${f.number} at ${f.sha} as "${commitTitle}"`),
           exitCode: 0,
         };
@@ -719,7 +743,7 @@ export function makeGithubPrMergeCommand(deps: SelfMergeDeps = {}): PluginComman
           repo: f.name,
           pull_number: f.number,
           sha: f.sha,
-          merge_method: "squash",
+          merge_method: SELF_MERGE_METHOD,
           commit_title: commitTitle,
         });
         if (!res.data.merged || !SHA_RE.test(res.data.sha ?? "")) {

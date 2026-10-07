@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 66
+version: 67
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -282,7 +282,8 @@ AGENT-18.a). `plugins/specsync/commands.ts` exports `SDD_OFF_REFUSAL`;
 `specsync-change-finalize` (REQ-plugins-518 / REQ-plugins-519);
 `TEAM_WORK_TOOLS` gains the last four;
 `plugins/github/merge.ts` (REQ-plugins-099) exports `SELF_MERGE_TOOL`,
-`SELF_MERGE_REPO`, `SELF_MERGE_CHECKS`, `SELF_MERGE_CHECK_APP`,
+`SELF_MERGE_REPO`, `isCorvidinhoRepoSlug(owner, repo)`, `SELF_MERGE_METHOD`
+(`squash`), `SELF_MERGE_CHECKS`, `SELF_MERGE_CHECK_APP`,
 `TALK_BRANCH_RE`, `SELF_MERGE_CODE`, `selfMergeGatePath(path)`,
 `selfMergeCallerRefusal(env)` → `SelfMergeRefusal | null`,
 `checkSelfMerge(args, env, deps)` → `SelfMergeVerdict`,
@@ -396,7 +397,7 @@ review (GITHUB-9, REQ-plugins-092): after the repo gate, for every caller, the
 branch on GitHub (dry run: the push remote) must be the reviewed tree, and the
 body gets the `## Second-model review` section before the attribution. The Octokit token is `GITHUB_TOKEN`, else `GH_TOKEN`, trimmed;
 a blank one is missing and never shadows the other, as WATCH reads it. Dry-run via
-CORVIDINHO_GITHUB_DRY_RUN=1. File write/edit/delete require minTier 2 (code);
+CORVIDINHO_GITHUB_DRY_RUN=1. `github-pr-merge` (GITHUB-7 / GITHUB-7.a / PROCESS-3, REQ-plugins-099) is registered once, from `plugins/github/merge.ts` (`githubPrMerge`; `checkSelfMerge` is its gate, `makeGithubPrMergeCommand(deps)` lets tests inject a fake Octokit): it merges only on `CorvidLabs/Corvidinho` (`isCorvidinhoRepoSlug` / `CORVIDINHO_REPO`; any other `--repo` is refused with `outside Corvidinho a human still merges`), only the token user's own PR (author id and login match `users.getAuthenticated`) from one of its own `talk/…` branches, open, not draft, last marked ready by a person, touching no gate path, with `smoke` and `spec-sync` passed at the named head, the `fetchCiStatus` verdict there `green`, and `mergeable === true` with `mergeable_state` `clean` / `has_hooks`; then the owner's `mustask-merge` card and one squash `pulls.merge` pinned to the head sha with no admin/bypass fields (squash only: `--method squash` is accepted, `merge` / `rebase` are refused). Anything else is refused (exit 2) as `github-pr-merge:<reason>`. File write/edit/delete require minTier 2 (code);
 `files-delete` is dangerous. Paths clamp to plugin cwd; symlink escapes refuse;
 a dangling symlink is followed by hand and its target clamped (loops refuse).
 Protected infra (`.env*`, `.git`, `fledge.toml`, `.fledge/**` (lane imports
@@ -1361,6 +1362,12 @@ command line.
 - **When** the agent runs `git-diff`, `git-diff --staged` or `git-diff certs/server.pem`
 - **Then** the diff shows `src/a.ts` only, and the explicit secret path is refused with exit 2 like `files-read`
 
+### Scenario: outside Corvidinho a human still merges, and it never bypasses (GITHUB-7)
+
+- **Given** an allowlisted `github-pr-merge` in the owner's own run
+- **When** it is pointed at any `--repo` other than `CorvidLabs/Corvidinho`
+- **Then** it refuses before any GitHub call with `outside Corvidinho a human still merges` (exit 2, one `github-pr-merge:not-corvidinho` row); and when a Corvidinho merge passes every GITHUB-7.a check and the owner approves, Octokit `pulls.merge` is called once, squash, without admin or bypass fields, and the result reports merged (REQ-plugins-099)
+
 ## Error Cases
 
 | Condition | Behavior |
@@ -1385,6 +1392,11 @@ command line.
 | Write/edit/delete under `hi/` in a repo that uses hi (as given, absolute, or through a symlink that lands there) | Refuse (exit 2, `refused (AGENT-18): '<path>' is under hi/, …`); file unchanged; reads unaffected (REQ-plugins-520) |
 | github-pr-merge from anyone but the owner's own interactive run (WATCH, a schedule, a worker, a spawned or non-owner run), on a repo other than Corvidinho, or for a PR that is not its own talk-branch PR, is a draft, self-marked ready or not last marked ready by a person, moved past `--sha`, touches a gate path, has changes requested, lacks green `smoke` / `spec-sync` at the head or is not `clean` per GitHub | Refuse (exit 2, `refused (GITHUB-7.a): …`), no card, nothing merged; one `denied` row `github-pr-merge:<reason>` (REQ-plugins-099) |
 | github-pr-merge after the owner's Approve when the PR changed meanwhile, the run was stopped before the merge call (exit 130, `aborted`), or GitHub refuses the merge (405 / 409 / 422) | Refuse (exit 2) after `started`; nothing merged; `github-pr-merge:<reason>` / `github-pr-merge:github-refused` `denied` row |
+| github-pr-merge `--repo` not CorvidLabs/Corvidinho | Refuse before any GitHub call (exit 2, `refused (GITHUB-7.a): … outside Corvidinho a human still merges (GITHUB-7)`, `not-corvidinho`); no Octokit merge (REQ-plugins-099) |
+| github-pr-merge PR author id or login ≠ the authenticated user's | Refuse (exit 2, never merges someone else's PR, `foreign-author`) (REQ-plugins-099) |
+| github-pr-merge CI verdict at the head not green (any check, not only `smoke` / `spec-sync`) | Refuse (exit 2, CI is not green, `ci-red` / `ci-pending` / `ci-none` / `ci-unread`) (REQ-plugins-099) |
+| github-pr-merge draft / closed / mergeable≠true | Refuse (exit 2, `draft` / `not-open` / `not-mergeable`) (REQ-plugins-099) |
+| github-pr-merge `--method merge` or `rebase` | Refuse (exit 1, usage: it only squash-merges); no GitHub call (REQ-plugins-099) |
 | github-pr-create inside a run in a repo that uses hi, with anything under `hi/` changed since the run's session base (or unreadable) | Refuse (exit 2, `refused (AGENT-18): this repo's hi/ changed since the session base (…) … so this run opens no PR; …`) before the GitHub client and the GITHUB-9 review; no PR (REQ-plugins-521) |
 | shell-exec cd/pushd escapes project root (incl. `cd -`, options, prefix words, redirections, quoting incl. bash `$'…'`, `\`-newline, comments, here-docs, expanded command words, command substitutions, `eval` and shell `-c` strings, DIRSTACK) | Refuse (exit 2, SAFE-3); no spawn |
 | shell-exec cd/pushd left open by an unterminated quote or trailing `\`, or a command nested too deeply to check | Refuse (exit 2, SAFE-3); no spawn |
@@ -1489,6 +1501,7 @@ command line.
 Plugin reload-after-clearRegistry for HEAR #13 fixtures (2026-09-26). Historical
 and current rows for plugins host evolution.
 
+| 2026-10-06 | github-7-typed-github-pr-merge: GITHUB-7 typed `github-pr-merge` merges the bot's own green Corvidinho PR only (CI green, own author, no admin bypass); fixture tests; docs/STATUS/CHANGELOG |
 | 2026-09-26 | discord-user-lookup read-only guild member resolve (REQ-plugins-312 / IDENTITY-5) |
 | 2026-09-26 | dogfood-ux-discord-identity-inject-identity-4-thinking-embed-model-plumbing-discord-3-a-clean-chat-replies-community: ROLES-CHAT-8 community public GitHub gate + secret-path read refuse |
 | 2026-09-26 | github-write-plugins-issue-48: dangerous issue/PR create comment review + attribution; SAFE-1 + GITHUB-6 |
@@ -1578,4 +1591,5 @@ and current rows for plugins host evolution.
 | 2026-10-05 | where-a-repo-uses-hi-it-drafts-criteria-and-asks-the-owner-on-a-card-before-capturing-them-agent-18-hi-drafts: Where a repo uses hi it drafts criteria and asks the owner on a card before capturing them (AGENT-18, hi drafts) |
 | 2026-10-05 | work-runs-its-second-model-review-rounds-before-the-pr-and-skips-with-not-reviewed-otherwise-github-9: /work runs its second-model review rounds before the PR and skips with not-reviewed otherwise (GITHUB-9) |
 | 2026-10-05 | in-a-trust-repo-the-verify-gate-also-runs-fledge-trust-verify-after-the-lane-both-must-pass-and-trust-toml-is-safe-2: In a Trust repo the verify gate also runs fledge trust verify after the lane, both must pass, and .trust.toml is SAFE-2 protected (AGENT-18 Trust clause) |
-| 2026-10-06 | it-can-merge-its-own-corvidinho-pr-when-i-ask-and-every-gate-is-green-never-its-gates-never-someone-else-s-github-7: It can merge its own Corvidinho PR when I ask and every gate is green; never its gates, never someone else's (GITHUB-7, GITHUB-7.a) |
+| 2026-10-06 | github-7-typed-github-pr-merge-merges-the-bot-s-own-green-corvidinho-pr-only-when-ci-is-green-and-branch-protection: GITHUB-7: typed github-pr-merge merges the bot's own green Corvidinho PR only when CI is green and branch protection allows; never others or outside Corvidinho |
+| 2026-10-06 | it-can-merge-its-own-corvidinho-pr-when-i-ask-and-every-gate-is-green-never-its-gates-never-someone-else-s-github-7: It can merge its own Corvidinho PR when I ask and every gate is green; never its gates, never someone else's (GITHUB-7, GITHUB-7.a); supersedes the gate of the github-7-typed-github-pr-merge change (#395) |

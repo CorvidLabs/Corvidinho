@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### GitHub (GITHUB-7)
+
+- **Typed `github-pr-merge` merges the bot's own green Corvidinho PR only** — (closes #99): Octokit `pulls.merge` behind SAFE-1 / GITHUB-6; CorvidLabs/Corvidinho only; author must be the authenticated token user; CI verdict green (reuse `github-ci-status`); open + mergeable + not draft; never admin/bypass so branch protection, reviews and CODEOWNERS stay enforced; outside Corvidinho refused (`outside Corvidinho a human still merges`). Default squash. Fixture/mock tests; no live tokens in CI. No package bump and no live-bridge cut in this PR.
+- **`github-pr-merge` now carries the GITHUB-7.a gate (Leif, round 16)** — one tool, registered once from `plugins/github/merge.ts`, replacing the gate above: it merges only when the owner asks in their own interactive run (chat, `/session start`, `/work`, an ask answer or a local CLI run; never team, community, WATCH, schedules or workers), only a PR its own token opened from one of its own `talk/…` branches, not draft and last marked ready by a person (it never marks its own `/work` draft ready), touching none of its gates (`.github/`, `fledge.toml`, `.fledge/`, `hi/`, `AGENTS.md`, `CODEOWNERS` and the merge gate's own code), with `smoke` and `spec-sync` passed at the exact head (`--sha`), no changes requested and GitHub reporting `clean`; then the owner's `mustask-merge` Approve card with the one-time code, the whole gate again, and one squash merge pinned to that head (squash only). A stop after the Approve merges nothing; every attempt is a SAFE-5 row (`github-pr-merge:<reason>` for a refusal).
+
 ## 0.0.42
 
 ### Agent / land-wave

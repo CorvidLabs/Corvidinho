@@ -2630,19 +2630,31 @@ Acceptance Criteria
 It may merge its own Corvidinho PR when verify and CI are green and branch
 protection, reviews and CODEOWNERS allow it; it never bypasses them, never
 merges someone else's PR, and outside Corvidinho a human still merges
-(GITHUB-7, captured on main from Leif's 2026-09-28 interview, round 4). It
-merges only PRs it opened from its own talk branches with its own token, and
-only when I ask; it never marks its own /work draft ready, won't merge a PR
-that changes its own gates (.github, fledge.toml, hi/, AGENTS.md, CODEOWNERS),
-and counts CI green only when smoke and spec-sync pass at the head
-(GITHUB-7.a, captured with `hi` in this change from the same interview
-record, round 16 of 2026-10-06).
+(GITHUB-7, captured in `hi/github.md`). It merges only PRs it opened from its
+own talk branches with its own token, and only when I ask; it never marks its
+own /work draft ready, won't merge a PR that changes its own gates (.github,
+fledge.toml, hi/, AGENTS.md, CODEOWNERS), and counts CI green only when smoke
+and spec-sync pass at the head (GITHUB-7.a, captured with `hi` in this change
+from Leif's 2026-09-28 interview record, round 16 of 2026-10-06).
 
-The GitHub plugin SHALL register `github-pr-merge`
-(`plugins/github/merge.ts`, `makeGithubPrMergeCommand(deps)`; dangerous,
-mutating, minTier 1), taking `<number> --repo OWNER/REPO --sha <40-hex head
-sha>` and nothing else (no draft-ready, admin or bypass option; a usage error
-is exit 1). `checkSelfMerge(args, env, deps)` SHALL be its gate, re-read in
+`github-pr-merge` SHALL be a dangerous, minTier 1, mutating typed plugin
+behind SAFE-1 and GITHUB-6, registered once (`plugins/github/merge.ts`,
+`githubPrMerge`). Before the repo gate it SHALL refuse any `--repo`
+other than `CorvidLabs/Corvidinho` (`isCorvidinhoRepoSlug` /
+`CORVIDINHO_REPO`) with exit 2 and a clear line that outside Corvidinho a
+human still merges. It SHALL require the PR author login (and id) to match
+`users.getAuthenticated`, the PR to be open, not draft and
+`mergeable === true`, and `fetchCiStatus` verdict `green` at its head. On
+success it SHALL call `pulls.merge` with method squash and SHALL NOT pass
+admin or bypass fields. Dry-run SHALL run the same guards and skip
+`pulls.merge`. Logic SHALL live in `plugins/github/merge.ts`
+(`checkSelfMerge`, `makeGithubPrMergeCommand(deps)`) so tests inject a fake
+Octokit.
+
+On top of that, for GITHUB-7.a, `github-pr-merge` SHALL take `<number>
+--repo OWNER/REPO --sha <40-hex head sha>` and optionally `--method squash`
+(the only method: `merge` or `rebase` is a usage error) and nothing else (no
+draft-ready, admin or bypass option; a usage error is exit 1). `checkSelfMerge(args, env, deps)` SHALL be its gate, re-read in
 full on every call, never throwing (a GitHub error refuses, exit 1), and SHALL
 refuse with exit 2, `refused (GITHUB-7.a): <why>`, `data.reason` and
 `auditDenied` set to the reason code unless every one holds, in this order:
@@ -2655,12 +2667,13 @@ refuse with exit 2, `refused (GITHUB-7.a): <why>`, `data.reason` and
   `CORVIDINHO_PROJECT_ROOT`; else `spawned`); in a role session the surface
   stamp is `chat`, `ask`, `session` or `work` (else `surface`) and the role,
   re-resolved now (IDENTITY-12), is the owner (else `not-owner`);
-- `--repo` is `CorvidLabs/Corvidinho` (`SELF_MERGE_REPO`, no case) — else
+- `--repo` is `CorvidLabs/Corvidinho` (`isCorvidinhoRepoSlug`, no case) — else
   `not-corvidinho`, saying outside Corvidinho a human still merges — and
   passes the GITHUB-6 gate for a write (`repo-gate`); a client exists
-  (`no-token`) and the token's own user can be read (`token-unknown`);
+  (`no-token`) and the token's own user id and login can be read
+  (`token-unknown`);
 - the PR is open and not merged (`not-open`), its base repo is Corvidinho
-  (`not-corvidinho`), its author id is the token's user id
+  (`not-corvidinho`), its author id and login are the token's user's
   (`foreign-author`), its head repo is the base repo and its head ref is a
   Corvidinho talk branch (`TALK_BRANCH_RE`,
   `talk/<1-16 of [A-Za-z0-9_-]>-<16 hex>`, as `generateTalkBranchName` names
@@ -2704,7 +2717,7 @@ result (no card) or, when it passes, ask class `merge` (REQ-plugins-097) with
 the target `<repo>#<n> at <head sha>` and the squash title as text; a dry run
 (`CORVIDINHO_GITHUB_DRY_RUN=1`) asks nothing. After the owner's approval the
 handler SHALL run the whole gate again and only then call `pulls.merge` once
-with `sha` = the named head, `merge_method: "squash"` and `commit_title`
+with `sha` = the named head, `merge_method: "squash"` (`SELF_MERGE_METHOD`) and `commit_title`
 `<PR title> (#<n>)` (`selfMergeCommitTitle`), never an admin or bypass
 option; its result SHALL name the merge sha (`Merged PR #<n> "<title>" into
 <base> as <sha> (squash, GITHUB-7.a).`, `data.sha`). GitHub not merging, or
@@ -2722,6 +2735,15 @@ gate (IDENTITY-12.a, REQ-plugins-1201) and is refused by the caller check
 with a `github-pr-merge:watch` row. No env var, config key or schema change.
 
 Acceptance Criteria
+- Allowlisted merge of an own green open mergeable Corvidinho PR (green under
+  GITHUB-7.a, after the owner's Approve) calls `pulls.merge` (squash) with no
+  admin or bypass field (`tests/github.self-merge.test.ts`).
+- Outside Corvidinho, other author, non-green CI, draft/closed/not-mergeable
+  refuse exit 2; dry-run skips merge; SAFE-1 denies without allowlist;
+  `plugins list` names `github-pr-merge`.
+- `--method squash` is accepted; `--method merge` or `rebase` is a usage error
+  (exit 1) before any GitHub call; a PR whose author id matches but whose login
+  does not is `foreign-author`.
 - With a fake GitHub client, a green PR and an approved card, `runPlugin` merges once with the named head sha, `squash` and `<title> (#12)`, names the merge sha, and leaves `started` then `ok`; the card is kind `mustask-merge`, class destructive, with target `CorvidLabs/Corvidinho#12 at <sha>`.
 - On the bridge's real card engine Approve alone merges nothing; Approve plus the one-time code merges once.
 - Each refusal — draft, foreign author, non-talk branch, fork head, closed, head moved, self-marked ready, opened ready with no person marking it ready, marked ready only by an app, a gate path (and a rename away from one), a short file list, changes requested, smoke or spec-sync missing, failed, pending, at another commit or from another app, another check failing, blocked, unknown or conflicting mergeability, an unreadable token user — raises no card, merges nothing and leaves one `github-pr-merge:<reason>` `denied` row.

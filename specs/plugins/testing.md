@@ -770,9 +770,31 @@ unchanged; `files-read .trust.toml` and `files-write trust.toml` work;
 `discord-send-file`'s `fileAttachment` refuses it with SAFE-2; `git-commit`
 refuses to stage the deletion of a tracked `.trust.toml`. Both tests fail
 with the base sources.
-## It merges its own Corvidinho PR only when the owner asks (REQ-plugins-099 added, REQ-plugins-097 / REQ-plugins-095 modified; GITHUB-7, GITHUB-7.a)
 
-`tests/github.self-merge.test.ts` (91 tests): a fake GitHub client
+## GITHUB-7 typed github-pr-merge (REQ-plugins-099)
+
+#395's `tests/github.merge.plugin.test.ts` (12 tests against its
+`mergeOwnGreenPr`) is folded into `tests/github.self-merge.test.ts` by the
+GITHUB-7.a change below, whose gate replaced `mergeOwnGreenPr`: the block
+"GITHUB-7 cases carried over from #395" (14 tests, fake Octokit, no token)
+keeps `isCorvidinhoRepoSlug`, dry-run skips `pulls.merge`, refuses outside
+Corvidinho with no GitHub call, refuses other authors, surfaces merge API
+errors with no bypass retry, plugin listing is dangerous minTier 1, SAFE-1
+denies without allowlist and the usage error without a PR number as they
+were; the squash merge with no admin or bypass field, non-green CI (a
+failing `ci` check) and draft/closed/not-mergeable now run on a GITHUB-7.a
+green PR and name their own reasons (`ci-red`, `draft`, `not-open`,
+`not-mergeable`), the builtin's outside-Corvidinho refusal names `--sha`,
+and two cases are new: the PR #395 would have merged (feature branch, no
+person's ready, only a `ci` check) is refused (`not-own-branch`, then
+`not-marked-ready`, `ci-smoke-missing`, `not-mergeable`), and `--method
+squash` is accepted while `merge` / `rebase` are usage errors.
+`tests/plugins.list.smoke.test.ts` expects `github-pr-merge` in `plugins list`.
+
+## It merges its own Corvidinho PR only when the owner asks (REQ-plugins-099 / REQ-plugins-097 / REQ-plugins-095 modified; GITHUB-7, GITHUB-7.a)
+
+`tests/github.self-merge.test.ts` (120 tests, #395's carried-over block
+above included): a fake GitHub client
 (`makeGithubPrMergeCommand({ client })`, no network or token), a temp data
 dir and allowlist file, the real must-ask gate, card store and SAFE-5 chain.
 - A green PR (own token, own `talk/…` branch, not draft, marked ready by a
@@ -806,8 +828,10 @@ dir and allowlist file, the real must-ask gate, card store and SAFE-5 chain.
   `.github/workflows/ci.yml` / `spec-sync.yml`.
 - `tests/must-ask.boundary.test.ts`: `github-pr-merge` is among the
   must-ask builtins.
-- Fails on the base (86d68cd0): without `plugins/github/merge.ts` the file
-  does not load; with it but the base `run.ts`, `tools.ts`, `execute.ts`,
+- Fails on the base: on main after #395 (54d6a6c7) the file does not load
+  (main's `plugins/github/merge.ts` has no `checkSelfMerge`,
+  `makeGithubPrMergeCommand` or `selfMergeCallerRefusal`). On 86d68cd0,
+  before #395: without `plugins/github/merge.ts` the file does not load; with it but the base `run.ts`, `tools.ts`, `execute.ts`,
   `events-ndjson.ts`, `loop-guards.ts`, `ask.ts`, 33 of 114 tests (with
   `tests/must-ask.boundary.test.ts` and `tests/agent.loop-guards.test.ts`)
   fail. Restored: 114 of 114 pass.
