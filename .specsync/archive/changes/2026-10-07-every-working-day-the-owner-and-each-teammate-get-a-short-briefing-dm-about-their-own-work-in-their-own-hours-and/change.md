@@ -1,6 +1,6 @@
 ---
 id: every-working-day-the-owner-and-each-teammate-get-a-short-briefing-dm-about-their-own-work-in-their-own-hours-and
-state: verifying
+state: accepted
 type: feature
 base_commit: a74ad96ce7cf05e5b6727417755611e0be1cffa2
 ---
