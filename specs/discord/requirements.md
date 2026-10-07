@@ -1348,6 +1348,25 @@ stub or its Choose button (DISCORD-ASK-5). A substantive continue then runs
 the agent as before, and an explicit cancel still clears every open ask with
 the short ack and no agent run.
 
+"Once a session question's buttons expire, the session stops waiting and my
+next message runs normally; a schedule's questions still wait until answered"
+(AUTONOMY-6.b, captured with `hi` in this change from Leif's 2026-09-28
+interview, round 17: keep as built). Past its ~30 minutes
+(`ASK_BUTTON_TTL_MS` from when the ask is stored, DISCORD-ASK-5), a session's
+button ask (chat, `/work`, `/session start` and their resumes) SHALL NOT keep
+the session waiting: by the rule above it is dropped before the thin-reply
+gate, so the requester's next message that is not an explicit cancel, a thin
+reply included, SHALL run the agent as ordinary chat with no prior-question
+block; only a thin reply, and only while an earlier button ask of the session
+is still live, restates that earlier ask instead (SESSION-MULTI-3). The ask
+is stored with its `expiresAt`, so this holds across a bridge restart. Inside
+the window a thin reply SHALL still restate the live ask (AUTONOMY-5/6). A
+free-text ask is unchanged (its question stays open for a reply after its
+Answer button stops, DISCORD-ASK-4.a), and so is a cancel sent after the
+expiry (the short ack, no run). Schedule asks never take this path
+(REQ-discord-045, REQ-discord-606). No new env var, config key, slash
+command, table or column.
+
 While a run of the session is in flight, a continue whose whole text is
 'cancel' (or 'stop') SHALL instead stop that run (AGENT-3.a, REQ-discord-302)
 and SHALL leave the session's open asks as they are; the cancel above applies
@@ -1389,6 +1408,9 @@ Acceptance Criteria
 - A substantive reply after the button ask timed out runs the agent and leaves no pending ask, so a later thin reply runs the agent too.
 - `cancel` after the button ask timed out still gets the short ack, runs no agent and leaves no pending ask.
 - While a run of the session is in flight, 'cancel' stops that run with the short stop ack and leaves every open ask of the session open; with nothing running it clears them with `ASK_CANCELLED_ACK` as above (REQ-discord-302).
+- AUTONOMY-6.b on the real window: the ask's `expiresAt` is its ask time plus `ASK_BUTTON_TTL_MS`; with the clock one minute inside it a thin reply restates the Choose ask with its Choose button and runs nothing; one minute past it a thin reply, or a new request, runs the agent with no prior-question block, posts no stub or Choose button for that ask and leaves no pending or open ask; a late press on it gets `ASK_CHOICE_EXPIRED`, and a later thin reply runs too.
+- AUTONOMY-6.b on the slash path: a reply `ok` to a `/session start` or `/work` Choose answer restates it one minute inside the window, and one minute past it runs the agent with no prior-question block and leaves no pending or open ask.
+- AUTONOMY-6.b across a restart: a bridge restarted on the same DB loads the session's ask with its `expiresAt`; one minute inside the window a thin reply restates it and runs nothing, and one minute past it a thin reply runs the agent with no prior-question block, leaves no pending ask, and a late press on it gets `ASK_CHOICE_EXPIRED`.
 
 ### REQ-discord-045
 
@@ -1404,6 +1426,13 @@ cancelled, so its Choose, Answer and Cancel controls work until then (the
 ask is kept in SQLite, `schedule_runs`, and survives restarts); the
 ~30-minute expiry of DISCORD-ASK-5 stays for session asks only.
 Free-text clarify SHALL be used only when options cannot be listed.
+
+AUTONOMY-6.b states both halves of that split: once a session question's
+buttons expire (~30 minutes) the session stops waiting on it and the next
+message runs normally (REQ-discord-044), while a schedule's question still
+waits until it is answered or cancelled: one minute past that same window,
+and a day later, its controls still take presses and its schedule's due runs
+are still skipped with one wait note (AUTONOMY-6.a, REQ-discord-606).
 
 A late press SHALL include the requester's Choose or option press on an ask
 that is no longer open because it timed out and was dropped, not promoted,
@@ -1443,6 +1472,8 @@ Acceptance Criteria
 - In a talk inside a thread under an allowlisted channel, the requester's press in that thread on a dropped ask or on an ask of the TTL-purged session gets `ASK_CHOICE_EXPIRED` with no run; another user's press there gets the not-for-you reply; a press from another thread or a non-allowlisted channel, or once the talk's channel has left the allowlist, gets the zero-width ack.
 - `SessionStore.findClosedAsk` returns `{ askId, userId, expiresAt, channelId, threadId? }` (no question or option text) for an earlier ask dropped when the newest is cleared, an ask cleared past its timeout, every open ask of a TTL-purged session and every ask of a session row purged on load; never for a pick of a live ask, a cancel or an askId stored again; past `CLOSED_ASKS_MAX` the oldest is forgotten.
 - A schedule ask recorded three days before the press still takes a pick from the owner (no "that choice expired"); session asks keep their ~30-minute expiry.
+- AUTONOMY-6.b: with a session ask and a schedule ask of the same age, one minute past `ASK_BUTTON_TTL_MS` the requester's press on the session ask gets `ASK_CHOICE_EXPIRED`, the schedule creator's chat message runs and leaves the schedule ask open, and the schedule ask's Choose opens its choices and a pick closes it (`picked`).
+- AUTONOMY-6.b: a schedule whose run asked stays blocked one minute past `ASK_BUTTON_TTL_MS` and a day later (each due run skipped, no run, one wait note, the ask still open) until the ask is answered; the next due run then starts with the answer in its prompt.
 
 ### REQ-discord-046
 
