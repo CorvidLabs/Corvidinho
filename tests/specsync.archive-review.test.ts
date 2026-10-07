@@ -23,8 +23,10 @@ const MERGED_375 = "f0c125383ff7ae21f35acf9cb57f1d0f758ddaae";
 
 /**
  * Archives a tip-orphan script wrote before this fix, each with a review
- * stamped in the same second as its finalization. Each keeps its record until
- * its own review runs; an archive written after this fix is not on this list.
+ * stamped in the same second as its finalization. None of them has had a
+ * review yet, so each keeps its record until one runs. Every other archive's
+ * review was recorded by `specsync change review`, at its own time, and a new
+ * archive with a review stamped in its finalization's second fails here.
  */
 const SCRIPTED_BEFORE_FIX = new Set([
   "2026-10-06-after-the-one-nudge-a-stalled-run-moves-to-the-next-stronger-model-in-the-order-i-set-and-says-so-agent-17-agent-17-a",
@@ -100,7 +102,7 @@ describe("archived SpecSync review for #375 (AUTONOMY-10.b bridge-live note)", (
 });
 
 describe("archived SpecSync reviews", () => {
-  test("no archive written after this fix has a review stamped in its finalization's second", () => {
+  test("only the 13 pre-fix tip-orphan archives have a review stamped in their finalization's second", () => {
     const scripted: string[] = [];
     for (const dir of readdirSync(ARCHIVE).sort()) {
       if (SCRIPTED_BEFORE_FIX.has(dir)) continue;
