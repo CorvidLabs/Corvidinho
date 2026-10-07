@@ -113,6 +113,22 @@ export type RouteAction =
       kind: "stop_run";
       runId: string;
       sessionId: string;
+    }
+  | {
+      /**
+       * SESSION-3.b (REQ-discord-479): the message begins with 'new topic'.
+       * The bridge takes `session`'s turn, then waits for `open`'s run like
+       * any message (AGENT-3.a), parks `open` the way idle expiry does and
+       * runs `prompt` as the fresh session's first message (`""`: a short
+       * fixed ack, and the fresh session takes the next message).
+       */
+      kind: "new_topic";
+      /** The fresh session, created at routing time (nothing replayed). */
+      session: SessionStub;
+      /** The author's open session there, parked first; none when nothing is open. */
+      open?: SessionStub;
+      /** The request after the phrase (mention trailer kept); `""` when none. */
+      prompt: string;
     };
 
 export type BridgeConfig = {

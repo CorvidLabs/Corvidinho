@@ -17,6 +17,12 @@
  * PLUGIN-5.a (REQ-discord-157): such a resume of a `/work` talk's retained
  * conversation is refused with `deps.refuseResume`'s line while `/work` is
  * turned off (no new session is made).
+ * SESSION-3.b (REQ-discord-479): only `/session start` or a message that
+ * begins with 'new topic' starts a fresh session; a normal @mention, reply or
+ * thread message keeps continuing the open one. Wherever a message would
+ * continue (or start) its author's session, after every gate, a leading
+ * 'new topic' is `new_topic` instead: the bridge parks the open session once
+ * its run is done and starts a fresh one.
  */
 
 import type { AllowlistConfig } from "../allowlist/types.ts";
@@ -34,6 +40,7 @@ import {
   type RateLimitConfig,
   type RateLimitState,
 } from "./permissions.ts";
+import { newTopicRequest } from "./new-topic.ts";
 import { isStopRunText, type SessionRunControl } from "./run-control.ts";
 import type { SessionStore } from "./session-store.ts";
 import {
@@ -69,6 +76,31 @@ export function promptBodyForAskGate(prompt: string): string {
     .replace(/\bDiscord user id \d+\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * SESSION-3.b — `new_topic` for a message that begins with 'new topic': the
+ * fresh session for its author where it was sent is created now (as
+ * `start_session` creates one) and `open`, the author's session there (if
+ * any), is superseded, so the author's next message there already finds the
+ * fresh one and waits behind this one (AGENT-3.a); the bridge parks `open`
+ * once its run is done. Null for any other message.
+ */
+function newTopicRoute(
+  msg: InboundMessage,
+  deps: RouterDeps,
+  open: SessionStub | undefined,
+  prompt: string,
+): RouteAction | null {
+  const request = newTopicRequest(prompt);
+  if (request === null) return null;
+  if (open) deps.store.supersede(open);
+  const session = deps.store.create({
+    channelId: msg.channelId,
+    userId: msg.authorId,
+    threadId: msg.threadId,
+  });
+  return { kind: "new_topic", session, ...(open ? { open } : {}), prompt: request };
 }
 
 export type RouterDeps = {
@@ -274,9 +306,14 @@ function resumeRetained(
   if (blocked) return blocked;
   const prompt = stripMentions(msg.content) || msg.content;
   const live = record.sessionId ? deps.store.get(record.sessionId) : undefined;
-  if (live && live.userId === msg.authorId) {
-    deps.store.touch(live);
-    return { kind: "continue_session", session: live, prompt };
+  const own = live && live.userId === msg.authorId ? live : undefined;
+  // SESSION-3.b: 'new topic' starts fresh — the retained conversation is not
+  // replayed, and a live session carrying it is parked.
+  const fresh = newTopicRoute(msg, deps, own, prompt);
+  if (fresh) return fresh;
+  if (own) {
+    deps.store.touch(own);
+    return { kind: "continue_session", session: own, prompt };
   }
   // PLUGIN-5.a: a `/work` talk's conversation is not resumed while `/work`
   // is turned off — the fixed line, and no new session is made.
@@ -315,7 +352,7 @@ function stopRunRoute(msg: InboundMessage, deps: RouterDeps): RouteAction | null
 
 /**
  * Pure router: given an inbound message, decide start/continue/refuse/ignore
- * (or `stop_run`, AGENT-3.a).
+ * (or `stop_run`, AGENT-3.a; or `new_topic`, SESSION-3.b).
  */
 export function routeMessage(
   msg: InboundMessage,
@@ -359,12 +396,12 @@ export function routeMessage(
       // Parent/thread channel allowlist already checked above.
       const blocked = refuseRateOrMute(msg, deps);
       if (blocked) return blocked;
+      const prompt = stripMentions(msg.content) || msg.content;
+      // SESSION-3.b: 'new topic' parks this session and starts fresh.
+      const fresh = newTopicRoute(msg, deps, own, prompt);
+      if (fresh) return fresh;
       deps.store.touch(own);
-      return {
-        kind: "continue_session",
-        session: own,
-        prompt: stripMentions(msg.content) || msg.content,
-      };
+      return { kind: "continue_session", session: own, prompt };
     }
     // SESSION-3.a: my session in this thread expired — my message here
     // starts a new one from its retained conversation.
@@ -389,12 +426,12 @@ export function routeMessage(
         // stands in for it (REQ-discord-212).
         const blocked = refuseRateOrMute(msg, deps);
         if (blocked) return blocked;
+        const prompt = stripMentions(msg.content) || msg.content;
+        // SESSION-3.b: 'new topic' parks this session and starts fresh.
+        const fresh = newTopicRoute(msg, deps, existing, prompt);
+        if (fresh) return fresh;
         deps.store.touch(existing);
-        return {
-          kind: "continue_session",
-          session: existing,
-          prompt: stripMentions(msg.content) || msg.content,
-        };
+        return { kind: "continue_session", session: existing, prompt };
       }
     } else {
       // SESSION-3.a: a reply to an answer of my expired session starts a
@@ -438,29 +475,26 @@ export function routeMessage(
   const blocked = refuseRateOrMute(msg, deps);
   if (blocked) return blocked;
 
-  // DISCORD-1 / SESSION-MULTI-1 — reuse this user's active session in the
-  // channel (or thread) when present; otherwise start a new stub.
+  // DISCORD-1 / SESSION-MULTI-1 / SESSION-3.b — a normal @mention keeps
+  // continuing this user's open session in the channel (or thread); only
+  // 'new topic' (or `/session start`) starts a fresh one. With none open, a
+  // new stub.
   const existing = deps.store.getByUserChannel(
     msg.authorId,
     msg.channelId,
     msg.threadId,
   );
+  const prompt = stripMentions(msg.content) || msg.content;
+  const fresh = newTopicRoute(msg, deps, existing, prompt);
+  if (fresh) return fresh;
   if (existing) {
     deps.store.touch(existing);
-    return {
-      kind: "continue_session",
-      session: existing,
-      prompt: stripMentions(msg.content) || msg.content,
-    };
+    return { kind: "continue_session", session: existing, prompt };
   }
   const session = deps.store.create({
     channelId: msg.channelId,
     userId: msg.authorId,
     threadId: msg.threadId,
   });
-  return {
-    kind: "start_session",
-    session,
-    prompt: stripMentions(msg.content) || msg.content,
-  };
+  return { kind: "start_session", session, prompt };
 }
