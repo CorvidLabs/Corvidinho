@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "with-only-the-daemon-running-and-no-bridge-a-scheduled-run-s-question-still-reaches-me-by-dm-autonomous-7-a",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "d5ab1a82c264791a07a79ccba7c28651f4822fa4",
+  "contract_digest": "6bf6b6b2a8cddb542614b3234b01ae3606031270b444be7231e949cdf941f1e3",
+  "execution_digest": "df1707ca8cb5953ef3ba49df1fdd5bf361f603f791606adf9893108c9d48905c",
+  "workspace_digest": "02ccdc889fe8e280c934c96649ee8dd5a1cf44e889765c5a951611f461db69b8",
+  "timestamp": 1791391540
+}
