@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-47-session-5-5-a-per-model-window-condense-405-and-session-3-b-new-topic-393-package-bump-changelog-fold",
+  "reviewer": "Corvid Agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "295c672c44c9a696413892be51456a7b16400c24",
+  "contract_digest": "72605a8c082866a08f478dda16c1f7097f1fe52fb890c77e6da265e6dbf948f3",
+  "execution_digest": "83ba677d121357bc87e0665ef303d3cead492cff9d1fa5a7eb09a5a21edde5c2",
+  "workspace_digest": "62eb1dbff2adf9477e8d5d35a40f0a3c501de6145b5d87aff6761e9ba25e2529",
+  "timestamp": 1791394846
+}

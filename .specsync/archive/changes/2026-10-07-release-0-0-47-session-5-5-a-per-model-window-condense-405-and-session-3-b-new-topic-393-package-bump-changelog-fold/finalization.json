@@ -1,0 +1,8 @@
+{
+  "schema_version": 2,
+  "change_id": "release-0-0-47-session-5-5-a-per-model-window-condense-405-and-session-3-b-new-topic-393-package-bump-changelog-fold",
+  "implementation_commit": "aab3ca12ef6b794a73abf027220c2de10bcadf30",
+  "finalization_digest": "tip-orphan-manual",
+  "timestamp": 1791396000,
+  "note": "tip-orphan archive after #431 squash (same class as #424\u2013#430)"
+}
