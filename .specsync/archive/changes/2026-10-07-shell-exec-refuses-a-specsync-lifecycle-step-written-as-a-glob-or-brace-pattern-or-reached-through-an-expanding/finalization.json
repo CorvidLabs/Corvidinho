@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "shell-exec-refuses-a-specsync-lifecycle-step-written-as-a-glob-or-brace-pattern-or-reached-through-an-expanding",
+  "implementation_commit": "c7f8c043147cc0c0076463728891cb96a348835a",
+  "implementation_tree": "2fe259197bff27b5d83c400bae7f6930aec4d5c8",
+  "contract_digest": "e1edd4657e6627bf438085111b0bec9fec2d0a1cc56e7ce230c419ea81dea478",
+  "workspace_digest": "3beb003a2f8f83c172acabf3eab34ad7b58f7362d961a1073db3ca1209ef441b",
+  "closing_digest": "7d1c0c9533f158acc7abc92c2c0ac0c5ebd48d7a039d760e4915dcc10cfb0ea0",
+  "review_digest": "01b78f003e94b32ac6b600b2e745d59f0f46c80560d4263225c8dc8cdde481a1",
+  "finalization_digest": "d7853e9cb2aa5cb233fc791c59d68df085633b88d553d32a67931da48f3fc63b",
+  "timestamp": 1791387508,
+  "note": "tip-orphan archive after #403 squash (same class as #414 / #415 / #416)"
+}

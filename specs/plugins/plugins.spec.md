@@ -819,18 +819,49 @@ npm-style `specsync@<version>` or an option's value such as
 `nohup`, `xargs`, `sudo`, `exec`, `find -exec`) and package runner (`bunx`,
 `npx`, `bun x`, `pnpm dlx`, `watch`) in front of it is covered; at a command word that
 is a link to the binary; and at a command word that expands, where only a
-literal step refuses. The step is the first word past SpecSync's options
+literal step refuses. A glob or brace pattern (a word holding an unquoted
+`*`, `?`, `[` or `{`, which the tokenizer marks `Word.glob`) is read as
+every word it may stand for (brace alternatives expanded, a sequence or a
+bracket expression read as a wildcard): one that may be `specsync` names it
+(`spec*ync`, `env spec*`, `bunx spec*`; a pattern of wildcards alone away
+from a command word, as in `cp * "$d"`, is read like an expanding command
+word), one that may be `change` is read as `change`, and one that may be a
+lifecycle step refuses with step null (`appr*ve`, `[a]pprove`,
+`{approve,}`). The step is the first word past SpecSync's options
 after `change`; a word right after an option may be its value or the step,
 so a lifecycle step there counts. A step that expands, or one `xargs`
 supplies from its input (no step word, or one that is not another
-`specsync change` subcommand), refuses. Read-only `specsync change
+`specsync change` subcommand), refuses. So does a word that expands or is a
+pattern where the subcommand (or an option's value) belongs (`specsync "$@"`
+in a function or after `set --`, `change${IFS}approve`, `specsync $S c1`,
+`specsync c?ange approve`), and a subcommand `xargs` supplies (none, or a
+word that is no `specsync` subcommand: a replace string); a command word
+that expands, or a pattern that may be `xargs`, counts as `xargs` for the
+words after it. A `specsync` that is only an argument of a command that
+never runs its arguments (`echo`, `grep`, `rg`, `cat`, `ls` …:
+`grep -l specsync "$f"`, `xargs grep -l specsync`, and `[`) is read only
+for a `change` step. A brace pattern is first split into the words bash
+makes of it (`{specsync,change} approve c1` is four words; `{,}` is none),
+and one past the caps may be any words; a word that expands only before
+its last `/` names specsync by its basename (`"$HOME"/.cargo/bin/specsync`).
+`xargs`'s options are read as getopt reads them: a word holding its replace
+string (`-I R`, `-rI R`, `-i`, `--replace[=R]`) where the subcommand or the
+step belongs refuses whatever it reads (`xargs -I check specsync check
+approve c1`; for the subcommand, not under a never-run command, so
+`xargs -I{} grep -l specsync {}` runs), and one a shell `-c` runs as a
+script is read with it as an
+expansion (`xargs -I X sh -c 'specsync X'` refuses; `xargs -I{} sh -c
+'wc -l {}'` runs). Read-only `specsync change
 status|list|show|check|ship-status|…` and `specsync check` still run.
 AGENT-18.a residuals: code an interpreter runs (`bun -e`, `node -e`,
 `python -c`, a script handed to `node` / `python`, the `node-exec` /
 `python-exec` / `cargo-exec` runners) that spawns specsync itself is not
 parsed; neither are package-manager scripts, `make` / `just` recipes and git
 aliases (which AUTONOMY-9 does read), nor a copy of the binary under another
-name or a link made by the same command.
+name or a link made by the same command, a shell alias for it, a bash
+extended glob (`@(…)` with `extglob` on), or a script `xargs` builds wholly
+from its input (`xargs -I X sh -c X`, or input that closes the script's own
+quotes).
 
 SAFE-4 (REQ-plugins-404): memories change only through `memory-forget` /
 `memory-override` and their two-phase confirm, the owner's DM card with
@@ -1668,6 +1699,7 @@ and current rows for plugins host evolution.
 | 2026-10-07 | on-github-a-text-someone-else-edited-never-gets-its-author-s-role-the-safe-13-owner-exemption-covers-only-text-the: On GitHub, a text someone else edited never gets its author's role, the SAFE-13 owner exemption covers only text the owner wrote, a WATCH run never writes the watcher's own checkout, and its audit rows name its GitHub trigger (IDENTITY-12.a follow-up to #374) |
 | 2026-10-06 | github-7-typed-github-pr-merge-merges-the-bot-s-own-green-corvidinho-pr-only-when-ci-is-green-and-branch-protection: GITHUB-7: typed github-pr-merge merges the bot's own green Corvidinho PR only when CI is green and branch protection allows; never others or outside Corvidinho |
 | 2026-10-06 | the-shell-and-the-runners-refuse-raw-sql-wipes-and-overwrites-of-corvidinho-s-own-store-only-memory-forget-and-memory: The shell and the runners refuse raw-SQL wipes and overwrites of Corvidinho's own store; only memory-forget and memory-override, with their two-phase confirm, change it (SAFE-4) |
+| 2026-10-07 | shell-exec-refuses-a-specsync-lifecycle-step-written-as-a-glob-or-brace-pattern-or-reached-through-an-expanding: Shell-exec refuses a SpecSync lifecycle step written as a glob or brace pattern, or reached through an expanding subcommand or xargs input (AGENT-18.a follow-up to #372) |
 | 2026-10-06 | the-specsync-check-tool-the-verify-lane-s-spec-check-step-starts-without-my-cloud-credentials-and-its-output-is: The specsync-check tool (the verify lane's spec-check step) starts without my cloud credentials and its output is scrubbed (SAFE-21.b follow-up to #373) |
 | 2026-10-07 | named-personas-are-their-own-files-in-personas-with-name-model-and-skill-tags-the-owner-can-run-a-task-as-one-and-a: Named personas are their own files in personas/ with name, model and skill tags; the owner can run a task as one and a lead's delegate picks one by skill tag; team and community can't pick one (AUTONOMOUS-2.a, AUTONOMOUS-5.a) |
 | 2026-10-07 | my-own-memory-forget-and-override-by-id-ask-me-on-a-dm-card-with-approve-and-a-one-time-code-and-an-override-shows-the: My own memory forget and override by id ask me on a DM card with Approve and a one-time code, and an override shows the new text word for word (SAFE-18.a) |
