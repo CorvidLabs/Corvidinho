@@ -7,10 +7,11 @@
   "title": "With only the daemon running and no bridge, a scheduled run's question still reaches me by DM (AUTONOMOUS-7.a)",
   "description": "With only the daemon running and no bridge, a scheduled run's question still reaches me by DM (AUTONOMOUS-7.a)",
   "kind": "feature",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "6526a95b9f0be002f310767668a37f072e625bf6",
   "created_at": 1791351222,
-  "updated_at": 1791354311,
+  "updated_at": 1791391290,
   "affected_specs": [
     "discord",
     "cli"

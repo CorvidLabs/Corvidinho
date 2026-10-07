@@ -1,6 +1,6 @@
 ---
 id: with-only-the-daemon-running-and-no-bridge-a-scheduled-run-s-question-still-reaches-me-by-dm-autonomous-7-a
-state: verifying
+state: implementing
 type: feature
 base_commit: 6526a95b9f0be002f310767668a37f072e625bf6
 ---
