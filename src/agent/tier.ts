@@ -4,7 +4,7 @@
  * Numeric plugin minTier: 0 = read floor, 1 = tool, 2+ = code.
  */
 
-import { entryLabel, modelChainForTier, parseModelChain } from "./providers.ts";
+import { entryModelId, modelChainForTier, parseModelChain } from "./providers.ts";
 
 export type CapabilityTier = "read" | "tool" | "code";
 
@@ -57,8 +57,7 @@ export function modelForTier(
   tier: CapabilityTier,
 ): string {
   const head = modelChainForTier(env, tier)[0];
-  if (!head) return "";
-  return head.kind === "cli" ? entryLabel(head) : head.model;
+  return head ? entryModelId(head) : "";
 }
 
 /**

@@ -1,6 +1,6 @@
 ---
 id: a-headless-agent-cli-can-be-one-of-my-models-in-my-own-runs-only-with-the-same-tools-as-my-other-models-inside-that
-state: approved
+state: verifying
 type: feature
 base_commit: b53cc4679baee4355db339e22f7929095b81d0a1
 ---
@@ -15,6 +15,7 @@ A headless agent CLI can be one of my models, in my own runs only, with the same
 
 - `agent`
 - `plugins`
+- `cli`
 
 ## Acceptance Criteria
 

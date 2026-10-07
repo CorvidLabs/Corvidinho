@@ -162,6 +162,7 @@ import {
   CLI_SKIP_DEFAULT_WHY,
   cliSkippedError,
   entryLabel,
+  entryModelId,
   failOver,
   mergeModelFallbacks,
   modelChain,
@@ -243,7 +244,8 @@ export function loadLlmEnv(
     kind: p?.entry.kind ?? null,
     apiKey: p?.apiKey,
     baseUrl: p?.baseUrl ?? "",
-    model: p?.entry.model ?? "",
+    // AGENT-13: a `cli` head is its whole label (`entryModelId`), as `modelForTier`.
+    model: p ? entryModelId(p.entry) : "",
     tier: runTier,
     notice: providerNotice(env, [runTier]),
   };
@@ -909,7 +911,14 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
     },
     onWorkerFallback: (via, hops) => {
       for (const h of hops) {
-        const hop: ModelFallback = { from: h.from, to: h.to, reason: h.reason, via };
+        // AGENT-13.a: a worker's skipped `cli:` entry stays `skipped` here too.
+        const hop: ModelFallback = {
+          from: h.from,
+          to: h.to,
+          reason: h.reason,
+          via,
+          ...(h.skipped ? { skipped: true as const } : {}),
+        };
         if (mergeModelFallbacks(fallbacks, [hop]).length > fallbacks.length) noteFallback(hop);
       }
     },
@@ -1003,7 +1012,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
    */
   const cliTurn = async (
     p: ResolvedProvider,
-    ctx: { attempt: number; verifyFeedback?: string; signal: AbortSignal; specBriefing?: string },
+    ctx: { attempt: number; verifyFeedback?: string; signal: AbortSignal; specBriefing?: string; repoWays?: RepoWays },
   ): Promise<{ done: true; result: ExecuteResult } | { done: false; failure: ModelFailure; error: string }> => {
     const label = entryLabel(p.entry);
     const guard = await guardProtectedPaths(cwd);
@@ -1026,6 +1035,9 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
         specBriefingBlock: renderSpecBriefing(ctx.specBriefing),
         personaBlock,
         projectBlock,
+        // SAFE-11 / IDENTITY-4: the identity rules every model of the run gets.
+        identityRules: IDENTITY_AGENT_SYSTEM_INSTRUCTIONS,
+        ...(ctx.repoWays ? { repoWays: ctx.repoWays } : {}),
       }),
       signal: ctx.signal,
       timeoutMs,
@@ -1077,6 +1089,7 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
     verifyFeedback?: string;
     signal: AbortSignal;
     specBriefing?: string;
+    repoWays?: RepoWays;
   }): Promise<ExecuteResult | null> => {
     for (;;) {
       const p = chain.entries[chain.index];
@@ -1170,7 +1183,13 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
         emit(onEvent, { type: "Text", text: cliRefusedLine(labels, gate.detail) });
       }
     }
-    const viaCli = await cliStep({ attempt, ...(verifyFeedback ? { verifyFeedback } : {}), signal, ...(specBriefing ? { specBriefing } : {}) });
+    const viaCli = await cliStep({
+      attempt,
+      ...(verifyFeedback ? { verifyFeedback } : {}),
+      signal,
+      ...(specBriefing ? { specBriefing } : {}),
+      ...(repoWays ? { repoWays } : {}),
+    });
     if (viaCli) return viaCli;
     const citePrs = opts.citeOpenPrs !== false;
     const lookup: CoverageLookup =

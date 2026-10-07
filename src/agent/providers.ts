@@ -729,8 +729,16 @@ export function answeredModelLabel(
  */
 export function modelIdOfLabel(label: string): string {
   const e = parseModelEntry(label);
-  if (!e) return label.trim();
-  return e.kind === "cli" ? entryLabel(e) : e.model;
+  return e ? entryModelId(e) : label.trim();
+}
+
+/**
+ * The model id an entry prices and shows as: its `body.model`, or for a
+ * `cli` entry (no `body.model`, no known price, AGENT-13 / SAFE-16) its
+ * whole label.
+ */
+export function entryModelId(entry: ModelEntry): string {
+  return entry.kind === "cli" ? entryLabel(entry) : entry.model;
 }
 
 /** Failovers kept on a result or tool data; more are dropped. */

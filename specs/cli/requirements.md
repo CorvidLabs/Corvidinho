@@ -1107,9 +1107,12 @@ never says the owner was told), the row's `error` and the `run.finished`
 (schedule <id>, exit 1): <notice>` line is logged; the daemon posts to no
 channel itself (a bridge's scheduler tick posts only a run's ask, such as the
 auto-pause ask, REQ-discord-353), and this start-up line says why. `--help` SHALL list `CORVIDINHO_LLM_MODEL` as required with the
-`openai:` / `ollama:` / `anthropic:` forms and no built-in default, plus
+`openai:` / `ollama:` / `anthropic:` / `cli:` forms (`cli:<program> [args]`, a
+headless agent CLI that runs only in my own code-tier runs with `shell-exec`
+allowlisted, in that talk's worktree, AGENT-13.a, REQ-agent-1301) and no
+built-in default, plus
 `CORVIDINHO_LLM_API_KEY` / `OPENAI_API_KEY`, `CORVIDINHO_LLM_BASE_URL`,
-`OLLAMA_HOST` and `ANTHROPIC_API_KEY`; `.env.example`, `docs/DAEMON.md`
+`OLLAMA_HOST`, `ANTHROPIC_API_KEY` and the optional `CORVIDINHO_LLM_CLI_ENV`; `.env.example`, `docs/DAEMON.md`
 (including the Logs table) and `docs/DISCORD-GO-LIVE.md` (E.9, with the
 upgrade note: a key-only setup must now set `CORVIDINHO_LLM_MODEL`) SHALL say
 the same. No key value is printed.
@@ -1119,6 +1122,7 @@ Acceptance Criteria
 - `task run --json` in the same setup prints a `failed` result whose summary is the notice and `filesChanged` `[]`.
 - The daemon with no model logs `daemon.started` with `llm: "none"` and a `warn` `llm.no_provider` line whose `notice` is the notice; with `CORVIDINHO_LLM_MODEL=ollama:qwen3` it logs `llm: "ollama:qwen3 @ 127.0.0.1:11434"` and no `llm.no_provider`.
 - `docs/DAEMON.md`'s Logs table has a row for `llm.no_provider` (the docs test checks every logged event).
+- `--help` and `.env.example` name the `cli:` form and `CORVIDINHO_LLM_CLI_ENV`, and `.env.example` no longer says every kind uses the chat API (`tests/agent.headless-cli.test.ts`).
 - A daemon with no model whose due schedules spawn the real `task run`: the owner's schedule's run row has `summary` = the notice and `error` = `failed (exit 1): <notice>`; another creator's has `summary` `That didn't work.` and the same `error`; each `run.finished` is a `warn` with `ok: false` and that `error`; `[scheduler] run failed (schedule <id>, exit 1): <notice>` is logged for each, never the bare `failed (exit 1)` line (`tests/daemon.no-provider-run.test.ts`).
 
 ### REQ-cli-080

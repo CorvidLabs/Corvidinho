@@ -96,7 +96,7 @@ import { getOwner } from "../identity/owner.ts";
 import { scheduleRunnerId } from "../scheduler/store.ts";
 import { openCorvidinhoDb } from "../store/db.ts";
 import { scrubSecrets } from "../store/scrub.ts";
-import { parseModelChain, providerForTier, providerId, resolveEntry } from "./providers.ts";
+import { entryModelId, parseModelChain, providerForTier, providerId, resolveEntry } from "./providers.ts";
 import { ensureSpendAlerts, rearmSpendAlerts, recordSpendWarning } from "./spend-alerts.ts";
 import {
   formatSpend,
@@ -1473,7 +1473,7 @@ export function readSpendSnapshot(opts: {
     // No model configured (AGENT-10): nothing is called, nothing to price.
     const head = providerForTier(env, loadTierFromEnv(env, "tool"));
     const headProvider =
-      head && head.entry.model === opts.model ? providerId(head).toLowerCase() : null;
+      head && entryModelId(head.entry) === opts.model ? providerId(head).toLowerCase() : null;
     const priced =
       !opts.model.trim() || priceForModel(opts.model) !== null || !covered(headProvider);
     const tierGap = priced ? unpricedTierModel(env, covered) : null;

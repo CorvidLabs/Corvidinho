@@ -57,6 +57,14 @@ per-request model timeout; the idle watchdog held (`whileIdlePaused`), like a
 chat call. Output: stdout scrubbed; one JSON object with a string `result`
 gives reply + `usage` (OpenAI or Anthropic names), else the whole stdout.
 
+Prompt (review fix): besides the persona, `CLI_TURN_INSTRUCTIONS` and the
+PERSONA-3 rules, the CLI gets the identity (IDENTITY-4 / SAFE-11) and
+untrusted-content (SAFE-12 / SAFE-13) rules every other model of the run gets
+(a talk's thread can carry fenced text from other people), and, for a repo
+with hi or SpecSync, one line each saying how those ways hold for it (never
+change hi/; it cannot open or edit a change). The pass-through keys only add
+keys the scrub dropped: they never override one it set or kept.
+
 ## SAFE-2 for a turn (`guardProtectedPaths`)
 
 Before: HEAD, `git status` (untracked included), the state of every dirty or
@@ -104,3 +112,8 @@ covering cap → the SAFE-16.a unknown-price card; approved → recorded
 7. **Never the GITHUB-9 reviewer.**
 8. **Spend:** never priced; under a covering cap every turn asks on the
    unknown-price card (no price override, SAFE-16.a).
+9. **Corvidinho's own tools are not bridged into the CLI.** It works with its
+   own built-in tools only: no memory, ask-human card, hi-draft, SpecSync
+   change, GitHub or Discord tool inside a CLI turn ("same tools" is read as
+   "never more than the shell reaches"). `/work`'s commit, push, second-model
+   review and PR still run after a verified turn as for any model.

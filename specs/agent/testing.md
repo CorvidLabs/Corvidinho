@@ -1423,6 +1423,15 @@ team member), an injected fake chat provider, a temp data dir; no network.
   `gpt-bad,cli:…,gpt-x` in a team run skips past it.
 - The real `task run`: by default the CLI works in the worktree the run made
   and the stand-in `fledge` lane verifies its edit; `--here` skips it.
+- Review fixes: the stand-in's stdin carries the IDENTITY-4 and SAFE-12 /
+  SAFE-13 rules; `cliTurnPrompt` adds the hi and SpecSync lines only for a
+  repo that uses them; `CORVIDINHO_PROJECT_ROOT` named in
+  `CORVIDINHO_LLM_CLI_ENV` stays the worktree (a dropped key it names is
+  passed); `loadLlmEnv` gives `cli:gpt-4o`, flagged unpriced under a total cap
+  and not under a provider cap that does not name it. In
+  `tests/agent.fallback.test.ts`, a council worker's skipped `cli:` hop reads
+  `council worker: cli:… skipped (…)` at the lead. Each fails on the pre-fix
+  branch sources and passes with the fixes.
 
 Fail-on-base: with the base's (`85871fa4`) `src/agent/providers.ts`,
 `execute.ts`, `spend.ts`, `tier.ts`, `types.ts`, `src/work/review.ts` and
@@ -1431,4 +1440,4 @@ file gave 0 pass, 1 fail (the module does not load); a scratch probe with only
 base-era imports gave 0 of 3 on the base (`cli:` parsed as `openai`; the
 owner's run sent `cli:fakecli --print` as a chat model and never started the
 CLI; a team run did the same instead of skipping it) and 3 of 3 on the
-branch. Restored, 29 of 29 pass.
+branch. Restored, 29 of 29 pass (32 with the review fixes).

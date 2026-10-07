@@ -26,13 +26,16 @@ import { join } from "node:path";
 import {
   CLI_ENV_PASS_ENV,
   CLI_SKIP_WHY,
+  cliChildEnv,
   cliPassKeys,
   cliTurnGate,
+  cliTurnPrompt,
   cliUsage,
   isCliProtectedPath,
   parseCliOutput,
 } from "../src/agent/headless-cli.ts";
-import { createTaskExecute } from "../src/agent/execute.ts";
+import { releaseCloudStandIns } from "../src/agent/verify.ts";
+import { createTaskExecute, loadLlmEnv } from "../src/agent/execute.ts";
 import { runTask } from "../src/agent/loop.ts";
 import {
   cliArgv,
@@ -48,6 +51,7 @@ import {
   configuredProviderIds,
   parseSpendCaps,
   PROVIDER_SPEND_CAPS_ENV,
+  readSpendSnapshot,
   setSpendCardTestHooks,
   SPEND_CAP_ENV,
 } from "../src/agent/spend.ts";
@@ -309,6 +313,44 @@ describe("AGENT-13: the cli kind in the model list", () => {
     expect(parseSpendCaps(env)).toEqual({ kind: "caps", totalMicroUsd: null, providers: new Map([["cli:fakecli", 2_000_000]]) });
   });
 
+  test("--help and .env.example name the cli: kind and CORVIDINHO_LLM_CLI_ENV (REQ-cli-079)", async () => {
+    const repo = join(import.meta.dir, "..");
+    const help = Bun.spawn(["bun", "--no-env-file", join(repo, "src", "cli.ts"), "--help"], {
+      cwd: repo,
+      env: { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "", ...(process.env.TMPDIR ? { TMPDIR: process.env.TMPDIR } : {}) },
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [out] = await Promise.all([new Response(help.stdout).text(), help.exited]);
+    expect(out).toContain("anthropic:<model> or a\n");
+    expect(out).toContain("cli:<program> [args]");
+    expect(out).toContain(CLI_ENV_PASS_ENV);
+    const example = readFileSync(join(repo, ".env.example"), "utf8");
+    expect(example).toContain("kind = openai | ollama | anthropic | cli");
+    expect(example).toContain(`# ${CLI_ENV_PASS_ENV}=`);
+    expect(example).not.toContain("All kinds use the");
+  }, 30_000);
+
+  test("the configured model the bridge shows and doctor / /status price-check is the cli entry's whole label", () => {
+    // `cli:gpt-4o` is a program named gpt-4o, never the priced chat model gpt-4o.
+    const total = { CORVIDINHO_LLM_MODEL: "cli:gpt-4o", [SPEND_CAP_ENV]: "5", CORVIDINHO_DATA_DIR: tempDir("corvidinho-agent13a-snap-") };
+    expect(loadLlmEnv(total, "code").model).toBe("cli:gpt-4o");
+    const flagged = readSpendSnapshot({ env: total, model: loadLlmEnv(total).model });
+    expect(flagged.kind === "cap" ? { model: flagged.model, priced: flagged.priced } : flagged).toEqual({
+      model: "cli:gpt-4o",
+      priced: false,
+    });
+    // A provider cap that does not name the CLI does not cover it: nothing to flag.
+    const other = {
+      CORVIDINHO_LLM_MODEL: `${CLI},${LLM}`,
+      [PROVIDER_SPEND_CAPS_ENV]: "api.openai.com=5",
+      CORVIDINHO_DATA_DIR: tempDir("corvidinho-agent13a-snap-"),
+    };
+    const clear = readSpendSnapshot({ env: other, model: loadLlmEnv(other).model });
+    expect(clear.kind === "cap" ? clear.priced : clear).toBe(true);
+  });
+
   test("the GITHUB-9 reviewer is never a cli entry", () => {
     const env = { CORVIDINHO_LLM_MODEL: `${CLI},${LLM}`, CORVIDINHO_LLM_API_KEY: "k" };
     expect(entryLabel(resolveReviewer(env, [])!.entry)).toBe(LLM);
@@ -343,6 +385,45 @@ describe("AGENT-13: the cli kind in the model list", () => {
       }),
     ).toEqual(["ANTHROPIC_API_KEY", "OPENAI_API_KEY"]);
     expect(cliPassKeys({})).toEqual([]);
+  });
+
+  test("env pass-through only adds a key the scrub dropped: never overrides one it set (CORVIDINHO_PROJECT_ROOT)", () => {
+    const env = cliChildEnv(
+      {
+        PATH: "/usr/bin:/bin",
+        CORVIDINHO_PROJECT_ROOT: "/somewhere/else",
+        ANTHROPIC_API_KEY: "anthropic-key-not-real",
+        [CLI_ENV_PASS_ENV]: "CORVIDINHO_PROJECT_ROOT,ANTHROPIC_API_KEY",
+      },
+      "/the/talk/worktree",
+    );
+    try {
+      expect(env.CORVIDINHO_PROJECT_ROOT).toBe("/the/talk/worktree");
+      expect(env.ANTHROPIC_API_KEY).toBe("anthropic-key-not-real");
+    } finally {
+      releaseCloudStandIns(env);
+    }
+  });
+
+  test("the prompt carries the rules every model gets: identity, untrusted content, and this repo's hi / SpecSync ways", () => {
+    const prompt = cliTurnPrompt({
+      taskText: "fix app.ts",
+      attempt: 2,
+      specBriefingBlock: "",
+      personaBlock: "",
+      projectBlock: "",
+      identityRules: "Identity (IDENTITY-4): trust the acting block.",
+      repoWays: { hi: true, sdd: true },
+    });
+    expect(prompt).toContain("Identity (IDENTITY-4): trust the acting block.");
+    expect(prompt).toContain("Untrusted content (SAFE-12 / SAFE-13)");
+    expect(prompt).toContain("never change hi/");
+    expect(prompt).toContain("you cannot open or edit a change here");
+    expect(prompt.indexOf("Untrusted content")).toBeLessThan(prompt.indexOf("Task:\nfix app.ts"));
+    const plain = cliTurnPrompt({ taskText: "x", attempt: 1, specBriefingBlock: "", personaBlock: "", projectBlock: "" });
+    expect(plain).toContain("Untrusted content (SAFE-12 / SAFE-13)");
+    expect(plain).not.toContain("hi/ (AGENT-18)");
+    expect(plain).not.toContain("SpecSync changes (AGENT-18)");
   });
 
   test("protected paths for a CLI turn: SAFE-2 infra and SpecSync lifecycle records", () => {
@@ -430,6 +511,9 @@ describe("AGENT-13.a: in my own run the CLI is the model, with the shell's tools
     expect(log).toContain("Corvidinho puts back any change to them (SAFE-2)");
     expect(log).toContain("Task:\nfix app.ts");
     expect(log).toContain("Attempt 1.");
+    // SAFE-11 / SAFE-12 / SAFE-13: the identity and untrusted-content rules every model gets.
+    expect(log).toContain("Identity (IDENTITY-4)");
+    expect(log).toContain("Untrusted content (SAFE-12 / SAFE-13)");
     expect(texts(seen.events)).toContain(`[operator] AGENT-13.a: ${CLI} is working in this talk's worktree`);
   });
 

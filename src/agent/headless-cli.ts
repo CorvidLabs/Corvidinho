@@ -70,6 +70,8 @@ import { isWorkerEnvDropped } from "../autonomous/delegate.ts";
 import { redactSecretEnvValues, scrubSecrets } from "../store/scrub.ts";
 import { whileIdlePaused } from "./limits.ts";
 import { PERSONA_RULES_SYSTEM_INSTRUCTIONS } from "./persona.ts";
+import type { RepoWays } from "./repo-ways.ts";
+import { UNTRUSTED_CONTENT_AGENT_SYSTEM_INSTRUCTIONS } from "./untrusted.ts";
 import {
   CLI_SKIP_DEFAULT_WHY,
   cliArgv,
@@ -197,11 +199,15 @@ export function cliPassKeys(env: NodeJS.ProcessEnv): string[] {
 /**
  * The CLI's env: the shell's (`runnerChildEnv`; release its cloud stand-ins
  * with `releaseCloudStandIns` once the CLI has exited) plus the set keys
- * {@link cliPassKeys} names.
+ * {@link cliPassKeys} names that the scrub dropped (a key it set or kept is
+ * never overridden).
  */
 export function cliChildEnv(base: NodeJS.ProcessEnv, root: string): Record<string, string> {
   const env = runnerChildEnv(base, root);
   for (const key of cliPassKeys(base)) {
+    // Only adds a key the scrub dropped: never overrides one it set or kept
+    // (`CORVIDINHO_PROJECT_ROOT`, the git / gh / cloud stand-ins).
+    if (Object.hasOwn(env, key)) continue;
     const v = base[key];
     if (typeof v === "string" && v !== "") env[key] = v;
   }
@@ -220,6 +226,29 @@ export const CLI_TURN_INSTRUCTIONS =
   "Never read or print secrets. " +
   "Finish with one short plain-text reply for the person who asked; that reply is posted as the answer.";
 
+/**
+ * AGENT-18: this repo's own ways, said the way they hold for a CLI turn (it
+ * has no hi-draft and no SpecSync change tools, and its protected-file
+ * changes are put back). "" when the repo uses neither.
+ */
+export function cliRepoWaysLines(ways: Pick<RepoWays, "hi" | "sdd"> | undefined): string {
+  const lines: string[] = [];
+  if (ways?.hi) {
+    lines.push(
+      "This repo keeps its acceptance criteria in hi/ (AGENT-18). Never invent criteria and never change hi/: " +
+        "any change there keeps the run from being verified. If a criterion seems missing or wrong, say so in your reply.",
+    );
+  }
+  if (ways?.sdd) {
+    lines.push(
+      "This repo works through SpecSync changes (AGENT-18): a changed file its SpecSync workflow cares about that no open change covers " +
+        "keeps the run from being verified, and you cannot open or edit a change here (Corvidinho puts back specs/ and .specsync changes). " +
+        "If your edits need one, say so in your reply.",
+    );
+  }
+  return lines.join(" ");
+}
+
 /** The prompt a CLI turn gets on stdin. */
 export function cliTurnPrompt(o: {
   taskText: string;
@@ -231,12 +260,25 @@ export function cliTurnPrompt(o: {
   personaBlock: string;
   /** AGENT-1: the project's AGENTS.md / CLAUDE.md block ("" when none). */
   projectBlock: string;
+  /**
+   * IDENTITY-4 / SAFE-11: the identity rules every model of the run gets
+   * (`IDENTITY_AGENT_SYSTEM_INSTRUCTIONS`, passed in by the execute hook).
+   */
+  identityRules?: string;
+  /** AGENT-18: this repo's ways ({@link cliRepoWaysLines}). */
+  repoWays?: Pick<RepoWays, "hi" | "sdd">;
 }): string {
   const parts = [
     // PERSONA-2 / PERSONA-3: the persona first, the rules after it win.
     o.personaBlock,
     CLI_TURN_INSTRUCTIONS,
     PERSONA_RULES_SYSTEM_INSTRUCTIONS.trim(),
+    // SAFE-11 / SAFE-12 / SAFE-13: like every other model, fenced text from
+    // anyone but the owner is data, and who someone is comes only from the
+    // acting block.
+    (o.identityRules ?? "").trim(),
+    UNTRUSTED_CONTENT_AGENT_SYSTEM_INSTRUCTIONS.trim(),
+    cliRepoWaysLines(o.repoWays),
     o.projectBlock,
     o.specBriefingBlock.trim(),
     o.taskText ? `Task:\n${o.taskText}` : "Task: (none provided)",

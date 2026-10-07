@@ -20,8 +20,11 @@ my next model (AGENT-13.a, captured in this change's PR from Leif's
   `PATH` or is a path); `cliProviderId` is `cli:<program name>`
   (lower-cased), which `resolveEntry` gives as its `baseUrl`, so `providerId`,
   the SAFE-8 ledger and a SAFE-14 provider cap name it so; it has no key and
-  is always `usable`. `modelIdOfLabel` and `modelForTier` SHALL keep a `cli`
-  entry's whole label, so it never has a known price (SAFE-16).
+  is always `usable`. `entryModelId` — and through it `modelIdOfLabel`,
+  `modelForTier`, `loadLlmEnv().model` (the configured model the bridge shows
+  and doctor / `/status` price-check) and `readSpendSnapshot`'s match of the
+  head entry — SHALL keep a `cli` entry's whole label, so it never has a
+  known price (SAFE-16).
 - `callChain` SHALL never call its `fn` with a `cli` entry. With the
   attempt's `CliTurnVerdict` granted it stops there with `handover: true`
   (`failure: null`, the chain stays on that entry); otherwise (refused, or no
@@ -47,7 +50,9 @@ my next model (AGENT-13.a, captured in this change's PR from Leif's
   skips it (`[operator] <a> skipped (<why>); falling back to <b>`, the closing
   `(model fallback: <a> skipped (<why>), fell back to <b>)` note, the hop on
   `TaskResult.modelFallback` with `skipped: true`, the bridge / WATCH /
-  daemon `llm.fallback` log) and the next entry runs; with none after it the
+  daemon `llm.fallback` log; a delegate or council worker's skipped hop stays
+  `skipped` at the lead, `<via> worker: <a> skipped (<why>)`) and the next
+  entry runs; with none after it the
   attempt fails with `cliSkippedError` and `modelCallFailedLine` (`The model
   call failed (<a> was skipped: <why>)`). A chat model that fails over to, or
   an AGENT-17.a move that reaches, a `cli` entry the attempt may run hands the
@@ -59,10 +64,15 @@ my next model (AGENT-13.a, captured in this change's PR from Leif's
   no GitHub / git credentials SAFE-21.a, no cloud credentials SAFE-21.b,
   `CORVIDINHO_PROJECT_ROOT`) plus only the set keys the owner names in the
   optional `CORVIDINHO_LLM_CLI_ENV` (`cliPassKeys`: never a git / GitHub
-  credential, a cloud credential, or a key no worker gets) — the prompt
+  credential, a cloud credential, or a key no worker gets; and never over a
+  key the scrub set or kept, such as `CORVIDINHO_PROJECT_ROOT`) — the prompt
   (`cliTurnPrompt`: persona, `CLI_TURN_INSTRUCTIONS`, the PERSONA-3 rules, the
-  project's AGENTS.md / CLAUDE.md block, the SpecSync briefing, the task, the
-  verify feedback excerpt, `Attempt N.`) on stdin, the per-request model
+  IDENTITY-4 / SAFE-11 identity rules and the SAFE-12 / SAFE-13
+  untrusted-content rules every model of the run gets, this repo's hi and
+  SpecSync ways as they hold for a CLI turn (`cliRepoWaysLines`: never change
+  hi/; it cannot open or edit a SpecSync change), the project's AGENTS.md /
+  CLAUDE.md block, the SpecSync briefing, the task, the verify feedback
+  excerpt, `Attempt N.`) on stdin, the per-request model
   timeout, the run's abort, the idle watchdog held, and its process tree
   killed once it exits; the cloud stand-ins released after. Its stdout,
   SAFE-6 scrubbed (cap `CLI_MAX_OUTPUT_BYTES`), is the attempt's summary; one
@@ -93,7 +103,9 @@ my next model (AGENT-13.a, captured in this change's PR from Leif's
   reported.
 - The GITHUB-9 reviewer is never a `cli` entry (REQ-plugins-1301). No schema
   change, slash command or CLI flag; one optional env key,
-  `CORVIDINHO_LLM_CLI_ENV` (unset = nothing passed).
+  `CORVIDINHO_LLM_CLI_ENV` (unset = nothing passed). `--help`,
+  `.env.example`, `README.md`, `docs/DAEMON.md` and `docs/DISCORD-GO-LIVE.md`
+  E.9 document the `cli` kind and that key.
 
 Acceptance Criteria
 - The owner's chat in its own talk worktree with `CORVIDINHO_LLM_MODEL=cli:fakecli --print,gpt-x`, `shell-exec` allowlisted, code tier: the stand-in CLI runs with cwd the worktree, argv `--print`, the task, rules and `Attempt 1.` on stdin, `FAKE_CLI_KEY` (named in `CORVIDINHO_LLM_CLI_ENV`) set and `GH_TOKEN`, `ANTHROPIC_API_KEY`, `CORVIDINHO_LLM_API_KEY`, `AWS_SECRET_ACCESS_KEY`, `DISCORD_TOKEN`, `CORVIDINHO_AUDIT_HMAC_KEY` unset (even when named), `GIT_CONFIG_GLOBAL` and `KUBECONFIG` `/dev/null`, `CORVIDINHO_PROJECT_ROOT` the worktree; the summary is its `result`, its usage (15 in incl. cache, 5 out) counts under its label, no chat request is sent.
@@ -104,6 +116,10 @@ Acceptance Criteria
 - A team member's chat, the owner's WATCH run, the owner's schedule, a delegate worker, the owner's chat outside the talk worktree, a local `task run --here`, no `shell-exec` allowlisted, the tool tier: the CLI never starts, `gpt-x` answers, the hop is `skipped` with the matching `why`, one operator line per run, the second attempt stays on `gpt-x`; with only `cli:` configured the run fails with `cliSkippedError`; `gpt-bad,cli:…,gpt-x` in a team run skips past the CLI.
 - The real `task run`: by default the CLI works in the worktree the run made and the stand-in `fledge` lane verifies its edit (`done`, `model` the label); with `--here` it is skipped and the next model answers.
 - `cliTurnGate` grants the owner's chat / ask / session / work in the talk worktree and a local run in its own worktree, and refuses every case above with its fixed `why`.
+- The stand-in CLI's stdin carries the identity (IDENTITY-4) and untrusted-content (SAFE-12 / SAFE-13) rules; `cliTurnPrompt` for a repo with hi and SpecSync adds the hi and SpecSync lines before the task, and for a repo with neither adds neither.
+- `cliChildEnv` with `CORVIDINHO_PROJECT_ROOT` named in `CORVIDINHO_LLM_CLI_ENV` and set to another folder keeps the talk worktree; a named key the scrub dropped (`ANTHROPIC_API_KEY`) is passed.
+- `loadLlmEnv` with `cli:gpt-4o` gives `cli:gpt-4o`; under a total cap the spend snapshot flags it unpriced; under a provider cap that does not name the CLI nothing is flagged.
+- A council worker's skipped `cli:` hop reaches the lead as `council worker: cli:… skipped (…)` in the operator line and the closing note (`tests/agent.fallback.test.ts`).
 
 ## Modified
 

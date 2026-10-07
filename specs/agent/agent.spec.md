@@ -323,8 +323,10 @@ bounded, at most `MODEL_FALLBACK_MAX` 16), `mergeModelFallbacks` and
 command with single spaces; `cliArgv(entry)` (split on whitespace, no shell),
 `cliProviderId(entry)` (`cli:<program name>`, lower-cased; `resolveEntry`
 gives a `cli` entry that as its `baseUrl`, no key, always `usable`, so
-`providerId` and the SAFE-8 ledger name it so), `modelIdOfLabel` /
-`modelForTier` give a `cli` entry its whole label (never priced),
+`providerId` and the SAFE-8 ledger name it so), `entryModelId(entry)` — and
+through it `modelIdOfLabel`, `modelForTier`, `loadLlmEnv().model` and the
+spend snapshot's head match — gives a `cli` entry its whole label (never
+priced),
 `ModelFailure` gains `skipped` (`why`) and `exit` (`code`; 127 = could not
 start), `ModelFallback.skipped`, `failOver(chain, failure, onFallback?)` (one
 hop, false with no next entry), `CliTurnVerdict`, `CLI_SKIP_DEFAULT_WHY`,
@@ -335,7 +337,9 @@ never calls `fn` with a `cli` entry: granted, it stops there with
 (`CORVIDINHO_LLM_CLI_ENV`), `CLI_SHELL_TOOL`, `CLI_MAX_OUTPUT_BYTES`,
 `CLI_PROTECTED_SNAPSHOT_MAX_BYTES`, `CLI_SKIP_WHY`, `cliTurnGate`,
 `cliRefusedLine`, `cliPassKeys`, `cliChildEnv`, `CLI_TURN_INSTRUCTIONS`,
-`cliTurnPrompt`, `cliUsage`, `parseCliOutput`, `runCliTurn`,
+`cliTurnPrompt` (with the identity and SAFE-12 / SAFE-13 untrusted-content
+rules every model gets, and `cliRepoWaysLines` for a hi / SpecSync repo),
+`cliRepoWaysLines`, `cliUsage`, `parseCliOutput`, `runCliTurn`,
 `isCliProtectedPath`, `guardProtectedPaths` (`ProtectedGuard`,
 `ProtectedRestore`), `pathPreview`, `cliRestoredNote` and
 `cliRestoreFailedLine`. `SpendGuard.call(c)` (`GuardedCall`,

@@ -11,6 +11,8 @@ artifact: docs
   bounds), protected files put back, the verify gate, spend, and exactly what
   it can still do that the shell's own checks would have stopped.
 - `README.md`: the model line names `cli:<command>` and where it runs.
+- `--help` (`src/cli.ts`) and `.env.example`: the `cli` kind and
+  `CORVIDINHO_LLM_CLI_ENV` (review fix: both still listed only three kinds).
 - `docs/DAEMON.md`: a `cli:` entry never runs in a schedule (skipped, next
   entry).
 - Specs: `specs/agent/agent.spec.md` (Purpose, Public API, an invariant, a
