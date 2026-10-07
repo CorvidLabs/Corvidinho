@@ -199,7 +199,7 @@ The reviewer's voice: terse, exacting, cites the line it means.
 
 ## Allowlists (bot VM)
 
-Corvidinho is **default-deny**: empty/missing allowlists refuse targeted GitHub plugin runs and Discord listen/post checks. Deny always wins. Do not copy Merlin’s empty-permissions → BASIC allow-by-default. An allowlist file that exists but cannot be read or parsed **fails closed**: the bridge, `github watch` and `daemon` refuse to start and the gates refuse, never falling back to env-only lists (`corvidinho doctor` names the line and key).
+Corvidinho is **default-deny**: empty/missing allowlists refuse targeted GitHub plugin runs and Discord listen/post checks. Deny always wins. Do not copy Merlin’s empty-permissions → BASIC allow-by-default. An allowlist file that exists but cannot be read or parsed **fails closed**: the bridge, `github watch` and `daemon` refuse to start and the gates refuse, never falling back to env-only lists (`corvidinho doctor` names the line and key); a running `github watch` skips each poll until it loads again.
 
 On the bot VM:
 

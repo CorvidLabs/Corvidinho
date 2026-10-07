@@ -12,7 +12,7 @@ Poll avoids exposing a webhook endpoint on the bot VM. Prefer webhook later when
 ## What it does
 
 1. Interval-poll GitHub (Octokit search) for @mentions / issue comments / review requests / **assignments** involving `CORVIDINHO_WATCH_USERNAME`
-2. **Allowlist BEFORE session spawn** (ALLOW-1): repo + user gates; empty = deny-all. For review requests and assignments the user gate checks both the thread author and the user who requested the review / assigned the watch user (REQ-watch-302); deny lists win
+2. **Allowlist BEFORE session spawn** (ALLOW-1): repo + user gates; empty = deny-all. For review requests and assignments the user gate checks both the thread author and the user who requested the review / assigned the watch user (REQ-watch-302); deny lists win. A `[github].deny_users` entry may be a login or a GitHub numeric user id: the sender is refused when either matches (the id the GitHub API reports for the event, so a renamed login stays denied; REQ-watch-043)
 3. Denied contacts refuse quietly (ALLOW-5) — no session
 4. Allowlisted events → session stub keyed by `owner/repo#number` (continue on follow-ups)
 5. Spawn `corvidinho task run` (prove-before-done; verification can't be skipped, AGENT-14) or echo in dry-run
@@ -223,7 +223,18 @@ bun src/cli.ts github watch
 Copy shape from [`allowlist.example.toml`](../allowlist.example.toml) → `~/.config/corvidinho/allowlist.toml`.
 `github watch` refuses to start when the token, the username or the repo/org allowlist is
 missing, and when an allowlist file exists but cannot be parsed (fail closed; `corvidinho doctor`
-names the line and key). `GITHUB_TOKEN` wins over `GH_TOKEN` when both are set; a blank (whitespace-only) one counts as
+names the line and key).
+
+**Allowlist changes apply without a restart (ADMIN-3.c, REQ-watch-043).** Each poll cycle
+re-reads the allowlist (file and env, the same path as at start), like the schedule daemon's
+tick, so an owner's `/admin deny add|remove` or `/admin github add|remove` on Discord (or a VM
+edit) applies on the next poll: the repos and orgs polled, the repo and user gates and the
+people list. While the file cannot be loaded each poll is skipped (`[watch] poll skip:
+allowlist could not be loaded …`; fail closed, nothing is polled with its deny lists lost);
+while the repo/org allowlist is empty nothing is polled (`[watch] poll skip: GitHub repo
+allowlist empty …`). When the GitHub lists change, the ids WATCH had quietly refused are
+forgotten, so those events are gated again under the new lists. `[github].users` is not
+editable with `/admin` (file / env only); a VM edit of it applies the same way. `GITHUB_TOKEN` wins over `GH_TOKEN` when both are set; a blank (whitespace-only) one counts as
 unset, for WATCH, the Octokit plugins and `corvidinho doctor` alike.
 
 ## CI

@@ -15,6 +15,11 @@
 
 # WATCH (github watch) also requires non-empty [github] orgs and/or repos
 # plus users — empty = deny-all (ALLOW-1). See docs/WATCH.md.
+# The owner can change orgs, repos and the deny_* lists here at runtime with
+# /admin github add|remove and /admin deny add|remove (ADMIN-3.c; owner-only,
+# audited): the bridge rewrites just that key's line, GitHub tools read it on
+# their next call and github watch re-reads it every poll. users stays
+# file / env only. The deny_* lists of [discord] work the same way.
 [github]
 orgs = []
 repos = []          # "OWNER/REPO" or "OWNER/*"

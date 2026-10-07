@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "admin-3-c-part-1-as-owner-i-can-change-the-deny-lists-and-the-github-repo-allow-lists-with-admin-deny-and-admin-github",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "94a4fc97ff7496fc9a44166f10d422dd2419daae",
+  "contract_digest": "a37016fd22398e4f72afaadf30c094ca1e2605afb9142198c92e7c38eca66b11",
+  "execution_digest": "959ea084dade2b464c66b12f0a05a38be6d4e6a0c653b37ed6600005f901480b",
+  "workspace_digest": "cbfd16a44e71ad3f872231ecfec9f261b249e6c0e7fa2fac03d7337964afbdc7",
+  "timestamp": 1791387744
+}

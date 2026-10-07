@@ -310,6 +310,33 @@ with an org name and a request id in its body; no network, no real key):
   community never reach a card; no shell and community workers on WATCH).
   Restored: 12 of 12 pass.
 
+## github watch re-reads the allowlist every poll (REQ-watch-043 added, ADMIN-3.c part 1)
+
+- `tests/watch.allowlist-reload.test.ts` — temp allowlist file, in-memory
+  DB, a real `startWatchPoller` (dry run, `runLoop: false`) with injected
+  events and a capturing agent; `/admin` changes are made the way the bridge
+  makes them (`planAdminListChange` + `commitAdminListChange` on its own
+  loaded allowlist); no token, no network.
+  - `/admin github add repo:` → the next cycle polls the new repo (same
+    `repos` array, same `allowlist` object) and runs its event; `/admin deny
+    add github_user:` → that user's next event is refused.
+  - `/admin deny add github_user:<numeric id>` → that sender's events are
+    refused by their id (`senderId`), a renamed login included; another id
+    with an allowlisted login still runs.
+  - A file that fails to load → `allowlistSkip: "unreadable"`, no fetch, no
+    run, lists unchanged; fixed → polls again with the file's deny list.
+  - The last repo removed → `allowlistSkip: "empty"`, nothing fetched; an org
+    added → polls `corvidlabs/*` again.
+  - A sender not on `[github].users` stays refused quietly while the lists
+    are unchanged and runs after the file adds them (denied ids forgotten).
+  - IDENTITY-12.a after a reload: the owner's comment runs as `owner`, a
+    stranger's as `community`.
+- Fail on base (`origin/main` 54d6a6c, same sources swapped in as the
+  discord evidence): 5 of 5 fail; restored, 5 of 5 pass. Review follow-up:
+  with the PR's first-round `src/watch/router.ts` swapped in, the numeric-id
+  case fails (the event gate matched `deny_users` against the login only);
+  restored, 6 of 6 pass.
+
 ## Edited text and SAFE-13 owner-written only (REQ-watch-1202 added, REQ-watch-1201 / REQ-watch-071 modified; IDENTITY-12.a follow-up to #374)
 
 - `tests/watch.github-roles.postreview.test.ts` — temp allowlist file (owner

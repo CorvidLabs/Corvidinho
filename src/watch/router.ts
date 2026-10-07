@@ -300,9 +300,23 @@ export type EventGateResult =
     };
 
 /**
+ * True when the sender's GitHub numeric user id (from the API event, never
+ * the text) is on `[github].deny_users`. A deny entry may be a login or a
+ * numeric id — the tool layer reads it both ways and `/admin deny add
+ * github_user:` takes either (ADMIN-3.c) — so the event gate refuses both:
+ * deny always wins.
+ */
+function senderIdDenied(event: Pick<DetectedEvent, "senderId">, github: GithubAllowlists): boolean {
+  if (event.senderId === undefined) return false;
+  const id = String(event.senderId).trim();
+  return id !== "" && github.denyUsers.some((d) => d.trim().toLowerCase() === id);
+}
+
+/**
  * Repo + user allowlist gates for one event (ALLOW-1/2; deny lists win).
  * Assignment / review_request events also need the user who assigned or
  * requested (`actor`) to pass the user gate; no actor → refused (fail closed).
+ * A sender whose numeric id is on `deny_users` is refused like a denied login.
  */
 export function gateEvent(
   event: DetectedEvent,
@@ -311,7 +325,7 @@ export function gateEvent(
   if (!isRepoAllowed(event.repo, github).ok) {
     return { ok: false, reason: "repo_not_allowlisted" };
   }
-  if (!isGithubUserAllowed(event.sender, github).ok) {
+  if (!isGithubUserAllowed(event.sender, github).ok || senderIdDenied(event, github)) {
     return { ok: false, reason: "user_not_allowlisted" };
   }
   if (
