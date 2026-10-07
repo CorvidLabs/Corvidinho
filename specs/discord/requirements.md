@@ -196,6 +196,26 @@ SHALL be sent or edited, and the pending ask SHALL stay as it was, so a muted
 user cannot keep a session going by buttons. No new env var, slash command,
 table or column.
 
+ADMIN-3.c (part 2, mutes): the owner-only `/admin mutes add|remove` (one
+required `user`, USER option) SHALL mute / unmute that user in this same live
+in-memory mute set, and `/mute` / `/unmute` SHALL be aliases served by the
+same helper (`applyMuteChange`). Every mute change SHALL be audited (SAFE-5,
+surface `discord:admin`, actions `admin-mutes-add` / `admin-mutes-remove`
+whichever spelling ran, args digest of the route and target only): a
+`started` row before the set changes, then `ok`; with no trail wired or a
+trail that throws, the command SHALL refuse (`audit log unavailable
+(SAFE-5)`) and leave the set unchanged — an unaudited mute is never made. A
+mute of the configured owner or of the caller SHALL be refused with
+`MUTE_SELF_OR_OWNER_REFUSED` and one `denied` row. A mute already in place,
+an unmute of someone not muted or a missing user SHALL change nothing and
+write no row. Mutes SHALL stay in memory until a restart (the
+`DISCORD_MUTED_USER_IDS` seed still applies at start); the mute reply SHALL
+say so and point to `/admin deny add user:` for a lasting block, and an
+unmute of a seeded id SHALL say the next restart mutes them again and that
+until then the tool layer, which reads that env, still gives their runs
+community tools. No new env var, config key, table, column or slash command
+name.
+
 Acceptance Criteria
 - Default window 60s / max 10; env override for window/max + muted seed.
 - User A rate-limited or muted → refuse A; user B still served.
@@ -210,6 +230,12 @@ Acceptance Criteria
 - A muted user's `/status` gets the ephemeral `MUTED` reply on every call and nothing is posted publicly.
 - A muted session owner's ask button press (open or pick) gets only the ephemeral `MUTED` reply, press after press: the agent does not run, nothing is sent or edited, and the ask stays pending; after `/unmute` the same button resumes the session.
 - With `DISCORD_RATE_LIMIT_MAX=1`, a member's pick after their @mention gets only the ephemeral `RATE_LIMITED` reply and the ask stays pending, while another user is still served; with `DISCORD_RATE_LIMIT_BY_LEVEL={"3":100}` the owner's pick after their @mention still resumes.
+- Owner `/admin mutes add user:M` mutes M at once (M's `/status` gets `MUTED`, M's @mention gets the one `MUTED` notice and no run); the ephemeral reply says the mute lasts until the bridge restarts and names `/admin deny add user:`; the trail holds `admin-mutes-add` `started` then `ok`. `/admin mutes remove user:M` unmutes with `admin-mutes-remove` `started` then `ok`.
+- `/mute` / `/unmute` write the same actions, outcomes and args digest as `/admin mutes add|remove` for the same target.
+- `/admin mutes add` or `/mute` of the owner, or of the caller, gets `MUTE_SELF_OR_OWNER_REFUSED`, one `admin-mutes-add` `denied` row, and the set is unchanged.
+- With the trail throwing or not wired, `/admin mutes add|remove`, `/mute` and `/unmute` reply `audit log unavailable (SAFE-5)` and the set is unchanged.
+- A mute already in place, an unmute of someone not muted and a missing user write no audit row.
+- `/admin config show` counts mutes (in memory until restart) and names `/admin mutes add|remove` among the updatable knobs.
 
 ### REQ-discord-011
 
@@ -222,11 +248,26 @@ registration alone SHALL NOT authorize admin actions. Fixture tests SHALL cover
 non-admin refuse without a live Discord token. The bridge SHALL NOT introduce
 ProcessManager or weaken channel/user/role default-deny allowlists.
 
+`/admin mutes add|remove` SHALL require ADMIN like every `/admin`
+subcommand: the dispatcher floor, then the `/admin` handler's own re-check,
+which appends an `admin-mutes-add|remove` `denied` row for a caller it
+refuses. `/mute` and `/unmute` keep their ADMIN floor and SHALL be aliases of
+`/admin mutes add|remove` (the same audited helper, REQ-discord-010), so a
+fixture context that runs them SHALL wire `recordAudit`. The helper SHALL
+re-check ADMIN itself at handler time (ADMIN-4), after the owner / caller
+refusal and before the no-op check, so a caller who is not ADMIN gets
+`not authorized` and one `admin-mutes-add|remove` `denied` row (args digest
+of the route only, as the `/admin` re-check's) on every spelling, the set is
+unchanged and the reply never says whether someone is muted.
+
 Acceptance Criteria
 - Non-admin `/mute`/`/unmute` → not authorized; mute set unchanged.
-- Admin user or admin role → mute/unmute mutates in-memory set.
+- The owner (the only ADMIN, IDENTITY-2) → mute/unmute mutates the in-memory set; admin user or role lists grant nothing.
 - Channel allowlist refuse still wins before permission re-check.
 - Empty admin lists ⇒ no ADMIN; secrets out of repo; no ProcessManager.
+- Non-owner `/admin mutes add|remove` → not authorized at dispatch (no row); at the `/admin` handler re-check → not authorized with an `admin-mutes-*` `denied` row; the mute set unchanged.
+- A non-owner who reaches the `/mute` / `/unmute` handler (past the dispatcher floor), or anyone when no owner is configured, gets `not authorized` and one `admin-mutes-*` `denied` row with the same args digest as the `/admin` re-check's — also for a target already muted — and the mute set is unchanged.
+- With `recordAudit` wired, the owner's `/mute` / `/unmute` (dispatcher, admin re-auth and owner fixtures) mutate the in-memory set as before.
 
 ### REQ-discord-012
 

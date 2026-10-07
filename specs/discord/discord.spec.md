@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 101
+version: 102
 status: draft
 files:
   - src/discord/types.ts
@@ -1885,3 +1885,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-10-07 | named-personas-are-their-own-files-in-personas-with-name-model-and-skill-tags-the-owner-can-run-a-task-as-one-and-a: Named personas are their own files in personas/ with name, model and skill tags; the owner can run a task as one and a lead's delegate picks one by skill tag; team and community can't pick one (AUTONOMOUS-2.a, AUTONOMOUS-5.a) |
 | 2026-10-07 | my-own-memory-forget-and-override-by-id-ask-me-on-a-dm-card-with-approve-and-a-one-time-code-and-an-override-shows-the: My own memory forget and override by id ask me on a DM card with Approve and a one-time code, and an override shows the new text word for word (SAFE-18.a) |
 | 2026-10-07 | once-a-session-question-s-buttons-expire-the-session-stops-waiting-and-my-next-message-runs-normally-a-schedule-s: Once a session question's buttons expire the session stops waiting and my next message runs normally; a schedule's questions still wait until answered (AUTONOMY-6.b) |
+| 2026-10-07 | admin-3-c-part-2-as-owner-i-can-mute-and-unmute-with-admin-mutes-add-remove-mute-and-unmute-are-audited-aliases-of-the: ADMIN-3.c part 2: as owner I can mute and unmute with /admin mutes add\|remove; /mute and /unmute are audited aliases of the same helper |
