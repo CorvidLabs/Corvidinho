@@ -502,6 +502,14 @@ provider's host, any other line as is — WATCH's `watchPublicFailureLine` is
 it). For a worker that failed, `DelegateChildOutcome.summary` is that line
 and `resultText` is unset.
 
+Chat completion transport (REQ-agent-102): `src/agent/execute.ts` exports
+`chatCompletions({ provider, fetchImpl, messages, tools, signal, timeoutMs,
+onUsage? })` → `Completion` (one OpenAI-compatible request; `tools` sent
+only when given; `failure: null` for a spend-cap stop or the caller's
+abort), used unchanged by the tool loop, the GITHUB-9 reviewer's
+`complete` and the daily briefing composer (COS-1, REQ-discord-102,
+`src/scheduler/briefing.ts`), each through its own spend-capped fetch.
+
 Second-model review in the tool loop (REQ-agent-092, GITHUB-9 / GITHUB-9.a):
 `createTaskExecute` hands every `runPlugin` call of its tool loop a
 `PrReviewRun` (`env`, `authors()`: every model its chain called, AGENT-11

@@ -1980,7 +1980,7 @@ async function singleChatCompletion(opts: {
  * model failed (AGENT-11: the chain fails over), or null when the call was
  * not a model failure (a SAFE-8 spend-cap stop, the run's own abort).
  */
-type Completion =
+export type Completion =
   | { ok: true; message: AssistantMessage }
   | {
       ok: false;
@@ -2025,7 +2025,14 @@ async function callModels(
   return { ok: true, message: r.value };
 }
 
-async function chatCompletions(opts: {
+/**
+ * One OpenAI-compatible chat completions request to `provider` (no retry):
+ * the reply's assistant message, or why there is none (`Completion`). Tools
+ * are sent only when given. Also the no-tools call of the GITHUB-9 reviewer
+ * and of the daily briefing (COS-1, src/scheduler/briefing.ts), both through
+ * their SAFE-8 spend-capped fetch.
+ */
+export async function chatCompletions(opts: {
   provider: ResolvedProvider;
   fetchImpl: FetchLike;
   messages: ChatMessage[];

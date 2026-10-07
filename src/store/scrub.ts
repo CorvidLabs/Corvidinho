@@ -203,7 +203,7 @@ export function scrubJsonText(raw: string): { text: string; parsed: boolean } {
  * and module-owned tables (spend_ledger: src/agent/spend.ts; spend_alerts:
  * src/agent/spend-alerts.ts;
  * discord_session_turns: src/discord/session-thread.ts; watch_owner_asks:
- * src/watch/owner-ask.ts). `json` columns hold a
+ * src/watch/owner-ask.ts; cos_briefings: src/scheduler/briefing.ts). `json` columns hold a
  * JSON document and are re-scrubbed value by value ({@link scrubJsonText}).
  */
 export const SCRUB_TARGETS: ReadonlyArray<{
@@ -251,6 +251,9 @@ export const SCRUB_TARGETS: ReadonlyArray<{
   // GITHUB-9.a (src/work/review.ts): the models that changed a checkout
   // (scrubbed on write; a new table, so no rules version bump).
   { table: "pr_change_authors", columns: ["model"] },
+  // COS-1 (src/scheduler/briefing.ts): a daily briefing DM held only until it
+  // goes out (scrubbed on write; a new table, so no rules version bump).
+  { table: "cos_briefings", columns: ["text"] },
 ];
 
 function tableExists(db: Database, table: string): boolean {

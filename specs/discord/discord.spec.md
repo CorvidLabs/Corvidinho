@@ -127,6 +127,9 @@ files:
   - src/scheduler/store.ts
   - src/scheduler/service.ts
   - src/scheduler/index.ts
+  - src/scheduler/briefing.ts
+  - tests/cos.briefing.test.ts
+  - tests/identity.briefing-hours.test.ts
   - tests/discord.schedule.test.ts
   - tests/scheduler.cron.test.ts
   - tests/scheduler.service.test.ts
@@ -349,7 +352,12 @@ role: undeclared or no `role` key ⇒ community, IDENTITY-8/12),
 `normalizeDiscordUserId`, `normalizeGithubId`, `validGithubLogin`,
 `cleanPersonLabel`, `PERSON_ID_RE`, `OWNER_PERSON_ID`, `PERSON_KEYS`,
 `LINK_FIELD` and the `DeclaredPerson` / `PeopleDirectory` / `ResolvedPerson`
-types. Owner (`src/identity/owner.ts`): `OwnerRecord.githubId` from
+types; briefing hours (COS-2.a, REQ-discord-102): `DeclaredPerson.timezone` /
+`workingHours` from the `timezone` / `working_hours` keys,
+`normalizePersonTimezone` (IANA name → canonical spelling, else undefined),
+`parseWorkingHours` → `WorkingHours` (`startMinute` / `endMinute`),
+`normalizeWorkingHours`, `formatClockMinutes`; `PeopleAdminRequest.timezone`
+/ `hours` and `PeopleAdminPlan.timezoneChanged` / `hoursChanged` (`add`). Owner (`src/identity/owner.ts`): `OwnerRecord.githubId` from
 `[owner] github_id` (file only), `normalizeGithubId` (shared with people),
 `isOwnerGithub(owner, githubId)` (the numeric id only, IDENTITY-7.a).
 `/admin people link github:` lookup (REQ-discord-367,
@@ -1022,7 +1030,61 @@ exports `holdSlashReply(opts)`; `SchedulerOutbound.post` takes
 `modelText?: boolean`; `plugins/discord/send-file.ts` exports
 `sendFileMustAsk(ctx)` (the command's `mustAsk`).
 
+Daily briefings (COS-1 / COS-2 / COS-2.a, REQ-discord-102):
+`src/scheduler/briefing.ts` exports `createBriefingTicker(opts)` →
+`BriefingTicker` (`tick(now)`, `settle(timeoutMs?)`, `stop()`;
+`BriefingTickerOptions`: `db`, `allowlist`, `people()`, `owner()`,
+`sendDm()`, `compose`, `github?`, `mutedUsers?`, `onSpendStop?`, `log?`),
+`createBriefingComposer({ env?, db?, fetchImpl?, personaRoot?,
+onSpendWarning?, timeoutMs? })` → `BriefingCompose` (`BriefingComposeInput`
+→ `BriefingComposeResult`: `ok` + text, `spend-cap` + ask, or `failed`),
+`createBriefingGithub(env)` → `BriefingGithub` (`search(query)` →
+`BriefingGithubItem[]`, `requestedReviewerIds(repo, number)`),
+`briefingRecipients` → `BriefingRecipient[]`, `briefingHoursFor` →
+`BriefingHours`, `briefingSlot` → `BriefingSlot`, `localClock` →
+`LocalClock`, `readLocalBriefingFacts`, `readGithubBriefingFacts`,
+`BriefingFacts` / `emptyBriefingFacts` / `briefingIsEmpty`,
+`renderBriefingFacts`, `cleanBriefingText`, `formatBriefingDm`,
+`formatBriefingHours`, the `cos_briefings` store (`BRIEFING_TABLE_SQL`,
+`ensureBriefingTable`, `readBriefingRow` → `BriefingRow`, `BriefingStatus`,
+`claimBriefingDay`, `recordBriefingSkipped` / `Pending` / `Failed` /
+`Budget` / `Sent`, `takeBriefingToSend`, `releaseBriefingSend`,
+`expireBriefing`), `consoleBriefingLog` / `BriefingLog` /
+`BriefingLogLevel`, `BRIEFING_SYSTEM_INSTRUCTIONS` and the limits
+`BRIEFING_DEFAULT_START_MINUTE` (09:00), `BRIEFING_DEFAULT_END_MINUTE`
+(17:00), `BRIEFING_FALLBACK_TIME_ZONE` (UTC), `BRIEFING_FIRST_LOOKBACK_MS`
+(24 h), `BRIEFING_MAX_LOOKBACK_MS` (7 d), `BRIEFING_MAX_ATTEMPTS` (3),
+`BRIEFING_RETRY_MS` (30 min), `BRIEFING_DM_RETRY_MS` (15 min),
+`BRIEFING_ITEMS_MAX` (8), `BRIEFING_TEXT_MAX` (1700),
+`BRIEFING_LLM_TIMEOUT_MS` (2 min), `BRIEFING_REVIEW_CHECKS_MAX` (10),
+`BRIEFING_GITHUB_TIMEOUT_MS` (15 s); `src/scheduler/index.ts` re-exports the
+ticker, composer, GitHub reads, recipients, hours and slot.
+`SchedulerServiceOpts.briefings` (`Pick<BriefingTicker, "tick">`);
+`StartBridgeOptions.briefings` (`false`, or test seams `{ compose?,
+fetchImpl?, github? }`).
+
 ## Invariants
+
+Daily briefings (COS-1 / COS-2 / COS-2.a, REQ-discord-102): every working
+day (Monday to Friday in their zone) the owner and each declared team member
+— never community or anyone undeclared, deny-listed, muted or on a clashing
+id, and nobody without an owner — get at most one DM, at the start of their
+working hours in their zone (`timezone` / `working_hours` on their
+`[people.<id>]` entry, set in the file or with `/admin people add`; else the
+owner's declared zone, else UTC, and 09:00–17:00), never outside those hours.
+The day is claimed in `cos_briefings` (module-owned, no schema version)
+before anything is read; a DM whose send started is never sent again. The
+facts are that person's only: their blocked and finished `/work` tasks,
+their schedule runs and open schedule questions (by their Discord ids), the
+owner's pending Approve card counts (owner only), and GitHub PRs / issues /
+review requests in allowlisted repos matched by their numeric id; no facts ⇒
+skipped, no model call. One read-tier no-tools model call (persona, rules,
+facts fenced as data) under the spend guard writes it; a cap stop raises no
+card, skips the day and goes to the owner's spend DM once that day; the
+reply is scrubbed, mass mentions defanged and cut, and held scrubbed only
+until sent. DM only, through the bridge's gateway `sendDm`; no DM path ⇒
+nothing claimed. The bridge runs it on every scheduler tick (not gated by
+PLUGIN-5.a), not in a dry run without seams; the daemon never sends one.
 
 A run a limit I set stopped (AGENT-12, REQ-discord-125) shows it only as
 `stopped=turn-cap` / `stopped=idle-timeout` at the end of the answer's footer

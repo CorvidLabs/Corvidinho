@@ -1323,3 +1323,16 @@ the token value is absent from the tool's output (SAFE-6 scrub).
 Fail-on-main: with main's (`86d68cd0`) `plugins/specsync/api.ts` swapped in,
 the file gave 7 pass, 1 fail (the owner's cloud markers and `GITHUB_TOKEN`
 came back through the tool); restored, 8 of 8 pass.
+
+## The chat completion transport is exported for the daily briefing (REQ-agent-102 added; COS-1)
+
+`tests/cos.briefing.test.ts`: the briefing composer calls the exported
+`chatCompletions` on the read tier's chain; the fake provider sees one POST
+to `https://llm.test/v1/chat/completions` with model `gpt-4o-mini` and no
+`tools` key, and its reply becomes the briefing text; with
+`CORVIDINHO_DAILY_SPEND_CAP_USD=0` the request is never sent and the
+composer reports `spend-cap` (a `SpendCapRefusal`, not a model failure, so no
+fallback). `tests/work.review.test.ts` (the GITHUB-9 reviewer's use of the
+same call) is unchanged and green. Fail on base: the base's `execute.ts` has
+no `chatCompletions` export, so `src/scheduler/briefing.ts` and the test
+file do not load.

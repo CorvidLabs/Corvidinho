@@ -1784,3 +1784,46 @@ Fail on base: with the stacked base's (387dada) sources swapped in, both
 `tests/work.pr.test.ts` GITHUB-9 cases fail (the base commits and pushes
 before `github-pr-create` refuses, and drops the frame's `review`);
 `tests/work.review.test.ts` cannot load. Restored, all pass.
+
+## Daily briefing DMs and per-person briefing hours (REQ-discord-102 added, REQ-discord-036 modified; COS-1, COS-2, COS-2.a)
+
+`tests/identity.briefing-hours.test.ts` (7): `timezone` / `working_hours`
+read from TOML and JSON in canonical spelling; a bad zone (unknown name,
+`+02:00`, a list) or bad hours (end before start, `9am-5pm`, `24:00`) skips
+the entry whole with an issue naming the person, never the account id; the
+owner still resolves on stable ids only; `/admin people add
+timezone:… hours:…` writes only those keys of that person (header comment,
+unread key and every other line kept), `admin-people-add` `started` + `ok`,
+live on the next read, no change for the same zone, `old → new` for new
+hours, `list` shows `tz … · hours …`, a new person declared with a zone;
+invalid values refused (`denied`, file unchanged); a non-owner refused; a
+JSON plan keeps the entry's other keys.
+
+`tests/cos.briefing.test.ts` (17): hours from the person, else the owner's
+zone and 09:00, else UTC; Monday–Friday slot within the hours (Oslo,
+New York, UTC, a UTC time that is already Thursday in Oslo, weekend);
+recipients owner + team only, deny-listed, muted, clashing and no-owner
+excluded; Tofu's one DM at 08:35 Oslo through the fake DM send with the
+fixed header and the fake LLM's text, the one read-tier no-tools call's
+fenced facts holding only Tofu's items (their PR, assigned issue, blocked
+task, review request, schedule question, finished task and runs) and none of
+Bob's, old, off-allowlist, denied, other-id or owner-only items; never twice
+a day (later ticks and a second ticker), the next working day covers only
+what is new, nothing at the weekend; Bob and the owner at 09:05 New York,
+the owner's own Approve card count without its title; nothing to say →
+skipped, no call; a token and `@everyone` in the reply scrubbed and
+defanged at rest and in the DM, text dropped once sent; a refused DM retried
+after 15 min, logged once, expired at the end of the hours; spend cap 0 →
+no request, no DM, `budget`, one stop handed over; a failed call retried 30
+min later; no DM path → nothing claimed; the claim rules (once a day, dead
+compose reclaimed ≤3 times, sent never reclaimed, next day starts at
+`covered_to`); `readGithubBriefingFacts` reads nothing without an id, a
+login or an allowed repo and reports a failed read; `SchedulerService.tick`
+calls `briefings.tick(now)` with schedules off; `startBridge` (dry run with
+seams) sends exactly one DM through the gateway `sendDm` and no channel post.
+
+Fail on base (85871fa4): with every modified source from the base both files
+fail to load; with the branch's `people.ts` only, the three `/admin people
+add` cases fail; with the branch's `people.ts`, `execute.ts` and
+`briefing.ts` and the base's `service.ts`, `bridge.ts` and `scrub.ts`, the
+tick, bridge and scrub cases fail. Restored, 24 of 24 pass.

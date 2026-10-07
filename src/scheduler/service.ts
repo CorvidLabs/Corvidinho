@@ -21,6 +21,10 @@
  * OPS-1/2 (#68): the nightly backup and weekly restore test (src/store/
  * backup.ts) ride the same tick in the bridge and the daemon; the backup
  * claims its night in SQLite, so two tickers on one data dir back up once.
+ * COS-1/2 (#102): the daily briefing DMs (src/scheduler/briefing.ts) ride
+ * the bridge's tick (`briefings`, after the backup); each person's day is
+ * claimed in SQLite, so nobody gets two in a day. Like the backup, they are
+ * not schedules: the PLUGIN-5.a schedule toggle does not gate them.
  * SAFE-12 / SAFE-13 (#71): a schedule's text is its creator's words. On every
  * tick the creator's role is resolved again; for anyone but the owner the
  * stored name / description / prompt are scanned (a hit runs nothing, pauses
@@ -112,6 +116,7 @@ import { isOwnerDiscord, type OwnerRecord } from "../identity/owner.ts";
 import { loadDeclaredPeople, type PersonRole } from "../identity/people.ts";
 import { SCHEDULE_SESSION_PREFIX } from "../plugins/roles.ts";
 import type { BackupTicker } from "../store/backup.ts";
+import type { BriefingTicker } from "./briefing.ts";
 import { scrubSecrets } from "../store/scrub.ts";
 import {
   ensureTalkWorkspace,
@@ -440,6 +445,12 @@ export type SchedulerServiceOpts = {
    */
   backup?: Pick<BackupTicker, "tick">;
   /**
+   * COS-1/2: the daily briefing DMs, run from each tick after the backup
+   * with the tick's clock (one pass at a time; never throws). The bridge
+   * wires it; the daemon has no DM path.
+   */
+  briefings?: Pick<BriefingTicker, "tick">;
+  /**
    * SAFE-5 trail for a tick's SAFE-13 refusal (`injection-suspected` /
    * `denied`; best effort). The bridge wires its trail; without it (the
    * daemon) the refusal still happens and the run row records why.
@@ -504,6 +515,7 @@ export class SchedulerService {
   private readonly onRunFinished?: (event: ScheduleRunFinished) => void;
   private readonly onTick?: () => void;
   private readonly backup?: Pick<BackupTicker, "tick">;
+  private readonly briefings?: Pick<BriefingTicker, "tick">;
   private readonly recordAudit?: (entry: AuditEntryInput) => unknown;
   private readonly mutedUsers?: Set<string>;
   private readonly schedulesEnabled?: () => boolean;
@@ -538,6 +550,7 @@ export class SchedulerService {
     this.onRunFinished = opts.onRunFinished;
     this.onTick = opts.onTick;
     this.backup = opts.backup;
+    this.briefings = opts.briefings;
     this.recordAudit = opts.recordAudit;
     this.mutedUsers = opts.mutedUsers;
     this.schedulesEnabled = opts.schedulesEnabled;
@@ -602,7 +615,7 @@ export class SchedulerService {
     try {
       const now = this.nowFn();
       // PLUGIN-5.a: with schedules turned off nothing is re-read, scanned or
-      // claimed; the delivery pass, spend DMs and backup below still run.
+      // claimed; the delivery pass, spend DMs, backup and briefings below still run.
       const due = this.schedulesOn() ? this.dueSchedules(now) : [];
       for (const schedule of due) {
         if (this.running.size >= this.maxConcurrent) {
@@ -651,6 +664,8 @@ export class SchedulerService {
       // OPS-1/2: the nightly backup / restore test when due, after the runs
       // are claimed; its owner notice post is fire-and-forget too.
       this.backup?.tick(now);
+      // COS-1/2: the daily briefings due now (fire-and-forget, one pass at a time).
+      this.briefings?.tick(now);
     } finally {
       this.tickInFlight = false;
     }
