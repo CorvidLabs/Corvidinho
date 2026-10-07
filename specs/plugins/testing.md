@@ -787,3 +787,17 @@ draft/closed/not-mergeable, surfaces merge API errors; plugin listing is
 dangerous minTier 1, SAFE-1 denies without allowlist, outside-Corvidinho
 refusal before Octokit, usage error without a PR number.
 `tests/plugins.list.smoke.test.ts` expects `github-pr-merge` in `plugins list`.
+
+## delegate --skill picks a named persona; the file tools leave personas/ alone (REQ-plugins-225; AUTONOMOUS-5.a, SAFE-2)
+
+`tests/agent.personas.test.ts`: `delegate` with a fake worker bin that records
+`CORVIDINHO_DELEGATE_PERSONA` and a temp persona root: `--skill review` with
+`zeta` and `alpha` both tagged runs the worker as `alpha` (`data.persona`,
+`[review → persona alpha]`); `--skill docs` and no skill run it with none,
+even with one in the lead's env; a match whose model is not configured is
+refused and no worker starts. With cwd at this checkout, `files-write`
+(relative and absolute), `files-edit` and `files-delete` of a
+`personas/<probe>` path are refused `refused (SAFE-2)` and nothing is
+written; `files-write personas/x.md` in another project works. Fail on base:
+with main's `plugins/autonomous/commands.ts`, `src/autonomous/delegate.ts`
+and the files plugin, all four fail; restored, pass.

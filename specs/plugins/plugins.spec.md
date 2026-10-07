@@ -260,7 +260,7 @@ flat-priced call's SAFE-8 ask (REQ-agent-098),
 HTTP/1.1 socket transport. Autonomous plugins
 register via `loadAutonomousPlugins` (`plugins/autonomous/index.ts`);
 `createDelegateCommand(deps)` builds `delegate` with an injectable env, bin,
-limiter and timeout; `createCouncilCommand(deps)` builds `council` with an
+limiter, timeout and persona root (`personaRoot`, a test seam); `createCouncilCommand(deps)` builds `council` with an
 injectable env, bin, limiter, council timeout and per-voice timeout.
 `PluginCommand.autonomous?: boolean`; `PluginCommand.agentTool?: boolean`
 (false: never in the agent's tool catalog, the agent loop runs it itself;
@@ -635,6 +635,19 @@ time, in order, usage (exit 1), the
 AUTONOMOUS-1 project switch, the depth cap, a code-tier lead, and the
 concurrency / per-run budget (exit 2, nothing spawned). It returns the
 worker's skill, tier, depth, state, summary and filesChanged.
+AUTONOMOUS-5.a (REQ-plugins-225): a `--skill` that a named persona's skill
+tags hold exactly (`personaForSkill` over `loadPersonas`, the first by name)
+runs the worker as that persona — its model and voice, through
+`CORVIDINHO_DELEGATE_PERSONA` on that worker's spawn only — and the data adds
+`persona` (null when none); a match whose model the owner did not configure
+is refused (exit 2, nothing spawned). With no skill or no match the worker
+runs as before. `council` is unchanged.
+
+SAFE-2 / AUTONOMOUS-2.a (REQ-plugins-225): `files-write`, `files-edit` and
+`files-delete` refuse (exit 2) any target inside Corvidinho's own
+`personas/` folder (`isLivePersonaPath`: `realpath(CORVIDINHO_ROOT)/personas`;
+`livePersonaRefuseMessage`), the named persona files the owner edits; a
+project's own `personas/` directory is unaffected and reads are allowed.
 
 Fledge commands (REQ-plugins-112/113) run `fledge plugins run <command> --
 <argv...>`, are bound to the project root they were discovered for (another
@@ -1417,6 +1430,8 @@ command line.
 | delegate while autonomous off / depth cap / below code tier / budget spent | Refuse (exit 2); nothing spawned |
 | delegate from a non-ADMIN role session (ROLES-CHAT-3) | Refuse (exit 2, not allowed for your role); nothing spawned |
 | delegate worker fails or times out | ok=false with worker exit / state and scrubbed summary |
+| delegate --skill matches a named persona whose model is not configured | Refuse (exit 2, the persona / file / model line); nothing spawned |
+| files-write / files-edit / files-delete in Corvidinho's own `personas/` folder | Refuse (exit 2, SAFE-2); nothing written |
 | council while autonomous off / depth cap / below code tier / council budget spent | Refuse (exit 2); nothing spawned |
 | council from a non-ADMIN role session (ROLES-CHAT-3) | Refuse (exit 2, not allowed for your role); nothing spawned |
 | council chair fails / fewer than 2 proposals | ok=false (exit 1) with the transcript |

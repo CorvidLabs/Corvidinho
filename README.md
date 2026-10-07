@@ -175,9 +175,22 @@ See [`AGENTS.md`](AGENTS.md): HI-first, Linux-only, no invent AC, secrets out of
 
 ## Persona (PERSONA-1..3)
 
-Corvidinho's voice lives in one file, [`persona.md`](persona.md) at the root of this checkout: corvid-agent's voice, warm and direct, with some personality and emoji, never a flat changelog. Every run on every surface (Discord chat, slash commands, `/work`, schedules, GitHub WATCH, `task run`, delegate and council workers) reads it again into the system prompt, ahead of Corvidinho's rules. The rules come after it and win: one message per turn, no spam, no unchecked claims.
+Corvidinho's voice lives in one file, [`persona.md`](persona.md) at the root of this checkout: corvid-agent's voice, warm and direct, with some personality and emoji, never a flat changelog. Every run on every surface (Discord chat, slash commands, `/work`, schedules, GitHub WATCH, `task run`, delegate and council workers) reads it again into the system prompt, ahead of Corvidinho's rules (a run as a named persona, below, uses that persona's voice instead). The rules come after it and win: one message per turn, no spam, no unchecked claims.
 
 To change the voice, edit the file and commit it (on the bot VM: merge it, then update). Only the committed copy is loaded, so a run cannot plant its own persona. The file is capped at 8 KiB and scrubbed for secrets (SAFE-6), but keep secrets out of it anyway. A missing, empty or refused file never stops a run: the run goes on without a persona and one `Persona: …` note in the run's output (never posted to Discord or GitHub) says why. Fixed-text bot posts (the bridge's update note, `/status`, error lines) do not go through the model and keep their text; the update note after a restart is written in this voice as one short line linking the version's release notes, not a changelog (PERSONA-1.a). There is no setting, env var or restart for it.
+
+**Named personas (AUTONOMOUS-2 / AUTONOMOUS-2.a, AUTONOMOUS-5 / AUTONOMOUS-5.a).** `persona.md` stays the default voice. Each named persona is its own file in `personas/` next to it, with its name, model, skill tags and voice:
+
+```markdown
+---
+name: reviewer
+model: anthropic:claude-sonnet-4-5
+skills: [review, specsync]
+---
+The reviewer's voice: terse, exacting, cites the line it means.
+```
+
+`model` is one `kind:model` entry you already configured (`CORVIDINHO_LLM_MODEL` or a per-tier key); any other model is refused with one plain line and nothing is called. A run as a persona uses its voice in place of `persona.md` (the rules still come after it and win) and calls its model first, with the tier's other configured models after it as the fallback chain, so spend caps, the fallback notice and the no-provider notice apply as usual. Only you pick a persona for a run: `corvidinho task run --persona reviewer --task "…"` or `/session start persona:reviewer` (for that run only; replies in the session go back to `persona.md`). A lead's `delegate --skill review` runs its worker as the first persona by name whose skill tags hold `review` exactly (no match = a plain worker as before); workers keep their limits. Team members and the community can't pick a persona. The files load like `persona.md`: only the committed copy, 8 KiB each, scrubbed, read again on every run; the agent's file tools can't change Corvidinho's own `personas/` folder (SAFE-2). Up to 32 files are read; a bad file is skipped and named when you ask for it.
 
 
 ## Allowlists (bot VM)

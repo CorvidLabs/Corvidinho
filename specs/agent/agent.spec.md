@@ -84,6 +84,8 @@ files:
   - tests/agent.trust-verify.test.ts
   - src/agent/limits.ts
   - tests/agent.limits.test.ts
+  - src/agent/personas.ts
+  - tests/agent.personas.test.ts
 
 db_tables: []
 depends_on:
@@ -595,6 +597,31 @@ prompts as persona block, then Corvidinho's rules with
 `persona.md` at the repo root uses corvid-agent's persona shape (Archetype,
 Personality traits, Background, Communication style, Example messages).
 
+Named personas (REQ-agent-225, AUTONOMOUS-2.a / AUTONOMOUS-5.a):
+`src/agent/personas.ts` exports `PERSONAS_DIR` (`personas`),
+`PERSONAS_MAX_FILES` (32), `PERSONA_SKILLS_MAX` (16), `PERSONA_LABEL_RE`,
+`parsePersonaFile`, `loadPersonas(root?, { maxBytes? })` (a `PersonaSet`:
+`personas` sorted by name, `refused` files with a reason, `skipped`),
+`normalizePersonaName`, `findPersona`, `personaForSkill`,
+`configuredModelEntries`, `personaModelRefusal`, `personaRunEnv`,
+`resolveRunPersona`, `renderNamedPersona` / `NAMED_PERSONA_HEADER`,
+`namedPersonaWarning` and `PERSONA_OWNER_ONLY_LINE`, plus the
+`NamedPersona` / `PersonaSet` / `RunPersona` types. Each named persona is its
+own `personas/<file>.md` next to `persona.md` at `CORVIDINHO_ROOT` (front
+matter `name`, `model` — one AGENT-13 `kind:model` entry — and `skills`,
+then the voice), listed by `listInstructionDir`
+(`src/agent/project-instructions.ts`: HEAD's tree plus the working tree) and
+read by the same loader as `persona.md`; `personaBlock` (`persona.ts`) renders
+both. `CreateTaskExecuteOpts.persona` (`{ name, by: "owner" | "lead" }`) runs
+the task as that persona: the run's env is `personaRunEnv` (the persona's
+model heads the run tier's key, the tier's other configured models after it),
+its voice replaces `persona.md`'s, and an owner pick from a non-owner role
+session, a lead pick at depth 0, an unknown persona or an unconfigured model
+fail the attempt with one plain line and no call. `src/autonomous/delegate.ts`
+adds `DELEGATE_PERSONA_ENV` (`CORVIDINHO_DELEGATE_PERSONA`, set or deleted on
+every worker spawn) and `delegatePersonaFromEnv` (depth > 0 only);
+`buildDelegateSpawn` / `runDelegateChild` take `persona`.
+
 `task-summary` exports `formatTaskPlumbing`, `chatBodyFromTaskResult` (optional
 `max`, default `CHAT_BODY_MAX` 1800), and
 `chatBodyFromTaskRunOutput` alongside `summarizeTaskResult`, plus
@@ -926,6 +953,12 @@ instructions, then project instructions) follows it, whether or not a persona
 loaded. The persona is read from Corvidinho's own checkout at `HEAD`, never
 from the run's project folder or an uncommitted working-tree copy, so a run
 cannot plant a persona for later runs. A persona problem never stops a run.
+A run as a named persona (REQ-agent-225) puts that persona's voice in the same
+place, read from the same checkout the same way, with the same rules after
+it; only the owner (or the local CLI) picks one for a run, a lead only for its
+delegate worker, and its model must be one the owner configured. Unlike a
+persona.md problem, a named persona that cannot be used fails the run with
+one line before any model call.
 
 The verify gate can't be skipped (AGENT-14, REQ-agent-003): no option,
 config key or CLI flag turns it off, and chat, WATCH, schedules, `/work` and
@@ -1448,6 +1481,12 @@ A change the run did not open is never touched.
 - **Given** `persona.md` committed at the root of Corvidinho's checkout
 - **When** a Discord chat, a schedule, WATCH or a local `task run` spawns a run in any project
 - **Then** the system prompt starts with the persona block, then Corvidinho's rules with the PERSONA-3 rules text, then that project's AGENTS.md / CLAUDE.md block; the next run after a committed edit carries the new text (REQ-agent-069)
+### Scenario: the owner runs a task as a named persona
+
+- **Given** `personas/reviewer.md` committed next to `persona.md` with `model: openai:persona-model` (configured in `CORVIDINHO_LLM_MODEL`) and `skills: [review]`
+- **When** the owner runs `task run --persona reviewer` (or `/session start persona:reviewer`), or a lead's `delegate --skill review` starts a worker
+- **Then** that run calls `persona-model` first with the reviewer's voice in place of `persona.md`'s and the PERSONA-3 rules after it; if `persona-model` fails it falls back to the tier's next model with the AGENT-11 note; a team member's or community user's pick is refused with one line and nothing runs (REQ-agent-225)
+
 ### Scenario: a fetched issue title tells the model to ignore its rules
 
 - **Given** a tool-tier run that offers `files-write` and calls `github-issue-list`

@@ -43,6 +43,7 @@ files:
   - src/worktree/base.ts
   - tests/worktree.test.ts
   - tests/discord.session-worktree.test.ts
+  - tests/discord.session-persona.test.ts
   - tests/worktree.project-scope.test.ts
   - tests/discord.nongit-project-dir.test.ts
   - src/memory/types.ts
@@ -714,6 +715,17 @@ client always writes `CORVIDINHO_DISCORD_REPLY_CHANNEL_ID` /
 `CORVIDINHO_DISCORD_REPLY_PARENT_CHANNEL_ID` (empty when unset). The bridge
 passes them on chat, reply-continue, thread and ask-button runs;
 `/session start` and `/work` pass the command's channel; schedules pass none.
+
+`/session start` has an optional `persona` STRING option (REQ-discord-225,
+AUTONOMOUS-2 / AUTONOMOUS-5.a): only the owner may set it (anyone else gets
+`PERSONA_OWNER_ONLY_LINE` ephemerally and nothing starts); for the owner the
+handler checks the persona exists and its model is configured
+(`findPersona` / `personaModelRefusal` over `loadPersonas(ctx.personaRoot)`,
+one ephemeral line otherwise) before any session or worktree, then passes
+`AgentRunChatOpts.persona`, which the spawn client sends as
+`task run --persona <name>` before `--task`. The answer head adds
+`Persona: <name>`; later replies in that session use `persona.md`.
+`SlashContext.personaRoot` is a test seam (default `CORVIDINHO_ROOT`).
 `verifyRequesterCanSend` takes `attachFiles` (also AttachFiles; the test
 checker gets `{ attachFiles: true }` as a third argument) and
 `requester-perms.ts` exports `RequesterNeeds` and `REQUESTER_CANNOT_ATTACH`.

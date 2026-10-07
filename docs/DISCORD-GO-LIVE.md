@@ -624,6 +624,9 @@ counts; a missing file, section or key, or any other value, means off.
   ADMIN, so they never get `delegate` or `council`. A schedule the owner created, and a WATCH
   run the owner's own comment triggered (IDENTITY-12.a), are ADMIN, so with the gate on and the
   tier `code` they may get them; their workers are community like any worker.
+- `delegate --skill <tag>` runs its worker as the named persona whose skill tags hold that tag
+  (first by name), with that persona's model and voice (AUTONOMOUS-5.a, E.8); no match runs a
+  plain worker as before. `council` voices keep the default voice.
 - `ask-human` (AUTONOMY-1) is not behind this gate.
 
 ### E.6 Roles: owner, team, community (IDENTITY-8..12, ROLES-CHAT)
@@ -766,13 +769,14 @@ Free-text columns in `corvidinho.db` and every string value in the daemon's log 
 scrubbed for secrets before they are written (SAFE-6). The audit chain stores an args digest,
 never the args.
 
-### E.8 Persona file (PERSONA-1..3)
+### E.8 Persona file (PERSONA-1..3) and named personas (AUTONOMOUS-2.a / 5.a)
 
 Corvidinho's voice is `persona.md` at the root of the corvidinho checkout whose `src/cli.ts`
 runs the task (`CORVIDINHO_BIN`; by default the checkout the bridge, WATCH and daemon run from),
 never the project a run works in. Every run reads it again (chat, slash commands, `/work`,
 schedules, WATCH, `task run`, delegate and council workers), so the next turn after an update
-uses the new text; no restart and no setting. It goes into the system prompt first, and
+uses the new text; no restart and no setting. A run as a named persona (below) uses that
+persona's file instead. It goes into the system prompt first, and
 Corvidinho's rules follow it and win (one message per turn, no spam, no unchecked claims).
 Fixed-text bot posts (the bridge-live note, `/status`, error and spend lines) do not go through
 the model and keep their text. The bridge-live note in the `/announce` channel is written in the
@@ -789,6 +793,28 @@ changelog bullet list (PERSONA-1.a); editing `persona.md` does not change it.
   file, for example "working-tree changes not loaded". It is a `Text` event in the run's output:
   `bun src/cli.ts task run` prints it on stderr and `--json` / NDJSON carry it; the bridges and
   WATCH do not post it to Discord or GitHub.
+
+**Named personas (AUTONOMOUS-2.a, AUTONOMOUS-5.a).** `persona.md` stays the default voice. Each
+named persona is its own file in `personas/` next to it (same checkout, same rules: committed
+copy only, 8 KiB, scrubbed, read again every run), with front matter `name`, `model` (one
+`kind:model` entry you configured in `CORVIDINHO_LLM_MODEL` or a per-tier key) and `skills`
+(tags), then its voice. No setting or restart.
+
+- Run as one: `bun src/cli.ts task run --persona <name> --task "…"`, or `/session start` with
+  the optional `persona` option (that one run). Owner only: a team member or community user who
+  sets it gets one private line and nothing starts; a role-session `task run --persona` from
+  anyone else is refused the same way.
+- The run uses the persona's voice instead of `persona.md` and calls its model first, then the
+  tier's other configured models (AGENT-11 fallback with its note). Spend caps and the
+  no-provider notice apply per model; an unpriced persona model's spend card names
+  `the model in personas/<file>.md`.
+- `delegate --skill <tag>` (E.5) runs the worker as the first persona by name whose `skills`
+  hold that tag exactly; no match runs a plain worker. The worker keeps its limits (tier, depth,
+  community role, no tokens).
+- An unknown persona, a refused file or a model you did not configure: one plain line naming
+  the persona, file and model label (never a key value), nothing called.
+- The agent's file tools refuse to write, edit or delete in Corvidinho's own `personas/`
+  folder (SAFE-2); a project's own `personas/` directory is unaffected.
 
 ### E.9 Models: you configure them; there is no default (AGENT-13, AGENT-10)
 

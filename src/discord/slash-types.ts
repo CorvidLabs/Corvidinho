@@ -64,6 +64,11 @@ export type SlashInteraction = {
 };
 
 export type SlashContext = {
+  /**
+   * AUTONOMOUS-2.a: the checkout whose `personas/` `/session start persona:`
+   * reads. Default: Corvidinho's own checkout (`CORVIDINHO_ROOT`). Tests only.
+   */
+  personaRoot?: string;
   store: SessionStore;
   workStore: WorkStore;
   /** DISCORD-SCHEDULE — optional until bridge wires it. */
