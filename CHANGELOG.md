@@ -2,7 +2,25 @@
 
 ## Unreleased
 
+## 0.0.45
+
+### Admin / Discord
+
+- **/admin mutes add|remove, with /mute and /unmute as audited aliases** — [#407](https://github.com/CorvidLabs/Corvidinho/pull/407) (ADMIN-3.c part 2; tip orphan [#421](https://github.com/CorvidLabs/Corvidinho/pull/421)): owner-only live in-memory mute set via one helper (`applyMuteChange`); SAFE-5 `admin-mutes-add|remove` started→ok; refuses owner/caller; helper re-checks ADMIN at handler time (ADMIN-4); unmute of a `DISCORD_MUTED_USER_IDS` seed notes restart + tool-layer truth; points to `/admin deny add user:` for a lasting block.
+
+### Agent / GitHub
+
+- **The model a run moved from is no author of the change** — [#401](https://github.com/CorvidLabs/Corvidinho/pull/401) (AGENT-17.a / GITHUB-9.a; tip orphan [#422](https://github.com/CorvidLabs/Corvidinho/pull/422)): after a stall move to a stronger model, the weak model is dropped from authors so it can be the second-model reviewer; a refused delegate call records no author before the move.
+
+### Ops
+
+- Package version **0.0.45** — restart the Discord bridge and `github watch` after update so presence (DISCORD-12) reports 0.0.45. The bridge already ticks schedules; do **not** start a second `corvidinho daemon`. Source `~/.config/corvidinho/env` **and** `watch.env` so `GIPHY_API_KEY` and the watch username stay set. Leave Brave off (do not invent keys). No schema bump; NDJSON protocol stays 2. v0.0.45 gets its tag and Release from CI when this bump lands on main.
+- Needs operator action: (1) Update live checkout to the **release commit** (not a tip-orphan ahead of it). (2) Restart bridge + github watch via pidfile pattern with env + watch.env loaded. (3) Post a feature/version summary in the allowlisted main channel.
+- Rollback to the v0.0.44 tag: schema unchanged. That tag does not include ADMIN-3.c part 2 mutes or AGENT-17.a / GITHUB-9.a authorship fix.
+- Parked: #394 stays closed; COS HI capture and COMMUNITY-1..4 stay parked; drafts #411/#413/#393/#405 remain (Spec Sync red / not rebased).
+
 ## 0.0.44
+
 
 ### Admin / Discord / Watch
 

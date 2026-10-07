@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "release-0-0-45-admin-3-c-part-2-mutes-407-and-agent-17-a-github-9-a-moved-from-authorship-401-package-bump-changelog",
+  "slug": "release-0-0-45-admin-3-c-part-2-mutes-407-and-agent-17-a-github-9-a-moved-from-authorship-401-package-bump-changelog",
+  "title": "Release 0.0.45: ADMIN-3.c part 2 mutes (#407) and AGENT-17.a / GITHUB-9.a moved-from authorship (#401). Package bump, CHANGELOG fold, STATUS rows, version fixtures; CI tags v0.0.45 on land.",
+  "description": "Release 0.0.45: ADMIN-3.c part 2 mutes (#407) and AGENT-17.a / GITHUB-9.a moved-from authorship (#401). Package bump, CHANGELOG fold, STATUS rows, version fixtures; CI tags v0.0.45 on land.",
+  "kind": "operations",
+  "state": "verifying",
+  "canonical_applied": true,
+  "base_commit": "309f472db9db22101b69005217d7aec0cb33371b",
+  "created_at": 1791390682,
+  "updated_at": 1791390738,
+  "affected_specs": [
+    "cli"
+  ],
+  "affected_paths": [
+    "package.json",
+    "CHANGELOG.md",
+    "STATUS.md",
+    "tests/version.test.ts",
+    "tests/update-helpers.test.ts",
+    "specs/cli/cli.spec.md",
+    "specs/cli/requirements.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "package.json 0.0.45; version prints 0.0.45; CHANGELOG 0.0.45 extractable covering ADMIN-3.c part 2 mutes (#407) and AGENT-17.a/GITHUB-9.a (#401) with tip-orphans #421/#422; STATUS rows mention 0.0.45; CI tags v0.0.45 on land"
+  ],
+  "selected_artifacts": [
+    "context",
+    "plan",
+    "testing",
+    "design",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

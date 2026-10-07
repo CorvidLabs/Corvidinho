@@ -1,0 +1,45 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1791390701,
+      "digest": "fb46da91485c68964d81c21da73e207fa6f42850e9f034ff454f2c3f66387ade",
+      "note": "Eager 0.0.45 after #407+#401",
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "release-0-0-45-admin-3-c-part-2-mutes-407-and-agent-17-a-github-9-a-moved-from-authorship-401-package-bump-changelog",
+        "title": "Release 0.0.45: ADMIN-3.c part 2 mutes (#407) and AGENT-17.a / GITHUB-9.a moved-from authorship (#401). Package bump, CHANGELOG fold, STATUS rows, version fixtures; CI tags v0.0.45 on land.",
+        "description": "Release 0.0.45: ADMIN-3.c part 2 mutes (#407) and AGENT-17.a / GITHUB-9.a moved-from authorship (#401). Package bump, CHANGELOG fold, STATUS rows, version fixtures; CI tags v0.0.45 on land.",
+        "kind": "operations",
+        "affected_specs": [
+          "cli"
+        ],
+        "affected_paths": [
+          "CHANGELOG.md",
+          "STATUS.md",
+          "package.json",
+          "specs/cli/cli.spec.md",
+          "specs/cli/requirements.md",
+          "tests/update-helpers.test.ts",
+          "tests/version.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "package.json 0.0.45; version prints 0.0.45; CHANGELOG 0.0.45 extractable covering ADMIN-3.c part 2 mutes (#407) and AGENT-17.a/GITHUB-9.a (#401) with tip-orphans #421/#422; STATUS rows mention 0.0.45; CI tags v0.0.45 on land"
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "no",
+          "public_contract": "no"
+        }
+      },
+      "approved_delta_digests": {
+        "cli": "79ee641e49d7db8cb8dffeed5d148b1ef552174e18e407898a26d12626619120"
+      }
+    }
+  ],
+  "reopenings": []
+}
