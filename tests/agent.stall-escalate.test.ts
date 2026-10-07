@@ -9,7 +9,7 @@
  * the delegate worker env, and the real CLI against the localhost fake LLM.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTaskExecute } from "../src/agent/execute.ts";
@@ -32,9 +32,9 @@ import type { AgentEvent, ExecuteResult, ModelUsage } from "../src/agent/types.t
 import type { CapabilityTier } from "../src/agent/tier.ts";
 import { buildDelegateSpawn } from "../src/autonomous/delegate.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
-import { clearRegistry, register } from "../src/plugins/registry.ts";
+import { clearRegistry, get as getPlugin, register, unregister } from "../src/plugins/registry.ts";
 import { openCorvidinhoDb } from "../src/store/db.ts";
-import { resolveReviewer } from "../src/work/review.ts";
+import { checkoutAuthors, resolveReviewer } from "../src/work/review.ts";
 import { startFakeLlm, type FakeReply } from "./fixtures/fake-llm.ts";
 
 // Spelled out (not imported) so the loop tests read the same on the base.
@@ -345,6 +345,59 @@ describe("tool loop: after the nudge it moves to the next stronger model in the 
     expect(bodies.map((b) => b.model)).toEqual(["fake-weak", "fake-weak", "fake-strong", "fake-strong"]);
     expect([...exec.review.authors()].sort()).toEqual(["fake-strong", "fake-weak"]);
     expect(resolveReviewer({ ...BASE_ENV, ...env }, exec.review.authors())).toBeNull();
+  });
+
+  test("GITHUB-9.a: a refused delegate call before the move records no author, so the checkout's record is the stronger model only", async () => {
+    registerWriter();
+    // A `delegate` refused before any worker ran (no data), as the real one
+    // refuses at the depth cap or with no free slot: nothing changed.
+    const real = getPlugin("delegate");
+    if (real) unregister("delegate", real);
+    register({
+      name: "delegate",
+      description: "test stand-in for a delegate call refused before a worker ran",
+      minTier: 0,
+      async handler() {
+        return { ok: false, error: "refused: delegation depth cap reached; do this subtask yourself (SAFE-9).", exitCode: 2 };
+      },
+    });
+    const dir = mkdtempSync(join(tmpdir(), "corvidinho-stall-escalate-authors-"));
+    try {
+      const git = Bun.spawnSync(["git", "init", "-q", "-b", "fix-typo"], { cwd: dir });
+      expect(git.exitCode).toBe(0);
+      const env = { CORVIDINHO_LLM_MODEL: "fake-weak,fake-strong", [ORDER]: "fake-weak,fake-strong" };
+      const { exec, bodies } = makeExec(
+        env,
+        {
+          "fake-weak": [{ toolCalls: [{ name: "delegate" }] }, "Done."],
+          "fake-strong": [{ toolCalls: [{ name: "touch-file" }] }, "Fixed the typo in README.md."],
+        },
+        { cwd: dir },
+      );
+      const r = await run(exec);
+      expect(bodies.map((b) => b.model)).toEqual([
+        "fake-weak",
+        "fake-weak",
+        "fake-weak",
+        "fake-strong",
+        "fake-strong",
+      ]);
+      expect(r.filesChanged).toEqual(["README.md"]);
+      expect(exec.review.authors()).toEqual(["fake-strong"]);
+      // What a later run that opens the PR from this checkout counts (pr_change_authors).
+      const db = openCorvidinhoDb({ env: process.env });
+      let recorded: string[];
+      try {
+        recorded = checkoutAuthors(db, realpathSync(dir), ["fix-typo"]);
+      } finally {
+        db.close();
+      }
+      expect(recorded).toEqual(["fake-strong"]);
+      const reviewer = resolveReviewer({ ...BASE_ENV, ...env }, [...exec.review.authors(), ...recorded]);
+      expect(reviewer ? entryLabel(reviewer.entry) : null).toBe("fake-weak");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("a plan after the nudge moves too; the rest of the run (a verify retry) stays on the stronger model", async () => {

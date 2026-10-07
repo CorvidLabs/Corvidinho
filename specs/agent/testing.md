@@ -384,6 +384,16 @@ stronger one.
   file does not load (`Export named 'stallMovedNote' not found`) and the
   changed stall-nudge cases fail (old stand line, old guard). Restored: all
   pass.
+- GITHUB-9.a after a move (REQ-agent-088, REQ-agent-092): with two models and
+  the order, the weak model saying "Done." twice and the strong one changing
+  README.md, `review.authors()` is the strong model only and
+  `resolveReviewer` picks the weak one; in a worker whose lead's authors
+  name the weak model it stays an author and there is no reviewer; in a
+  `git init` checkout, a `delegate` call refused before any worker ran (no
+  `data`) records no author, so `checkoutAuthors` is the strong model only
+  and the weak model reviews. Fail on main: with origin/main's
+  `src/agent/execute.ts` the first and third fail; with the PR's first
+  version (57c9a48d) the third fails (the record also has the weak model).
 
 ## Public spend text (REQ-agent-098 modified, SAFE-14.a)
 

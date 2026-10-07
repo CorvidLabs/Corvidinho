@@ -1779,14 +1779,25 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
           );
         }
       }
-      // GITHUB-9.a: a call that changed (or may have changed) the checkout —
-      // a state-changing result, a tool whose edits no result reports, a
-      // worker — makes the run's models its authors beyond this run.
-      if (
-        onStateChange &&
+      // A call whose edits no result reports: a tool that edits files
+      // unreported, or a worker that ran (a refusal carries no data) and may
+      // have run an allowlisted Fledge command, or left no result frame (a
+      // frame always carries `verified`), so no file it edited was reported
+      // (REQ-agent-502).
+      const editsUnreported =
         offered.has(name) &&
-        (changedState(name, result) || editsFilesUnreported(name) || name === DELEGATE_COMMAND_NAME)
-      ) {
+        (editsFilesUnreported(name) ||
+          (name === DELEGATE_COMMAND_NAME &&
+            result.data !== undefined &&
+            (workerEditsUnreported ||
+              typeof (result.data as { verified?: unknown }).verified !== "boolean")));
+      // GITHUB-9.a: a call that changed (or may have changed) the checkout —
+      // a state-changing result (a finished worker, or one that reported a
+      // changed file) or one whose edits no result reports — makes the run's
+      // models its authors beyond this run. AGENT-17 counts each of these as
+      // a change, so a run that moves to a stronger model has recorded none
+      // (a refused `delegate` ran no worker and records nothing).
+      if (onStateChange && offered.has(name) && (changedState(name, result) || editsUnreported)) {
         await onStateChange();
       }
       // SAFE-8 (REQ-agent-098): a flat-priced tool call (`web-search`, or
@@ -1823,18 +1834,7 @@ async function runToolLoop(args: LoopArgs): Promise<ExecuteResult> {
       for (const f of filesChangedFromToolData(result.data)) {
         filesChanged.add(f);
       }
-      if (
-        offered.has(name) &&
-        (editsFilesUnreported(name) ||
-          // A worker ran (a refusal carries no data) and may have run an
-          // allowlisted Fledge command, or it left no result frame (a frame
-          // always carries `verified`), so no file it edited was reported
-          // (REQ-agent-502).
-          (name === DELEGATE_COMMAND_NAME &&
-            result.data !== undefined &&
-            (workerEditsUnreported ||
-              typeof (result.data as { verified?: unknown }).verified !== "boolean")))
-      ) {
+      if (editsUnreported) {
         unreportedEditTools.add(name);
         // AGENT-17: remembered for every attempt of the run.
         stallGuard.changed();

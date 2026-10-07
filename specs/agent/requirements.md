@@ -2279,8 +2279,12 @@ and delegate workers — and SHALL hand each `runPlugin` call a `PrReviewRun`
   own.
 
 After each offered tool call that changed, or may have changed, the
-checkout (a `changedState` result, a tool whose edits no result reports, or
-`delegate`), the loop SHALL record the run's current `authors()` for it
+checkout (a `changedState` result, a finished `delegate` worker or one that
+reported a changed file included, or a call whose edits no result reports: a
+tool that edits files unreported, or a `delegate` worker that ran and may
+have, REQ-agent-502; the calls AGENT-17 counts as a change, so a `delegate`
+call refused before any worker ran records nothing), the loop SHALL record
+the run's current `authors()` for it
 (`recordChangeAuthors`: the git top level of the run's cwd and the branch
 checked out then, `""` when detached; the `pr_change_authors` table, created
 on first use with no schema version bump, each (checkout, branch, model)
@@ -2776,15 +2780,21 @@ No config key, flag, slash command, HumanAsk reason, NDJSON field, table or
 schema version is added.
 
 A move only follows a stall in a run where nothing changed, so the model the
-run moved from wrote none of the change: on a move `createTaskExecute` SHALL
-drop it from the run's `authors()` (REQ-agent-092, GITHUB-9.a: the reviewer
-is the first configured model that didn't write the change), so a later
-state change records only the models that wrote it (`recordChangeAuthors`)
-and, with two configured models, the model it moved from can review the
-stronger model's change. It SHALL stay an author when the lead's authors
-(`CORVIDINHO_DELEGATE_AUTHORS`), a `delegate` result's `data.models` or a
-failover (the run's own or a worker's) also name it, and a later reply from
-it in the run makes it an author again (`onModel`).
+run moved from wrote none of the change, and the run has recorded no author
+for the checkout yet (REQ-agent-092 records only after a call AGENT-17
+counts as a change; a `delegate` call refused before any worker ran records
+nothing): on a move `createTaskExecute` SHALL drop it from the run's
+`authors()` (REQ-agent-092, GITHUB-9.a: the reviewer is the first configured
+model that didn't write the change), so a later state change records only
+the models that wrote it (`recordChangeAuthors`) and, with two configured
+models, the model it moved from can review the stronger model's change. It
+SHALL stay an author when the lead's authors (`CORVIDINHO_DELEGATE_AUTHORS`),
+a `delegate` result's `data.models` or a failover (the run's own or a
+worker's) also name it, and a later reply from it in the run makes it an
+author again (`onModel`). A worker's own move does not reach its lead: the
+worker's `data.models` still name the model it moved from whenever its
+usage was reported (`usageByModel`), so the lead counts that model as an
+author.
 
 Acceptance Criteria
 - `modelOrderFromEnv` is [] unset or blank and parses `kind:model` entries in order; `MODEL_ORDER_ENV` is `CORVIDINHO_LLM_MODEL_ORDER`.
@@ -2798,6 +2808,7 @@ Acceptance Criteria
 - A delegate worker's env keeps `CORVIDINHO_LLM_MODEL_ORDER`.
 - The real CLI (`task run --output ndjson`, two localhost `ollama:` models, the order set) makes three requests (weak, weak, strong), emits both operator lines, and ends `done` with the note and `model` naming the stronger model.
 - After a move (two configured models, the order set, the weak model saying "Done." twice, the stronger one changing `README.md`), the run's `review.authors()` is the stronger model only and `resolveReviewer` picks the weak model; in a worker whose lead's authors name the weak model it stays an author after the move and there is no reviewer.
+- In a git checkout, a `delegate` call the weak model made that was refused before any worker ran records no author: after the move and the stronger model's change, the checkout's `pr_change_authors` record is the stronger model only and the weak model is the reviewer.
 
 ### REQ-agent-525
 
