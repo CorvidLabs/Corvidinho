@@ -146,6 +146,139 @@
         "REQ-agent-088",
         "REQ-agent-092"
       ]
+    },
+    {
+      "timestamp": 1791390335,
+      "commit": "bdbfe3d8cbeb9c82b9e085ea9f70c1d04872a94c",
+      "contract_digest": "586cb61f1d43f5321abb9a9481863600e3fbd2c1308f0d33ccb7bc476cdb8d75",
+      "execution_digest": "22a0a3170fa74d57d1722b21c80010be2e21d67e7e4795631c81d24d7772c135",
+      "workspace_digest": "f0ee6058d530a74a5e790d8111cce1fb9a0a83763188245f5ccb5f7d5d24ed4e",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-088",
+        "REQ-agent-092"
+      ]
+    },
+    {
+      "timestamp": 1791390337,
+      "commit": "57beb344cdd86dcbd5a9872a99b2456a10d4e79e",
+      "contract_digest": "586cb61f1d43f5321abb9a9481863600e3fbd2c1308f0d33ccb7bc476cdb8d75",
+      "execution_digest": "22a0a3170fa74d57d1722b21c80010be2e21d67e7e4795631c81d24d7772c135",
+      "workspace_digest": "f0ee6058d530a74a5e790d8111cce1fb9a0a83763188245f5ccb5f7d5d24ed4e",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-088",
+        "REQ-agent-092"
+      ]
+    },
+    {
+      "timestamp": 1791390337,
+      "commit": "c5b148cdf5fe9e90472e4b4284a1373f7f80d84f",
+      "contract_digest": "586cb61f1d43f5321abb9a9481863600e3fbd2c1308f0d33ccb7bc476cdb8d75",
+      "execution_digest": "22a0a3170fa74d57d1722b21c80010be2e21d67e7e4795631c81d24d7772c135",
+      "workspace_digest": "f0ee6058d530a74a5e790d8111cce1fb9a0a83763188245f5ccb5f7d5d24ed4e",
+      "acceptance_input_digest": "eaa243c88ea6e7c11edabacea6dd82a7f21cfd227c458add8151fca5eda2b0bd",
+      "acceptance_manifest": {
+        "schema_version": 1,
+        "entries": [
+          {
+            "path": "specs/agent/agent.spec.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "7482e8969774379fe4b1f7dc699937178a0e47e8e35e7a0bb0d5c84c2fba43e5",
+            "entry_digest": "b1be10cdd593842ac304979e2744d97015fee7967c2fe54b6f430d0bf17e743d",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "specs/agent/context.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "d76cd90c631ea926a7a66ed9c1d9e19cdc745e767687deaff21241041adfb8b9",
+            "entry_digest": "f93515f598a7f68afe90f924ba2680118dbcad9dc5735e84bc325f0aa1fc4208",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "specs/agent/requirements.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "e8b0967785dbfb5dece770d48b8915e9eebf3dbbd801aa4d2135da41a1eb2747",
+            "entry_digest": "b27bf724f4256d8db15a564d56ea59ffbff44353ff2bb11e803ab24a9b74c90d",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "specs/agent/tasks.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "15955dc0ea8bc11ad9e36cea1ca266e352d029a49b0803ae5dae3d239a9fb472",
+            "entry_digest": "320502eca3792ee5e517405b9d1da93a33b8016a009625d2b311ddfce229b670",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "specs/agent/testing.md",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "87f7467d5c12b9df973b516d46eb3595384dfc793f5e5796de0236af80d7c95f",
+            "entry_digest": "47d84c0e11a259757e299e5276e73818ced5f0a078ab8d720e712dfbefcc9da0",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "src/agent/execute.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "278051f3b3266a746e9df4703363a71b39bd157b88bc583433f866091c5ace72",
+            "entry_digest": "5b120ead3b369e11c7ea77cbe8df8b83355d2008e3a789c7085fc79dcff5d15b",
+            "owners": [
+              "agent"
+            ]
+          },
+          {
+            "path": "tests/agent.stall-escalate.test.ts",
+            "kind": "file",
+            "mode": 33188,
+            "payload_digest": "098fdfb00847d7d2b0cd6c120a8759478e3553f76c662c41e978d0ce5b996dcd",
+            "entry_digest": "f1fe49d7fd4716cc24e507dd385c32692008f82d04bf272c6d9ed4cffb274920",
+            "owners": [
+              "@exact:test"
+            ]
+          }
+        ]
+      },
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-088",
+        "REQ-agent-092"
+      ]
     }
   ]
 }

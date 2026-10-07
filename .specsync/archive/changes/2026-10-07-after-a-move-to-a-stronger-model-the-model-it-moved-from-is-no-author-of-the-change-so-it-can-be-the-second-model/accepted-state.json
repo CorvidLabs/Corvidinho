@@ -7,11 +7,11 @@
   "title": "After a move to a stronger model, the model it moved from is no author of the change, so it can be the second-model reviewer (AGENT-17.a, GITHUB-9.a)",
   "description": "After a move to a stronger model, the model it moved from is no author of the change, so it can be the second-model reviewer (AGENT-17.a, GITHUB-9.a)",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "54d6a6c777f51b4fa430511a5d7f049a8ba42083",
   "created_at": 1791332152,
-  "updated_at": 1791390088,
+  "updated_at": 1791390443,
   "affected_specs": [
     "agent"
   ],

@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "after-a-move-to-a-stronger-model-the-model-it-moved-from-is-no-author-of-the-change-so-it-can-be-the-second-model",
+  "implementation_commit": "bdbfe3d8cbeb9c82b9e085ea9f70c1d04872a94c",
+  "implementation_tree": "ba0abd5b1beaad0c909d438536305830452e4fb8",
+  "contract_digest": "586cb61f1d43f5321abb9a9481863600e3fbd2c1308f0d33ccb7bc476cdb8d75",
+  "workspace_digest": "f0ee6058d530a74a5e790d8111cce1fb9a0a83763188245f5ccb5f7d5d24ed4e",
+  "closing_digest": "f58a23f3afc04c6f735e89d92115c72ed298ac7cd90ca5ff7da9da22cc6b34d8",
+  "review_digest": "3fd8ff3758a1ac14c766a5513f366e27492171b4861aa3c6b46afb066acbcdfc",
+  "finalization_digest": "dfc0a4fd88282fcdf7f19218f463d05410c38517b225904663f1e8ec0fc477f3",
+  "timestamp": 1791390443,
+  "note": "tip-orphan archive after #401 squash (same class as #400 / #414 / #417 / #418 / #420 / #421)"
+}
