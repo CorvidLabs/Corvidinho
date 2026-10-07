@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "4973f5eade8423c3f65f979e9d6727b45239e13e",
   "created_at": 1791332416,
-  "updated_at": 1791332463,
+  "updated_at": 1791332465,
   "affected_specs": [
     "cli"
   ],
