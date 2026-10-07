@@ -24,6 +24,21 @@ export type DetectedEvent = {
   /** GitHub numeric user id of `sender` when the API gave it (IDENTITY-7 stable id). */
   senderId?: number;
   /**
+   * IDENTITY-12.a / SAFE-13 (REQ-watch-1202): the GitHub numeric user ids of
+   * everyone who edited the text that triggered the event (the comment, or
+   * the issue / PR body) after it was posted — `[]` when it was never
+   * edited; absent when that could not be read. GitHub keeps `user` (the
+   * `sender`) as the original author when someone with write access edits
+   * it, so only a text nobody but `senderId` edited gives the run the
+   * sender's role or the owner's SAFE-13 exemption (fail closed).
+   */
+  textEditorIds?: number[];
+  /**
+   * SAFE-13 (REQ-watch-1202): GitHub numeric user id of the thread's author
+   * (who wrote its title), when the API gave it.
+   */
+  threadAuthorId?: number;
+  /**
    * assignment / review_request only: the user who assigned the watch user or
    * requested its review. Both `sender` and `actor` must pass the user
    * allowlist, and a missing actor is refused (REQ-watch-302).

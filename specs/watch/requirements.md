@@ -452,6 +452,11 @@ successful ack), `maybePostWatchInjectionNotice` SHALL post one comment
 per event id (the summary dedup store; skipped for a bad repo; a rate-limited
 post backs off like the summary). No env var, config key, table or column.
 
+- Since REQ-watch-1202 (follow-up to #374) the owner exemption SHALL cover
+  only text the owner wrote: the body when the owner sent it and nobody else
+  edited it (`textUneditedByOthers`), the title when the owner opened the
+  thread (`threadAuthorId`); every other part is scanned.
+
 Acceptance Criteria
 - `routeEvent` puts the title and body inside the fence after the header; a 20 000-char body that guesses the end marker, and a body of lines that get quoted, both leave the real end marker last and the prompt within 8000 chars.
 - `watchInjectionVerdict` flags a non-owner's injected body or title — including one from the owner's login with no or another numeric id — and returns null for the owner's (by numeric id) and for an ordinary body.
@@ -459,6 +464,7 @@ Acceptance Criteria
 - `buildSummaryBody` adds the owner line only when the run reports `injection`.
 - Through `startWatchPoller`: an assignment event whose run reports `injection` gets one comment @mentioning the owner's login with the SAFE-13 line, and a second poll does not repeat it.
 - Regression tests in `tests/safe.injection.test.ts` fail on the base sources and pass after.
+- `watchInjectionVerdict` flags the owner's injected body when someone else edited it or its edits are unknown, and a title the owner did not write (REQ-watch-1202, `tests/watch.github-roles.postreview.test.ts`).
 
 ### REQ-watch-067
 
@@ -805,10 +811,58 @@ it, `watchTriggerRole(event, people)` (`src/watch/router.ts`), as
   role, the SAFE-13 owner exemption, the `watch` surface (no shell, runners
   or Fledge runs, SAFE-3.a, REQ-watch-735), the memory scope (REQ-watch-067).
   No env var, config key, flag, table or schema change.
+- Since REQ-watch-1202 (follow-up to #374) the sender triggered the run only
+  through text nobody else edited: `watchTriggerRole` SHALL give `community`
+  unless `textUneditedByOthers(event)`, and the SAFE-13 owner exemption
+  covers only text the owner wrote.
 
 Acceptance Criteria
 - Through `startWatchPoller`: comments by the owner's numeric id → `actingRole: "owner"` and the prompt's owner role line; by the team member's → `"team"`; by a declared community person, a stranger, the owner's login with another id and with no id → `"community"`, with no owner or team role line; the thread text is still fenced.
 - An issue-body mention by the team member → `"team"`; an assignment and a review request on the owner's own thread → `"community"`, and the prompt says the run has community tools.
 - `watchTriggerRole` gives owner / team by numeric id, community for a community person, a stranger, a re-registered login, no id, no people list and both actor-gated types.
 - `tests/watch.github-roles.test.ts` fails on the base sources and passes on the branch.
+- An owner comment or issue body someone else edited → `"community"` (REQ-watch-1202, `tests/watch.github-roles.postreview.test.ts`).
 
+### REQ-watch-1202
+
+IDENTITY-12.a follow-up to #374 (REQ-watch-1201, REQ-watch-071): GitHub keeps
+a comment's or an issue / PR body's author as its `user` when someone with
+write access (or an Actions / App token) edits it, so the sender triggered a
+run only through text nobody else edited.
+
+- The search clients SHALL carry, on each `issue_comment` and `issues`
+  event, `DetectedEvent.textEditorIds`: the GitHub numeric user ids of
+  everyone who edited the triggering text after it was posted — `[]` for a
+  comment whose `updated_at` is its `created_at`; otherwise, and for every
+  body, what `SearchClient.findTextEditors(nodeId)` reads (the live client:
+  GraphQL `TEXT_EDITORS_QUERY` on the REST `node_id` — `lastEditedAt`, the
+  last `editor`, and every `userContentEdits` revision's `editor` and
+  `deletedBy` — parsed by `textEditorIdsFromNode`). An editor or deleter
+  with no numeric id, a history longer than was read, a failed lookup (a
+  rate limit still bubbles) or a client with no lookup SHALL leave it absent
+  (unknown). Every event SHALL carry `threadAuthorId`, the numeric id of the
+  thread's author, when the API gave it. The fixture client takes
+  `updated_at` and `editor_ids` on comments and `body_editor_ids` on items
+  (default: never edited).
+- `textUneditedByOthers(event)` (`src/watch/router.ts`) SHALL be true only
+  when `senderId` and `textEditorIds` are known and every editor is
+  `senderId`. `watchTriggerRole` SHALL give `community` when it is false
+  (fail closed), and the identity block's role line for a declared owner or
+  team sender SHALL then read `- role: <owner|team> (but someone else may
+  have edited this text after they posted it, so this run has community
+  tools)`. Editing one's own text keeps one's role.
+- `watchInjectionVerdict` SHALL exempt only text the owner wrote (the owner
+  by numeric id, REQ-watch-367): the body only when the owner sent it and
+  `textUneditedByOthers` holds, the title only when `threadAuthorId` is the
+  owner's. Every other part SHALL be scanned, so the owner's comment on a
+  thread someone else opened has that thread's title scanned.
+- No env var, config key, flag, table or schema change. A poll makes one
+  GraphQL call per body-mention item and per edited mention comment.
+
+Acceptance Criteria
+- Through `startWatchPoller` with the fixture client: the owner's comment edited by a stranger and the owner's issue body edited by a team member → `actingRole: "community"` with the "someone else may have edited" role line; the owner's unedited comment, self-edited comment and unedited body → `"owner"`.
+- A failed edit lookup, or a client with no lookup, leaves `textEditorIds` absent and the role community.
+- The live client over a stubbed `fetch`: an edited comment and each body mention get one GraphQL lookup (an unedited comment none); a stranger's revision gives `[stranger, owner]`, a body with no edits `[]`, a 502 leaves it absent; `threadAuthorId` is the item author's id.
+- `textEditorIdsFromNode`: `[]` for no edits; every editor and deleter; null for a missing editor id, a cut history or no node.
+- `watchInjectionVerdict` flags the owner's injected comment when someone else edited it or its edits are unknown, and an injected title unless the owner opened the thread; through the poller a stranger's injected title on the owner's comment is refused before any run while the owner's own thread runs as the owner.
+- `tests/watch.github-roles.postreview.test.ts` fails on the base sources and passes on the branch.

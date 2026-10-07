@@ -650,10 +650,12 @@ Who is who in an allowlisted channel:
 - On GitHub (IDENTITY-12.a) a WATCH run gets the role of the person who triggered it, matched
   by their GitHub numeric user id in the people list (never a login): the owner's tools for the
   owner, the team's for a team member (not `/work` file edits), behind the same must-ask gate;
-  community for anyone else and for every assignment or review request. It never gets the
-  shell, runners, Fledge runs or a discovered Fledge plugin command, and secret-looking
-  paths stay hidden there for every role
-  ([`WATCH.md`](WATCH.md) "Roles on GitHub").
+  community for anyone else, for every assignment or review request, and for a comment or body
+  someone else edited (REQ-watch-1202). It never gets the shell, runners, Fledge runs or a
+  discovered Fledge plugin command, never writes the watcher's own checkout (file writes,
+  git branch / commit / push, SpecSync change steps, REQ-plugins-1202), and secret-looking
+  paths stay hidden there for every role; its audit rows and cards name `github:<id>`
+  (REQ-plugins-1203) ([`WATCH.md`](WATCH.md) "Roles on GitHub").
 - Schedules anyone but the owner created and `delegate` / `council` workers are
   community whoever triggered them. A schedule the owner created runs as the owner
   (DISCORD-SCHEDULE-1.a): their allowlisted tools and must-ask cards, never the shell,

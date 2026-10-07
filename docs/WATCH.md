@@ -56,30 +56,52 @@ people list, a GitHub `deny_users` entry (login or id), or the person's
 Discord id muted or deny-listed applies to the next call, and a stamp, a login
 or a Discord id alone never raises it.
 
+**Edited text (REQ-watch-1202):** GitHub keeps a comment's (or an issue / PR
+body's) author as its `user` when someone with write access — or an Actions /
+App token — edits it, so the author's role applies only when **nobody else
+edited that text**: a comment whose `updated_at` is its `created_at` was
+never edited; otherwise, and for every body, WATCH reads its edit history from
+GraphQL (`lastEditedAt`, `editor`, `userContentEdits`). An edit by anyone but
+the author — or a history that can't be read — gives the run community tools
+(fail closed), the identity block says so, and the text loses the owner's
+SAFE-13 exemption. Editing your own comment keeps your role.
+
 | Who triggered the run | Tools on GitHub |
 |---|---|
-| **Owner** (`[owner] github_id`, or `github_ids` on the owner's person) | The owner's tools (IDENTITY-9), behind the same must-ask gate: a must-ask call (a `git-push` to the default branch, a `discord-post-message`) waits for the owner's Approve card, which the Discord bridge DMs to the owner (the watch process and the bridge share `CORVIDINHO_DATA_DIR`); no answer or a deny runs nothing (SAFE-20). |
+| **Owner** (`[owner] github_id`, or `github_ids` on the owner's person) | The owner's tools (IDENTITY-9), behind the same must-ask gate: a must-ask call (a `discord-post-message`, a prod or deploy call) waits for the owner's Approve card, which the Discord bridge DMs to the owner (the watch process and the bridge share `CORVIDINHO_DATA_DIR`); no answer or a deny runs nothing (SAFE-20). Never the tools that write the watcher's own checkout (below). |
 | **Team** (`role = "team"` and a `github_ids` entry) | The team's tools (IDENTITY-10): every read tool, reviews (`github-issue-comment`, `github-pr-review` as `COMMENT`, allowlisted repos only), their own memory (MEMORY-8), `web-search` / `gif-search` when allowlisted. File edits stay `/work`-only (start a `/work` on Discord). |
 | Anyone else — undeclared, declared community, no numeric id, a re-registered login, every assignment and review request | Community, as before: read/chat tools only. |
 
 What stays the same for every role on GitHub: the shell, the runners, the
 Fledge runs and discovered Fledge plugin commands are never offered
-(SAFE-3.a); secret-looking paths (`.env*`,
+(SAFE-3.a); a WATCH run works in the watcher's own checkout (`task run
+--here`, the checkout every WATCH, Discord and daemon spawn runs its binary
+from) with no worktree of its own, so the tools that write that checkout —
+`files-write` / `files-edit` / `files-delete`, `git-branch-create` /
+`git-commit` / `git-push` and the SpecSync change steps — are refused there,
+the owner's runs included (REQ-plugins-1202; edit on Discord or with `/work`,
+which get a worktree); secret-looking paths (`.env*`,
 `.ssh`, keys, keystores) stay hidden from the file, search and git tools, the
 owner's runs included, because the answer goes to a public thread
 (ROLES-CHAT-8); the owner's `--person` memory view, private notes and profiles
 are never read there (MEMORY-7.a); WATCH runs never approve or archive a
-SpecSync change (AGENT-18.a); `delegate` / `council` workers are community; and
-the thread's title and body stay fenced untrusted data (SAFE-12).
+SpecSync change (AGENT-18.a); `delegate` / `council` workers are community;
+the thread's title and body stay fenced untrusted data (SAFE-12); and the
+SAFE-5 audit rows and must-ask cards of a WATCH run's tools name the person
+who triggered it as `github:<numeric id>` (else `github:<login>`), never
+`local`, which is the operator's own CLI (REQ-plugins-1203).
 
 **Untrusted text (SAFE-12 / SAFE-13, #71):** the issue / PR / comment title
 and body go to the model inside an `UNTRUSTED_DATA` fence (clipped first, so
 the end marker, which carries a random id, always survives the ~8000-char
 prompt cap); the run treats them as data, and what it may run is decided by
 its role (the trigger's declared role, IDENTITY-12.a — see "Roles on GitHub"). Before any ack or run, the same
-conservative detector as Discord checks the title and body of every event not
-sent by the owner (recognised by the owner's numeric id only, never the login —
-a re-registered owner login is checked like anyone else): on a hit WATCH posts one
+conservative detector as Discord checks every part of the event the owner did
+not write (REQ-watch-1202; the owner recognised by the owner's numeric id only,
+never the login — a re-registered owner login is checked like anyone else):
+the body, unless the owner sent it and nobody else edited it, and the title,
+unless the owner opened the thread — so the owner's comment on a thread
+someone else opened still has that thread's title checked: on a hit WATCH posts one
 comment saying it won't act on it and why (plain words, never quoting the
 text), @mentioning the owner's GitHub login from `[owner]` /
 `CORVIDINHO_OWNER_GITHUB_LOGIN` when set, appends an `injection-suspected`

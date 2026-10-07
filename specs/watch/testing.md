@@ -309,3 +309,39 @@ with an org name and a request id in its body; no network, no real key):
   regression guards (a Discord run ignores the GitHub keys; team and
   community never reach a card; no shell and community workers on WATCH).
   Restored: 12 of 12 pass.
+
+## Edited text and SAFE-13 owner-written only (REQ-watch-1202 added, REQ-watch-1201 / REQ-watch-071 modified; IDENTITY-12.a follow-up to #374)
+
+- `tests/watch.github-roles.postreview.test.ts` — temp allowlist file (owner
+  with a `github_id`, a team person with `github_ids`), a real
+  `startWatchPoller` over the fixture search client with a capturing agent,
+  and `createOctokitSearchClient` over a stubbed `fetch` (search, comments
+  and `POST /graphql`); no token, no network.
+  - "through the poller": the owner's comment edited by a stranger
+    (`updated_at` later, `editor_ids` [stranger, owner]) and the owner's
+    issue body edited by the team member → `actingRole: community`, and the
+    prompt's role line says someone else may have edited it; the owner's
+    unedited comment, self-edited comment and unedited body → `owner`.
+  - "edits that cannot be read": a lookup returning null, and a client with
+    no lookup, leave `textEditorIds` absent → community.
+  - `watchTriggerRole`: owner / team only when every editor is the sender.
+  - "the live client": an edited comment and each body mention get one
+    GraphQL lookup (an unedited comment none); `[stranger, owner]`, `[]`, and
+    absent for a 502; `threadAuthorId` from the item's `user.id`.
+  - `textEditorIdsFromNode`: `[]`, every editor and deleter, null for a
+    missing id, a cut history or no node.
+  - SAFE-13: the owner's injected comment is flagged once someone else
+    edited it or its edits are unknown; an injected title is flagged unless
+    the owner opened the thread; through the poller a stranger's injected
+    title on the owner's comment is refused (`injection_refused`), while the
+    owner's own thread runs as the owner.
+- Updated for the new field (never-edited text now says so explicitly):
+  `tests/watch.github-roles.test.ts` (`ev()` and the `watchTriggerRole`
+  cases carry `textEditorIds: []`), `tests/safe.injection.test.ts` (the
+  owner-exempt case), `tests/identity.recognise.test.ts` (the owner role
+  line).
+- Fail on base (`origin/main` 86d68cd): with its `src/` swapped in, 11 of 12
+  fail (only the owner's Discord-run control passes); per file, main's
+  `src/watch/router.ts` fails the 7 role / SAFE-13 cases and main's
+  `src/watch/searcher.ts` the 4 searcher / poller cases. Restored: 12 of 12
+  pass.

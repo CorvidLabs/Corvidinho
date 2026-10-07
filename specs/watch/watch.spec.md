@@ -27,6 +27,7 @@ files:
   - tests/watch.github-numeric-id.test.ts
   - tests/watch.failed-comment.test.ts
   - tests/watch.github-roles.test.ts
+  - tests/watch.github-roles.postreview.test.ts
 
 db_tables: []
 depends_on:
@@ -70,7 +71,10 @@ work is paused for budget. Roles on GitHub (IDENTITY-12.a, REQ-watch-1201):
 each run gets the declared role of the person who triggered it — the comment
 or issue-body author, by GitHub numeric id (`watchTriggerRole`); an
 assignment or review request is community — stamped by the spawn like a
-Discord run and re-resolved by the tool layer at every call.
+Discord run and re-resolved by the tool layer at every call; a comment or body
+someone else edited (GitHub keeps its author as `user`) or whose edits can't
+be read is community too, and the SAFE-13 owner exemption covers only text the
+owner wrote (REQ-watch-1202).
 
 ## Public API
 
@@ -107,7 +111,12 @@ declared commenter's prompt opens with a `[Corvidinho acting GitHub user …]`
 paragraph (IDENTITY-14 / IDENTITY-7). `watchTriggerRole(event, people)`
 (`router.ts`) and `AgentRunChatOpts.actingRole` (`agent-client.ts`): the
 trigger's declared role the poller passes to the spawn (IDENTITY-12.a,
-REQ-watch-1201).
+REQ-watch-1201). `DetectedEvent.textEditorIds` / `threadAuthorId`,
+`SearchClient.findTextEditors(nodeId)`, `TEXT_EDITORS_QUERY` and
+`textEditorIdsFromNode(node)` (`searcher.ts`), `textUneditedByOthers(event)`
+(`router.ts`), and fixture `updated_at` / `editor_ids` (comments) and
+`body_editor_ids` (items): who edited the triggering text after it was posted
+(REQ-watch-1202).
 Untrusted text (SAFE-12 / SAFE-13, #71, REQ-watch-071): `router.ts` exports
 `watchEventText(event)`, `watchInjectionVerdict(event, people)`,
 `WATCH_BODY_FENCE_HEADER` and `WATCH_PROMPT_MAX_CHARS` (8000); `ack.ts`
@@ -239,9 +248,11 @@ The event's title and body reach the model only inside an `UNTRUSTED_DATA`
 fence, clipped before fencing so the whole prompt stays within
 `WATCH_PROMPT_MAX_CHARS` and the end marker (random id) is always last; the
 header line, `URL:` and any identity block stay outside it. Before any ack or
-run, `watchInjectionVerdict` checks the title and body of every routed event
-whose sender is not the owner (by the owner's GitHub numeric id in the people
-list only; the owner's login with no or another id is checked, REQ-watch-367); a
+run, `watchInjectionVerdict` checks every part of a routed event the owner did
+not write — the body unless the owner sent it and nobody else edited it, the
+title unless the owner opened the thread (REQ-watch-1202; the owner by GitHub
+numeric id in the people list only; the owner's login with no or another id is
+checked, REQ-watch-367); a
 hit counts `refused`, runs nothing, posts one `buildInjectionRefusalBody`
 comment (any event type; skipped for the watch user's own events and an
 already-answered id; @mentions the owner's GitHub login when configured),
@@ -271,7 +282,9 @@ plugins, SAFE-13 owner exemption, the run's role — uses `senderId` only, never
 `sender`; no id or an undeclared id is community, never the owner (IDENTITY-7.a,
 REQ-watch-367). The run's role is the trigger's (`watchTriggerRole`,
 IDENTITY-12.a, REQ-watch-1201): an `issue_comment`, `issues` or
-`pull_request_review_comment` event is triggered by its sender; an
+`pull_request_review_comment` event is triggered by its sender, through text
+nobody else edited (`textUneditedByOthers`; an edit by anyone else, or edits
+that can't be read, give community, REQ-watch-1202); an
 `assignment` or `review_request` is triggered by its `actor`, so it is
 community whoever the thread author is, and the identity block's role line
 says so.

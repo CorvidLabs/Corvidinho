@@ -770,3 +770,23 @@ unchanged; `files-read .trust.toml` and `files-write trust.toml` work;
 `discord-send-file`'s `fileAttachment` refuses it with SAFE-2; `git-commit`
 refuses to stage the deletion of a tracked `.trust.toml`. Both tests fail
 with the base sources.
+
+## A WATCH run never writes the watcher's checkout; its audit actor is its GitHub trigger (REQ-plugins-1202 / REQ-plugins-1203 added, REQ-plugins-1201 modified; IDENTITY-12.a follow-up to #374)
+
+- `tests/watch.github-roles.postreview.test.ts` (with the watch cases under
+  the watch module): the env a real WATCH spawn hands its child, applied to
+  this process; a temp git checkout standing in for the project root.
+  - REQ-plugins-1202: the owner's WATCH `files-edit`, `files-write`,
+    `files-delete`, `git-branch-create` and `git-commit` (tier `code`,
+    allowlisted) are refused with "writes the watcher's own checkout", and
+    the checkout's file, branches and `git status` are unchanged; the
+    owner's Discord run still writes a file there.
+  - REQ-plugins-1203: a team member's WATCH `github-pr-review` (dry run)
+    appends `started` / `ok` rows with actor `github:4242` and surface
+    `watch:watch_w1`; the owner's WATCH must-ask card has requester
+    `github:8268288`, and after the owner denies it the same call from the
+    local CLI raises a new card (requester `local`) and runs on approval.
+- `tests/audit.log.test.ts` (updated): `auditContextFromEnv` with only a
+  WATCH session id gives `github:(unknown)`, with nothing `local` / `cli`.
+- Fail on base: main's `src/plugins/{run,roles}.ts` fail the checkout case;
+  main's `src/audit/log.ts` fails both audit cases. Restored: they pass.

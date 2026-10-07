@@ -18,12 +18,18 @@
  * review request was triggered by its `actor` (known by login only), never
  * by the thread author, so it is community; so is anyone undeclared or with
  * no id. The identity block's role line says which tools the run has.
+ * REQ-watch-1202: GitHub keeps a comment's or body's author as its `user`
+ * when someone with write access edits it, so the role (and the owner's
+ * SAFE-13 exemption) is the author's only when nobody else edited that text
+ * (`textUneditedByOthers`); an edit by anyone else, or edits that could not
+ * be read, give the run community tools (fail closed).
  *
  * SAFE-12 / SAFE-13 (#71): the issue / PR / comment title and body go to the
  * model inside an untrusted-data fence (clipped first, so the end marker
  * always survives the prompt cap); `watchInjectionVerdict` is the detector's
- * verdict on that text for anyone but the owner, which the poller acts on
- * before any run.
+ * verdict on that text, which the poller acts on before any run. Only text
+ * the owner wrote is exempt (REQ-watch-1202): the body when the owner sent
+ * it and nobody else edited it, the title when the owner opened the thread.
  */
 
 import {
@@ -83,12 +89,27 @@ const ACTOR_GATED_TYPES: ReadonlySet<DetectedEventType> = new Set([
  * (src/plugins/roles.ts).
  */
 export function watchTriggerRole(
-  event: Pick<DetectedEvent, "type" | "senderId">,
+  event: Pick<DetectedEvent, "type" | "senderId"> & Partial<Pick<DetectedEvent, "textEditorIds">>,
   people: PeopleDirectory | null | undefined,
 ): PersonRole {
   if (ACTOR_GATED_TYPES.has(event.type)) return "community";
   if (!people || event.senderId === undefined) return "community";
+  // REQ-watch-1202: a text someone else edited (or unknown edits) is not the sender's.
+  if (!textUneditedByOthers(event)) return "community";
   return roleOfPerson(resolvePerson(people, { githubId: event.senderId }));
+}
+
+/**
+ * REQ-watch-1202 (IDENTITY-12.a / SAFE-13): true when nobody but its author
+ * edited the triggering text — its editors are known (`textEditorIds`, from
+ * the GitHub API) and every one is `senderId`. No sender id, or editors that
+ * could not be read ⇒ false (fail closed).
+ */
+export function textUneditedByOthers(
+  event: Pick<DetectedEvent, "senderId"> & Partial<Pick<DetectedEvent, "textEditorIds">>,
+): boolean {
+  if (event.senderId === undefined || !Array.isArray(event.textEditorIds)) return false;
+  return event.textEditorIds.every((id) => id === event.senderId);
 }
 
 export const WATCH_IDENTITY_HEADER =
@@ -104,7 +125,7 @@ export const WATCH_IDENTITY_HEADER =
  * even silently).
  */
 export function formatWatchIdentityBlock(
-  event: Pick<DetectedEvent, "sender" | "senderId"> & Partial<Pick<DetectedEvent, "type">>,
+  event: Pick<DetectedEvent, "sender" | "senderId"> & Partial<Pick<DetectedEvent, "type" | "textEditorIds">>,
   people: PeopleDirectory | null | undefined,
 ): string | null {
   if (!people) return null;
@@ -134,10 +155,13 @@ export function formatWatchIdentityBlock(
     // triggered it (a comment or body mention), never on an assignment or
     // review request someone else made on their thread.
     const triggered = event.type === undefined || !ACTOR_GATED_TYPES.has(event.type);
+    // REQ-watch-1202: a text someone else edited (or unknown edits) gives community tools.
     lines.push(
-      triggered
-        ? `- role: ${person.role} (this run has the ${person.role}'s tools, behind the same must-ask gate as on Discord)`
-        : `- role: ${person.role} (but this run was started by an assignment or review request, so it has community tools)`,
+      !triggered
+        ? `- role: ${person.role} (but this run was started by an assignment or review request, so it has community tools)`
+        : textUneditedByOthers(event)
+          ? `- role: ${person.role} (this run has the ${person.role}'s tools, behind the same must-ask gate as on Discord)`
+          : `- role: ${person.role} (but someone else may have edited this text after they posted it, so this run has community tools)`,
     );
   }
   lines.push("- Address this user by display_name when present; do not invent alternate names.");
@@ -198,19 +222,28 @@ function buildPrompt(event: DetectedEvent, people?: PeopleDirectory | null): str
 
 /**
  * SAFE-13 — the detector's verdict on the event's title and body, or null
- * when nothing tripped or the sender is the owner (recognised by the owner's
- * GitHub numeric user id in the people list, IDENTITY-7.a — never by a login
- * or a name; no id ⇒ not the owner).
+ * when nothing tripped. Only text the owner wrote is exempt (REQ-watch-1202),
+ * the owner recognised by the owner's GitHub numeric user id in the people
+ * list (IDENTITY-7.a — never by a login or a name; no id ⇒ not the owner):
+ * the body when the owner sent it and nobody else edited it
+ * (`textUneditedByOthers`), the title when the owner opened the thread
+ * (`threadAuthorId`). Everything else is scanned, the owner's comment on a
+ * thread someone else opened included.
  */
 export function watchInjectionVerdict(
-  event: Pick<DetectedEvent, "title" | "body" | "sender" | "senderId">,
+  event: Pick<DetectedEvent, "title" | "body" | "sender" | "senderId"> &
+    Partial<Pick<DetectedEvent, "textEditorIds" | "threadAuthorId">>,
   people: PeopleDirectory | null | undefined,
 ): InjectionVerdict | null {
-  if (people?.ownerPersonId) {
-    const person = resolvePerson(people, { githubId: event.senderId });
-    if (person?.personId === people.ownerPersonId) return null;
-  }
-  const verdict = detectInjection(watchEventText(event));
+  const isOwner = (githubId: number | undefined): boolean =>
+    Boolean(people?.ownerPersonId) &&
+    githubId !== undefined &&
+    resolvePerson(people!, { githubId })?.personId === people!.ownerPersonId;
+  const ownerBody = isOwner(event.senderId) && textUneditedByOthers(event);
+  const ownerTitle = isOwner(event.threadAuthorId);
+  const verdict = detectInjection(
+    watchEventText({ title: ownerTitle ? "" : event.title, body: ownerBody ? "" : event.body }),
+  );
   return verdict.suspected ? verdict : null;
 }
 

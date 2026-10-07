@@ -250,7 +250,11 @@ imports) exports `GIPHY_MEDIA_HOSTS` and `hasGiphyMediaLink`, which
 put in an embed (REQ-discord-075), `src/plugins/roles.ts` exports
 `TEAM_SEARCH_TOOLS` (PLUGIN-9: `web-search` and `gif-search`) and
 `isWatchRunEnv(env)` (IDENTITY-12.a: the surface stamp is `watch`;
-REQ-plugins-1201), and `PluginHandlerResult.spendAsk` carries a
+REQ-plugins-1201), `WATCH_CHECKOUT_WRITE_TOOLS`,
+`watchCheckoutWriteRefused(env, name)` and `watchCheckoutWriteRefusal(name)`
+(a WATCH run never writes the watcher's own checkout; REQ-plugins-1202),
+`auditContextFromEnv` gives a WATCH run's GitHub trigger as its actor
+(`github:<id>`, never `local`; REQ-plugins-1203), and `PluginHandlerResult.spendAsk` carries a
 flat-priced call's SAFE-8 ask (REQ-agent-098),
 `githubRepoOfUrl(url)` says whether a URL is on a GitHub host and which
 `OWNER/REPO` it names (DISCORD-SCHEDULE-3.a),
@@ -855,7 +859,12 @@ owner's person; `team` the team (or owner) stamp and a team person; a GitHub
 deny-listed, is community. A WATCH run is never a `/work` task
 (`actingWorkTask` false whatever its stamp), and every must-ask call the owner's
 WATCH run makes raises the owner's Approve card like any other run
-(REQ-plugins-097). Refusals are "not allowed for your role" (ROLES-CHAT-3/6).
+(REQ-plugins-097). A WATCH run (surface `watch` or a WATCH session id) never
+runs the tools that write the watcher's own checkout — it has no worktree of
+its own — so `runPlugin` refuses `WATCH_CHECKOUT_WRITE_TOOLS` there before
+the role gate, for every role (REQ-plugins-1202); its SAFE-5 rows and must-ask
+card requester are `github:<id>` (else `github:<login>`), never `local`
+(REQ-plugins-1203). Refusals are "not allowed for your role" (ROLES-CHAT-3/6).
 `files-edit`, `specsync-change-new`, `specsync-change-answer`,
 `specsync-change-approve`, `specsync-change-finalize`); `community` (everyone else: undeclared, declared community,
 WATCH runs no declared owner or team member triggered, schedules, workers,
