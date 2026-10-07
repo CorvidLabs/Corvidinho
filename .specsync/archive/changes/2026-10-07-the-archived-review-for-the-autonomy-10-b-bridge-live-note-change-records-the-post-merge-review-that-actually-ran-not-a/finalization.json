@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "the-archived-review-for-the-autonomy-10-b-bridge-live-note-change-records-the-post-merge-review-that-actually-ran-not-a",
+  "implementation_commit": "88b0230458596b11daaf1fe143abda6421474b71",
+  "implementation_tree": "2b9307720eae0f6da359806341319b3bf0ba104a",
+  "contract_digest": "2cc297ca07538d21ac5e29e12848c3145261aa9d3e1c92664fd56b5862b4a95c",
+  "workspace_digest": "e4b7a9e42fd9769c73de4cebacf91a053b78a3c65eb731958c2263560992eb2a",
+  "closing_digest": "3c17c01bed9b4ca0c9e78ab4be90f34b315b51d301262c7ea0debefab9ee9623",
+  "review_digest": "b6eace31e6851b2c48f412dc2acec81820da2118687301c0ce0fc2f4f1e23b6d",
+  "finalization_digest": "beff3dd808a9bdda03551e812c37fe0ac35c8a89fb27392e3abe2a8ad0f3f97a",
+  "timestamp": 1791357486,
+  "note": "tip-orphan archive after #406 squash (same class as #414)"
+}
