@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "the-shell-and-the-runners-refuse-raw-sql-wipes-and-overwrites-of-corvidinho-s-own-store-only-memory-forget-and-memory",
+  "implementation_commit": "83df562d4c91cf5e669898824f4ce4532662516f",
+  "implementation_tree": "b5c8fb3540197de7cd65fc6e59a9fdc4dabda6ad",
+  "contract_digest": "3a174379565fca696f9caeb43861613cc448075af0be44f0e4ca50774f66146d",
+  "workspace_digest": "4968507e2e2d064d4760656a9143dd3f889066f7f4d97fba92373770fa5435e7",
+  "closing_digest": "316f5d7e8d556970f93b77a6a9d597fe8c86a4a88a52712062b71e5a480fed7b",
+  "review_digest": "771ca78bdcac26e69cf52c6195a05289457ec91d499670d24be9249f59559c4b",
+  "finalization_digest": "689c3cdab8bf30d89af4c4de43c6d5e352f095e4d61f2541e33cb26acd5f2a79",
+  "timestamp": 1791388298,
+  "note": "tip-orphan archive after #396 squash (same class as #414 / #415 / #416 / #417)"
+}
