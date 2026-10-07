@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "admin-3-c-part-1-as-owner-i-can-change-the-deny-lists-and-the-github-repo-allow-lists-with-admin-deny-and-admin-github",
+  "implementation_commit": "c305dbc673b80efaf7e4d172717d8a17f82e2758",
+  "implementation_tree": "9476094902ce965652dd11f12d3976b1b7d21629",
+  "contract_digest": "a37016fd22398e4f72afaadf30c094ca1e2605afb9142198c92e7c38eca66b11",
+  "workspace_digest": "4968507e2e2d064d4760656a9143dd3f889066f7f4d97fba92373770fa5435e7",
+  "closing_digest": "3dd1c9f0553eda699400260e72162825bbebc7cee6f08c8a39dcd7443710d128",
+  "review_digest": "2ac848e55e4282a7e0664a35f45e50969005a5e8bc1556cb29abba2bbeac7a0d",
+  "finalization_digest": "e6635673e2b8890a5736bb40fc8305601ed68acb13129080efa66c6f3f9b01d5",
+  "timestamp": 1791388242,
+  "note": "tip-orphan archive after #404 squash (same class as #414 / #415 / #416 / #417)"
+}
