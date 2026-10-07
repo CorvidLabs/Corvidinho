@@ -7,11 +7,11 @@
   "title": "GITHUB-7: typed github-pr-merge merges the bot's own green Corvidinho PR only when CI is green and branch protection allows; never others or outside Corvidinho",
   "description": "GITHUB-7: typed github-pr-merge merges the bot's own green Corvidinho PR only when CI is green and branch protection allows; never others or outside Corvidinho",
   "kind": "feature",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "86d68cd0d65e1836475d5e37a49444bdd0177ecb",
   "created_at": 1791329728,
-  "updated_at": 1791330137,
+  "updated_at": 1791331958,
   "affected_specs": [
     "plugins"
   ],

@@ -1,6 +1,6 @@
 ---
 id: after-the-one-nudge-a-stalled-run-moves-to-the-next-stronger-model-in-the-order-i-set-and-says-so-agent-17-agent-17-a
-state: implementing
+state: archived
 type: feature
 base_commit: 94c2e479b7b95812010e77a7c4812e94b4f497b7
 ---
