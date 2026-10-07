@@ -6,20 +6,21 @@
  *
  * Both halves are pinned on the real ~30-minute window (`ASK_BUTTON_TTL_MS`,
  * DISCORD-ASK-5), not on a hand-edited expiry:
- * - a session's Choose question (chat, or a `/session start` answer) keeps
- *   the session waiting inside the window (a thin reply restates it), and one
- *   minute past it the same thin reply, or a new request, runs normally and
- *   nothing is left waiting;
+ * - a session's Choose question (chat, or a `/session start` or `/work`
+ *   answer, and across a bridge restart) keeps the session waiting inside the
+ *   window (a thin reply restates it), and one minute past it the same thin
+ *   reply, or a new request, runs normally and nothing is left waiting;
  * - a schedule's question, one minute past that same window (and a day on),
  *   still blocks its schedule and still takes a pick, until it is answered;
  * - hi/autonomy.md holds the captured text and the docs cite it where the
  *   expiry is described.
- * Fixtures only: `startBridge` with a null gateway and an injected agent, a
- * manual `SchedulerService` on an in-memory DB, a frozen system clock; no
- * live Discord, no network, no token.
+ * Fixtures only: `startBridge` with a null gateway and an injected agent (a
+ * second one on the same in-memory DB for a restart), a manual
+ * `SchedulerService` on an in-memory DB, a frozen system clock; no live
+ * Discord, no network, no token.
  */
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { HumanAsk } from "../src/agent/types.ts";
@@ -78,13 +79,27 @@ function clockAt(ms: number): void {
 type Reply = { channelId: string; content: string; components?: unknown[] };
 type Ephemeral = { content?: string; ephemeral?: boolean; components?: unknown[] };
 
+type BridgeOpts = {
+  /** Reuse this DB (a restart); the caller closes it. Default: a fresh in-memory DB. */
+  db?: ReturnType<typeof openCorvidinhoDb>;
+  /** Declare the requester team (IDENTITY-11.a: community can't start /work). */
+  team?: boolean;
+  /** The first chat run asks `PICK` (default); false: every run answers. */
+  asks?: boolean;
+};
+
 /**
  * A bridge on an in-memory DB with an owner and one allowlisted channel.
  * Chat runs ask `PICK` first, then answer; schedule runs are never started
  * here (the scheduler is off), so a schedule ask is recorded directly.
  */
-async function bridge() {
-  const db = openCorvidinhoDb({ memory: true });
+async function bridge(opts: BridgeOpts = {}) {
+  const ownDb = !opts.db;
+  const db = opts.db ?? openCorvidinhoDb({ memory: true });
+  const allowlistFile = join(tempDir("corvidinho-expired-asks-"), "allowlist.toml");
+  if (opts.team) {
+    writeFileSync(allowlistFile, `[people.team1]\nrole = "team"\ndiscord_ids = ["${REQUESTER_ID}"]\n`);
+  }
   const scheduleStore = new ScheduleStore({ db });
   const box: { handlers: GatewayHandlers | null } = { handlers: null };
   const replies: Reply[] = [];
@@ -95,7 +110,7 @@ async function bridge() {
     async runChat({ sessionId, prompt }) {
       prompts.push(prompt);
       chatRuns += 1;
-      if (chatRuns === 1) {
+      if (chatRuns === 1 && opts.asks !== false) {
         return {
           ok: true,
           sessionId,
@@ -119,7 +134,7 @@ async function bridge() {
       DISCORD_BOT_TOKEN: "fake",
       DISCORD_CHANNEL_IDS: CHAN,
       CORVIDINHO_DISCORD_DRY_RUN: "1",
-      CORVIDINHO_ALLOWLIST_FILE: join(tempDir("corvidinho-expired-asks-"), "none.toml"),
+      CORVIDINHO_ALLOWLIST_FILE: allowlistFile,
       CORVIDINHO_OWNER_DISCORD_ID: OWNER_ID,
     },
     db,
@@ -141,9 +156,16 @@ async function bridge() {
     },
   });
   if (!result.ok || !box.handlers) throw new Error("bridge did not start");
-  cleanups.push(async () => {
+  let stopped = false;
+  /** Stop this bridge (a restart's first half); the DB stays open. */
+  const stop = async (): Promise<void> => {
+    if (stopped) return;
+    stopped = true;
     await result.stop();
-    db.close();
+  };
+  cleanups.push(async () => {
+    await stop();
+    if (ownDb) db.close();
   });
   const handlers = box.handlers;
 
@@ -173,16 +195,16 @@ async function bridge() {
       referencedMessageId: messageId,
     });
   }
-  /** The requester runs `/session start topic:<topic>`. */
-  async function sessionStart(topic: string): Promise<void> {
+  /** The requester runs `/session start topic:<text>` or `/work description:<text>`. */
+  async function slash(command: "session" | "work", text: string): Promise<void> {
     seq += 1;
     const ix: SlashInteraction = {
       id: `slash_${seq}`,
-      commandName: "session",
-      subcommand: "start",
+      commandName: command,
+      ...(command === "session" ? { subcommand: "start" } : {}),
       channelId: CHAN,
       userId: REQUESTER_ID,
-      options: { topic },
+      options: command === "session" ? { topic: text } : { description: text },
       reply: async () => {},
       deferReply: async () => {},
       editReply: async () => undefined,
@@ -242,8 +264,9 @@ async function bridge() {
     scheduleStore,
     say,
     replyTo,
-    sessionStart,
+    slash,
     press,
+    stop,
     recordScheduleAsk,
     postedSince,
     mark,
@@ -301,34 +324,77 @@ describe("AUTONOMY-6.b: once a session question's buttons expire, the session st
   }
 });
 
-describe("AUTONOMY-6.b on the slash path: a /session start question's buttons expire the same way", () => {
-  test("a thin reply to its Choose answer restates it inside ~30 minutes, and runs normally one minute past them", async () => {
+describe("AUTONOMY-6.b on the slash path: a /session start or /work question's buttons expire the same way", () => {
+  for (const [command, label, text] of [
+    ["session", "/session start", "storage"],
+    ["work", "/work", "set up storage"],
+  ] as const) {
+    test(`a thin reply to a ${label} Choose answer restates it inside ~30 minutes, and runs normally one minute past them`, async () => {
+      const t0 = Date.parse("2026-10-07T10:00:00Z");
+      clockAt(t0);
+      // IDENTITY-11.a: /work needs the requester declared team.
+      const b = await bridge({ team: command === "work" });
+      await b.slash(command, text);
+      expect(b.prompts).toHaveLength(1);
+      // The slash answer is the Choose stub (the thinking message edited in place).
+      const answer = b.outbound.contentEdits.find(
+        (e) => typeof e.content === "string" && e.content.includes(ASK_STUB_HINT),
+      )!;
+      expect(answer).toBeDefined();
+      const ask = b.result.store.getByBotMessage(answer.messageId)!.pendingAsk!;
+      expect(ask.expiresAt).toBe(t0 + ASK_BUTTON_TTL_MS);
+      if (command === "work") expect(b.result.workStore.list()[0]!.status).toBe("blocked");
+
+      clockAt(t0 + INSIDE);
+      const inside = b.mark();
+      await b.replyTo(answer.messageId, "ok");
+      expect(b.prompts).toHaveLength(1);
+      expect(b.postedSince(inside)).toContain(openCustomId(ask.askId));
+
+      clockAt(t0 + PAST);
+      const past = b.mark();
+      await b.replyTo(answer.messageId, "ok");
+      expect(b.prompts).toHaveLength(2);
+      expect(b.prompts[1]).not.toContain("Prior clarifying question");
+      expect(b.postedSince(past)).not.toContain(openCustomId(ask.askId));
+      const session = b.result.store.getByBotMessage(answer.messageId)!;
+      expect(session.pendingAsk ?? null).toBeNull();
+      expect(session.openAsks).toBeUndefined();
+    });
+  }
+});
+
+describe("AUTONOMY-6.b across a bridge restart: the stored ask keeps its ~30 minutes", () => {
+  test("after a restart a thin reply still restates the ask inside its window, and one minute past it the next message runs", async () => {
     const t0 = Date.parse("2026-10-07T10:00:00Z");
     clockAt(t0);
-    const b = await bridge();
-    await b.sessionStart("storage");
-    expect(b.prompts).toHaveLength(1);
-    // The slash answer is the Choose stub (the thinking message edited in place).
-    const answer = b.outbound.contentEdits.find(
-      (e) => typeof e.content === "string" && e.content.includes(ASK_STUB_HINT),
-    )!;
-    expect(answer).toBeDefined();
-    const ask = b.result.store.getByBotMessage(answer.messageId)!.pendingAsk!;
+    const db = openCorvidinhoDb({ memory: true });
+    cleanups.push(() => db.close());
+    const first = await bridge({ db });
+    await first.say("set up storage");
+    const ask = first.result.store.list()[0]!.pendingAsk!;
     expect(ask.expiresAt).toBe(t0 + ASK_BUTTON_TTL_MS);
+    await first.stop();
 
+    // A new bridge on the same DB loads the session with its open ask
+    // (`discord_sessions.pending_ask`) and its expiry.
     clockAt(t0 + INSIDE);
+    const b = await bridge({ db, asks: false });
+    expect(b.result.store.list()[0]!.pendingAsk?.askId).toBe(ask.askId);
     const inside = b.mark();
-    await b.replyTo(answer.messageId, "ok");
-    expect(b.prompts).toHaveLength(1);
+    await b.say("ok");
+    expect(b.prompts).toHaveLength(0);
     expect(b.postedSince(inside)).toContain(openCustomId(ask.askId));
 
     clockAt(t0 + PAST);
     const past = b.mark();
-    await b.replyTo(answer.messageId, "ok");
-    expect(b.prompts).toHaveLength(2);
-    expect(b.prompts[1]).not.toContain("Prior clarifying question");
+    await b.say("ok");
+    expect(b.prompts).toHaveLength(1);
+    expect(b.prompts[0]).not.toContain("Prior clarifying question");
     expect(b.postedSince(past)).not.toContain(openCustomId(ask.askId));
-    expect(b.result.store.getByBotMessage(answer.messageId)!.pendingAsk ?? null).toBeNull();
+    expect(b.result.store.list()[0]!.pendingAsk ?? null).toBeNull();
+    expect(await b.press(pickCustomId(ask.askId, "pg"))).toEqual([{ content: ASK_CHOICE_EXPIRED, ephemeral: true }]);
+    expect(b.prompts).toHaveLength(1);
   });
 });
 

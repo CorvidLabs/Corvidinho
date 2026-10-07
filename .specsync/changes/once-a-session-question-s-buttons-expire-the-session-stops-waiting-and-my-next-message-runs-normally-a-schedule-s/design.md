@@ -20,7 +20,8 @@ artifact: design
   (`setSystemTime`) and moves it to one minute inside and one minute past
   `ASK_BUTTON_TTL_MS` instead of hand-editing `expiresAt`, so it also pins
   that the bridge stamps the ~30-minute window. Session half: chat (thin
-  reply and a new request) and a `/session start` answer. Schedule half: a
+  reply and a new request), a `/session start` answer, a `/work` answer,
+  and a bridge restart on the same DB. Schedule half: a
   manual `SchedulerService` with both clocks moved past the window (and a
   day on) and, through `startBridge`, a session ask and a schedule ask of
   the same age side by side. Plus hi/doc citation cases.
@@ -33,4 +34,6 @@ artifact: design
   button also stops after ~30 minutes, but that question stays open for a
   reply as built (DISCORD-ASK-4.a), so a thin reply still restates it. A
   `cancel` sent after the expiry still gets the short cancel ack and runs
-  nothing, as built. Both are kept unchanged and listed for Leif.
+  nothing, as built. If an earlier button ask of the same session is still
+  live, a thin reply restates that one (SESSION-MULTI-3); only the expired
+  question stops waiting. All are kept unchanged and listed for Leif.

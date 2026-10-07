@@ -16,7 +16,9 @@ artifact: docs
     (REQ-discord-044): the expired ask is dropped, the next message (a thin
     `ok` included) runs as ordinary chat with no prior-question block, a
     late press gets "that choice expired"; it holds for chat, `/work` and
-    `/session start`; a free-text question stays open for a reply
+    `/session start`; a thin reply restates an earlier ask only while that
+    one is still live (SESSION-MULTI-3); the expiry holds across a bridge
+    restart; a free-text question stays open for a reply
     (DISCORD-ASK-4.a); a schedule's question never expires this way.
 - `docs/DISCORD-GO-LIVE.md`: the schedule-question bullet adds that a chat
   or slash question's Choose buttons expire after ~30 minutes and then that

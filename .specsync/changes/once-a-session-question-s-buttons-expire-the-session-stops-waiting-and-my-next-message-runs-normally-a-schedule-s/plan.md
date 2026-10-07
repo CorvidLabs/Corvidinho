@@ -9,7 +9,8 @@ artifact: plan
 2. Confirm on main that both halves already hold (bridge continue path,
    late-press path, schedule store / tick / press path).
 3. `tests/discord.expired-asks.test.ts`: session half (chat thin reply and
-   new request, `/session start` answer) and schedule half (scheduler tick
+   new request, `/session start` and `/work` answers, a restart) and
+   schedule half (scheduler tick
    and bridge press) on a frozen clock one minute inside / past
    `ASK_BUTTON_TTL_MS`; hi/doc citation cases.
 4. Docs (`docs/discord.md`, `docs/DISCORD-GO-LIVE.md`), spec prose,

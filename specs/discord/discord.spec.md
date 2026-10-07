@@ -1296,9 +1296,11 @@ Once a session question's buttons expire, the session stops waiting and the
 requester's next message runs normally; a schedule's questions still wait
 until answered (AUTONOMY-6.b, REQ-discord-044 / REQ-discord-045). A session's
 button ask (chat, `/work`, `/session start`) keeps the session waiting only
-for its ~30 minutes (`ASK_BUTTON_TTL_MS`): past them the next message that is
-not a cancel drops it and runs as ordinary chat, with no prior-question
-block. A schedule's ask has no expiry: its controls take presses and its
+for its ~30 minutes (`ASK_BUTTON_TTL_MS`, kept with the stored ask across a
+restart): past them the next message that is not a cancel drops it and runs
+as ordinary chat, with no prior-question block (only a thin reply, while an
+earlier button ask of the session is still live, restates that one instead,
+SESSION-MULTI-3). A schedule's ask has no expiry: its controls take presses and its
 schedule's due runs stay skipped until it is answered or cancelled
 (AUTONOMY-6.a, REQ-discord-606).
 
