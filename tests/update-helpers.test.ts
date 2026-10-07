@@ -180,16 +180,16 @@ describe("update-helpers.sh", () => {
     }
   });
 
-  test("extract_changelog_section finds 0.0.46", () => {
+  test("extract_changelog_section finds 0.0.47", () => {
     const r = bashEval(
-      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.46`,
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.47`,
     );
     expect(r.exitCode).toBe(0);
-    expect(r.stdout).toContain("AUTONOMOUS-7.a");
-    expect(r.stdout).toContain("#411");
-    expect(r.stdout).toContain("AGENT-13");
-    expect(r.stdout).toContain("#413");
-    expect(r.stdout).not.toContain("## 0.0.45");
+    expect(r.stdout).toContain("SESSION-5");
+    expect(r.stdout).toContain("#405");
+    expect(r.stdout).toContain("SESSION-3.b");
+    expect(r.stdout).toContain("#393");
+    expect(r.stdout).not.toContain("## 0.0.46");
   });
 
   test("extract_changelog_section finds 0.0.44", () => {
@@ -1025,10 +1025,10 @@ describe("release tagging helpers", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.46", () => {
+  test("package.json is 0.0.47", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.46");
+    expect(pkg.version).toBe("0.0.47");
   });
 });
