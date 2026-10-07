@@ -11,7 +11,7 @@
   "canonical_applied": true,
   "base_commit": "c70bbe9b925dc7874d3192468d97035694102ee1",
   "created_at": 1791333932,
-  "updated_at": 1791356983,
+  "updated_at": 1791357027,
   "affected_specs": [],
   "affected_paths": [
     "tests/specsync.archive-review.test.ts",
