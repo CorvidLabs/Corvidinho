@@ -53,6 +53,15 @@
         "agent": "331dff78181aa950b776be449ef5481a061ce5a5988c887d34fc8b456e4e6fd4",
         "cli": "6bf9fdd77246d2f9e5af6fc6a04c8d71d26d395f993e2b6c608d2dc8615a71f6"
       }
+    },
+    {
+      "gate": "finalization",
+      "actor": "corvid-agent",
+      "timestamp": 1791303855,
+      "digest": "186285cb319b490463822184939686d5229bc9ebf1667929358958602b520672",
+      "note": "tip-orphan closing digest (repaired after #384 incomplete evidence)",
+      "approved_scope": null,
+      "approved_delta_digests": null
     }
   ],
   "reopenings": []
