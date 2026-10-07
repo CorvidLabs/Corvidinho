@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "change_id": "admin-3-c-part-2-as-owner-i-can-mute-and-unmute-with-admin-mutes-add-remove-mute-and-unmute-are-audited-aliases-of-the",
+  "implementation_commit": "652ad892bd6173d99bd2873ce28c5b5ad73d22ea",
+  "implementation_tree": "8e1edf3d1caa0751759ed2fca4b82ddf495be187",
+  "contract_digest": "cbb8a747af9ab4465cf83b4a39213a98d1626881e7adb21c0ed95ac7b473c46b",
+  "workspace_digest": "ac9bb13e7ee04f3fb2bbe3122417721a9aee990eb1dc61511d356ec1acece430",
+  "closing_digest": "811e4efd6e7b64459df4312a2fa832a7cb6d4185767bcda325ff8061542690e3",
+  "review_digest": "7849e657d26426ff5288dfe7064c5386e38a737248e198f890c4b3397042e3b9",
+  "finalization_digest": "60ca799dd64b05745cb683b6f36edca0e277c6e08c7ba7f46e226e8e9c5f64d9",
+  "timestamp": 1791389810,
+  "note": "tip-orphan archive after #407 squash (same class as #400 / #414 / #417 / #418 / #420)"
+}
