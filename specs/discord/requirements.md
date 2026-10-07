@@ -1354,11 +1354,13 @@ next message runs normally; a schedule's questions still wait until answered"
 interview, round 17: keep as built). Past its ~30 minutes
 (`ASK_BUTTON_TTL_MS` from when the ask is stored, DISCORD-ASK-5), a session's
 button ask (chat, `/work`, `/session start` and their resumes) SHALL NOT keep
-the session waiting: by the rule above, the requester's next message that is
-not an explicit cancel, a thin reply included, SHALL run the agent as
-ordinary chat with no prior-question block, unless an earlier button ask of
-the session is still live (that one is restated, SESSION-MULTI-3). Inside the
-window a thin reply SHALL still restate the live ask (AUTONOMY-5/6). A
+the session waiting: by the rule above it is dropped before the thin-reply
+gate, so the requester's next message that is not an explicit cancel, a thin
+reply included, SHALL run the agent as ordinary chat with no prior-question
+block; only a thin reply, and only while an earlier button ask of the session
+is still live, restates that earlier ask instead (SESSION-MULTI-3). The ask
+is stored with its `expiresAt`, so this holds across a bridge restart. Inside
+the window a thin reply SHALL still restate the live ask (AUTONOMY-5/6). A
 free-text ask is unchanged (its question stays open for a reply after its
 Answer button stops, DISCORD-ASK-4.a), and so is a cancel sent after the
 expiry (the short ack, no run). Schedule asks never take this path
@@ -1407,7 +1409,8 @@ Acceptance Criteria
 - `cancel` after the button ask timed out still gets the short ack, runs no agent and leaves no pending ask.
 - While a run of the session is in flight, 'cancel' stops that run with the short stop ack and leaves every open ask of the session open; with nothing running it clears them with `ASK_CANCELLED_ACK` as above (REQ-discord-302).
 - AUTONOMY-6.b on the real window: the ask's `expiresAt` is its ask time plus `ASK_BUTTON_TTL_MS`; with the clock one minute inside it a thin reply restates the Choose ask with its Choose button and runs nothing; one minute past it a thin reply, or a new request, runs the agent with no prior-question block, posts no stub or Choose button for that ask and leaves no pending or open ask; a late press on it gets `ASK_CHOICE_EXPIRED`, and a later thin reply runs too.
-- AUTONOMY-6.b on the slash path: a reply `ok` to a `/session start` Choose answer restates it one minute inside the window, and one minute past it runs the agent with no prior-question block and leaves no pending ask.
+- AUTONOMY-6.b on the slash path: a reply `ok` to a `/session start` or `/work` Choose answer restates it one minute inside the window, and one minute past it runs the agent with no prior-question block and leaves no pending or open ask.
+- AUTONOMY-6.b across a restart: a bridge restarted on the same DB loads the session's ask with its `expiresAt`; one minute inside the window a thin reply restates it and runs nothing, and one minute past it a thin reply runs the agent with no prior-question block, leaves no pending ask, and a late press on it gets `ASK_CHOICE_EXPIRED`.
 
 ### REQ-discord-045
 
