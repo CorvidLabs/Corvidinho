@@ -7,11 +7,11 @@
   "title": "Shell-exec refuses a SpecSync lifecycle step written as a glob or brace pattern, or reached through an expanding subcommand or xargs input (AGENT-18.a follow-up to #372)",
   "description": "Shell-exec refuses a SpecSync lifecycle step written as a glob or brace pattern, or reached through an expanding subcommand or xargs input (AGENT-18.a follow-up to #372)",
   "kind": "bug_fix",
-  "state": "verifying",
+  "state": "accepted",
   "canonical_applied": true,
   "base_commit": "54d6a6c777f51b4fa430511a5d7f049a8ba42083",
   "created_at": 1791331865,
-  "updated_at": 1791387496,
+  "updated_at": 1791387508,
   "affected_specs": [
     "plugins"
   ],

@@ -1,6 +1,6 @@
 ---
 id: shell-exec-refuses-a-specsync-lifecycle-step-written-as-a-glob-or-brace-pattern-or-reached-through-an-expanding
-state: verifying
+state: accepted
 type: bug_fix
 base_commit: 54d6a6c777f51b4fa430511a5d7f049a8ba42083
 ---
