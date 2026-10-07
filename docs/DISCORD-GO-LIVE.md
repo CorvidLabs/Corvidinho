@@ -191,7 +191,9 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   **Cancel**; after Continue the next due run's calls past a cap, or at an unknown price, ask on
   the spend card first) that the schedule's creator or the owner presses; a reply does not
   answer it, and the buttons do not expire while it is open. Until then the schedule's due runs are skipped (not made up) and one note says it
-  is waiting. A schedule with no channel sends its question and buttons to the owner by **direct
+  is waiting. A chat or slash question is different (AUTONOMY-6.b): its **Choose** buttons expire
+  after ~30 minutes, and then that session stops waiting on it and your next message runs normally;
+  a schedule's questions still wait until answered. A schedule with no channel sends its question and buttons to the owner by **direct
   message** (same DM rule as above). See [`discord.md`](discord.md) "Scheduled questions wait for
   an answer".
 - A scheduled run the bridge started can be stopped from Discord by the owner or the schedule's
