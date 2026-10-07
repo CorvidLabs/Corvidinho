@@ -1,6 +1,6 @@
 ---
 id: the-specsync-check-tool-the-verify-lane-s-spec-check-step-starts-without-my-cloud-credentials-and-its-output-is
-state: implementing
+state: verifying
 type: bug_fix
 base_commit: 86d68cd0d65e1836475d5e37a49444bdd0177ecb
 ---
