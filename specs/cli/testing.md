@@ -295,3 +295,12 @@ false for community, the `chat` surface, no /work bit, a worker
 (`CORVIDINHO_DELEGATE_DEPTH=1`), no stamps, and either plugin missing. Fail
 on base: the file cannot load (`workReviewApplies` is not exported from
 `src/cli.ts`).
+## task run --persona (REQ-cli-225; AUTONOMOUS-2 / AUTONOMOUS-5.a)
+
+`tests/agent.personas.test.ts` ("task run --persona"): the real CLI with only
+the env each case sets, in a plain temp dir (`--here`, `--output json`): an
+unknown persona fails (exit 1) with the not-found line and no model call;
+`--persona` with no name exits 1 with `--persona needs a name`; a community
+role session gets `PERSONA_OWNER_ONLY_LINE`; `CORVIDINHO_DELEGATE_PERSONA`
+reaches a depth-1 run and is ignored at depth 0. Fail on base: with main's
+`src/cli.ts` the flag and env are ignored, so all four fail; restored, pass.

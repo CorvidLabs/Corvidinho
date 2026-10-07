@@ -141,6 +141,13 @@ import {
   withPersona,
 } from "./persona.ts";
 import {
+  namedPersonaWarning,
+  PERSONA_OWNER_ONLY_LINE,
+  PERSONAS_DIR,
+  renderNamedPersona,
+  resolveRunPersona,
+} from "./personas.ts";
+import {
   loadTierFromEnv,
   modelKeyForTier,
   type CapabilityTier,
@@ -433,6 +440,18 @@ export type CreateTaskExecuteOpts = {
    * own checkout root, whatever the run cwd. Tests only.
    */
   personaRoot?: string;
+  /**
+   * AUTONOMOUS-2 / AUTONOMOUS-5.a: run as this named persona (its file in
+   * `personas/` next to `persona.md`, read from `personaRoot`'s checkout):
+   * its voice replaces persona.md's in the system prompt and its model heads
+   * the run tier's chain (src/agent/personas.ts). `by: "owner"` is the
+   * owner's pick (`task run --persona`, `/session start persona:`), refused
+   * for anyone else; `by: "lead"` is the persona a lead's `delegate` picked
+   * by skill tag for its worker (only at delegation depth > 0). An unknown
+   * persona, or one whose model is not configured, fails the run with one
+   * plain line and calls nothing. Unset: persona.md, as before.
+   */
+  persona?: { name: string; by: "owner" | "lead" };
   /**
    * SAFE-13: called once per run when a tool result that carries third-party
    * text looked like a prompt-injection attempt (the tool and reason ids only).
@@ -752,7 +771,20 @@ function capabilityFacts(input: {
 }
 
 export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecuteFn {
-  const env = opts.env ?? process.env;
+  const baseEnv = opts.env ?? process.env;
+  // AUTONOMOUS-2 / 2.a: a named persona is read for this run (one run = one
+  // turn), like persona.md; running as one puts its model at the head of the
+  // tier's chain in this run's env, so the spend guard, the AGENT-11 fallback
+  // and the AGENT-10 notice treat it like any configured model.
+  const named = opts.persona
+    ? resolveRunPersona({
+        name: opts.persona.name,
+        env: baseEnv,
+        tier: opts.tier ?? loadTierFromEnv(baseEnv, "tool"),
+        ...(opts.personaRoot !== undefined ? { root: opts.personaRoot } : {}),
+      })
+    : null;
+  const env = named?.ok ? named.env : baseEnv;
   // SAFE-8: warn at 80% of the daily spend cap; a call that would pass it is
   // not sent as is (no cap = untouched fetch): with an owner configured it
   // waits for the owner's spend Approve card, which lets that one call
@@ -761,7 +793,10 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
     env,
     readUsage: extractUsage,
     // AGENT-5: an unpriced model's ask names the key that set this tier's model.
-    modelKey: modelKeyForTier(env, opts.tier ?? loadTierFromEnv(env, "tool")),
+    // A persona run's model is set in its persona file (AUTONOMOUS-2.a).
+    modelKey: named?.ok
+      ? `the model in ${named.persona.file}`
+      : modelKeyForTier(env, opts.tier ?? loadTierFromEnv(env, "tool")),
     onWarning: (w) => {
       emit(opts.onEvent, { type: "Text", text: formatSpendWarningLine(w) });
       opts.onSpendWarning?.(w);
@@ -892,9 +927,18 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
   let projectNote = project ? projectInstructionsWarning(project) : null;
   // PERSONA-2: the one persona file, read for this run (one run = one turn)
   // from Corvidinho's checkout on every surface; PERSONA-3 rules follow it.
-  const persona = loadPersona(opts.personaRoot);
-  const personaBlock = renderPersona(persona);
-  let personaNote = personaWarning(persona);
+  // AUTONOMOUS-2.a: a run as a named persona uses that persona's voice instead.
+  const persona = opts.persona ? null : loadPersona(opts.personaRoot);
+  const personaBlock = named?.ok
+    ? renderNamedPersona(named.persona)
+    : persona
+      ? renderPersona(persona)
+      : "";
+  let personaNote = named?.ok
+    ? namedPersonaWarning(named.persona)
+    : persona
+      ? personaWarning(persona)
+      : null;
   let roleRefused = false;
   // SAFE-13: the first tool result this run found that looked like an injection.
   let injection: InjectionNotice | null = null;
@@ -921,6 +965,23 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
     repoWays,
     workspaceChanged,
   }) => {
+    // AUTONOMOUS-5.a: only the owner (or the local CLI, no role session)
+    // picks a persona; a lead's pick reaches only its delegate worker. Then an
+    // unknown persona, or one whose model the owner did not configure, is
+    // refused with one plain line (AUTONOMOUS-2.a). Nothing is called.
+    if (opts.persona) {
+      const pickRole = await resolveActingRole(env);
+      const refusal =
+        opts.persona.by === "owner"
+          ? pickRole === null || pickRole === "owner"
+            ? null
+            : PERSONA_OWNER_ONLY_LINE
+          : delegateDepthFromEnv(env) > 0
+            ? null
+            : `A persona is picked by a lead only for its delegate worker (${PERSONAS_DIR}/, AUTONOMOUS-5.a); nothing was run.`;
+      const line = refusal ?? (named && !named.ok ? named.error : null);
+      if (line) return { summary: line, filesChanged: [], error: true, failureReason: line };
+    }
     if (personaNote) {
       emit(onEvent, { type: "Text", text: personaNote });
       personaNote = null;

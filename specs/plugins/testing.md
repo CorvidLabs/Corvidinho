@@ -866,6 +866,21 @@ dir and allowlist file, the real must-ask gate, card store and SAFE-5 chain.
   `events-ndjson.ts`, `loop-guards.ts`, `ask.ts`, 33 of 114 tests (with
   `tests/must-ask.boundary.test.ts` and `tests/agent.loop-guards.test.ts`)
   fail. Restored: 114 of 114 pass.
+## delegate --skill picks a named persona; the file tools leave personas/ alone (REQ-plugins-225; AUTONOMOUS-5.a, SAFE-2)
+
+`tests/agent.personas.test.ts`: `delegate` with a fake worker bin that records
+`CORVIDINHO_DELEGATE_PERSONA` and a temp persona root: `--skill review` with
+`zeta` and `alpha` both tagged runs the worker as `alpha` (`data.persona`,
+`[review → persona alpha]`); `--skill docs` and no skill run it with none,
+even with one in the lead's env; a match whose model is not configured is
+refused and no worker starts; the `delegate` description lists `alpha
+(review); zeta (review)` but not the unconfigured persona, and carries no
+persona line without personas. With cwd at this checkout, `files-write`
+(relative and absolute), `files-edit` and `files-delete` of a
+`personas/<probe>` path are refused `refused (SAFE-2)` and nothing is
+written; `files-write personas/x.md` in another project works. Fail on base:
+with main's `plugins/autonomous/commands.ts`, `src/autonomous/delegate.ts`
+and the files plugin, all four fail; restored, pass.
 ## My memory forget / override by id on a DM card (REQ-plugins-183 added, REQ-plugins-011 modified; SAFE-18.a, SAFE-4/19/20)
 
 `tests/memory.forget-card.test.ts` (17 tests; the real card engine with

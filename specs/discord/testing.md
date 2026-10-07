@@ -1785,6 +1785,19 @@ Fail on base: with the stacked base's (387dada) sources swapped in, both
 before `github-pr-create` refuses, and drops the frame's `review`);
 `tests/work.review.test.ts` cannot load. Restored, all pass.
 
+## /session start persona (REQ-discord-225; AUTONOMOUS-2 / AUTONOMOUS-5.a)
+
+`tests/discord.session-persona.test.ts` (handler ctx with a recording agent
+and a plain persona root; a fake bin for the spawn client): `/session start`
+options are `topic`, `project`, `persona` (optional STRING); a team member and
+a community user setting `persona` get exactly `PERSONA_OWNER_ONLY_LINE`
+ephemerally with no run and no session; the owner's unknown persona and
+unconfigured model each get one ephemeral line, nothing started; the owner's
+`Reviewer` reaches `runChat` as `reviewer` and the answer says
+`Persona: reviewer`, and without it nothing changes; the spawn client puts
+`--persona reviewer` before `--task` and nothing when unset. Fail on base:
+with main's `session.ts`, `slash-commands.ts`, `slash-types.ts` and
+`agent-client.ts` all 5 fail; restored, all pass.
 ## The `memory` card and the spawn without typed tokens (REQ-discord-183 added, REQ-discord-021 and REQ-discord-128 modified; SAFE-18.a)
 
 `tests/memory.forget-card.test.ts` drives the card engine with
