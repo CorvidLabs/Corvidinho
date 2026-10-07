@@ -2672,13 +2672,17 @@ refuse:
   through a symlink, a worktree link to the data dir included) or text that
   spells it (its path, `~/…`, `$HOME/…`, or its path below the home dir); an
   assignment or output redirection pointing into it, an in-root script's
-  included; input fed to the command that names it; and code given to a SQL
+  included; input fed to the command that names it; code given to a SQL
   client or interpreter (its words, here-docs and here-strings, the
-  commands piped into it) that names it or `CORVIDINHO_DATA_DIR`. Read-only
+  commands piped into it) that names it or `CORVIDINHO_DATA_DIR`; and an
+  assignment (a prefix one, or a word of `export`, `declare`, `typeset`,
+  `local` or `readonly`) whose value is code that names either. Read-only
   looks (`ls`, `stat`, `du`, `df`, `file`, `wc`, `head`, `tail`, `cat`,
   `cmp`, `diff`, the checksum tools, `readlink`, `realpath`, `echo`,
-  `printf`, `test`, `grep`, `rg`, `cd`, a `find` with no action) SHALL still
-  run. A SQL client (`sqlite3`, `sqlite`, `sqlite3_rsync`, `sqlcipher`,
+  `printf`, `test`, `grep`, `rg` without `--pre`, `cd`, a `find` with no
+  action) SHALL still run; `xxd`, `tree` and `less`, which can write a file,
+  and `rg --pre`, which runs a command on every file it searches, are not
+  read-only looks. A SQL client (`sqlite3`, `sqlite`, `sqlite3_rsync`, `sqlcipher`,
   `sqlite-utils`, `litecli`, `duckdb`) on the store SHALL be refused for
   reads too: the check cannot tell its reads from its writes. Shells,
   `eval` and `trap` are read through the code the walker hands over.
@@ -2711,13 +2715,15 @@ Commands and argv that don't name the store SHALL still run. Residual
 substitution or a variable filled from program output, handed to a command
 outside the SQL-client and write families; code that joins the path), code
 that reaches the store without naming it (a script file handed to an
-interpreter, a module it imports), and an in-root script's output
-redirection to an expanded path (as for the SAFE-21 edit family). No new
-command, slash command, env var, must-ask class, config key or schema.
+interpreter, a module it imports, a package script or `make` / `just`
+recipe the command runs), and an in-root script's output redirection to an
+expanded path (as for the SAFE-21 edit family). No new command, slash
+command, env var, must-ask class, config key or schema.
 
 Acceptance Criteria
 - With `CORVIDINHO_DATA_DIR` a temp store seeded through `memory-store`, `shell-exec` refuses with exit 2, `shell-exec refused (SAFE-4): …`, `data.rule` `SAFE-4` and the two-phase `memory-forget` / `memory-override` named instead, spawning nothing, and the memories rows read back unchanged: `sqlite3` `DELETE` / `DROP TABLE` / `ATTACH` on `corvidinho.db` through `~`, `$HOME`, `${HOME}`, `$CORVIDINHO_DATA_DIR`, the absolute path or a worktree symlink to the data dir (SQL as an argument or piped in), `truncate -s 0`, `cp /dev/null`, `cp fixture.db` over it, `dd of=`, `python3 -c` with `sqlite3`, `sh -c`, `timeout`, and an in-root script run with `sh wipe.sh` (named in the message) or SQL read from `< wipe.sql`.
 - A target only the running shell can resolve (`$(cat where.txt)`, a variable the command sets, `xargs` input) is refused fail-closed; the `-wal` / `-shm` / `-journal` siblings are refused like the DB.
+- `xxd /dev/null <db>`, `tree -o <db>`, `less -o <db>`, `rg --pre rm x <db>`, and `CODE='…CORVIDINHO_DATA_DIR…'; python3 -c "$CODE"` (also with `export CODE=…`) are refused and the rows stay; `rg -n` / `grep -rn` of the store and `export CORVIDINHO_DATA_DIR=<elsewhere>` are not.
 - `python-exec` and `node-exec` refuse pre-spawn with `<runner> refused (SAFE-4): …` argv that names the DB path, `CORVIDINHO_DATA_DIR` or a worktree link to the data dir, and the rows stay; `python-exec ["-c","print(40 + 2)"]` runs.
 - `sqlite3 ./fixture.db 'DELETE FROM t'` in the worktree changes the fixture; `ls`, `stat`, `sha256sum` of the store, `cp` / `truncate` of worktree files and `python3 -c "print(1)"` run; `rm <store db>` and `echo > <store db>` still refuse under SAFE-21 (delete, edit).
 - `shellProdWhy` / `runnerProdWhy` return null for a refused call that also names `kubectl` (non-null without the store part).
