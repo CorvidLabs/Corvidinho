@@ -24,7 +24,6 @@ import { spendWarningFromUnknown } from "../agent/spend-notice.ts";
 import { injectionNoticeFromUnknown } from "../agent/untrusted.ts";
 import { stopReasonFromUnknown } from "../agent/limits.ts";
 import type { PersonRole } from "../identity/people.ts";
-import { extractConfirmTokens } from "../memory/confirm.ts";
 import {
   collectProcessTree,
   killProcessTree,
@@ -49,9 +48,11 @@ export type AgentStatusUpdate = {
 export type AgentRunChatOpts = {
   prompt: string;
   /**
-   * The human's own words for this run, before memory/image enrichment.
-   * SAFE-4 confirm tokens are taken only from here — never from `prompt`,
-   * which may carry recalled memory the model wrote. Omitted ⇒ no tokens.
+   * The human's own words for this run, before memory/image enrichment
+   * (never `prompt`, which may carry recalled memory the model wrote). The
+   * spawn takes nothing from it: since SAFE-18.a a typed confirm token
+   * counts for nothing (the owner's memory forget and override by id ask on
+   * a DM card instead).
    */
   humanText?: string;
   sessionId: string;
@@ -165,7 +166,6 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
   return {
     async runChat({
       prompt,
-      humanText,
       sessionId,
       actingUserId,
       actingIsAdmin,
@@ -207,8 +207,10 @@ export function createSpawnAgentClient(opts: SpawnAgentClientOpts): AgentClient 
           CORVIDINHO_NON_INTERACTIVE: "1",
           // Always overwrite: never inherit an actor from the bridge env (REQ-discord-021).
           CORVIDINHO_ACTING_DISCORD_USER_ID: actingUserId ?? "",
-          // SAFE-4: only confirm tokens the human typed in this message count.
-          CORVIDINHO_ACTING_CONFIRM_TOKENS: extractConfirmTokens(humanText ?? "").join(","),
+          // SAFE-18.a: a typed confirm token counts for nothing (the owner's
+          // memory forget / override by id ask on a DM card); always cleared,
+          // like the WATCH spawn, so no stale value reaches a run.
+          CORVIDINHO_ACTING_CONFIRM_TOKENS: "",
           // DISCORD-17: the only channel discord-send-file may attach in.
           // Always overwritten, never inherited from the bridge env.
           CORVIDINHO_DISCORD_REPLY_CHANNEL_ID: replyChannelId ?? "",

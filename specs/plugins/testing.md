@@ -866,3 +866,46 @@ dir and allowlist file, the real must-ask gate, card store and SAFE-5 chain.
   `events-ndjson.ts`, `loop-guards.ts`, `ask.ts`, 33 of 114 tests (with
   `tests/must-ask.boundary.test.ts` and `tests/agent.loop-guards.test.ts`)
   fail. Restored: 114 of 114 pass.
+## My memory forget / override by id on a DM card (REQ-plugins-183 added, REQ-plugins-011 modified; SAFE-18.a, SAFE-4/19/20)
+
+`tests/memory.forget-card.test.ts` (17 tests; the real card engine with
+`memoryApprovalKind` and recording DMs, a temp data dir, no token, no
+network): the owner's `memory-forget` in a Discord conversation raises one
+`memory` card (destructive) DMed to the owner with the exact action, the
+target (id, category/key, owner scope, last changed) and the amount; Approve
+alone forgets nothing, Approve + the one-time code forgets it once (request
+`used`; `memory-card`, `approval-code-issue`, `memory-approve` and the
+`memory-forget` tool rows on the audit trail); Deny, a lapse (and a late
+Approve), a stopped run (exit 130) and a memory changed after the card went
+out change nothing. `memory-override`: the new text goes out first, word for
+word, inside one code block headed as data, then the card; Approve + code
+stores exactly it; backticks can't end the block; a secret is scrubbed on the
+card exactly as stored; Deny keeps the old text. No card and no change: the
+local CLI (also with `--confirm` and a token in the env) and the owner's
+schedule run refuse with the bridge line; a typed token in the owner's chat is
+refused; a card that can't be raised or read refuses with a SAFE-6 scrubbed
+reason and changes nothing; a non-owner (also with a forged ADMIN bit) is
+refused as before with no card, and their `memory-forget-me` still records a forget request. A card
+whose waiting run is gone closes as a no. The fake model's `memory-forget`
+call through `createTaskExecute` waits for the card and succeeds once
+approved with the code. The argv hint and descriptions name the card and no
+`--confirm`.
+
+`tests/memory.plugins.test.ts` (two-phase cases replaced): the owner's forget
+asks on the card and forgets once approved (no token, no content in the
+result); `--confirm` in any form is refused with no card; an override stores
+exactly the card's text; Deny and no answer change nothing; override without
+text is a usage error with no card; `--confirm` after `--` is the override's
+text, not a token. The ACL cases (argv identity, empty admin, non-owner,
+deny-listed / muted owner, admin lists, the bridge bit, SAFE-1) are unchanged.
+
+Fail on base: with main's (`85871fa4`) `plugins/memory/commands.ts`,
+`src/discord/agent-client.ts` and `src/agent/tools.ts` swapped in (the new
+card module kept loadable), 21 of the 43 tests in
+`tests/memory.forget-card.test.ts`, `tests/memory.plugins.test.ts` and
+`tests/memory.spawn-env.test.ts` fail (no card is raised, the first call
+returns a token, `--confirm` is accepted, the spawn passes the typed token,
+the hint names `--confirm`); with every touched source swapped back to main
+the two card files cannot load. Restored: 43 of 43 pass. REQ-plugins-010
+(modified): the forget / override ACL fixtures in `tests/memory.plugins.test.ts`
+now refuse without the owner's approved card instead of a token.

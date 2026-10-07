@@ -1,12 +1,15 @@
 /**
  * Memory plugins (REQ-plugins-010) + ACL hardening (REQ-plugins-011):
- * identity/ADMIN only from bridge env, handler-time ADMIN, two-phase confirm.
+ * identity/ADMIN only from bridge env, handler-time ADMIN, and the owner's
+ * forget/override by id confirmed on a DM card, not a typed token
+ * (SAFE-4 / SAFE-18.a; the card itself: tests/memory.forget-card.test.ts).
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { setConfirmTurnForTests } from "../src/memory/index.ts";
+import { ApprovalStore } from "../src/approvals/store.ts";
+import { setMemoryCardTestHooks } from "../src/memory/index.ts";
 import { loadBuiltins } from "../src/plugins/builtins.ts";
 import { clearRegistry, list } from "../src/plugins/registry.ts";
 import { runPlugin } from "../src/plugins/run.ts";
@@ -23,6 +26,8 @@ const ENV_KEYS = [
   "CORVIDINHO_MEMORY_INMEM",
   "CORVIDINHO_ACTING_CONFIRM_TOKENS",
   "CORVIDINHO_OWNER_DISCORD_ID",
+  "CORVIDINHO_DISCORD_REPLY_CHANNEL_ID",
+  "CORVIDINHO_DISCORD_SESSION_ID",
 ] as const;
 
 /** Owner snowflakes — ADMIN is owner-only (IDENTITY-2). */
@@ -32,10 +37,12 @@ const BOSS2 = "900000000000000002";
 let saved: Record<string, string | undefined> = {};
 let dir = "";
 
+/** A bridge-started run in a Discord conversation with `userId`. */
 function actAs(userId: string | undefined, isAdminBit = false): void {
   if (userId === undefined) delete process.env.CORVIDINHO_ACTING_DISCORD_USER_ID;
   else process.env.CORVIDINHO_ACTING_DISCORD_USER_ID = userId;
   process.env.CORVIDINHO_ACTING_IS_ADMIN = isAdminBit ? "1" : "0";
+  process.env.CORVIDINHO_DISCORD_REPLY_CHANNEL_ID = "100000000000000001";
 }
 
 function run(name: string, args: string[]) {
@@ -54,16 +61,19 @@ async function storeAs(userId: string, key: string, content: string): Promise<st
   return (r.data as { id: string }).id;
 }
 
-/** The human replies with the token in a new message (bridge-extracted). */
-function humanSays(token: string): void {
-  process.env.CORVIDINHO_ACTING_CONFIRM_TOKENS = token;
-}
+/** Cards the owner was asked on (SAFE-18.a), with what they show. */
+let cards: Array<{ id: string; action: string; target: string; text?: string }> = [];
 
-let turn = 0;
-function newTurn(): void {
-  turn += 1;
-  const t = `turn-${turn}`;
-  setConfirmTurnForTests(() => t);
+/** The owner answers every memory card at once (the card engine itself: memory.forget-card.test.ts). */
+function ownerAnswers(answer: "approved" | "denied" | "none"): void {
+  setMemoryCardTestHooks({
+    ttlMs: answer === "none" ? 40 : 2_000,
+    pollMs: 5,
+    onRequest: (req, db) => {
+      cards.push({ id: req.id, action: req.action, target: req.target, ...(req.text !== undefined ? { text: req.text } : {}) });
+      if (answer !== "none") new ApprovalStore({ db }).decide(req.id, answer, { by: BOSS });
+    },
+  });
 }
 
 beforeEach(() => {
@@ -73,13 +83,14 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "corvidinho-memplug-"));
   process.env.CORVIDINHO_DATA_DIR = dir;
   process.env.CORVIDINHO_ALLOWLIST_FILE = join(dir, "no-allowlist.toml");
-  newTurn();
+  cards = [];
+  ownerAnswers("approved");
   clearRegistry();
   loadBuiltins();
 });
 
 afterEach(() => {
-  setConfirmTurnForTests(null);
+  setMemoryCardTestHooks({});
   for (const k of ENV_KEYS) {
     if (saved[k] === undefined) delete process.env[k];
     else process.env[k] = saved[k];
@@ -176,79 +187,74 @@ describe("memory ACL hardening (REQ-plugins-011)", () => {
     expect(JSON.stringify(r)).not.toContain("content-u1");
   });
 
-  test("admin forget is two-phase: token, same-turn refused, new turn ok, replay refused", async () => {
+  test("SAFE-18.a: the owner's forget asks on a DM card and forgets once approved; no token, no content", async () => {
     process.env.CORVIDINHO_OWNER_DISCORD_ID = BOSS;
     const id = await storeAs("u1", "k", "content-u1");
     actAs(BOSS, true);
 
-    const phase1 = await run("memory-forget", ["--id", id]);
-    expect(phase1.ok).toBe(true);
-    const pending = phase1.data as { pending: boolean; confirmToken: string; ownerUserId: string };
-    expect(pending.pending).toBe(true);
-    expect(pending.ownerUserId).toBe("u1");
-    expect(JSON.stringify(phase1)).not.toContain("content-u1");
-
-    const bare = await run("memory-forget", ["--id", id, "--confirm"]);
-    expect(bare.ok).toBe(false);
-    expect(bare.error).toContain("token from phase 1");
-
-    const sameTurn = await run("memory-forget", ["--id", id, "--confirm", pending.confirmToken]);
-    expect(sameTurn.ok).toBe(false);
-    expect(sameTurn.error).toContain("new message/turn");
-
-    newTurn();
-    const notHuman = await run("memory-forget", ["--id", id, "--confirm", pending.confirmToken]);
-    expect(notHuman.ok).toBe(false);
-    expect(notHuman.error).toContain("must come from the human");
-    humanSays(pending.confirmToken);
-    const ok = await run("memory-forget", ["--id", id, "--confirm", pending.confirmToken]);
+    const ok = await run("memory-forget", ["--id", id]);
     expect(ok.ok).toBe(true);
-    expect(ok.message).toContain(`by ${BOSS}`);
+    expect(ok.message).toContain(`forgot memory ${id} (person/k, owner u1) by ${BOSS}`);
+    expect(ok.message).toContain(`DM card ${cards[0]!.id}`);
     expect(JSON.stringify(ok)).not.toContain("content-u1");
+    expect(JSON.stringify(ok)).not.toContain("confirmToken");
+    expect(cards).toHaveLength(1);
+    expect(cards[0]!.action).toContain("memory-forget");
+    expect(cards[0]!.target).toContain(`memory ${id} — person/k, owner scope u1`);
 
-    newTurn();
-    const replay = await run("memory-forget", ["--id", id, "--confirm", pending.confirmToken]);
-    expect(replay.ok).toBe(false);
+    // Gone: a second forget finds nothing and raises no card.
+    const again = await run("memory-forget", ["--id", id]);
+    expect(again.ok).toBe(false);
+    expect(cards).toHaveLength(1);
 
     actAs("u1");
     const after = await run("memory-recall", []);
     expect(after.data).toEqual([]);
   });
 
-  test("confirm token is bound to the memory id and actor", async () => {
+  test("SAFE-18.a: --confirm is refused — there are no confirm tokens; no card, nothing forgotten", async () => {
     process.env.CORVIDINHO_OWNER_DISCORD_ID = BOSS;
-    const a = await storeAs("u1", "a", "A");
-    const b = await storeAs("u1", "b", "B");
+    const id = await storeAs("u1", "k", "kept");
     actAs(BOSS, true);
-    const p1 = await run("memory-forget", ["--id", a]);
-    const token = (p1.data as { confirmToken: string }).confirmToken;
-    newTurn();
-    const wrongId = await run("memory-forget", ["--id", b, "--confirm", token]);
-    expect(wrongId.ok).toBe(false);
-    expect(wrongId.error).toContain("does not match");
-    process.env.CORVIDINHO_OWNER_DISCORD_ID = BOSS2;
-    actAs(BOSS2, true);
-    const wrongActor = await run("memory-forget", ["--id", a, "--confirm", token]);
-    expect(wrongActor.ok).toBe(false);
-    expect(wrongActor.error).toContain("does not match");
+    const token = `mc1.${Date.now() + 60_000}.turn-1.${"a".repeat(64)}`;
+    process.env.CORVIDINHO_ACTING_CONFIRM_TOKENS = token;
+    for (const args of [["--id", id, "--confirm", token], ["--id", id, `--confirm=${token}`], ["--id", id, "--confirm"]]) {
+      const r = await run("memory-forget", args);
+      expect(r.ok).toBe(false);
+      expect(r.error).toContain("no confirm tokens");
+    }
+    expect(cards).toHaveLength(0);
+    actAs("u1");
+    expect(((await run("memory-recall", [])).data as unknown[]).length).toBe(1);
   });
 
-  test("override binds content across phases", async () => {
+  test("SAFE-18.a: override shows the new text word for word and stores exactly it once approved", async () => {
     process.env.CORVIDINHO_OWNER_DISCORD_ID = BOSS;
     const id = await storeAs("u1", "k", "old");
     actAs(BOSS, true);
-    const p1 = await run("memory-override", ["--id", id, "--content", "new value"]);
-    expect(p1.ok).toBe(true);
-    const token = (p1.data as { confirmToken: string }).confirmToken;
-    newTurn();
-    humanSays(token);
-    const swapped = await run("memory-override", ["--id", id, "--confirm", token, "--content", "evil value"]);
-    expect(swapped.ok).toBe(false);
-    const ok = await run("memory-override", ["--id", id, "--confirm", token, "--content", "new value"]);
+    const ok = await run("memory-override", ["--id", id, "--content", "new value"]);
     expect(ok.ok).toBe(true);
+    expect(ok.message).toContain(`overrode memory ${id}`);
+    expect(cards[0]!.text).toBe("new value");
     actAs("u1");
     const after = await run("memory-recall", []);
     expect((after.data as Array<{ content: string }>)[0]?.content).toBe("new value");
+  });
+
+  test("SAFE-20: denied or unanswered cards change nothing", async () => {
+    process.env.CORVIDINHO_OWNER_DISCORD_ID = BOSS;
+    const id = await storeAs("u1", "k", "old");
+    actAs(BOSS, true);
+    ownerAnswers("denied");
+    const denied = await run("memory-override", ["--id", id, "--content", "new"]);
+    expect(denied.ok).toBe(false);
+    expect(denied.error).toContain("the owner denied");
+    ownerAnswers("none");
+    const lapsed = await run("memory-forget", ["--id", id]);
+    expect(lapsed.ok).toBe(false);
+    expect(lapsed.error).toContain("no answer");
+    actAs("u1");
+    expect((await run("memory-recall", [])).data).toMatchObject([{ content: "old" }]);
   });
 
   test("deny-listed or muted owner is never ADMIN", async () => {
@@ -278,10 +284,7 @@ describe("memory ACL hardening (REQ-plugins-011)", () => {
     process.env.CORVIDINHO_OWNER_DISCORD_ID = BOSS;
     const id = await storeAs(BOSS, "k", "gone soon");
     actAs(BOSS, true);
-    const p1 = await run("memory-forget", ["--id", id]);
-    newTurn();
-    humanSays((p1.data as { confirmToken: string }).confirmToken);
-    await run("memory-forget", ["--id", id, "--confirm", (p1.data as { confirmToken: string }).confirmToken]);
+    expect((await run("memory-forget", ["--id", id])).ok).toBe(true);
     const adminView = await run("memory-recall", ["--include-deleted"]);
     expect(adminView.ok).toBe(true);
     expect((adminView.data as unknown[]).length).toBe(1);
@@ -317,12 +320,14 @@ describe("memory ACL hardening — review follow-ups", () => {
     expect((await run("memory-forget", ["--id", id])).ok).toBe(true);
   });
 
-  test("override phase-1 hint names the content requirement", async () => {
+  test("override with no new text is a usage error naming the content; no card", async () => {
     process.env.CORVIDINHO_OWNER_DISCORD_ID = BOSS;
     const id = await storeAs("u1", "k", "old");
     actAs(BOSS, true);
-    const p1 = await run("memory-override", ["--id", id, "--content", "new"]);
-    expect(p1.message).toContain("--content");
+    const r = await run("memory-override", ["--id", id]);
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("<content>");
+    expect(cards).toHaveLength(0);
   });
 
   test("--include-deleted=false stays off; =true needs ADMIN", async () => {
@@ -346,15 +351,13 @@ describe("memory ACL hardening — review follow-ups", () => {
     expect(bare.error).toContain("after `--`");
   });
 
-  test("--confirm=TOKEN form works", async () => {
+  test("the override's text may hold the word --confirm after `--`; it is data, not a token", async () => {
     process.env.CORVIDINHO_OWNER_DISCORD_ID = BOSS;
     const id = await storeAs("u1", "k", "v");
     actAs(BOSS, true);
-    const p1 = await run("memory-forget", ["--id", id]);
-    newTurn();
-    humanSays((p1.data as { confirmToken: string }).confirmToken);
-    const ok = await run("memory-forget", ["--id", id, `--confirm=${(p1.data as { confirmToken: string }).confirmToken}`]);
+    const ok = await run("memory-override", ["--id", id, "--", "always", "--confirm", "first"]);
     expect(ok.ok).toBe(true);
+    expect(cards[0]!.text).toBe("always --confirm first");
   });
 });
 
@@ -365,8 +368,8 @@ describe("configured owner is ADMIN for memory (IDENTITY-1 / REQ-plugins-042)", 
     actAs("111111111111111111", false);
     expect((await run("memory-forget", ["--id", id])).error).toMatch(/not authorized|not allowed for your role/);
     actAs("111111111111111111", true);
-    const p1 = await run("memory-forget", ["--id", id]);
-    expect(p1.ok).toBe(true);
+    const done = await run("memory-forget", ["--id", id]);
+    expect(done.ok).toBe(true);
     actAs("222222222222222222", true);
     expect((await run("memory-forget", ["--id", id])).error).toMatch(/not authorized|not allowed for your role/);
   });
