@@ -2019,3 +2019,26 @@ throwing `onError` never throws; `formatScheduleAskDaemonNote` text.
 Fail on base: with main's (85871fa) `src/` swapped in, all 12 cases of
 `tests/daemon.owner-dm.test.ts` fail and `tests/discord.rest-dm.test.ts`
 cannot load (no `src/discord/rest-dm.ts`). Restored, all 17 pass.
+
+## A reply made only of thin words and emoji is still thin (REQ-discord-044 modified; AUTONOMY-5)
+
+`tests/discord.thin-ack.test.ts`: `isThinAck` is true for `ok 👍`, `👍 ok`,
+`hmm ok`, `yeah ok`, `sure, ok`, `k k`, `OK 👍👍`, `hmm, ok 👍`,
+`ok <:party:…>` and `okay. 👍` (none a cancel), and false for
+`ok use postgres` (± 👍), `option 2`, `2 👍`, `👍 2`, `2`, `Postgres 👍`,
+`sure, option 2` and `go with the first one`. Through `startBridge` (null
+gateway, dry-run outbound, scripted agent): while a Choose ask waits, each of
+the seven mixed replies gets one restatement (the stub with its Choose
+button and the requester mention), no agent run and the same pending ask;
+while a free-text ask waits, one restatement (the quoted question with its
+Answer button), no run, the ask kept; none says "ready when you are". `2 👍`
+answers a free-text ask (the run sees the question and the answer; no
+pending ask). `tests/discord.ask-answer-modal.test.ts`: `ok 👍`, `👍 ok`,
+`hmm ok`, `sure, ok`, `OK 👍👍` typed in the Answer form are restated
+privately with the Answer button, no run, nothing posted, the ask kept.
+`tests/discord.schedule-ask.test.ts`: `ok 👍`, `hmm ok`, `sure, ok` typed in
+a schedule ask's form are restated privately and the question stays open.
+
+Fail on base: with main's (49273ff) `src/discord/thin-ack.ts` swapped in, the
+7 new tests fail and the other 51 tests of those files pass; restored, 58 of
+58 pass.

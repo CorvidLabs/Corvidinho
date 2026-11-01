@@ -471,6 +471,26 @@ describe("Answer form submit resumes the requester's session like a reply", () =
     await b.result.stop();
   });
 
+  test("a submit made only of thin words and emoji (`ok 👍`, `hmm ok`, `sure, ok`) is not an answer (AUTONOMY-5): restated privately with the Answer button, no run, nothing posted, ask kept", async () => {
+    const b = await withFreeTextAsk();
+    const before = sent(b);
+    for (const text of ["ok 👍", "👍 ok", "hmm ok", "sure, ok", "OK 👍👍"]) {
+      const rec = recorder();
+      await b.handlers.onComponent!(submit(b.askId, USER_ID, text, rec, { messageId: b.stubId }));
+      expect(rec.eph).toHaveLength(1);
+      const eph = rec.eph[0]!;
+      expect(eph.ephemeral).toBe(true);
+      expect(String(eph.content)).toContain(`> ${QUESTION}`);
+      expect(String(eph.content)).toContain(ASK_ANSWER_HINT);
+      expect(String(eph.content).toLowerCase()).not.toContain("ready when you are");
+      expect(eph.components).toEqual(buildAnswerStubComponents(b.askId));
+    }
+    expect(b.calls).toHaveLength(1);
+    expect(sent(b)).toBe(before);
+    expect(pendingAskId(b)).toBe(b.askId);
+    await b.result.stop();
+  });
+
   test("an explicit cancel typed in the form drops the session's open asks like a cancel reply (AUTONOMY-6): private ack, no run, nothing posted", async () => {
     const b = await withFreeTextAsk();
     const before = sent(b);

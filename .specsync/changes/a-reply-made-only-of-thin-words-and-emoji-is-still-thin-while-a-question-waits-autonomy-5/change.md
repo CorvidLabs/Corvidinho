@@ -1,0 +1,24 @@
+---
+id: a-reply-made-only-of-thin-words-and-emoji-is-still-thin-while-a-question-waits-autonomy-5
+state: approved
+type: bug_fix
+base_commit: 49273ff4a95fafcad87cde66492e3a8dd2c6c3f4
+---
+
+# A reply made only of thin words and emoji is still thin while a question waits (AUTONOMY-5)
+
+## Intent
+
+A reply made only of thin words and emoji is still thin while a question waits (AUTONOMY-5)
+
+## Affected Canonical Specs
+
+- `discord`
+
+## Acceptance Criteria
+
+- AUTONOMY-5 (captured on main, hi/autonomy.md: 'While a session is waiting on an ask, thin replies (ok, k, sure, hmmm, emoji-only, and similar) do not clear blocked or mark done; restate the pending question once (no vacuous ready when you are).'): (1) isThinAck (src/discord/thin-ack.ts) is true when the reply splits on whitespace/commas into pieces that are each a word already in THIN_WORD_RE's list or an emoji ('ok 👍', '👍 ok', 'hmm ok', 'yeah ok', 'sure, ok', 'k k', 'OK 👍👍'); no new word, env var, config key or command. (2) Any piece that is not a listed thin word or emoji keeps the reply substantive ('ok use postgres', 'option 2', '2 👍', 'Postgres', 'go with the first one'); a bare ASCII digit is never counted as an emoji; cancel phrases stay isCancelAsk=true and isThinAck=false. (3) Bridge: while waiting on a Choose ask, and separately a free-text ask, 'ok 👍' sends one restatement (Choose stub with its Choose button / the question with its Answer button), spawns no agent, the ask stays pending, nothing says 'ready when you are'. (4) 'ok 👍' typed in the private Answer form or a schedule ask's form is restated privately and the question stays open. (5) The new cases in tests/discord.thin-ack.test.ts, tests/discord.ask-answer-modal.test.ts and tests/discord.schedule-ask.test.ts fail with origin/main's src/discord/thin-ack.ts and pass on the branch.
+
+## No-spec Rationale
+
+Not applicable
