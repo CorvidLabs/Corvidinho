@@ -6,14 +6,11 @@
  * A run whose next priced model call would pass a spend cap holds that call
  * and records a `spend` request in `approval_requests` (src/agent/spend.ts
  * `createSpendGuard`; any process on the data dir: chat and slash runs,
- * schedules, WATCH, the daemon, delegate and council workers, the CLI); so
- * does its `web-search` or `gif-search` past the total cap (the guard's
- * `flatCard`, REQ-agent-398). The
+ * schedules, WATCH, the daemon, delegate and council workers, the CLI). The
  * engine DMs it to the configured owner like every other card: the run's
  * task as quoted data first, then the card — the action (one model call to
- * <model> via <provider>, or one <tool> via <host> for a search), the target
- * (the tripped cap scope(s), `total` / `provider:<id>`) and the amount (that
- * call's estimate, or the search's price). The class is
+ * <model> via <provider>), the target (the tripped cap scope(s), `total` /
+ * `provider:<id>`) and the amount (that call's estimate). The class is
  * `money`, so Approve also needs the one-time code (SAFE-19). Approve only
  * records the decision: the waiting run reads it, uses it once, and sends
  * exactly that call at that amount (SAFE-8.a); the next call past the cap
