@@ -7,10 +7,11 @@
   "title": "A reply made only of thin words and emoji is still thin while a question waits (AUTONOMY-5)",
   "description": "A reply made only of thin words and emoji is still thin while a question waits (AUTONOMY-5)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "49273ff4a95fafcad87cde66492e3a8dd2c6c3f4",
   "created_at": 1793546012,
-  "updated_at": 1793546361,
+  "updated_at": 1793546385,
   "affected_specs": [
     "discord"
   ],

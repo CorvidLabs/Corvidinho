@@ -1,6 +1,6 @@
 ---
 id: a-reply-made-only-of-thin-words-and-emoji-is-still-thin-while-a-question-waits-autonomy-5
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 49273ff4a95fafcad87cde66492e3a8dd2c6c3f4
 ---

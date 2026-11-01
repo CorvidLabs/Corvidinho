@@ -1462,6 +1462,23 @@ While a run of the session is in flight, a continue whose whole text is
 and SHALL leave the session's open asks as they are; the cancel above applies
 when nothing of the session is running.
 
+AUTONOMY-5 ("While a session is waiting on an ask, thin replies (`ok`, `k`,
+`sure`, `hmmm`, emoji-only, and similar) do not clear blocked or mark done;
+restate the pending question once (no vacuous 'ready when you are')."): a
+thin-ack continue, and a thin answer typed in the private Answer form
+(REQ-discord-548) or in a schedule ask's form (REQ-discord-606), SHALL be any
+text `isThinAck` (`src/discord/thin-ack.ts`) accepts: blank, one word of its
+existing thin-word list, emoji only, or text whose pieces, split on
+whitespace and commas, are each a word of that list or an emoji (`ok 👍`,
+`👍 ok`, `hmm ok`, `yeah ok`, `sure, ok`, `k k`, `OK 👍👍`). Such a reply
+SHALL be handled exactly as a single thin word is (restated once, no agent
+run, the ask kept, never 'ready when you are'). Any piece that is not a word
+of that list or an emoji SHALL keep the text substantive (`ok use postgres`,
+`option 2`, `2 👍`, `Postgres`, `go with the first one`); a bare ASCII digit
+SHALL NOT count as an emoji (Unicode lists the digits as emoji components),
+so `2` and `2 👍` are answers. An explicit cancel SHALL stay a cancel, never
+thin. No new thin word, env var, config key or command.
+
 Acceptance Criteria
 - Clarify mentionUserIds is [requester] when provided; stuck is [owner].
 - Thin ack restates; pendingAsk remains.
@@ -1501,6 +1518,9 @@ Acceptance Criteria
 - AUTONOMY-6.b on the real window: the ask's `expiresAt` is its ask time plus `ASK_BUTTON_TTL_MS`; with the clock one minute inside it a thin reply restates the Choose ask with its Choose button and runs nothing; one minute past it a thin reply, or a new request, runs the agent with no prior-question block, posts no stub or Choose button for that ask and leaves no pending or open ask; a late press on it gets `ASK_CHOICE_EXPIRED`, and a later thin reply runs too.
 - AUTONOMY-6.b on the slash path: a reply `ok` to a `/session start` or `/work` Choose answer restates it one minute inside the window, and one minute past it runs the agent with no prior-question block and leaves no pending or open ask.
 - AUTONOMY-6.b across a restart: a bridge restarted on the same DB loads the session's ask with its `expiresAt`; one minute inside the window a thin reply restates it and runs nothing, and one minute past it a thin reply runs the agent with no prior-question block, leaves no pending ask, and a late press on it gets `ASK_CHOICE_EXPIRED`.
+- `isThinAck` is true for `ok 👍`, `👍 ok`, `hmm ok`, `yeah ok`, `sure, ok`, `k k` and `OK 👍👍`, and false for `ok use postgres`, `option 2`, `2 👍`, `2`, `Postgres` and `go with the first one`; cancel phrases stay `isCancelAsk` and are never thin (AUTONOMY-5).
+- While a Choose ask waits, a reply `ok 👍` (and each reply above made only of thin words and emoji) restates the Choose stub with its Choose button once, runs no agent and leaves the ask pending; while a free-text ask waits it restates the question with its Answer button once, the same way; neither says 'ready when you are'. A reply `2 👍` to a free-text ask answers it and runs the agent with the question (AUTONOMY-5).
+- `ok 👍` typed in the private Answer form, or in a schedule ask's form, is restated privately and the question stays open (AUTONOMY-5).
 
 ### REQ-discord-045
 
