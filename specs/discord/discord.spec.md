@@ -1,6 +1,6 @@
 ---
 module: discord
-version: 105
+version: 106
 status: draft
 files:
   - src/discord/types.ts
@@ -481,6 +481,12 @@ in the thread, and `getByThread(threadId)` the thread's most recently active
 one, whoever owns it; another user starting a session in the thread never
 replaces the first user's (DISCORD-2.a / SESSION-MULTI-1/2, REQ-discord-046).
 `src/discord/thin-ack.ts` exports `isThinAck` / `isCancelAsk` / `ASK_CANCELLED_ACK`.
+`isThinAck` is true for blank text, one listed thin word, emoji only, a
+reply whose space- or comma-separated pieces are each a listed thin word or
+an emoji (`ok 👍`, `sure, ok`, AUTONOMY-5 / REQ-discord-044), or one or two
+characters that are not all ASCII letters and digits; a bare ASCII digit is
+never an emoji, so `2` and `2 👍` are answers. Its emoji check takes one
+character per step, so a long emoji chain is decided in linear time.
 `/work` and `/session start` keep a clarify or stuck ask as their session's
 `pendingAsk` (never a `spend-cap` stop), and the bridge sets
 `SlashContext.trackBotMessage` so the slash answer message continues its
@@ -1918,3 +1924,4 @@ DISCORD-9 image attachments + DISCORD-10 protocol lockstep (2026-09-26, corvid-a
 | 2026-10-07 | with-only-the-daemon-running-and-no-bridge-a-scheduled-run-s-question-still-reaches-me-by-dm-autonomous-7-a: With only the daemon running and no bridge, a scheduled run's question still reaches me by DM (AUTONOMOUS-7.a): the scheduler's `ownerDm` pass DMs each pending ask to the owner over Discord's REST API (`createRestSendDm`) while no bridge runs on the data dir, and takes it so a bridge never sends it again (REQ-discord-707; REQ-discord-347 modified) |
 | 2026-10-07 | session-5-a-each-configured-model-has-its-own-context-window-at-about-80-of-the-whole-prompt-a-model-writes-the-summary: SESSION-5.a: each configured model has its own context window; at about 80% of the whole prompt a model writes the summary of older turns, the task and latest instruction stay word for word |
 | 2026-10-07 | saying-new-topic-starts-a-fresh-session-a-normal-mention-keeps-continuing-the-open-one-session-3-b: Saying 'new topic' starts a fresh session; a normal @mention keeps continuing the open one (SESSION-3.b) |
+| 2026-11-01 | a-reply-made-only-of-thin-words-and-emoji-is-still-thin-while-a-question-waits-autonomy-5: A reply made only of thin words and emoji is still thin while a question waits (AUTONOMY-5) |

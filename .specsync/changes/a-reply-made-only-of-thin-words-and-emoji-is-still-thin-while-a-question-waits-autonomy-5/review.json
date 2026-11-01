@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "change_id": "a-reply-made-only-of-thin-words-and-emoji-is-still-thin-while-a-question-waits-autonomy-5",
+  "reviewer": "corvid-agent",
+  "provenance": {
+    "schema_version": 1,
+    "provider": "github_actions_check",
+    "required_check": "SpecSync scoped review"
+  },
+  "verdict": "pass",
+  "implementation_commit": "eb092f23c983943a2f75e14f54e3d86d3777e800",
+  "contract_digest": "5532763446be25d2e60d5a474cda351099206ed7e8a1808ef65652a1f0e3f38c",
+  "execution_digest": "ae557755cb3cddd30580d91e49c6b68892850ef5d213f1be1998f7e85a99c4af",
+  "workspace_digest": "6aa450dbb247949708d415f4fce5813ab05922284f464bb922ee0098c2c7c664",
+  "timestamp": 1793549630
+}
