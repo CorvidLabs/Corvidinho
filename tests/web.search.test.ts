@@ -11,9 +11,17 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Database } from "bun:sqlite";
-import { createTaskExecute } from "../src/agent/execute.ts";
+import { ApprovalStore, type ApprovalRequest } from "../src/approvals/store.ts";
+import { createTaskExecute, extractUsage } from "../src/agent/execute.ts";
 import { SPEND_CAP_SUMMARY } from "../src/agent/spend-notice.ts";
-import { PROVIDER_SPEND_CAPS_ENV, SPEND_CAP_ENV, SpendLedger } from "../src/agent/spend.ts";
+import {
+  createSpendGuard,
+  PROVIDER_SPEND_CAPS_ENV,
+  setSpendCardTestHooks,
+  SPEND_CAP_ENV,
+  SpendLedger,
+} from "../src/agent/spend.ts";
+import type { AgentEvent } from "../src/agent/types.ts";
 import * as taskSummaryModule from "../src/agent/task-summary.ts";
 import { chatBodyFromTaskResult, closingNotesTail } from "../src/agent/task-summary.ts";
 import { resultFrame } from "../src/agent/events-ndjson.ts";
@@ -1079,6 +1087,215 @@ describe("each search counts toward the SAFE-8 total daily cap (about $0.005 res
     expect(r.ask?.reason).toBe("spend-cap");
     expect(r.ask?.question).toContain("Daily spend cap reached (SAFE-8)");
     db.close();
+  });
+});
+
+describe("at the cap a search waits on the owner's spend Approve card, as a model call does (SAFE-8 / SAFE-8.a / SAFE-14.a, REQ-agent-098)", () => {
+  const OWNER = "181969874455756800";
+
+  afterEach(() => {
+    setSpendCardTestHooks({});
+  });
+
+  /** $0.9980 of the $1.00 total cap spent: one $0.005 search passes it. */
+  function nearCap(): Database {
+    const db = openCorvidinhoDb({ memory: true });
+    new SpendLedger(db).reserve({ provider: "p", model: "gpt-4o-mini", estimateMicroUsd: 998_000, capMicroUsd: 1e12, now: Date.now() - 1000 });
+    return db;
+  }
+
+  /** Decide each spend card as it is recorded (as the bridge's engine would after Approve + code, or Deny). */
+  function answer(d: "approved" | "denied"): ApprovalRequest[] {
+    const asked: ApprovalRequest[] = [];
+    setSpendCardTestHooks({
+      ttlMs: 2_000,
+      pollMs: 5,
+      onRequest: (req, db) => {
+        asked.push(req);
+        new ApprovalStore({ db }).decide(req.id, d, { by: OWNER });
+      },
+    });
+    return asked;
+  }
+
+  function braveRows(db: Database) {
+    return db
+      .query("SELECT status, estimate_micro_usd AS est, cost_micro_usd AS cost FROM spend_ledger WHERE provider = ?")
+      .all(BRAVE_SEARCH_HOST) as Array<{ status: string; est: number; cost: number }>;
+  }
+
+  test("the handler: the run's card lets exactly that one search through; a no sends nothing and the result says only 'Work is paused for budget.'", async () => {
+    const db = nearCap();
+    const g = createSpendGuard(async () => new Response("{}"), {
+      env: { [SPEND_CAP_ENV]: "1", CORVIDINHO_OWNER_DISCORD_ID: OWNER },
+      readUsage: extractUsage,
+      approval: { taskText: "search for bun" },
+    });
+    expect(g.flatCard).toBeDefined();
+    const t = fakeTransport(() => ({ json: braveJson(HITS) }));
+    const cmd = searchCommand({
+      resolver: fakeResolver().resolver,
+      transport: t.transport,
+      env: { [BRAVE_SEARCH_API_KEY_ENV]: KEY, [SPEND_CAP_ENV]: "1" },
+      spendDb: db,
+    });
+    const asked = answer("approved");
+    const ok = await cmd.handler({ ...ctx(["bun"]), spendCard: g.flatCard! });
+    expect(ok.ok).toBe(true);
+    expect(t.calls).toHaveLength(1);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!.kind).toBe("spend");
+    expect(asked[0]!.class).toBe("money");
+    expect(asked[0]!.action).toBe(`send one web-search via ${BRAVE_SEARCH_HOST}`);
+    expect(asked[0]!.target).toBe("total");
+    expect(asked[0]!.amount).toBe("~$0.0050 (this one call's estimate)");
+    expect(braveRows(db)).toEqual([{ status: "actual", est: BRAVE_SEARCH_COST_MICRO_USD, cost: BRAVE_SEARCH_COST_MICRO_USD }]);
+    // SAFE-14.a: no amount or cap setting in what the model reads.
+    expect(outsideFence(ok)).not.toMatch(/\$|CORVIDINHO_|SAFE-8|spend/i);
+    expect(ok.spendAsk).toBeUndefined();
+
+    // SAFE-8.a: the next search past the cap asks again; denied, nothing is sent.
+    const denied = answer("denied");
+    const no = await cmd.handler({ ...ctx(["bun"]), spendCard: g.flatCard! });
+    expect(denied).toHaveLength(1);
+    expect(denied[0]!.id).not.toBe(asked[0]!.id);
+    expect(t.calls).toHaveLength(1);
+    expect(no.ok).toBe(false);
+    expect(no.exitCode).toBe(2);
+    expect((no.data as { code: string }).code).toBe("spend-cap");
+    expect(no.error).toBe("web-search spend-cap: refused: Work is paused for budget. (SAFE-8)");
+    expect(JSON.stringify({ error: no.error, data: no.data, message: no.message })).not.toMatch(/\$|CORVIDINHO_/);
+    expect(no.spendAsk?.reason).toBe("spend-cap");
+    expect(no.spendAsk?.question).toContain(`The owner denied Approve card ${denied[0]!.id}`);
+    expect(braveRows(db)).toHaveLength(1);
+    db.close();
+  });
+
+  test("the handler: the run's stop ends the card wait at once (SAFE-20): nothing is sent or recorded and the ask says the wait was cut short", async () => {
+    const db = nearCap();
+    const g = createSpendGuard(async () => new Response("{}"), {
+      env: { [SPEND_CAP_ENV]: "1", CORVIDINHO_OWNER_DISCORD_ID: OWNER },
+      readUsage: extractUsage,
+      approval: { taskText: "search for bun" },
+    });
+    const t = fakeTransport(() => ({ json: braveJson(HITS) }));
+    const cmd = searchCommand({
+      resolver: fakeResolver().resolver,
+      transport: t.transport,
+      env: { [BRAVE_SEARCH_API_KEY_ENV]: KEY, [SPEND_CAP_ENV]: "1" },
+      spendDb: db,
+    });
+    // The owner never answers; the card would stay open for a minute.
+    const asked: ApprovalRequest[] = [];
+    setSpendCardTestHooks({ ttlMs: 60_000, pollMs: 5, onRequest: (req) => asked.push(req) });
+    const stop = new AbortController();
+    const started = Date.now();
+    const pending = cmd.handler({ ...ctx(["bun"]), signal: stop.signal, spendCard: g.flatCard! });
+    for (let i = 0; i < 400 && asked.length === 0; i++) await Bun.sleep(5);
+    expect(asked).toHaveLength(1);
+    stop.abort();
+    const no = await pending;
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(t.calls).toHaveLength(0);
+    expect(no.ok).toBe(false);
+    expect((no.data as { code: string }).code).toBe("spend-cap");
+    expect(no.error).toBe("web-search spend-cap: refused: Work is paused for budget. (SAFE-8)");
+    expect(no.spendAsk?.question).toContain(`The wait on Approve card ${asked[0]!.id} was cut short`);
+    expect(new ApprovalStore({ db }).get(asked[0]!.id)?.status).not.toBe("used");
+    expect(braveRows(db)).toEqual([]);
+    db.close();
+  });
+
+  function cardRun() {
+    const db = nearCap();
+    clearRegistry();
+    const t = fakeTransport(() => ({ json: braveJson(HITS) }));
+    register(
+      searchCommand({
+        resolver: fakeResolver().resolver,
+        transport: t.transport,
+        env: { [BRAVE_SEARCH_API_KEY_ENV]: KEY, [SPEND_CAP_ENV]: "1" },
+        spendDb: db,
+      }),
+    );
+    const bodies: Array<{ messages: Array<{ role: string; content: unknown }> }> = [];
+    const events: AgentEvent[] = [];
+    const exec = createTaskExecute({
+      taskText: "search for bun",
+      env: {
+        CORVIDINHO_LLM_API_KEY: "test-key-not-real",
+        // A priced model: its own calls fit the cap; only the search passes it.
+        CORVIDINHO_LLM_MODEL: "gpt-4o-mini",
+        CORVIDINHO_LLM_BASE_URL: "https://llm.test/v1",
+        CORVIDINHO_DATA_DIR: tmp(),
+        CORVIDINHO_OWNER_DISCORD_ID: OWNER,
+        [SPEND_CAP_ENV]: "1",
+      },
+      tier: "tool",
+      loadPlugins: false,
+      projectInstructions: false,
+      allowlist: ["web-search"],
+      onEvent: (e) => events.push(e),
+      fetchImpl: async (_u, init) => {
+        bodies.push(JSON.parse(String(init?.body)));
+        const message =
+          bodies.length === 1
+            ? { tool_calls: [{ id: "c1", type: "function", function: { name: "web-search", arguments: '{"argv":["bun"]}' } }] }
+            : { content: "Bun is a JavaScript runtime." };
+        return new Response(
+          JSON.stringify({ choices: [{ message }], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } }),
+          { status: 200 },
+        );
+      },
+    });
+    const texts = () => events.filter((e) => e.type === "Text").map((e) => (e as { text: string }).text);
+    const toolResults = () =>
+      events.filter((e) => e.type === "ToolResult") as Array<{ name: string; success: boolean; detail: string }>;
+    return { db, t, bodies, texts, toolResults, attempt: () => exec({ attempt: 1, signal: new AbortController().signal }) };
+  }
+
+  test("in the tool loop: approved, the one search goes out and the run goes on; the model and the ToolResult see no amount, cap or card", async () => {
+    const run = cardRun();
+    const asked = answer("approved");
+    const r = await run.attempt();
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!.action).toBe(`send one web-search via ${BRAVE_SEARCH_HOST}`);
+    expect(asked[0]!.text).toContain("Task:\nsearch for bun");
+    expect(run.t.calls).toHaveLength(1);
+    expect(r.ask).toBeUndefined();
+    expect(r.summary).toContain("Bun is a JavaScript runtime.");
+    expect(braveRows(run.db)).toEqual([{ status: "actual", est: 5_000, cost: 5_000 }]);
+    expect(run.bodies).toHaveLength(2);
+    const toolMessages = run.bodies[1]!.messages.filter((m) => m.role === "tool").map((m) => String(m.content));
+    expect(toolMessages).toHaveLength(1);
+    expect(toolMessages[0]).toContain("bun.sh");
+    expect(toolMessages.join("\n")).not.toMatch(/\$\d|CORVIDINHO_|spend|Approve card/i);
+    const result = run.toolResults().find((e) => e.name === "web-search")!;
+    expect(result.success).toBe(true);
+    expect(result.detail).not.toMatch(/\$\d|CORVIDINHO_|spend|Approve card/i);
+    // The wait and the outcome are the run's operator notes (no amounts).
+    const wait = run.texts().find((x) => x.includes("waiting for the owner's OK"))!;
+    expect(wait).toContain("one web-search past a spend cap, SAFE-8.a");
+    expect(wait).not.toMatch(/\$\d/);
+    expect(run.texts().some((x) => x.includes(`the owner approved request ${asked[0]!.id}`))).toBe(true);
+    run.db.close();
+  });
+
+  test("in the tool loop: denied, nothing is sent and the attempt ends blocked with the spend-cap ask naming the card; no further model call", async () => {
+    const run = cardRun();
+    const asked = answer("denied");
+    const r = await run.attempt();
+    expect(asked).toHaveLength(1);
+    expect(run.t.calls).toHaveLength(0);
+    expect(run.bodies).toHaveLength(1);
+    expect(r.summary).toBe(SPEND_CAP_SUMMARY);
+    expect(r.ask?.reason).toBe("spend-cap");
+    expect(r.ask?.question).toContain("Daily spend cap reached (SAFE-8)");
+    expect(r.ask?.question).toContain(`The owner denied Approve card ${asked[0]!.id}`);
+    const result = run.toolResults().find((e) => e.name === "web-search")!;
+    expect(result).toMatchObject({ success: false, detail: SPEND_CAP_SUMMARY });
+    expect(braveRows(run.db)).toEqual([]);
+    run.db.close();
   });
 });
 

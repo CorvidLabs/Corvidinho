@@ -4,6 +4,7 @@
  */
 
 import type { ModelFailure, ResolvedProvider } from "../agent/providers.ts";
+import type { FlatSpendCard } from "../agent/spend.ts";
 import type { CapabilityTier } from "../agent/tier.ts";
 import type { HumanAsk } from "../agent/types.ts";
 
@@ -59,6 +60,14 @@ export type PluginHandlerArgs = {
   signal?: AbortSignal;
   /** GITHUB-9: the calling agent run's models and call path (tool loop only). */
   review?: PrReviewRun;
+  /**
+   * SAFE-8 / SAFE-8.a (REQ-agent-098): the calling run's spend card for a
+   * flat-priced call (`web-search`, `gif-search`) past the total cap — the
+   * tool loop's, when the run's spend guard asks the owner on a card for a
+   * model call (createTaskExecute). Absent elsewhere (`corvidinho plugins
+   * run`): such a call stops at once with the `spend-cap` ask.
+   */
+  spendCard?: FlatSpendCard;
 };
 
 /** An image a plugin opened for the model to look at (DISCORD-9). */
@@ -102,7 +111,8 @@ export type PluginHandlerResult = {
   reviewHold?: "findings" | "refused";
   /**
    * SAFE-8 (REQ-agent-098): a flat-priced call (`web-search`, `gif-search`) stopped at the
-   * daily spend cap before it was sent. The tool loop ends the attempt with
+   * daily spend cap before it was sent (no spend card to ask on, or the
+   * card came to no). The tool loop ends the attempt with
    * this `spend-cap` ask, as for a model call stopped at the cap; kept off
    * `data` and `message` so amounts and cap settings never reach the model
    * or a public reply (SAFE-14.a).

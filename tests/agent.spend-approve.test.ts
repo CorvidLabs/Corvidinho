@@ -32,6 +32,7 @@ import {
   formatUsd,
   priceForModel,
   PROVIDER_SPEND_CAPS_ENV,
+  reserveFlatSpend,
   setSpendCardTestHooks,
   SPEND_CAP_ENV,
   SPEND_CARD_TASK_MAX,
@@ -40,6 +41,8 @@ import {
   spendCardFields,
   SpendLedger,
   withSpendCap,
+  type FlatSpendCard,
+  type FlatSpendHold,
   type SpendFetch,
 } from "../src/agent/spend.ts";
 import { SPEND_CAP_SUMMARY } from "../src/agent/spend-notice.ts";
@@ -615,5 +618,230 @@ describe("createTaskExecute: a run asks on the card and says it is waiting", () 
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("a flat-priced tool call past the total cap waits on the same spend card (SAFE-8 / SAFE-8.a / SAFE-19 / SAFE-20, REQ-agent-098)", () => {
+  const BRAVE = "api.search.brave.com";
+
+  /** One `web-search`-priced reservation (5000 micro-USD) through the run's card, as the plugin makes it. */
+  function flat(
+    db: Database,
+    card: FlatSpendCard | undefined,
+    o: { env?: Record<string, string>; signal?: AbortSignal; tool?: string; provider?: string; model?: string; cost?: number } = {},
+  ): Promise<FlatSpendHold> {
+    return reserveFlatSpend({
+      env: { [SPEND_CAP_ENV]: "1", ...o.env },
+      provider: o.provider ?? BRAVE,
+      model: o.model ?? "brave-web-search",
+      tool: o.tool ?? "web-search",
+      costMicroUsd: o.cost ?? 5_000,
+      ...(card ? { card } : {}),
+      ...(o.signal ? { signal: o.signal } : {}),
+      db,
+      now: () => NOW,
+    });
+  }
+
+  function stoppedAsk(hold: FlatSpendHold) {
+    expect(hold.kind).toBe("stopped");
+    return (hold as Extract<FlatSpendHold, { kind: "stopped" }>).ask;
+  }
+
+  function flatRows(db: Database) {
+    return db
+      .query(
+        "SELECT status, estimate_micro_usd AS estimate, cost_micro_usd AS cost FROM spend_ledger WHERE model = 'brave-web-search' ORDER BY ts, rowid",
+      )
+      .all() as { status: string; estimate: number; cost: number }[];
+  }
+
+  async function waitFor(cond: () => boolean): Promise<void> {
+    for (let i = 0; i < 400 && !cond(); i++) await Bun.sleep(5);
+    expect(cond()).toBe(true);
+  }
+
+  test("Approve + code: exactly that one search is let through, recorded once at the price the card showed; the card shows action, target and amount (money: code)", async () => {
+    const db = openCorvidinhoDb({ memory: true });
+    nearCap(db);
+    const notes: string[] = [];
+    const { g, bodies } = guard(db, { notes });
+    const asked = answer("approved");
+    const hold = await flat(db, g.flatCard);
+    expect(hold.kind).toBe("held");
+    expect(asked).toHaveLength(1);
+    const req = requests(db)[0]!;
+    expect(req.kind).toBe("spend");
+    expect(req.class).toBe("money");
+    expect(req.status).toBe("used");
+    expect(req.action).toBe(`send one web-search via ${BRAVE}`);
+    expect(req.target).toBe("total");
+    expect(req.amount).toBe(`~${formatUsd(5_000)} (this one call's estimate)`);
+    expect(req.amount).toBe("~$0.0050 (this one call's estimate)");
+    expect(req.title).toBe("Spend past a cap — asks first (SAFE-8) · from cli");
+    expect(req.text).toContain("Asked by local on cli, project corvidlabs/corvidinho.");
+    expect(req.text).toContain("24h spend when it paused: total $0.9990 of $1.00.");
+    expect(req.text).toContain("Task:\ntidy the README");
+    // One row, at the price the card showed, settled once.
+    expect(flatRows(db)).toEqual([{ status: "reserved", estimate: 5_000, cost: 5_000 }]);
+    if (hold.kind === "held") {
+      hold.settle("billed");
+      hold.settle("not-billed");
+    }
+    expect(flatRows(db)).toEqual([{ status: "actual", estimate: 5_000, cost: 5_000 }]);
+    // The wait line names the search, never an amount; then the outcome.
+    const wait = notes.find((n) => n.includes("waiting for the owner's OK"))!;
+    expect(wait).toStartWith("[operator] AUTONOMY-8: waiting for the owner's OK on an Approve card with the one-time code");
+    expect(wait).toContain("(one web-search past a spend cap, SAFE-8.a; request ");
+    expect(wait).not.toMatch(/\$\d/);
+    expect(notes.some((n) => n.includes(`the owner approved request ${req.id}; sending that one call`))).toBe(true);
+    // No model call went out, and nothing is left for the attempt's finish.
+    expect(bodies).toEqual([]);
+    expect(g.finish({ summary: "done", filesChanged: [] })).toEqual({ summary: "done", filesChanged: [] });
+  });
+
+  test("SAFE-8.a: the next search past the cap raises a new card and code; one approval never covers two", async () => {
+    const db = openCorvidinhoDb({ memory: true });
+    nearCap(db);
+    const { g } = guard(db);
+    answer("approved");
+    const first = await flat(db, g.flatCard);
+    expect(first.kind).toBe("held");
+    if (first.kind === "held") first.settle("billed");
+    answer("denied");
+    const ask = stoppedAsk(await flat(db, g.flatCard));
+    const all = requests(db);
+    expect(all.map((x) => x.status)).toEqual(["used", "denied"]);
+    expect(all[0]!.id).not.toBe(all[1]!.id);
+    expect(flatRows(db)).toHaveLength(1);
+    expect(ask.question).toContain(`The owner denied Approve card ${all[1]!.id}`);
+  });
+
+  test("Deny: nothing is let through or recorded; stopped with the spend-cap ask naming the card, both ways on, no reply note; the guard's finish is untouched", async () => {
+    const db = openCorvidinhoDb({ memory: true });
+    nearCap(db);
+    const { g } = guard(db);
+    answer("denied");
+    const ask = stoppedAsk(await flat(db, g.flatCard));
+    const req = requests(db)[0]!;
+    expect(req.status).toBe("denied");
+    expect(flatRows(db)).toEqual([]);
+    expect(ask.reason).toBe("spend-cap");
+    expect(ask.spendScopes).toEqual(["total"]);
+    expect(ask.question).toStartWith("Daily spend cap reached (SAFE-8): $0.9990 spent in the last 24h (99% of the $1.00 cap)");
+    expect(ask.question).toContain("so I held it and asked the owner on a spend Approve card to let that one call through (SAFE-8.a)");
+    expect(ask.question).toContain(`The owner denied Approve card ${req.id}, so the call was not sent and nothing was spent (SAFE-20).`);
+    expect(ask.question).toContain("Stopped at cap: total.");
+    expect(ask.question).toContain("ask again — the next call past the cap raises a new card and code");
+    expect(ask.question).not.toContain(NO_REPLY);
+    // The tool's own spendAsk ends the attempt; the guard leaves the result alone.
+    expect(g.finish({ summary: "x", filesChanged: ["a.ts"] })).toEqual({ summary: "x", filesChanged: ["a.ts"] });
+  });
+
+  test("no answer in time, a late code and the run's stop are a no (SAFE-20): nothing is let through or recorded", async () => {
+    const db = openCorvidinhoDb({ memory: true });
+    nearCap(db);
+    const { g } = guard(db);
+    // No answer before the card lapses; an approval after that does not take.
+    const asked = answer("none", { ttlMs: 30 });
+    const lapsed = stoppedAsk(await flat(db, g.flatCard));
+    expect(requests(db)[0]!.status).toBe("expired");
+    expect(lapsed.question).toContain("No answer on Approve card");
+    expect(new ApprovalStore({ db }).decide(asked[0]!.id, "approved", { by: OWNER })).toBe(false);
+    expect(flatRows(db)).toEqual([]);
+    // The run's stop ends the wait at once.
+    answer("none", { ttlMs: 60_000 });
+    const abort = new AbortController();
+    setTimeout(() => abort.abort(), 30);
+    const started = Date.now();
+    const cut = stoppedAsk(await flat(db, g.flatCard, { signal: abort.signal }));
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(requests(db)[1]!.status).toBe("expired");
+    expect(cut.question).toContain("was cut short (the run was stopped or its request timed out)");
+    // A stop that lands as the owner approves wins: the approval is left unused.
+    const late = new AbortController();
+    answer(() => {
+      late.abort();
+      return "approved";
+    });
+    stoppedAsk(await flat(db, g.flatCard, { signal: late.signal }));
+    expect(requests(db)[2]!.status).toBe("approved");
+    // A run already stopped raises no card.
+    const before = requests(db).length;
+    stoppedAsk(await flat(db, g.flatCard, { signal: late.signal }));
+    expect(requests(db)).toHaveLength(before);
+    expect(flatRows(db)).toEqual([]);
+  });
+
+  test("where a model call gets no card, neither does a search: no owner, no approval hook, an invalid cap setting, an unavailable ledger keep today's ask", async () => {
+    const db = openCorvidinhoDb({ memory: true });
+    nearCap(db);
+    answer("approved", { ttlMs: 60_000 });
+    // No owner: nobody can approve, so the plain ask at once.
+    const nobody = guard(db, { env: { CORVIDINHO_OWNER_DISCORD_ID: "" } });
+    const started = Date.now();
+    const plain = stoppedAsk(await flat(db, nobody.g.flatCard));
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(plain.question).toContain("so I stopped before sending it");
+    expect(plain.question).toEndWith("Replying can't lift the cap — this needs the operator.");
+    // A guard without the approval hook has no card to offer.
+    const capped = createSpendGuard(mockFetch().fetch, {
+      env: { [SPEND_CAP_ENV]: "1", CORVIDINHO_OWNER_DISCORD_ID: OWNER },
+      readUsage: extractUsage,
+      db,
+      now: () => NOW,
+    });
+    expect(capped.flatCard).toBeUndefined();
+    expect(stoppedAsk(await flat(db, capped.flatCard)).question).toContain("so I stopped before sending it");
+    // An invalid cap setting and an unavailable ledger stop before any card.
+    const { g } = guard(db);
+    expect(stoppedAsk(await flat(db, g.flatCard, { env: { [SPEND_CAP_ENV]: "five" } })).question).toContain(
+      "Spend cap can't be enforced (SAFE-8)",
+    );
+    const closed = openCorvidinhoDb({ memory: true });
+    closed.close();
+    expect(stoppedAsk(await flat(closed, g.flatCard)).question).toContain("spend ledger is unavailable");
+    expect(requests(db)).toEqual([]);
+    expect(flatRows(db)).toEqual([]);
+  });
+
+  test("a search and a model call of one run share its one open card: the search's card waits for the model call's", async () => {
+    const db = openCorvidinhoDb({ memory: true });
+    nearCap(db);
+    const { g, bodies } = guard(db);
+    const asked = answer("none", { ttlMs: 10_000 });
+    const model = g.fetch(URL_, chatInit("gpt-4o", "model call"));
+    await waitFor(() => asked.length === 1);
+    const search = flat(db, g.flatCard);
+    await Bun.sleep(50);
+    expect(requests(db).filter((r) => r.status === "pending")).toHaveLength(1);
+    new ApprovalStore({ db }).decide(asked[0]!.id, "approved", { by: OWNER });
+    await model;
+    await waitFor(() => asked.length === 2);
+    expect(asked[1]!.action).toBe(`send one web-search via ${BRAVE}`);
+    new ApprovalStore({ db }).decide(asked[1]!.id, "approved", { by: OWNER });
+    expect((await search).kind).toBe("held");
+    expect(bodies).toHaveLength(1);
+    expect(requests(db).map((r) => r.status)).toEqual(["used", "used"]);
+  });
+
+  test("a free GIPHY gif-search ($0) with the window already past the cap asks the same way, its card showing that call", async () => {
+    const db = openCorvidinhoDb({ memory: true });
+    expect(
+      new SpendLedger(db).reserve({ provider: HOST, model: "gpt-4o", estimateMicroUsd: 1_000_001, now: NOW - 1000 }).ok,
+    ).toBe(true);
+    const { g } = guard(db);
+    const asked = answer("approved");
+    const gif = { tool: "gif-search", provider: "api.giphy.com", model: "giphy-gif-search", cost: 0 };
+    const hold = await flat(db, g.flatCard, gif);
+    expect(hold.kind).toBe("held");
+    expect(asked[0]!.action).toBe("send one gif-search via api.giphy.com");
+    expect(asked[0]!.target).toBe("total");
+    expect(asked[0]!.amount).toBe("~$0.00 (this one call's estimate)");
+    answer("denied");
+    expect(stoppedAsk(await flat(db, g.flatCard, gif)).question).toContain("The owner denied Approve card");
+    expect(
+      db.query("SELECT status, estimate_micro_usd AS e FROM spend_ledger WHERE model = 'giphy-gif-search'").all(),
+    ).toEqual([{ status: "reserved", e: 0 }]);
   });
 });

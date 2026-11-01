@@ -1,6 +1,6 @@
 ---
 module: agent
-version: 58
+version: 59
 status: draft
 files:
   - src/agent/types.ts
@@ -404,14 +404,17 @@ AUTONOMY-8.a, REQ-agent-298),
 in the shared DB), `SpendCapRefusal` (carries a `spend-cap` `HumanAsk`),
 `createSpendGuard` (`{ fetch, finish }`: the capped provider fetch plus the
 hook that turns a stopped call into the attempt's ask), `withSpendCap` (the
-fetch alone; unchanged when no cap is set), `reserveFlatSpend` (a
+fetch alone; unchanged when no cap is set), `reserveFlatSpend` (async: a
 flat-priced tool call's reservation in the same ledger — `off` with no cap at
 all / `held` with `settle(billed | not-billed | unknown)` / `stopped` with the
 spend-cap ask; recorded while any cap is set and counted against the total cap
 only, since a SAFE-14 provider cap is keyed on a configured model provider;
+past the total cap it waits on the calling run's spend card when given one
+(`card`, with the run's `signal`; REQ-agent-398) and is `held` on the one row
+an approval lets through; `tool` names the command on the card;
 `FlatSpendHold`, `FlatSpendOutcome`; a Brave `web-search` is 5000 micro-USD,
-#318; a free-tier GIPHY `gif-search` is 0, a $0 row stopped only when the
-window is already past the cap), `readSpendSnapshot` and
+#318; a free-tier GIPHY `gif-search` is 0, a $0 row stopped (or asking)
+only when the window is already past the cap), `readSpendSnapshot` and
 `spendDoctorCheck` (doctor line). `src/agent/spend-notice.ts` holds the
 pure text: `formatSpendWarningLine`, `spendWarningFromUnknown`, the
 `spendCap*Ask` question builders, `formatSpendDoctorLine`,
@@ -424,9 +427,11 @@ while paused, else undefined — the only spend line anyone but the owner sees).
 `createTaskExecute` builds its fetch with `createSpendGuard`, emits the 80%
 warning as a `Text` event and through `onSpendWarning`, and passes every
 attempt's result through `finish`; an offered tool whose result carries a
-`spend-cap` `spendAsk` (a flat-priced call stopped at the cap, never sent)
-ends the attempt the same way, with `SPEND_CAP_SUMMARY` and that ask and no
-further model call. `HumanAskReason` gains `spend-cap`;
+`spend-cap` `spendAsk` (a flat-priced call stopped at the cap, never sent:
+no card to ask on, or the card came to no) ends the attempt the same way,
+with `SPEND_CAP_SUMMARY` and that ask and no further model call. The tool
+loop hands every offered tool the run's spend card (`spendCard`, the guard's
+`flatCard`, REQ-agent-398). `HumanAskReason` gains `spend-cap`;
 `TaskResult` gains optional `spendWarning` (`SpendWarning`: integer
 `spentMicroUsd` / `capMicroUsd` and `percent`). A run stopped at the cap
 reports the generic `SPEND_CAP_SUMMARY` (= `SPEND_PAUSED_TEXT`, SAFE-14.a) as
@@ -499,6 +504,14 @@ amount past the cap after a re-fit check; `trips` names the caps it still
 passes; no row for an estimate over the approved amount, `reason: "amount"`,
 or for a call that would now also pass a cap outside the card's target,
 `reason: "target"`).
+Flat-priced calls on the card (REQ-agent-398, SAFE-8 / SAFE-8.a):
+`SpendGuard.flatCard` (only on a guard given `approval` while a cap is set)
+is the `FlatSpendCard` a `web-search` or `gif-search` past the total cap waits
+on — the same re-fit, owner check, one-card-at-a-time turn, wait, `consume`
+and `reserveApproved` as a priced model call, on the flat call's own ledger
+and DB, resolving `FlatSpendCardOutcome` (`{ ok: true, id }` or `{ ok: false,
+ask }`, never thrown and never left for `finish`); `spendCardFields({ tool })`
+makes the card's action `send one <tool> via <provider>`.
 `src/agent/spend-notice.ts` adds `spendScopeLabel`, the `SpendCardNo` /
 `SpendCardOutcome` types (`denied`, `expired`, `aborted`, `changed`,
 `unavailable`) and
@@ -1159,6 +1172,13 @@ even when the request timeout ended the wait. The wait line is a Text event
 without amounts; the card records its waiting process so a killed run's card
 closes as a no. Invalid-setting and ledger stops never raise a card; a covered
 unpriced model's call asks on its own unknown-price card (REQ-agent-199).
+A flat-priced tool call (`web-search`, `gif-search`) past the total cap
+asks on the same card in the same run, one card at a time with its model
+calls (`send one <tool> via <host>`, its price as amount): it is sent only
+on an approval used once, recorded once at that price, and every later one
+past the cap raises a new card; any no — or no card to ask on — stops it
+with the `spend-cap` ask in the tool's `spendAsk`, which never reaches the
+model, a tool message or the ToolResult (REQ-agent-398).
 Autonomous mode is off unless the project `fledge.toml` sets
 `[corvidinho.autonomous] enabled = true` (AUTONOMOUS-1). Autonomous extras are
 left out of the tool catalog unless the session is allowed (enabled, depth
@@ -1465,6 +1485,12 @@ A change the run did not open is never touched.
 - **When** the run's next `gpt-4o` call would pass the cap
 - **Then** the call is held and a `spend` card (money) is recorded with action `send one model call to gpt-4o via <host>`, target `total` and that call's estimate as amount; the run emits `[operator] AUTONOMY-8: waiting for the owner's OK on an Approve card with the one-time code …` (no amounts); once the owner approves with the code the call goes out once, recorded at that estimate; the next call past the cap raises a new card; a Deny or a lapse sends nothing and the run ends `blocked` on a `spend-cap` ask (REQ-agent-198)
 
+### Scenario: the owner lets one web-search past the spend cap
+
+- **Given** `CORVIDINHO_DAILY_SPEND_CAP_USD=1`, $0.998 spent in the last 24 h, a configured owner and `web-search` allowlisted
+- **When** the run's model calls `web-search`, whose $0.005 would pass the total cap
+- **Then** the search is held and a `spend` card (money) is recorded with action `send one web-search via api.search.brave.com`, target `total` and amount `~$0.0050 (this one call's estimate)`; approved with the code, that one search goes out, recorded once at $0.005, and the run goes on; the next search past the cap raises a new card; a Deny or a lapse sends nothing and the attempt ends `blocked` on a `spend-cap` ask naming the card; the model, the tool message and the ToolResult never see an amount (REQ-agent-398)
+
 ### Scenario: a call whose worst-case reply would pass the cap asks first
 
 - **Given** `CORVIDINHO_DAILY_SPEND_CAP_USD=0.10`, nothing spent in the last 24 h and a configured owner
@@ -1692,7 +1718,8 @@ A change the run did not open is never touched.
 | Spend cap set, an owner configured, and a priced call over a cap: the owner denies the spend card, it lapses (no bridge, no answer), a code comes late, the run is stopped, the request times out, or the card cannot be raised | call held and then not sent, nothing recorded; run ends `blocked` with a `spend-cap` ask naming the card and what it came to, and how to continue (ask again for a new card, or the operator action), no reply note; generic summary (REQ-agent-198) |
 | A cap covers a call to a model with no known price, an owner is configured, and its unknown-price card comes to no (deny, lapse, late code, stop, timeout, unavailable) | call not sent, nothing recorded; run ends `blocked` with the unpriced `spend-cap` ask naming the card, the amount shown as unknown, and both ways on (a new card, or a priced model / the cap), no reply note; generic summary (REQ-agent-199) |
 | `CORVIDINHO_PROVIDER_SPEND_CAPS_USD` set and a provider's 24h spend + estimate over its cap (or a bad entry / unknown provider) | provider call not sent (none to any other model either); run ends `blocked` with a `spend-cap` ask naming `provider:<id>` (or the bad setting, never its value) and `spendScopes`; generic summary (SAFE-14 / SAFE-15) |
-| A flat-priced tool call (`web-search`; `gif-search` at $0 once the window is past the cap) would pass the total cap, or a spend-cap setting is invalid, or the ledger is unavailable | not sent; the tool returns the ask in `spendAsk`; the attempt ends `blocked` with that `spend-cap` ask and `SPEND_CAP_SUMMARY`, no further model call (REQ-agent-098) |
+| A flat-priced tool call (`web-search`; `gif-search` at $0 once the window is past the cap) would pass the total cap with no card to ask on (no owner, no `approval`, `corvidinho plugins run`), or a spend-cap setting is invalid, or the ledger is unavailable | not sent; the tool returns the ask in `spendAsk`; the attempt ends `blocked` with that `spend-cap` ask and `SPEND_CAP_SUMMARY`, no further model call (REQ-agent-098) |
+| A flat-priced tool call would pass the total cap, an owner is configured, and its spend card comes to no (deny, lapse, late code, the run's stop, an approval that no longer matches, a card that cannot be raised) | not sent, nothing recorded; the tool returns `spendCapReachedAsk(…, card)` in `spendAsk`; the attempt ends `blocked` with it and `SPEND_CAP_SUMMARY`, no further model call (REQ-agent-398) |
 | A `web-search` call failed, was refused or was stopped (no key, usage error, secret query, HTTP error, spend cap), or the run made none | no attribution line on the reply; one call that Brave answered puts "Search by Brave" on every later summary of the run, once (REQ-agent-318) |
 | Settled call brings 24h spend to ≥80% of the cap while the warning is armed | one `Text` warning + `TaskResult.spendWarning` + a pending `warn` row; later calls stay quiet until spend is seen under 70% (or 24 h pass) (SAFE-8) |
 | Autonomous tool named while not offered | Refused like any non-offered tool (REQ-agent-128) |
@@ -1841,3 +1868,4 @@ Flesh LLM tool loop MVP on prove-before-done (#31) (2026-09-26, corvid-agent).
 | 2026-10-07 | after-a-move-to-a-stronger-model-the-model-it-moved-from-is-no-author-of-the-change-so-it-can-be-the-second-model: After a move to a stronger model, the model it moved from is no author of the change, so it can be the second-model reviewer (AGENT-17.a, GITHUB-9.a) |
 | 2026-10-07 | a-headless-agent-cli-can-be-one-of-my-models-in-my-own-runs-only-with-the-same-tools-as-my-other-models-inside-that: A headless agent CLI can be one of my models, in my own runs only, with the same tools as my other models, inside that talk's own worktree; other runs skip it and use my next model (AGENT-13, AGENT-13.a) |
 | 2026-10-07 | session-5-a-each-configured-model-has-its-own-context-window-at-about-80-of-the-whole-prompt-a-model-writes-the-summary: SESSION-5.a: each configured model has its own context window; at about 80% of the whole prompt a model writes the summary of older turns, the task and latest instruction stay word for word |
+| 2026-11-01 | at-a-spend-cap-a-flat-priced-tool-call-web-search-gif-search-waits-on-the-owner-s-spend-approve-card-like-a-model-call: At a spend cap a flat-priced tool call (web-search, gif-search) waits on the owner's spend Approve card like a model call instead of stopping at once; Approve plus the one-time code lets only that call through at the amount shown, the next one asks again, and any no keeps today's spend-cap ask (SAFE-8, SAFE-8.a) |
