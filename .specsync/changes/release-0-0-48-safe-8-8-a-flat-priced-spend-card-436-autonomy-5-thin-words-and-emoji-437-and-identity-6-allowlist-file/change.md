@@ -1,6 +1,6 @@
 ---
 id: release-0-0-48-safe-8-8-a-flat-priced-spend-card-436-autonomy-5-thin-words-and-emoji-437-and-identity-6-allowlist-file
-state: approved
+state: implementing
 type: operations
 base_commit: a57e735831d3c62819aa6b335024a13c48186d17
 ---
