@@ -15,9 +15,14 @@ const CANCEL_RE =
 const THIN_WORD_RE =
   /^(ok|okay|k|kk|sure|yep|yeah|ya|yup|y|yea|alright|all\s*right|fine|cool|got\s*it|sounds\s*good|h+m+|uh+\s*huh|mhm|mm+|👍|👌|✅|😂|😅|🙏|👀|🔥|💯|✨|🙂|😊|😄|😉|👏|🙌)(?:\s*[.!…]*)?$/iu;
 
-/** Discord custom emoji `<:name:id>` or animated `<a:name:id>`, unicode emoji, ZWJ. */
+/**
+ * Discord custom emoji `<:name:id>` or animated `<a:name:id>`, unicode emoji,
+ * ZWJ / variation selector / keycap / skin tone. One character per step: a
+ * long ZWJ chain that ends in a letter then fails at once instead of trying
+ * every way to split it (the ZWJ and U+FE0F are emoji components themselves).
+ */
 const EMOJI_CHUNK_RE =
-  /^(?:<a?:\w+:\d+>|\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*|\p{Emoji_Component})+$/u;
+  /^(?:<a?:\w+:\d+>|[\p{Extended_Pictographic}\p{Emoji_Component}])+$/u;
 
 /** A Discord custom emoji tag (its name and id may hold digits). */
 const CUSTOM_EMOJI_RE = /<a?:\w+:\d+>/g;

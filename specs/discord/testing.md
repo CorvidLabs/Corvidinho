@@ -2038,7 +2038,12 @@ pending ask). `tests/discord.ask-answer-modal.test.ts`: `ok 👍`, `👍 ok`,
 privately with the Answer button, no run, nothing posted, the ask kept.
 `tests/discord.schedule-ask.test.ts`: `ok 👍`, `hmm ok`, `sure, ok` typed in
 a schedule ask's form are restated privately and the question stays open.
+Emoji sequences (`ok 👨‍👩‍👧`, `👍🏽 ok`, `ok 🇺🇸`, `❤️ ok`, `ok 2️⃣`) stay thin,
+and a 25-emoji ZWJ chain (alone or after `ok `) is thin while the same chain
+ending in a letter is not, each decided in under 250 ms (the earlier emoji
+pattern backtracked exponentially on such a chain).
 
 Fail on base: with main's (49273ff) `src/discord/thin-ack.ts` swapped in, the
-7 new tests fail and the other 51 tests of those files pass; restored, 58 of
-58 pass.
+8 new tests fail and the other 51 tests of those files pass; with the first
+draft's `thin-ack.ts` (1a72bcc) the ZWJ-chain test fails on time (about 3 s);
+restored, 59 of 59 pass.

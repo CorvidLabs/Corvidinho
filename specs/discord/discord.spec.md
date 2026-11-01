@@ -481,10 +481,12 @@ in the thread, and `getByThread(threadId)` the thread's most recently active
 one, whoever owns it; another user starting a session in the thread never
 replaces the first user's (DISCORD-2.a / SESSION-MULTI-1/2, REQ-discord-046).
 `src/discord/thin-ack.ts` exports `isThinAck` / `isCancelAsk` / `ASK_CANCELLED_ACK`.
-`isThinAck` is true for blank text, one listed thin word, emoji only, or a
+`isThinAck` is true for blank text, one listed thin word, emoji only, a
 reply whose space- or comma-separated pieces are each a listed thin word or
-an emoji (`ok 👍`, `sure, ok`, AUTONOMY-5 / REQ-discord-044); a bare ASCII
-digit is never an emoji, so `2` and `2 👍` are answers.
+an emoji (`ok 👍`, `sure, ok`, AUTONOMY-5 / REQ-discord-044), or one or two
+characters that are not all ASCII letters and digits; a bare ASCII digit is
+never an emoji, so `2` and `2 👍` are answers. Its emoji check takes one
+character per step, so a long emoji chain is decided in linear time.
 `/work` and `/session start` keep a clarify or stuck ask as their session's
 `pendingAsk` (never a `spend-cap` stop), and the bridge sets
 `SlashContext.trackBotMessage` so the slash answer message continues its

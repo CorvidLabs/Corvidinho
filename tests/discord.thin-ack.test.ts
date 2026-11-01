@@ -95,6 +95,20 @@ describe("isThinAck / isCancelAsk (AUTONOMY-5/6)", () => {
     }
   });
 
+  test("emoji sequences stay emoji, and a long ZWJ chain ending in a letter is decided at once", () => {
+    for (const t of ["ok 👨‍👩‍👧", "👍🏽 ok", "ok 🇺🇸", "❤️ ok", "ok 2️⃣"]) {
+      expect(isThinAck(t)).toBe(true);
+    }
+    const chain = `👍${"‍👍".repeat(24)}`;
+    expect(isThinAck(chain)).toBe(true);
+    expect(isThinAck(`ok ${chain}`)).toBe(true);
+    for (const t of [`${chain}a`, `ok ${chain}a`]) {
+      const started = performance.now();
+      expect(isThinAck(t)).toBe(false);
+      expect(performance.now() - started).toBeLessThan(250);
+    }
+  });
+
   test("cancel phrases", () => {
     for (const t of ["cancel", "Cancel!", "nevermind", "never mind", "forget it", "stop asking", "nm"]) {
       expect(isCancelAsk(t)).toBe(true);
