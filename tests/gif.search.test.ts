@@ -12,10 +12,11 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Database } from "bun:sqlite";
-import { createTaskExecute } from "../src/agent/execute.ts";
+import { ApprovalStore, type ApprovalRequest } from "../src/approvals/store.ts";
+import { createTaskExecute, extractUsage } from "../src/agent/execute.ts";
 import { NO_STATE_CHANGE_TOOLS, STATE_CHANGING_TOOLS } from "../src/agent/loop-guards.ts";
 import { SPEND_CAP_SUMMARY } from "../src/agent/spend-notice.ts";
-import { SPEND_CAP_ENV, SpendLedger } from "../src/agent/spend.ts";
+import { createSpendGuard, setSpendCardTestHooks, SPEND_CAP_ENV, SpendLedger } from "../src/agent/spend.ts";
 import { buildOpenAiTools } from "../src/agent/tools.ts";
 import { INJECTION_SCAN_TOOLS, type InjectionNotice } from "../src/agent/untrusted.ts";
 import { buildVerifyEnv, isVerifyEnvDropped } from "../src/agent/verify.ts";
@@ -1048,6 +1049,63 @@ describe("each GIF search is recorded at $0 against the SAFE-8 total daily cap (
     expect(t.calls).toHaveLength(0);
     expect(r.summary).toBe(SPEND_CAP_SUMMARY);
     expect(r.ask?.reason).toBe("spend-cap");
+    db.close();
+  });
+});
+
+describe("past the cap a GIF search waits on the owner's spend Approve card, through the same path as web-search (SAFE-8 / SAFE-8.a, REQ-agent-098)", () => {
+  const OWNER = "181969874455756800";
+
+  afterEach(() => {
+    setSpendCardTestHooks({});
+  });
+
+  function answer(d: "approved" | "denied"): ApprovalRequest[] {
+    const asked: ApprovalRequest[] = [];
+    setSpendCardTestHooks({
+      ttlMs: 2_000,
+      pollMs: 5,
+      onRequest: (req, db) => {
+        asked.push(req);
+        new ApprovalStore({ db }).decide(req.id, d, { by: OWNER });
+      },
+    });
+    return asked;
+  }
+
+  test("approved, exactly that one search is sent and recorded at $0; the next one asks again and, denied, sends nothing", async () => {
+    const db = openCorvidinhoDb({ memory: true });
+    new SpendLedger(db).reserve({ provider: "p", model: "gpt-4o-mini", estimateMicroUsd: 1_000_001, capMicroUsd: 1e12, now: Date.now() - 1000 });
+    const g = createSpendGuard(async () => new Response("{}"), {
+      env: { [SPEND_CAP_ENV]: "1", CORVIDINHO_OWNER_DISCORD_ID: OWNER },
+      readUsage: extractUsage,
+      approval: { taskText: "find a cat gif" },
+    });
+    const t = fakeTransport(() => ({ json: giphyJson(HITS) }));
+    const cmd = gifCommand({ resolver: fakeResolver().resolver, transport: t.transport, env: withKey({ [SPEND_CAP_ENV]: "1" }), spendDb: db });
+    const rows = () =>
+      db.query("SELECT status, estimate_micro_usd AS est, cost_micro_usd AS cost FROM spend_ledger WHERE provider = ?").all(GIPHY_API_HOST);
+    const asked = answer("approved");
+    const ok = await cmd.handler({ ...ctx(["cat"]), spendCard: g.flatCard! });
+    expect(ok.ok).toBe(true);
+    expect(t.calls).toHaveLength(1);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!).toMatchObject({
+      kind: "spend",
+      class: "money",
+      action: `send one gif-search via ${GIPHY_API_HOST}`,
+      target: "total",
+      amount: "~$0.00 (this one call's estimate)",
+    });
+    expect(rows()).toEqual([{ status: "actual", est: 0, cost: 0 }]);
+    const denied = answer("denied");
+    const no = await cmd.handler({ ...ctx(["cat"]), spendCard: g.flatCard! });
+    expect(t.calls).toHaveLength(1);
+    expect(no.ok).toBe(false);
+    expect(no.error).toBe("gif-search spend-cap: refused: Work is paused for budget. (SAFE-8)");
+    expect(JSON.stringify({ error: no.error, data: no.data, message: no.message })).not.toMatch(/\$|CORVIDINHO_/);
+    expect(no.spendAsk?.question).toContain(`The owner denied Approve card ${denied[0]!.id}`);
+    expect(rows()).toHaveLength(1);
     db.close();
   });
 });

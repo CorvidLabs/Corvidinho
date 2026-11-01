@@ -262,8 +262,11 @@ REQ-plugins-1201), `WATCH_CHECKOUT_WRITE_TOOLS`,
 `watchCheckoutWriteRefused(env, name)` and `watchCheckoutWriteRefusal(name)`
 (a WATCH run never writes the watcher's own checkout; REQ-plugins-1202),
 `auditContextFromEnv` gives a WATCH run's GitHub trigger as its actor
-(`github:<id>`, never `local`; REQ-plugins-1203), and `PluginHandlerResult.spendAsk` carries a
-flat-priced call's SAFE-8 ask (REQ-agent-098),
+(`github:<id>`, never `local`; REQ-plugins-1203), `PluginHandlerResult.spendAsk` carries a
+flat-priced call's SAFE-8 ask (REQ-agent-098), and `PluginHandlerArgs.spendCard`
+(`RunOptions.spendCard`, passed through by `runPlugin`) is the calling run's
+SAFE-8 spend card for a flat-priced call past the total cap (REQ-plugins-398,
+REQ-agent-398),
 `plugins/github/merge.ts` exports `mergeOwnGreenPr`, `isCorvidinhoRepoSlug`, `MERGE_OUTSIDE_CORVIDINHO`, `MERGE_NOT_OWN`, `MERGE_CI_NOT_GREEN`, `MERGE_NOT_MERGEABLE` and the `MergeOctokit` / `MergeResult` types (GITHUB-7, REQ-plugins-099). `githubRepoOfUrl(url)` says whether a URL is on a GitHub host and which
 `OWNER/REPO` it names (DISCORD-SCHEDULE-3.a),
 `checkAddress` classifies one IP, and `createSocketTransport` is the pinned
@@ -521,9 +524,12 @@ is always sent; `--count` is a whole number 1–20 (default 5) and
 secret env value is refused before anything is sent (SAFE-6). Each search
 reserves $0.005 against the SAFE-8 total cap before the request
 (`reserveFlatSpend`; recorded while any cap is set, SAFE-14's provider caps
-included, and counted against the total cap only); a search stopped at the
-cap, or while a spend-cap setting is not valid, is not sent and ends the
-tool-loop attempt with the spend-cap ask. Titles, URLs and descriptions
+included, and counted against the total cap only); one that would pass the
+total cap waits on the calling run's spend card (`ctx.spendCard`, action
+`send one web-search via api.search.brave.com`) and is sent only when the
+owner lets that one search through (REQ-plugins-398); a search stopped at the
+cap (no card, or the card came to no), or while a spend-cap setting is not
+valid, is not sent and ends the tool-loop attempt with the spend-cap ask. Titles, URLs and descriptions
 reach the model only inside the untrusted web fence, and SAFE-13 scans the
 result: one suspicious snippet switches off every mutating tool, `web-search`
 and `web-fetch` included, for the rest of the run. No output, error, data
@@ -562,8 +568,10 @@ one; nothing else is filtered or reordered. Only when someone asks for a GIF
 does the run post one, as a link in its reply (the description and the
 summary say so); `gif-search` never downloads or attaches one and never
 posts (no must-ask entry, AUTONOMY-11). Each search
-is recorded at $0 against the SAFE-8 total cap (GIPHY is free-tier), and is
-stopped with the spend-cap ask only when the window is already past the cap.
+is recorded at $0 against the SAFE-8 total cap (GIPHY is free-tier), and
+only when the window is already past the cap does it wait on the run's spend
+card (`send one gif-search via api.giphy.com`, REQ-plugins-398) or, with no
+card or on a no, stop with the spend-cap ask.
 The summary carries that guidance and "Powered By GIPHY", and
 SAFE-13 scans the result (one hostile title switches off `gif-search`,
 `web-search` and `web-fetch` with every other mutating tool).
@@ -1391,7 +1399,7 @@ command line.
 
 - **Given** `CORVIDINHO_DAILY_SPEND_CAP_USD` is set and the last 24 h of spend plus $0.005 would pass it
 - **When** the model calls `web-search`
-- **Then** nothing is sent, the result says only "Work is paused for budget.", and the run stops with the spend-cap ask like a model call
+- **Then** with a configured owner the search waits on the run's spend card (`send one web-search via api.search.brave.com`, target `total`, `~$0.0050`) like a model call: approved with the one-time code, that one search is sent and recorded once at $0.005, and the next one past the cap asks again (REQ-plugins-398); on a no — or with no owner, or outside a run (`corvidinho plugins run`) — nothing is sent, the result says only "Work is paused for budget.", and the run stops with the spend-cap ask like a model call
 
 ### Scenario: a reply that used web-search credits Brave
 
@@ -1532,7 +1540,7 @@ command line.
 | web-search with no, blank or malformed `BRAVE_SEARCH_API_KEY` | `not-configured` (exit 1) naming the env var, never its value; no DNS, request or spend (REQ-plugins-318) |
 | web-search usage error (count not a whole number 1–20, unknown freshness or flag, query words together with `--query`, `--query` / `--count` / `--freshness` given twice, missing / oversized query) | `usage` (exit 1); nothing sent |
 | web-search query carrying a secret-looking value or a set secret env value | Refuse (exit 2, SAFE-6) before spend or request |
-| web-search at the SAFE-8 cap, invalid cap value or unavailable ledger | Refuse (exit 2, "Work is paused for budget."); nothing sent; the tool loop ends the attempt with the spend-cap ask (REQ-agent-098) |
+| web-search at the SAFE-8 cap with no spend card to ask on (no owner, outside a run) or after its card came to no, invalid cap value or unavailable ledger | Refuse (exit 2, "Work is paused for budget."); nothing sent; the tool loop ends the attempt with the spend-cap ask (REQ-agent-098, REQ-plugins-398) |
 | web-search / keyed JSON GET: http, another host or port, URL credentials; a non-public answer; any redirect | Refuse (exit 2) before DNS / before connecting / without following (REQ-plugins-3181) |
 | web-search Brave 401 / 403 / 422 `SUBSCRIPTION_TOKEN_INVALID`, other 422, 429, other status; non-JSON, compressed, oversized or malformed body; timeout; network error or a body that fails mid-read | `auth` / `bad-request` / `rate-limited` / `http-status` / `content-type` / `too-large` / `invalid-json` / `timeout` / `network` (exit 1); no server text, key or URL in the error |
 | web-search in a run already stopped, or stopped mid-request | `aborted` (exit 1); a stopped run reserves and sends nothing |
@@ -1540,7 +1548,7 @@ command line.
 | gif-search with no, blank or malformed `GIPHY_API_KEY` | `not-configured` (exit 1) naming the env var, never its value; no DNS, request or spend (REQ-plugins-3182) |
 | gif-search usage error (`--rating`, `--contentfilter` or any other unknown flag, limit not a whole number 1–10, query words together with `--query`, `--query` / `--limit` given twice, missing / over-50-character query) | `usage` (exit 1); nothing sent |
 | gif-search query carrying a secret-looking value or a set secret env value | Refuse (exit 2, SAFE-6) before spend or request |
-| gif-search with the SAFE-8 window already past the cap, an invalid cap value or an unavailable ledger | Refuse (exit 2, "Work is paused for budget."); nothing sent; the tool loop ends the attempt with the spend-cap ask |
+| gif-search with the SAFE-8 window already past the cap and no spend card to ask on or after its card came to no, an invalid cap value or an unavailable ledger | Refuse (exit 2, "Work is paused for budget."); nothing sent; the tool loop ends the attempt with the spend-cap ask (REQ-plugins-398) |
 | gif-search: a non-public answer for `api.giphy.com`, or any redirect | Refuse (exit 2) before connecting / without following |
 | gif-search GIPHY 401 / 403, 400 / 422, 429, other status; a 2xx `error` body or a 2xx body without `results`; non-JSON, oversized or malformed body; timeout; network error | `auth` / `bad-request` / `rate-limited` / `http-status` / `api-error` / `bad-response` / `content-type` / `too-large` / `invalid-json` / `timeout` / `network` (exit 1); no GIPHY text, key or URL in the error |
 | gif-search result link over http, off the GIPHY media hosts, with credentials or another port, or with a path or query outside plain URL characters (Discord markdown, a mention) | Link dropped (a fragment is only cut off); a result with no valid link is dropped and counted in `data.dropped` and the summary (no other filtering or reordering) |
@@ -1599,7 +1607,7 @@ command line.
 | fledge (optional system binary) | Fledge core builtins (`lanes list` / `lanes validate` / `lanes run`, `run`) and the Fledge plugin bridge, via `Bun.spawn` argv arrays |
 | node:dns / net / tls | web-fetch resolve once, dial pinned IP, SNI + cert check |
 | src/store/scrub.ts | `scrubSecrets` on web-fetch output and errors; secret-bearing URLs refused; `scrubSecrets` + `redactSecretEnvValues` on every web-search and gif-search string and secret-bearing queries refused |
-| src/agent/spend.ts | `reserveFlatSpend` for web-search's SAFE-8 reservation and gif-search's $0 row (REQ-agent-098) |
+| src/agent/spend.ts | `reserveFlatSpend` for web-search's SAFE-8 reservation and gif-search's $0 row (REQ-agent-098), with the run's `FlatSpendCard` past the total cap (REQ-agent-398) |
 | Brave Search API (external, optional) | `GET https://api.search.brave.com/res/v1/web/search` with `X-Subscription-Token` for web-search (PLUGIN-7) |
 | GIPHY API (external, optional) | `GET https://api.giphy.com/v2/search` (Tenor-compatible) with `key` and `contentfilter=medium` for gif-search (PLUGIN-8); media links on `media.giphy.com`, `media0`–`media4.giphy.com`, `i.giphy.com`, never fetched |
 | src/discord/image-attachments.ts | `MAX_IMAGE_SIZE_BYTES` / `ImageMediaType` for files-read image mode (DISCORD-9) |

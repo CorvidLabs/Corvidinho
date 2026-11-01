@@ -35,13 +35,15 @@
  *   attached (GIPHY's terms, #318).
  * - SAFE-8: GIPHY's API is free-tier, so each search is recorded at $0 against
  *   the total daily cap (`reserveFlatSpend` with 0; the ledger takes a zero
- *   row). With the rolling window already past the cap it is stopped with
- *   the spend-cap ask like any other call.
+ *   row). With the rolling window already past the cap it waits on the
+ *   calling run's spend card like any other call past the cap (`spendCard`,
+ *   action `send one gif-search via api.giphy.com`), else it is stopped with
+ *   the spend-cap ask.
  * - SAFE-6: a query carrying a secret-looking value is refused, never sent.
  */
 
 import type { Database } from "bun:sqlite";
-import { reserveFlatSpend, type FlatSpendOutcome } from "../../src/agent/spend.ts";
+import { reserveFlatSpend, type FlatSpendCard, type FlatSpendOutcome } from "../../src/agent/spend.ts";
 import type { HumanAsk } from "../../src/agent/types.ts";
 import { stripInvisible } from "../../src/agent/untrusted.ts";
 import { API_NOT_SENT_CODES, ApiRequestError, apiGetJson, type ApiGetDeps } from "../web/api.ts";
@@ -149,6 +151,8 @@ export type GifSearchDeps = ApiGetDeps & {
   spendDb?: Database;
   now?: () => number;
   signal?: AbortSignal;
+  /** SAFE-8 / SAFE-8.a: the calling run's spend card (`PluginHandlerArgs.spendCard`). */
+  spendCard?: FlatSpendCard;
 };
 
 export type GifSearchResult = {
@@ -383,11 +387,15 @@ export async function giphyGifSearch(argv: readonly string[], deps: GifSearchDep
   if (deps.signal?.aborted) {
     throw new GifSearchError("aborted", "stopped: the calling run was interrupted");
   }
-  const hold = reserveFlatSpend({
+  // SAFE-8: past the total cap it waits on the run's spend card (when it has one).
+  const hold = await reserveFlatSpend({
     env,
     provider: GIPHY_API_HOST,
     model: GIPHY_SEARCH_SPEND_MODEL,
+    tool: "gif-search",
     costMicroUsd: GIPHY_SEARCH_COST_MICRO_USD,
+    ...(deps.spendCard ? { card: deps.spendCard } : {}),
+    ...(deps.signal ? { signal: deps.signal } : {}),
     ...(deps.spendDb ? { db: deps.spendDb } : {}),
     ...(deps.now ? { now: deps.now } : {}),
   });

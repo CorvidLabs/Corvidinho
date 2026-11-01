@@ -38,9 +38,15 @@
  * Tool calls with a flat price per call (a Brave `web-search`, #318; a
  * free-tier GIPHY `gif-search`, recorded at $0) count toward the same total
  * cap and are recorded while any cap is set:
- * `reserveFlatSpend` reserves the price in the same ledger before the call,
- * and a stopped call hands the tool loop the same `spend-cap` ask
- * (`PluginHandlerResult.spendAsk`, src/agent/execute.ts).
+ * `reserveFlatSpend` reserves the price in the same ledger before the call.
+ * One that would pass the total cap waits on the same owner spend card
+ * when the calling run's guard would hold a model call for one
+ * (`SpendGuard.flatCard`, handed to the tool as `PluginHandlerArgs.spendCard`;
+ * the card's action is `send one <tool> via <host>`); Approve plus the code
+ * lets exactly that call through at its price, and the next one past the cap
+ * asks again (SAFE-8.a). A stopped call — a no, or no card to raise — hands
+ * the tool loop the same `spend-cap` ask (`PluginHandlerResult.spendAsk`,
+ * src/agent/execute.ts).
  *
  * Assumptions (see specs/agent REQ-agent-098):
  *  - "Daily" is the last 24 hours (rolling), not a calendar day.
@@ -799,9 +805,15 @@ export function spendCardFields(o: {
   requester: string;
   project?: string;
   taskText?: string;
+  /**
+   * A flat-priced tool call (reserveFlatSpend): the command the card's
+   * action names (`send one <tool> via <provider>`) instead of a model call.
+   */
+  tool?: string;
 }): { title: string; action: string; target: string; amount: string; text: string } {
   const provider = scrubSecrets(o.provider).replace(/\s+/g, "") || "(unknown)";
   const model = scrubSecrets(o.model).replace(/\s+/g, " ").trim() || "(none)";
+  const tool = o.tool === undefined ? "" : scrubSecrets(o.tool).replace(/\s+/g, "") || "(unknown)";
   const unknown = o.estimateMicroUsd === null;
   const context = [
     `Asked by ${o.requester} on ${o.surface}${o.project ? `, project ${o.project}` : ""}.`,
@@ -821,7 +833,7 @@ export function spendCardFields(o: {
         : `Spend past a cap — asks first (SAFE-8) · from ${o.surface}`,
       100,
     ),
-    action: shortLine(`send one model call to ${model} via ${provider}`, 500),
+    action: shortLine(tool ? `send one ${tool} via ${provider}` : `send one model call to ${model} via ${provider}`, 500),
     target: shortLine(o.trips.map((t) => spendScopeLabel(t.scope)).join(", "), 500),
     amount:
       o.estimateMicroUsd === null
@@ -871,6 +883,43 @@ export type GuardedCall<T> = {
   outcome: (value: T) => Promise<GuardedOutcome>;
 };
 
+/** What the run's spend card is asked to let through, or the no's ask (never throws). */
+export type FlatSpendCardOutcome = { ok: true; id: string } | { ok: false; ask: HumanAsk };
+
+/**
+ * SAFE-8 / SAFE-8.a / SAFE-19 for a flat-priced tool call whose price would
+ * pass the total cap ({@link reserveFlatSpend}): the calling run's own spend
+ * card (`SpendGuard.flatCard`, as createTaskExecute builds the guard, handed
+ * to the tool as `PluginHandlerArgs.spendCard`). On `db`'s approvals store
+ * and `ledger` (the flat call's own): re-fit, raise one `spend` / `money`
+ * card whose action is `send one <tool> via <provider>`, target the tripped
+ * cap(s) and amount the call's price, and wait. Resolves the id of exactly
+ * that call's ledger row once the owner approved it and the approval was
+ * used once (`reserveApproved`, at the price the card showed; or at once
+ * when the re-fit finds it fits now), else the no's `spend-cap` ask: the
+ * same no rules as a model call (no owner: the plain ask, no card; deny,
+ * lapse, late code, `signal`'s stop, a card that could not be raised:
+ * `spendCapReachedAsk` naming the card). Never throws.
+ */
+export type FlatSpendCard = (held: {
+  db: Database;
+  ledger: SpendLedger;
+  /** The command shown in the card's action, e.g. `web-search`. */
+  tool: string;
+  /** Ledger provider label (the API host), shown in the action. */
+  provider: string;
+  /** Ledger model label (e.g. `brave-web-search`). */
+  model: string;
+  /** The call's price: the card's amount and the approved row's estimate. */
+  estimateMicroUsd: number;
+  /** The total cap. */
+  capMicroUsd?: number;
+  /** The caps the refused reservation passed. */
+  trips: SpendTrip[];
+  /** The calling run's stop: ends the wait as a no. */
+  signal?: AbortSignal;
+}) => Promise<FlatSpendCardOutcome>;
+
 /** Capped fetch plus the ask it stopped on, for the execute hook. */
 export type SpendGuard = {
   /** The provider fetch; `fetchImpl` itself when no cap is set. */
@@ -889,6 +938,15 @@ export type SpendGuard = {
    * reporting a failed call. Clears the ask.
    */
   finish(result: ExecuteResult): ExecuteResult;
+  /**
+   * SAFE-8 / SAFE-8.a: this run's spend card for a flat-priced tool call
+   * past the total cap (see {@link FlatSpendCard}); it shares the run's
+   * one-card-at-a-time turn with its model calls and leaves `finish` alone
+   * (the tool's own `spendAsk` ends the attempt). Only on a guard given
+   * `approval` while a cap is set; absent otherwise, and the flat call then
+   * stops with the plain ask.
+   */
+  flatCard?: FlatSpendCard;
 };
 
 /**
@@ -950,16 +1008,18 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
    * also needs the SAFE-19 one-time code) and wait for it: `approved` only
    * when the owner approved it and the approval was used once while the
    * call's signal was not aborted; otherwise how it came to no (SAFE-20).
-   * `what` names the call in the wait note (no amounts). Never throws.
+   * `cardDb` holds the approvals store; `what` names the call in the wait
+   * note (no amounts). Never throws.
    */
   const waitOnCard = async (
+    cardDb: Database,
     fields: ReturnType<typeof spendCardFields>,
     what: string,
     signal: AbortSignal | undefined,
   ): Promise<{ approved: true; requestId: string } | { approved: false; card: SpendCardNo }> => {
     let requestId: string | undefined;
     try {
-      const store = new ApprovalStore({ db: db! });
+      const store = new ApprovalStore({ db: cardDb });
       const { actor } = auditContextFromEnv(env);
       const req = store.request({
         kind: SPEND_CARD_KIND,
@@ -977,7 +1037,7 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
           `${new Date(req.expiresAt).toISOString()} means no, and nothing is spent — the running Discord ` +
           "bridge DMs the card to the owner; with no bridge running it lapses).",
       );
-      spendCardHooks.onRequest?.(req, db!);
+      spendCardHooks.onRequest?.(req, cardDb);
       const decided = await store.waitForDecision(req.id, {
         pollMs: spendCardHooks.pollMs ?? SPEND_CARD_POLL_MS,
         ...(signal ? { signal } : {}),
@@ -1015,7 +1075,13 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
   };
 
   /** Card fields for this run (who asked, where, the project and the task as data). */
-  const cardFields = (o: { model: string; provider: string; estimateMicroUsd: number | null; trips: SpendTrip[] }) => {
+  const cardFields = (o: {
+    model: string;
+    provider: string;
+    estimateMicroUsd: number | null;
+    trips: SpendTrip[];
+    tool?: string;
+  }) => {
     const { actor, surface } = auditContextFromEnv(env);
     const project = projectForCard();
     return spendCardFields({
@@ -1029,45 +1095,58 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
 
   /**
    * SAFE-8 / SAFE-8.a / SAFE-19: a priced call past a cap waits for the
-   * owner's spend card. Resolves the reservation of exactly that call when
-   * the owner approved it (Approve + one-time code) and the approval was used
-   * once; throws SpendCapRefusal on a no — deny, no answer in time or a late
-   * code (SAFE-20), a stop while waiting, no owner configured (nobody can
-   * approve: the operator-action ask) or a card that could not be raised.
+   * owner's spend card, on `on.db`'s approvals store and `on.ledger` (the
+   * guard's own for a model call; a flat-priced tool call's own, with
+   * `on.tool` naming it on the card). Resolves the reservation of exactly
+   * that call when the owner approved it (Approve + one-time code) and the
+   * approval was used once; otherwise the ask of the no — deny, no answer in
+   * time or a late code (SAFE-20), a stop while waiting, no owner configured
+   * (nobody can approve: the operator-action ask) or a card that could not
+   * be raised. Never throws.
    */
-  const passOnCard = async (
+  const holdOnCard = async (
+    on: { db: Database; ledger: SpendLedger; tool?: string },
     call: PausedCall,
     trips: SpendTrip[],
     signal: AbortSignal | undefined,
-  ): Promise<string> => {
-    const reached = (card?: SpendCardNo) =>
-      stop(spendCapReachedAsk({ estimateMicroUsd: call.estimateMicroUsd, trips, ...(card ? { card } : {}) }));
+  ): Promise<FlatSpendCardOutcome> => {
+    const reached = (card?: SpendCardNo): FlatSpendCardOutcome => ({
+      ok: false,
+      ask: spendCapReachedAsk({ estimateMicroUsd: call.estimateMicroUsd, trips, ...(card ? { card } : {}) }),
+    });
     if (!opts.approval) return reached();
     if (!(await ownerConfigured())) return reached();
     if (signal?.aborted) return reached({ outcome: "aborted" });
-    const turn = cardTurn.then(async (): Promise<string> => {
+    const turn = cardTurn.then(async (): Promise<FlatSpendCardOutcome> => {
       // Re-fit first: the window may have moved while an earlier card of
       // this run was open (or the call was checked a moment ago).
       let again: SpendReservation;
       try {
-        again = ledger!.reserve({ ...call, now: now() });
+        again = on.ledger.reserve({ ...call, now: now() });
       } catch (err) {
-        return stop(spendCapLedgerAsk(err instanceof Error ? err.message : String(err)));
+        return { ok: false, ask: spendCapLedgerAsk(err instanceof Error ? err.message : String(err)) };
       }
-      if (again.ok) return again.id;
+      if (again.ok) return { ok: true, id: again.id };
       trips = again.trips;
       if (signal?.aborted) return reached({ outcome: "aborted" });
       let fields: ReturnType<typeof spendCardFields>;
       try {
-        fields = cardFields({ model: call.model, provider: call.provider, estimateMicroUsd: call.estimateMicroUsd, trips });
+        fields = cardFields({
+          model: call.model,
+          provider: call.provider,
+          estimateMicroUsd: call.estimateMicroUsd,
+          trips,
+          ...(on.tool !== undefined ? { tool: on.tool } : {}),
+        });
       } catch (err) {
         return reached({ outcome: "unavailable", error: err instanceof Error ? err.message : String(err) });
       }
-      const waited = await waitOnCard(fields, "one model call past a spend cap, SAFE-8.a", signal);
+      const what = on.tool !== undefined ? `one ${on.tool}` : "one model call";
+      const waited = await waitOnCard(on.db, fields, `${what} past a spend cap, SAFE-8.a`, signal);
       if (!waited.approved) return reached(waited.card);
       let passed: ReturnType<SpendLedger["reserveApproved"]>;
       try {
-        passed = ledger!.reserveApproved({
+        passed = on.ledger.reserveApproved({
           ...call,
           approvedMicroUsd: call.estimateMicroUsd,
           approvedScopes: trips.map((t) => t.scope),
@@ -1090,10 +1169,24 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
         `[operator] AUTONOMY-8: the owner approved request ${waited.requestId}; sending that one call ` +
           "(SAFE-8.a: the next call past the cap asks again).",
       );
-      return passed.id;
+      return { ok: true, id: passed.id };
     });
     cardTurn = turn.catch(() => undefined);
     return turn;
+  };
+
+  /**
+   * A priced model call past a cap (see {@link holdOnCard}): the id of its
+   * approved reservation, or SpendCapRefusal with the no's ask (left for
+   * `finish`).
+   */
+  const passOnCard = async (
+    call: PausedCall,
+    trips: SpendTrip[],
+    signal: AbortSignal | undefined,
+  ): Promise<string> => {
+    const passed = await holdOnCard({ db: db!, ledger: ledger! }, call, trips, signal);
+    return passed.ok ? passed.id : stop(passed.ask);
   };
 
   /**
@@ -1134,7 +1227,12 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
       } catch (err) {
         return unpriced({ outcome: "unavailable", error: err instanceof Error ? err.message : String(err) });
       }
-      const waited = await waitOnCard(fields, "one model call at an unknown price under a spend cap, SAFE-16.a", signal);
+      const waited = await waitOnCard(
+        db!,
+        fields,
+        "one model call at an unknown price under a spend cap, SAFE-16.a",
+        signal,
+      );
       if (!waited.approved) return unpriced(waited.card);
       let id: string;
       try {
@@ -1287,6 +1385,24 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
     });
   };
 
+  // SAFE-8 / SAFE-8.a: a flat-priced tool call past the total cap asks on
+  // this run's card (one at a time with its model calls); a no is returned,
+  // never left for `finish`.
+  const flatCard: FlatSpendCard = async ({ db: cardDb, ledger: flatLedger, tool, trips, signal, ...call }) => {
+    try {
+      return await holdOnCard({ db: cardDb, ledger: flatLedger, tool }, call, trips, signal);
+    } catch (err) {
+      return {
+        ok: false,
+        ask: spendCapReachedAsk({
+          estimateMicroUsd: call.estimateMicroUsd,
+          trips,
+          card: { outcome: "unavailable", error: err instanceof Error ? err.message : String(err) },
+        }),
+      };
+    }
+  };
+
   return {
     fetch: guarded,
     call,
@@ -1296,6 +1412,7 @@ export function createSpendGuard(fetchImpl: SpendFetch, opts: SpendCapOptions): 
       if (!ask) return result;
       return { summary: SPEND_CAP_SUMMARY, filesChanged: [...result.filesChanged], ask };
     },
+    ...(opts.approval ? { flatCard } : {}),
   };
 }
 
@@ -1316,29 +1433,43 @@ export type FlatSpendHold =
  * is set the price is reserved in the IMMEDIATE ledger transaction before the
  * call, so the call is recorded like a provider call; it counts against the
  * total cap only (a provider cap is keyed on a configured model provider,
- * REQ-agent-114, so none covers it). A call that would pass the total cap, or
+ * REQ-agent-114, so none covers it). A call that would pass the total cap
+ * waits on the calling run's spend card when `card` is given (SAFE-8 /
+ * SAFE-8.a; Leif's #318 go: "the run waits for the owner's spend Approve
+ * card", as a model call does; see {@link FlatSpendCard}):
+ * approved, it is `held` on the one row the card let through, at the price
+ * the card showed. Without `card`, or on a no, it is `stopped` with the same
+ * `spend-cap` ask a model call gets, and must not be sent; so is a call that
  * cannot be counted (a spend-cap setting that is not valid, an unavailable
- * ledger), is `stopped` with the same `spend-cap` ask a model call gets, and
- * must not be sent. `settle` records the outcome once: `billed` keeps the
+ * ledger), with no card. `settle` records the outcome once: `billed` keeps the
  * price as the call's actual cost, `not-billed` (refused before connecting,
  * or an HTTP error reply) counts 0, `unknown` (network error, timeout, abort,
  * unreadable reply) keeps it counted at the estimate. The 80% warning is
  * noted by the next model call's settle, which sees this row in the window.
  * A free call (a GIPHY `gif-search`, #318) passes a price of 0: its row is
- * recorded at $0, and it is stopped only when the window is already past the
- * cap (spend + 0 > cap).
+ * recorded at $0, and it is stopped (or asks on the card) only when the
+ * window is already past the cap (spend + 0 > cap).
  */
-export function reserveFlatSpend(opts: {
+export async function reserveFlatSpend(opts: {
   env?: NodeJS.ProcessEnv;
   /** Ledger provider label (the API host). */
   provider: string;
   /** Ledger model label (the priced call, e.g. `brave-web-search`). */
   model: string;
+  /** The command, named in a spend card's action (`send one <tool> via <provider>`). */
+  tool: string;
   costMicroUsd: number;
+  /**
+   * SAFE-8 / SAFE-8.a: the calling run's spend card (`PluginHandlerArgs.spendCard`).
+   * Omitted (e.g. `corvidinho plugins run`) ⇒ a call past the cap stops at once.
+   */
+  card?: FlatSpendCard;
+  /** The calling run's stop: ends a card wait as a no. */
+  signal?: AbortSignal;
   /** Test seam: ledger DB (default: shared DB under CORVIDINHO_DATA_DIR, closed after settle). */
   db?: Database;
   now?: () => number;
-}): FlatSpendHold {
+}): Promise<FlatSpendHold> {
   const env = opts.env ?? process.env;
   const caps = parseSpendCaps(env);
   if (caps.kind === "off") return { kind: "off" };
@@ -1355,11 +1486,12 @@ export function reserveFlatSpend(opts: {
       // already closed
     }
   };
+  let ledgerDb: Database;
   let ledger: SpendLedger;
   let hold: SpendReservation;
   try {
-    db = opts.db ?? openCorvidinhoDb({ env });
-    ledger = new SpendLedger(db);
+    ledgerDb = db = opts.db ?? openCorvidinhoDb({ env });
+    ledger = new SpendLedger(ledgerDb);
     hold = ledger.reserve({
       provider: opts.provider,
       model: opts.model,
@@ -1371,11 +1503,38 @@ export function reserveFlatSpend(opts: {
     close();
     return { kind: "stopped", ask: spendCapLedgerAsk(err instanceof Error ? err.message : String(err)) };
   }
-  if (!hold.ok) {
-    close();
-    return { kind: "stopped", ask: spendCapReachedAsk({ estimateMicroUsd: cost, trips: hold.trips }) };
+  let id: string;
+  if (hold.ok) {
+    id = hold.id;
+  } else {
+    const reached = spendCapReachedAsk({ estimateMicroUsd: cost, trips: hold.trips });
+    if (!opts.card) {
+      close();
+      return { kind: "stopped", ask: reached };
+    }
+    // SAFE-8 / SAFE-8.a: past the cap, the run's spend card may let this one call through.
+    let passed: FlatSpendCardOutcome;
+    try {
+      passed = await opts.card({
+        db: ledgerDb,
+        ledger,
+        tool: opts.tool,
+        provider: opts.provider,
+        model: opts.model,
+        estimateMicroUsd: cost,
+        ...(total !== undefined ? { capMicroUsd: total } : {}),
+        trips: hold.trips,
+        ...(opts.signal ? { signal: opts.signal } : {}),
+      });
+    } catch {
+      passed = { ok: false, ask: reached };
+    }
+    if (!passed.ok) {
+      close();
+      return { kind: "stopped", ask: passed.ask };
+    }
+    id = passed.id;
   }
-  const id = hold.id;
   let settled = false;
   return {
     kind: "held",

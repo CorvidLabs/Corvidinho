@@ -203,6 +203,7 @@ export function createWebCommands(deps: WebFetchDeps & WebSearchDeps = {}): Plug
             ...deps,
             env,
             ...(ctx.signal ? { signal: ctx.signal } : {}),
+            ...(ctx.spendCard ? { spendCard: ctx.spendCard } : {}),
           });
           const content = fenceSearchResults(formatHits(r.hits), env);
           const freshness = r.args.freshness;

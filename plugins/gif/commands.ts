@@ -99,6 +99,7 @@ export function createGifCommands(deps: GifSearchDeps = {}): PluginCommand[] {
             ...deps,
             env,
             ...(ctx.signal ? { signal: ctx.signal } : {}),
+            ...(ctx.spendCard ? { spendCard: ctx.spendCard } : {}),
           });
           const content = fenceGifResults(formatGifHits(r.hits), env);
           const data = {
