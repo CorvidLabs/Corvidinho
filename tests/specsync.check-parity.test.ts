@@ -47,7 +47,11 @@ function specSyncActionInputs(): Record<string, unknown> {
     readFileSync(join(REPO, ".github", "workflows", "spec-sync.yml"), "utf8"),
   ) as { jobs: Record<string, { steps?: { uses?: string; with?: Record<string, unknown> }[] }> };
   const steps = Object.values(wf.jobs).flatMap((j) => j.steps ?? []);
-  const action = steps.filter((s) => s.uses?.startsWith("CorvidLabs/spec-sync@"));
+  // The Archive job's archive-gate-only step runs no `specsync check`, so it
+  // carries no check strictness to mirror.
+  const action = steps.filter(
+    (s) => s.uses?.startsWith("CorvidLabs/spec-sync@") && !truthy(s.with?.["archive-gate-only"]),
+  );
   expect(action).toHaveLength(1);
   return action[0]!.with ?? {};
 }
