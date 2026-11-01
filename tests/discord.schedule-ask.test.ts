@@ -288,6 +288,21 @@ describe("schedule ask controls: Choose, Answer, Cancel (AUTONOMY-6.a)", () => {
     expect(runRow(b.db, second)).toMatchObject({ ask_outcome: "cancelled", ask_answer: null });
   });
 
+  test("a form answer made only of thin words and emoji (`ok 👍`) is restated privately and the question stays open (AUTONOMY-5)", async () => {
+    const b = await scheduleBridge();
+    const runId = b.recordAsk(FREE);
+    for (const text of ["ok 👍", "hmm ok", "sure, ok"]) {
+      const thin: Reply[] = [];
+      await b.handlers.onComponent!(submit(runId, OWNER_ID, text, thin));
+      expect(thin).toHaveLength(1);
+      expect(thin[0]!.ephemeral).toBe(true);
+      expect(thin[0]!.content).toContain("> Verification still fails. How should I proceed?");
+      expect(JSON.stringify(thin[0]!.components)).toContain(cancelCustomId(runId));
+      expect(b.scheduleStore.openRunAsk(runId)).toBeDefined();
+    }
+    expect(runRow(b.db, runId)).toMatchObject({ ask_closed_at: null, ask_outcome: null, ask_answer: null });
+  });
+
   test("Cancel: the owner or the creator; anyone else is refused and the ask stays open", async () => {
     const b = await scheduleBridge();
     const runId = b.recordAsk(FREE);

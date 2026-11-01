@@ -234,9 +234,10 @@ Set the owner before you deploy. ADMIN is owner-only; nobody else can become ADM
   shows the spend line to the owner only; anyone else sees just "Spend: Work is paused for
   budget." while runs are stopped at the cap.
 - At a cap, with an owner configured, a run first asks the owner on a **spend card** (SAFE-8,
-  SAFE-8.a): the bridge DMs a card showing the one model call it held (model and provider), the
-  cap it would pass (`total` or `provider:<id>`) and that call's estimate, after the run's task
-  as quoted data. The estimate counts the request plus the longest reply the model can return
+  SAFE-8.a): the bridge DMs a card showing the one model call it held (model and provider) — or
+  the one `web-search` / `gif-search` it held past the total cap (`send one web-search via
+  api.search.brave.com`) — the cap it would pass (`total` or `provider:<id>`) and that call's
+  estimate, after the run's task as quoted data. The estimate counts the request plus the longest reply the model can return
   (its listed maximum output, e.g. 16,384 tokens for `gpt-4o`, 128,000 for the Claude Fable,
   Opus and Sonnet models; 128,000 for a priced model with no listed maximum), so the card comes
   before a call whose long reply could pass a cap (AUTONOMY-8.a); replies are never cut short,
@@ -485,10 +486,13 @@ What one search does:
   $0.005 against the same total cap as the model calls before it is sent. With only
   `CORVIDINHO_PROVIDER_SPEND_CAPS_USD` set, each search is still recorded, but no provider cap
   covers it (a provider cap names a configured model provider, so `api.search.brave.com=…` makes
-  the whole setting invalid and stops every call). A search that would pass the total cap, or
-  that runs while a spend-cap setting is not valid, is not sent, and the run stops with the
-  spend-cap ask, as a model call does. Prepay the Brave account with a usage limit as a hard
-  backstop too.
+  the whole setting invalid and stops every call). A search that would pass the total cap is
+  not sent as is: with an owner configured the run first asks on the owner's spend card
+  (`send one web-search via api.search.brave.com`, target `total`, the $0.005), as a model call
+  does, and Approve plus the one-time code sends that one search; the next one past the cap
+  asks again. A no, no owner, or a spend-cap setting that is not valid sends nothing, and the
+  run stops with the spend-cap ask, as a model call does. Prepay the Brave account with a usage
+  limit as a hard backstop too.
 - Each call is on the audit trail like any dangerous tool (SAFE-5).
 - Attribution (your go on #318, to meet Brave's terms): a reply whose run got an answer from
   Brave ends with the line `Search by Brave`, once, after a blank line. It shows on every reply
@@ -554,8 +558,10 @@ What one search does:
   (AUTONOMY-10.a).
 - Spend (SAFE-8): GIPHY's API is free-tier, so with `CORVIDINHO_DAILY_SPEND_CAP_USD` set each
   search is recorded at $0 in the same ledger as the model calls. It adds nothing to the
-  24-hour spend; when earlier spend has already gone past the cap it is not sent, and the run
-  stops with the spend-cap ask, as a model call does.
+  24-hour spend; when earlier spend has already gone past the cap it is not sent as is: with an
+  owner configured it first asks on the owner's spend card (`send one gif-search via
+  api.giphy.com`, `~$0.00`), as a model call does, and a no stops the run with the spend-cap
+  ask.
 - Each call is on the audit trail like any dangerous tool (SAFE-5).
 - Attribution: GIPHY's standard terms require "Powered By GIPHY". It is in this guide, in
   `.env.example` and in the tool result the model reads (its summary line and

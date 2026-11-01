@@ -228,16 +228,21 @@ when the provider returned an HTTP error.
 
 Tool calls with a flat price per call SHALL count toward the same total
 cap (Leif, #318: a Brave `web-search` is about $0.005; a GIPHY `gif-search`
-is free-tier and SHALL be recorded at a price of 0, a $0 row, stopped only
-when the window is already past the cap): `reserveFlatSpend({
-env, provider, model, costMicroUsd, db?, now? })` SHALL be `off` (DB never
-opened) without a cap, and otherwise reserve the price in the same IMMEDIATE
-ledger transaction before the call — `stopped` with the same `spend-cap`
-ask as below when spend plus the price would exceed the cap, the cap value
-is invalid or the ledger is unavailable (the call SHALL NOT be sent), else
-`held`, whose `settle` records `billed` as the call's actual cost,
-`not-billed` (refused before connecting, or an HTTP error reply) as 0, and
-`unknown` (network error, timeout, abort, unreadable reply) at the estimate.
+is free-tier and SHALL be recorded at a price of 0, a $0 row, which passes
+the cap only when the window is already past it): `reserveFlatSpend({
+env, provider, model, tool, costMicroUsd, card?, signal?, db?, now? })`
+(async) SHALL be `off` (DB never opened) without a cap, and otherwise reserve
+the price in the same IMMEDIATE ledger transaction before the call. When
+spend plus the price would exceed the cap and the calling run's spend card
+is given (`card`, REQ-agent-398), the run SHALL wait for the owner's spend
+Approve card, and the call SHALL be `held` on the one row an approval lets
+through. Otherwise — no card, a no on the card, an invalid cap value or an
+unavailable ledger (those two never raise a card) — it SHALL be `stopped`
+with the same `spend-cap` ask as below (the card's outcome named after a
+no), and the call SHALL NOT be sent. `held`'s `settle` records `billed` as
+the call's actual cost, `not-billed` (refused before connecting, or an HTTP
+error reply) as 0, and `unknown` (network error, timeout, abort, unreadable
+reply) at the estimate, once.
 A plugin stopped this way SHALL return the ask in
 `PluginHandlerResult.spendAsk` (never in `data` or `message`), and the tool
 loop SHALL end the attempt on an offered tool's `spend-cap` ask exactly as
@@ -298,8 +303,9 @@ Acceptance Criteria
 - Under the cap: the call is sent, the caller can still read the reply, and the ledger row settles to the usage cost in integer micro-USD.
 - Spend plus estimate over the cap (including a zero cap): no fetch; the attempt returns a `spend-cap` ask naming spend, estimate, cap and `CORVIDINHO_DAILY_SPEND_CAP_USD`, ending with the operator action and no question mark; the summary is `SPEND_CAP_SUMMARY` (no `$`, no `CORVIDINHO_`); `runTask` returns `blocked` with verify skipped; `task run --json` exits 0 with `result.ask.reason` `spend-cap`.
 - Spend older than 24 hours no longer counts.
-- A flat-priced `web-search` (`tests/web.search.test.ts`): no cap opens no database; under the cap a `reserved` row of 5000 micro-USD exists when the request goes out and settles `actual` at 5000; an HTTP error or a refusal before connecting settles `failed` at 0, and a network failure, a body that fails mid-read, a timeout, a non-JSON or malformed 2xx body and an abort after the request went out stay `estimated` at 5000; a run already stopped reserves nothing and sends nothing; at the cap (or with an invalid cap value, or an unavailable ledger such as a closed database, whose ask says the spend ledger is unavailable) nothing is sent, the error names no amount and the result carries the `spend-cap` ask; in the tool loop that search ends the attempt with `SPEND_CAP_SUMMARY` and the ask after one model call.
-- A free `gif-search` (`tests/gif.search.test.ts`): no cap opens no database; under the cap a `reserved` row at 0 for `api.giphy.com` / `giphy-gif-search` exists when the request goes out and settles `actual` at 0, leaving 24-hour spend unchanged; a 2xx reply settles `actual` at 0 also when its body is an `error` or has no `results`; a 429 or a refusal before connecting settles `failed` at 0 and a network failure `estimated` at 0; a run already stopped writes no row; with the window already past the cap, an invalid cap value, or an unavailable ledger, nothing is sent (and an invalid cap writes no row) and the result carries the `spend-cap` ask; in the tool loop that search ends the attempt with `SPEND_CAP_SUMMARY` and the ask after one model call.
+- A flat-priced `web-search` (`tests/web.search.test.ts`): no cap opens no database; under the cap a `reserved` row of 5000 micro-USD exists when the request goes out and settles `actual` at 5000; an HTTP error or a refusal before connecting settles `failed` at 0, and a network failure, a body that fails mid-read, a timeout, a non-JSON or malformed 2xx body and an abort after the request went out stay `estimated` at 5000; a run already stopped reserves nothing and sends nothing; at the cap with no spend card to ask on (or with an invalid cap value, or an unavailable ledger such as a closed database, whose ask says the spend ledger is unavailable) nothing is sent, the error names no amount and the result carries the `spend-cap` ask; in the tool loop that search ends the attempt with `SPEND_CAP_SUMMARY` and the ask after one model call.
+- A free `gif-search` (`tests/gif.search.test.ts`): no cap opens no database; under the cap a `reserved` row at 0 for `api.giphy.com` / `giphy-gif-search` exists when the request goes out and settles `actual` at 0, leaving 24-hour spend unchanged; a 2xx reply settles `actual` at 0 also when its body is an `error` or has no `results`; a 429 or a refusal before connecting settles `failed` at 0 and a network failure `estimated` at 0; a run already stopped writes no row; with the window already past the cap and no spend card to ask on, an invalid cap value, or an unavailable ledger, nothing is sent (and an invalid cap writes no row) and the result carries the `spend-cap` ask; in the tool loop that search ends the attempt with `SPEND_CAP_SUMMARY` and the ask after one model call.
+- With the calling run's spend card a flat-priced call past the total cap waits on the owner's spend Approve card and is sent only on an approval, once (REQ-agent-398).
 - Unpriced model, invalid cap value or unavailable ledger: no fetch and a `spend-cap` ask; the invalid value and secret-shaped model ids are not echoed.
 - HTTP error reply counts 0; missing usage and network errors keep the estimate.
 - Two connections on one DB file see each other's reservations and record the 80% warning once between them.
@@ -3329,4 +3335,76 @@ Acceptance Criteria
 - The summary prompt stays within half the window and folds an earlier summary in; a second attempt makes no second summary call; a summary of fenced text is fenced `model-summary`, and so is the summary in a team member's run (`CORVIDINHO_ACTING_ROLE=team`), never in the owner's.
 - HTTP 500 or an empty reply on the summary call: extractive points, the `[operator]` line with the reason, the answer still from the head model (no failover).
 - Under a spend cap the summary call and the answer are both ledger rows; at a 0 cap nothing is sent and the run ends with the spend-cap ask.
+
+### REQ-agent-398
+
+At 100% of the total spend cap a flat-priced tool call SHALL ask the owner on
+the spend Approve card instead of refusing, as a priced model call does
+(SAFE-8, captured on main, `hi/safe.md`: "When a daily spend cap is set, I
+get a warning at 80% of it, and at 100% the agent asks me (an Approve card to
+continue) instead of refusing or quietly running up the bill."; SAFE-8.a:
+"One Approve and its code let only the paused call through, at the amount
+shown; the next call past the cap raises a new card and code."; Leif's go on
+#318 adopted #334's REQ-agent-098 wording: "the run waits for the owner's
+spend Approve card"). When `createSpendGuard` is given `approval` while a
+cap is set, the guard SHALL expose `flatCard` (`FlatSpendCard`);
+`createTaskExecute`'s tool loop SHALL hand it to every offered tool call as
+`PluginHandlerArgs.spendCard` (through `runPlugin`, REQ-plugins-398), and
+`reserveFlatSpend({ …, tool, card, signal })` SHALL call it when the
+reservation is refused at the total cap (REQ-agent-098):
+
+- The card SHALL be the REQ-agent-198 spend card, raised and decided by the
+  same rules, on the flat call's own ledger and its DB's approvals store:
+  with no owner configured, no card and the plain `spendCapReachedAsk` at
+  once; otherwise, inside the run's one-card-at-a-time turn, which it shares
+  with the run's model calls, a re-fit (a call that fits now is `held` at
+  once, with no card), then one request of kind `spend` and class `money`
+  (Approve also needs the SAFE-19 one-time code) with title `Spend past a
+  cap — asks first (SAFE-8) · from <surface>`, action `send one <tool> via
+  <provider>` (`send one web-search via api.search.brave.com`, `send one
+  gif-search via api.giphy.com`; `spendCardFields({ tool })`), target the
+  tripped scope (`total`), amount the call's price (`~$X (this one call's
+  estimate)`; `~$0.00` for a $0 call), and the same text, requester, waiter
+  and lifetime as a model call's card (SAFE-18); the wait note `[operator]
+  AUTONOMY-8: waiting for the owner's OK on an Approve card with the one-time
+  code (one <tool> past a spend cap, SAFE-8.a; request <id>; …)` (no amounts)
+  and the approval note SHALL be the run's Text events.
+- Only an approval the run uses once (`consume`) while its abort signal is
+  not set SHALL let the call through, and then only that call:
+  `SpendLedger.reserveApproved` SHALL record exactly one row at the price the
+  card showed (a call that would by then pass a cap the card did not show
+  records nothing and is a no), `reserveFlatSpend` SHALL return `held` on
+  that row, the tool sends its one request and `settle` records the outcome
+  once. The next flat call past the cap SHALL raise a new card and code
+  (SAFE-8.a).
+- A deny, no answer before the card lapses, a late code (SAFE-20), the run's
+  stop (its abort signal, also one that lands as the owner approves), an
+  approval that no longer matches, or a card that could not be raised SHALL
+  be a no: nothing is sent or recorded, `reserveFlatSpend` SHALL return
+  `stopped` with `spendCapReachedAsk({ estimateMicroUsd, trips, card })`, the
+  tool returns it in `spendAsk`, and the tool loop ends the attempt `blocked`
+  with it and `SPEND_CAP_SUMMARY` (REQ-agent-098). The no SHALL be returned
+  (`FlatSpendCardOutcome`), never thrown or left for the guard's `finish`.
+- Where a model call gets no card, the flat call SHALL keep the plain ask of
+  REQ-agent-098: no owner configured, a guard without `approval`
+  (`withSpendCap`: no `flatCard`), a call outside a run (`corvidinho plugins
+  run`: no `spendCard`), an invalid cap setting or an unavailable ledger.
+- No amount or cap setting SHALL reach the model, a tool message, the
+  `ToolResult` or a non-owner post (SAFE-14.a): an approved call's result is
+  the tool's own, and a no's details ride only `spendAsk`.
+- No schema version, table, config key or env var changes. COS briefings at
+  a cap and delivery on daemon-only or CLI-only installs are not part of this
+  requirement (the card is recorded and waits out its lifetime there, as
+  REQ-agent-198 says).
+
+Acceptance Criteria
+- Owner configured, $0.9990 of a $1.00 cap spent: a `web-search`-priced `reserveFlatSpend` with the guard's `flatCard` raises one `spend` / `money` card with action `send one web-search via api.search.brave.com`, target `total` and amount `~$0.0050 (this one call's estimate)`, the model call's title, requester, project and task text; approved (and used) it is `held` with exactly one row at 5000, settled once; the wait line names the call with no `$` amount; no model call; `finish` leaves the result alone.
+- After one approved search the next one past the cap raises a second card; denied, it is `stopped` and no second row is recorded (SAFE-8.a).
+- Denied: `stopped`, no row, request `denied`; the ask (`spendScopes` `["total"]`) says the owner denied Approve card `<id>`, keeps `Stopped at cap: total.`, offers asking again and the operator action, with no reply note; `finish` untouched.
+- No answer before the card lapses (`expired`, a later approval does not take), the run's stop (the wait ends at once), a stop that lands as the owner approves (approval left unused) and a run already stopped (no card): `stopped`, no row.
+- No owner (the plain ask at once), a guard without `approval` (no `flatCard`), an invalid cap value and an unavailable ledger: today's ask, no card, no row.
+- A model call's open card holds a search's card back until it is decided; then the search gets its own card.
+- A $0 `gif-search` with the window already past the cap asks on a card with action `send one gif-search via api.giphy.com` and amount `~$0.00 (this one call's estimate)`.
+- Through `createTaskExecute` with an owner and a cap: approved, the one search goes out and the run goes on; the tool message and the `ToolResult` carry no amount, cap setting or card; denied, no request, one model call, `SPEND_CAP_SUMMARY` and the `spend-cap` ask naming the card.
+- These tests fail on main's sources (except the no-card case, which keeps main's behavior).
 

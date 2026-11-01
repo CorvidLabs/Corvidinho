@@ -15,9 +15,37 @@ const CANCEL_RE =
 const THIN_WORD_RE =
   /^(ok|okay|k|kk|sure|yep|yeah|ya|yup|y|yea|alright|all\s*right|fine|cool|got\s*it|sounds\s*good|h+m+|uh+\s*huh|mhm|mm+|👍|👌|✅|😂|😅|🙏|👀|🔥|💯|✨|🙂|😊|😄|😉|👏|🙌)(?:\s*[.!…]*)?$/iu;
 
-/** Discord custom emoji `<:name:id>` or animated `<a:name:id>`, unicode emoji, ZWJ. */
+/**
+ * Discord custom emoji `<:name:id>` or animated `<a:name:id>`, unicode emoji,
+ * ZWJ / variation selector / keycap / skin tone. One character per step: a
+ * long ZWJ chain that ends in a letter then fails at once instead of trying
+ * every way to split it (the ZWJ and U+FE0F are emoji components themselves).
+ */
 const EMOJI_CHUNK_RE =
-  /^(?:<a?:\w+:\d+>|\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*|\p{Emoji_Component})+$/u;
+  /^(?:<a?:\w+:\d+>|[\p{Extended_Pictographic}\p{Emoji_Component}])+$/u;
+
+/** A Discord custom emoji tag (its name and id may hold digits). */
+const CUSTOM_EMOJI_RE = /<a?:\w+:\d+>/g;
+
+/** An ASCII digit that is not part of a keycap emoji (`2️⃣`). */
+const BARE_DIGIT_RE = /[0-9](?![\uFE0F\u20E3])/;
+
+/**
+ * Emoji only. Unicode counts the ASCII digits as emoji components, but a bare
+ * digit is a real answer (`2` picks option 2), never an emoji.
+ */
+function isEmojiOnly(s: string): boolean {
+  return (
+    s.length > 0 &&
+    EMOJI_CHUNK_RE.test(s) &&
+    !BARE_DIGIT_RE.test(s.replace(CUSTOM_EMOJI_RE, ""))
+  );
+}
+
+/** One space- or comma-separated piece: a listed thin word or emoji only. */
+function isThinPiece(piece: string): boolean {
+  return THIN_WORD_RE.test(piece) || isEmojiOnly(piece);
+}
 
 /**
  * True when `text` is an explicit cancel of the pending ask (AUTONOMY-6).
@@ -40,8 +68,11 @@ export function isThinAck(text: string): boolean {
   const t = raw.replace(/\s+/g, " ");
   if (THIN_WORD_RE.test(t)) return true;
   // Emoji-only (one or more), optionally with spaces between.
-  const noSpace = t.replace(/\s+/g, "");
-  if (noSpace.length > 0 && EMOJI_CHUNK_RE.test(noSpace)) return true;
+  if (isEmojiOnly(t.replace(/\s+/g, ""))) return true;
+  // Only listed thin words and emoji, split on spaces / commas: `ok 👍`,
+  // `hmm ok`, `sure, ok`. Any other piece makes it an answer (`2 👍`).
+  const pieces = t.split(/[\s,]+/).filter(Boolean);
+  if (pieces.length > 0 && pieces.every(isThinPiece)) return true;
   // Very short non-answer: 1–2 chars that aren't a real choice token.
   if (t.length <= 2 && !/^[0-9a-z]+$/i.test(t)) return true;
   return false;
