@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "workflow_version": 2,
+  "workflow_origin_version": 2,
+  "id": "release-0-0-48-safe-8-8-a-flat-priced-spend-card-436-autonomy-5-thin-words-and-emoji-437-and-identity-6-allowlist-file",
+  "slug": "release-0-0-48-safe-8-8-a-flat-priced-spend-card-436-autonomy-5-thin-words-and-emoji-437-and-identity-6-allowlist-file",
+  "title": "Release 0.0.48: SAFE-8/8.a flat-priced spend card (#436), AUTONOMY-5 thin words and emoji (#437) and IDENTITY-6 allowlist file (#435). Package bump, CHANGELOG fold, STATUS rows, version fixtures; CI tags v0.0.48 on land.",
+  "description": "Release 0.0.48: SAFE-8/8.a flat-priced spend card (#436), AUTONOMY-5 thin words and emoji (#437) and IDENTITY-6 allowlist file (#435). Package bump, CHANGELOG fold, STATUS rows, version fixtures; CI tags v0.0.48 on land.",
+  "kind": "operations",
+  "state": "approved",
+  "base_commit": "a57e735831d3c62819aa6b335024a13c48186d17",
+  "created_at": 1793551384,
+  "updated_at": 1793551504,
+  "affected_specs": [
+    "cli"
+  ],
+  "affected_paths": [
+    "package.json",
+    "CHANGELOG.md",
+    "STATUS.md",
+    "tests/version.test.ts",
+    "tests/update-helpers.test.ts",
+    "specs/cli/cli.spec.md",
+    "specs/cli/requirements.md"
+  ],
+  "no_spec_change": false,
+  "no_spec_change_rationale": null,
+  "acceptance_criteria": [
+    "package.json 0.0.48; version prints 0.0.48; CHANGELOG 0.0.48 extractable covering SAFE-8/8.a flat-priced spend card (#436), AUTONOMY-5 thin words and emoji (#437) and IDENTITY-6 allowlist file (#435); STATUS rows mention 0.0.48; CI tags v0.0.48 on land"
+  ],
+  "selected_artifacts": [
+    "context",
+    "plan",
+    "testing",
+    "design",
+    "tasks"
+  ],
+  "dependencies": [],
+  "answers": {
+    "architecture_risk": "no",
+    "public_contract": "no"
+  }
+}

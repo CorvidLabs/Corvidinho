@@ -3,6 +3,30 @@
 ## Unreleased
 
 
+## 0.0.48
+
+### Agent / plugins — spend
+
+- **At a spend cap, a flat-priced web-search or gif-search waits on the owner's spend Approve card like a model call** — [#436](https://github.com/CorvidLabs/Corvidinho/pull/436) (SAFE-8 / SAFE-8.a): when one `web-search` (Brave) or `gif-search` (GIPHY) call's flat price would pass the total daily spend cap, the run now holds that one call on the owner's spend Approve card (DM, kind `spend`, class `money`; action `send one web-search via api.search.brave.com` or `send one gif-search via api.giphy.com`, target `total`, amount `~$0.0050 (this one call's estimate)` or `~$0.00`), the same way a model call already waited at 100% (REQ-agent-198). Before, the plugin threw the spend-cap refusal, raised no card and the tool loop ended the attempt. Approve plus the one-time code sends exactly that one call, recorded once; the next call past the cap raises a new card and code. Deny, a lapse, a late code or the run's stop (including one that lands as the owner approves) sends nothing, records nothing and ends the attempt with the spend-cap ask naming the card. With no owner, no `approval` hook (`withSpendCap`, `corvidinho plugins run`), an invalid cap setting or an unavailable ledger, the search keeps the plain spend-cap ask and no card is raised. No amount reaches the model, the tool message or the ToolResult (SAFE-14.a). One shared card path in `src/agent/spend.ts` (`holdOnCard`, `SpendGuard.flatCard`; `reserveFlatSpend` is async and takes `tool`, `card?`, `signal?`), passed through `PluginHandlerArgs.spendCard` / `RunOptions.spendCard`; `docs/discord.md` and `docs/DISCORD-GO-LIVE.md` spend bullets updated. Adds REQ-agent-398 / REQ-plugins-398, modifies REQ-agent-098. No schema, table, config key, env var, CLI or Discord command change.
+
+### Discord — asks
+
+- **A reply made only of thin words and emoji, like "ok 👍", is still thin while a question waits** — [#437](https://github.com/CorvidLabs/Corvidinho/pull/437) (AUTONOMY-5): `isThinAck` (`src/discord/thin-ack.ts`) splits a reply on whitespace and commas; when every piece is a word from the existing thin list or an emoji (`ok 👍`, `👍 ok`, `hmm ok`, `yeah ok`, `sure, ok`, `k k`, `OK 👍👍`), the reply is thin. Before, such a mixed reply cleared a free-text ask and ran the agent, ran as ordinary chat on a Choose ask, and was accepted as the answer in the private Answer form and a schedule ask's form. Now, in chat, the Answer form and a schedule ask's form, it restates the pending question once (with the Choose or Answer button), runs no agent and keeps the ask open. Any other word or a number is an answer (`ok use postgres`, `option 2`, `2 👍`, `2`). A bare ASCII digit no longer counts as an emoji (keycap emoji such as `2️⃣` still do), so `2` and `12` are now answers. The emoji check is linear-time, so a long ZWJ chain no longer stalls the bridge's event loop. No thin word added; cancel phrases unchanged. REQ-discord-044 modified (full text kept).
+
+### Plugins — files
+
+- **files-write / files-edit / files-delete refuse the loaded allowlist file, so people links never change through chat** — [#435](https://github.com/CorvidLabs/Corvidinho/pull/435) (IDENTITY-6, backed by ALLOW-6): the file tools refuse (exit 2, nothing written, `refused (IDENTITY-6): …`) a target that lands on the allowlist file this process reads people from (`CORVIDINHO_ALLOWLIST_FILE`, else the first of `~/.config/corvidinho/allowlist.toml|json` that exists) or on either default path, whether reached by a relative, `./` or absolute path, a symlink or a hard link, for every caller. This closes the gap where, in a non-git project (AGENT-1.a) whose folder holds that file (an env path inside the project, or a non-git `$HOME` as the project), one chat run could add a `discord_ids` link or change a `role` in `[people.<id>]` past `/admin people` and its SAFE-5 audit rows. The refusal points at `/admin people add|link|unlink|remove|role` (audited) or editing the file on the VM. Reads are unchanged. `isAllowlistFilePath` / `allowlistFilePaths` in `plugins/files/protectedPaths.ts`, checked in `refuseProtected`; `docs/discord.md` "Declared people" corrected. Adds REQ-plugins-1204. No new command, env var or config knob.
+
+### SpecSync
+
+- The SpecSync changes for #436, #437 and #435 (`at-a-spend-cap-a-flat-priced-tool-call-…`, `a-reply-made-only-of-thin-words-and-emoji-…`, `file-tools-refuse-the-loaded-allowlist-file-…`) and this release's change stay open on main (state `verifying`) until [CorvidLabs/spec-sync#833](https://github.com/CorvidLabs/spec-sync/issues/833) lets them archive; their verification evidence is re-recorded after each merge of main so `specsync change audit` stays green. No finalize or hand archive.
+
+### Changed
+
+- Package version `0.0.48`; STATUS rows; REQ-cli-440.
+- Restart the Discord bridge and `github watch` after update so presence (DISCORD-12) reports 0.0.48. No schema bump (schema stays 15); NDJSON protocol stays 2. v0.0.48 gets its tag and Release from CI when this bump lands on main.
+- Rollback to the v0.0.47 tag: schema unchanged. That tag does not include the SAFE-8 flat-priced spend card, the AUTONOMY-5 thin words-and-emoji rule or the IDENTITY-6 allowlist-file refusal.
+
 ## 0.0.47
 
 ### Added

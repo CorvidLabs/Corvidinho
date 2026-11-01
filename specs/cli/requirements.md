@@ -1510,6 +1510,15 @@ Acceptance Criteria
 - CLI `version` prints `0.0.47`.
 - CHANGELOG has a 0.0.47 section that the updater's changelog helper extracts exactly.
 
+### REQ-cli-440
+
+The project SHALL ship package version `0.0.48` (SAFE-8/8.a flat-priced spend card, AUTONOMY-5 thin words and emoji, IDENTITY-6 allowlist file after v0.0.47). CLI `version` and Discord presence (DISCORD-12) report `0.0.48` after a restart. CHANGELOG SHALL include verbose 0.0.48 notes covering #436 / #437 / #435.
+
+Acceptance Criteria
+- `package.json` version is `0.0.48`.
+- CLI `version` prints `0.0.48`.
+- CHANGELOG has a 0.0.48 section that the updater's changelog helper extracts exactly.
+
 ### REQ-cli-225
 
 `corvidinho task run` SHALL accept `--persona NAME` (or `--persona=NAME`)
