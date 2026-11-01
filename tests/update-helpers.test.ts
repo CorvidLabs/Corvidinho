@@ -180,16 +180,18 @@ describe("update-helpers.sh", () => {
     }
   });
 
-  test("extract_changelog_section finds 0.0.47", () => {
+  test("extract_changelog_section finds 0.0.48", () => {
     const r = bashEval(
-      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.47`,
+      `source "${helpers}"; extract_changelog_section CHANGELOG.md 0.0.48`,
     );
     expect(r.exitCode).toBe(0);
-    expect(r.stdout).toContain("SESSION-5");
-    expect(r.stdout).toContain("#405");
-    expect(r.stdout).toContain("SESSION-3.b");
-    expect(r.stdout).toContain("#393");
-    expect(r.stdout).not.toContain("## 0.0.46");
+    expect(r.stdout).toContain("SAFE-8");
+    expect(r.stdout).toContain("#436");
+    expect(r.stdout).toContain("AUTONOMY-5");
+    expect(r.stdout).toContain("#437");
+    expect(r.stdout).toContain("IDENTITY-6");
+    expect(r.stdout).toContain("#435");
+    expect(r.stdout).not.toContain("## 0.0.47");
   });
 
   test("extract_changelog_section finds 0.0.44", () => {
@@ -1025,10 +1027,10 @@ describe("release tagging helpers", () => {
 });
 
 describe("package version", () => {
-  test("package.json is 0.0.47", () => {
+  test("package.json is 0.0.48", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("0.0.47");
+    expect(pkg.version).toBe("0.0.48");
   });
 });
