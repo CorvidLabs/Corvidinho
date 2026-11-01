@@ -1,0 +1,45 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "corvid-agent",
+      "timestamp": 1793545129,
+      "digest": "25366378472d922eeffe64aa5f6e67418595ae692d8faf33dda607cf6deecf78",
+      "note": null,
+      "approved_scope": {
+        "schema_version": 1,
+        "change_id": "file-tools-refuse-the-loaded-allowlist-file-so-people-links-never-change-through-chat-identity-6",
+        "title": "File tools refuse the loaded allowlist file so people links never change through chat (IDENTITY-6)",
+        "description": "File tools refuse the loaded allowlist file so people links never change through chat (IDENTITY-6)",
+        "kind": "bug_fix",
+        "affected_specs": [
+          "plugins"
+        ],
+        "affected_paths": [
+          "docs/discord.md",
+          "plugins/files/commands.ts",
+          "plugins/files/protectedPaths.ts",
+          "specs/plugins/plugins.spec.md",
+          "specs/plugins/requirements.md",
+          "specs/plugins/testing.md",
+          "tests/files.allowlist-file.test.ts"
+        ],
+        "no_spec_change": false,
+        "no_spec_change_rationale": null,
+        "acceptance_criteria": [
+          "IDENTITY-6 (captured on main, hi/identity.md: 'Only I add, change or remove a person's links, never through chat.'), backed by ALLOW-6 (hi/allow.md: 'Widening an allowlist is an explicit config change I make; the agent does not grow trust from chatting with someone new.'): files-write, files-edit and files-delete refuse with exit 2, before any write or existence check, with 'refused (IDENTITY-6): …' naming /admin people, when the target, judged where the write would land (relative or absolute, symlinks resolved, a hard link to the same file), is the allowlist file this process reads people from (resolveAllowlistPath: CORVIDINHO_ALLOWLIST_FILE, else ~/.config/corvidinho/allowlist.toml|json; both default paths are covered since creating either makes it the file read), for every caller including the owner's session and the local CLI; the file stays byte-for-byte unchanged. tests/files.allowlist-file.test.ts reproduces both cases (CORVIDINHO_ALLOWLIST_FILE inside a non-git project; the default path under a non-git HOME project, in a child process whose HOME is the project): an owner session (resolveActingIsAdmin true) files-edit adding a discord_ids link or changing a role is refused and the file is unchanged; it fails on the base sources and passes on the branch. /admin people add|link|unlink|remove keep working with their SAFE-5 audit rows (tests/discord.admin-people.test.ts unchanged and passing); writes to other project files are unchanged; the SAFE-2 and files suites pass unchanged. No new command, env var, config key or criterion."
+        ],
+        "dependencies": [],
+        "supersedes": [],
+        "answers": {
+          "architecture_risk": "yes",
+          "public_contract": "yes"
+        }
+      },
+      "approved_delta_digests": {
+        "plugins": "01635eb7ff935ebefb7261c5974e2a1581b51b55483d7f528eca4d47948a33c8"
+      }
+    }
+  ],
+  "reopenings": []
+}

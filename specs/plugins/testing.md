@@ -991,3 +991,38 @@ it); "the GITHUB-9 reviewer is never a cli entry": `resolveReviewer` picks
 `gpt-x` over `cli:fakecli --print` and is null with only the CLI. The shell,
 runners and Fledge runs keep a closed stdin (`tests/fledge.*.test.ts`,
 `tests/shell.*`, `tests/runners.plugins.test.ts` unchanged and passing).
+## The file tools never change the allowlist file people are read from (REQ-plugins-1204, IDENTITY-6)
+
+`tests/files.allowlist-file.test.ts` through `runPlugin`: temp folders only,
+never this checkout or the operator's config; the allowlist file holds
+`[owner]`, `[people.tofu]` (team) and `[people.pat]` (community).
+- `CORVIDINHO_ALLOWLIST_FILE` inside a non-git project: in the owner's
+  session (`resolveActingIsAdmin()` true, the owner read from that file)
+  `files-edit` adding a `discord_ids` link and changing `role = "community"`
+  to `"team"` (relative, `./`, absolute) are refused with exit 2,
+  `refused (IDENTITY-6)` and `/admin people`; `files-write` and
+  `files-delete` (`allowlist.toml`, `./sub/../allowlist.toml`, absolute) are
+  refused for the local CLI and the owner; a symlink and a hard link to it
+  are refused, and with the env naming the link, the file it leads to is
+  refused; the file is byte-for-byte unchanged after each case.
+- The default path under a non-git `$HOME` project: a child `bun` process
+  (Bun's `os.homedir()` reads `HOME` only at start) with `HOME` the project,
+  cwd the project and no `CORVIDINHO_ALLOWLIST_FILE` reads the owner from
+  `~/.config/corvidinho/allowlist.toml` (`resolveActingIsAdmin()` true) and
+  refuses `files-edit` (link and role, relative and absolute),
+  `files-write` and `files-delete` of it while `notes.txt` is written; with
+  only `allowlist.json`, creating `allowlist.toml` and overwriting
+  `allowlist.json` are refused.
+- Other project files (`notes.txt`, `src/app.ts`, `allowlist.example.toml`,
+  `sub/allowlist.toml`) are written, edited and deleted as before; the
+  `isAllowlistFilePath` unit case covers both default paths, a dangling
+  default link's target and a `~/…` env value, and not other files.
+- Fail-on-base proof: with 49273ff4's `plugins/files/commands.ts` and
+  `plugins/files/protectedPaths.ts` swapped in, 6 of 7 fail (each refusal
+  case: the edit, write or delete returned ok and changed the file; the unit
+  case finds no `isAllowlistFilePath`); the other-files case passes on both.
+  Restored: 7 of 7 pass.
+- `tests/discord.admin-people.test.ts` (`/admin people add|link|unlink|remove`
+  with their `admin-people-*` audit rows), `tests/files.*.test.ts`,
+  `tests/plugins.nongit-project-dir.test.ts` and the other non-git and
+  persona suites pass unchanged.
