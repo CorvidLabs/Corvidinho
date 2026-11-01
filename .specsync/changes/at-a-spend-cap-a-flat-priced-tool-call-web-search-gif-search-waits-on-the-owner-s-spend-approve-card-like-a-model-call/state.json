@@ -7,10 +7,11 @@
   "title": "At a spend cap a flat-priced tool call (web-search, gif-search) waits on the owner's spend Approve card like a model call instead of stopping at once; Approve plus the one-time code lets only that call through at the amount shown, the next one asks again, and any no keeps today's spend-cap ask (SAFE-8, SAFE-8.a)",
   "description": "At a spend cap a flat-priced tool call (web-search, gif-search) waits on the owner's spend Approve card like a model call instead of stopping at once; Approve plus the one-time code lets only that call through at the amount shown, the next one asks again, and any no keeps today's spend-cap ask (SAFE-8, SAFE-8.a)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "49273ff4a95fafcad87cde66492e3a8dd2c6c3f4",
   "created_at": 1793545159,
-  "updated_at": 1793545516,
+  "updated_at": 1793545820,
   "affected_specs": [
     "agent",
     "plugins"

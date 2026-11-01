@@ -1,6 +1,6 @@
 ---
 id: at-a-spend-cap-a-flat-priced-tool-call-web-search-gif-search-waits-on-the-owner-s-spend-approve-card-like-a-model-call
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 49273ff4a95fafcad87cde66492e3a8dd2c6c3f4
 ---
