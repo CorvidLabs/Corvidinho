@@ -180,6 +180,26 @@
         "REQ-agent-398",
         "REQ-plugins-398"
       ]
+    },
+    {
+      "timestamp": 1793549615,
+      "commit": "4960182412c057dd949649481bfd7ae02f220a20",
+      "contract_digest": "a896ea413275e0f5ffc60cfcc585e717eff34151a036cd3a7e5e41b5de4bf2e5",
+      "execution_digest": "ba7a2e5f513cef7c368aab0dd822acfea6b21659791f91bc1ffabbfdb914f1bb",
+      "workspace_digest": "6aa450dbb247949708d415f4fce5813ab05922284f464bb922ee0098c2c7c664",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-agent-398",
+        "REQ-plugins-398"
+      ]
     }
   ]
 }
