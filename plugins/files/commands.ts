@@ -22,8 +22,10 @@ import type {
 import { MAX_IMAGE_SIZE_BYTES, sniffImageFile } from "./image.ts";
 import { repoWaysNow } from "../../src/agent/repo-ways.ts";
 import {
+  allowlistFileRefuseMessage,
   hiRefuseMessage,
   livePersonaRefuseMessage,
+  isAllowlistFilePath,
   isHiPath,
   isLivePersonaPath,
   isNonGitRootInstructionPath,
@@ -77,6 +79,11 @@ function refuseProtected(
   // SAFE-2 / AUTONOMOUS-2.a: Corvidinho's own named persona files.
   if (isLivePersonaPath(absPath)) {
     return { ok: false, error: livePersonaRefuseMessage(userPath), exitCode: 2 };
+  }
+  // IDENTITY-6 / ALLOW-6: the allowlist file this process reads people from
+  // (a non-git project folder or $HOME can hold it), for every caller.
+  if (isAllowlistFilePath(absPath)) {
+    return { ok: false, error: allowlistFileRefuseMessage(userPath), exitCode: 2 };
   }
   return null;
 }

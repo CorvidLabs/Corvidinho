@@ -3,9 +3,11 @@
  * No in-band override (Merlin files-delete pattern).
  */
 
-import { statSync } from "node:fs";
-import { basename, isAbsolute, join, relative } from "node:path";
+import { lstatSync, readlinkSync, realpathSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { PROJECT_INSTRUCTION_FILES } from "../../src/agent/project-instructions.ts";
+import { defaultAllowlistPaths, resolveAllowlistPath } from "../../src/allowlist/load.ts";
 import { CORVIDINHO_ROOT } from "../../src/agent/persona.ts";
 import { PERSONAS_DIR } from "../../src/agent/personas.ts";
 import {
@@ -157,6 +159,114 @@ export function isNonGitRootInstructionPath(absPath: string, cwd: string): boole
     }
   }
   return false;
+}
+
+/** Symlink hops followed by hand for a dangling link (Linux SYMLOOP_MAX). */
+const MAX_LINK_HOPS = 40;
+
+/**
+ * Where a read or write of `p` lands: symlinks resolved, a missing leaf
+ * placed under its parent's real path, and a dangling link followed by hand
+ * (a write through it creates its target) — as `resolveProjectPath` does
+ * for the file tools' own target, without the project clamp.
+ */
+function landingPath(p: string, hops = 0): string {
+  const abs = resolve(p);
+  try {
+    return realpathSync(abs);
+  } catch {
+    /* missing, or a dangling / looping link */
+  }
+  const dir = dirname(abs);
+  if (dir === abs) return abs;
+  const leaf = join(landingPath(dir, hops), basename(abs));
+  if (hops < MAX_LINK_HOPS) {
+    try {
+      if (lstatSync(leaf).isSymbolicLink()) {
+        return landingPath(resolve(dirname(leaf), readlinkSync(leaf)), hops + 1);
+      }
+    } catch {
+      /* missing */
+    }
+  }
+  return leaf;
+}
+
+/**
+ * IDENTITY-6 / ALLOW-6: the allowlist files this process reads people (and
+ * their links and roles), the owner and the allow/deny lists from —
+ * `resolveAllowlistPath(env, home)` (`CORVIDINHO_ALLOWLIST_FILE`, else the
+ * first of `~/.config/corvidinho/allowlist.toml|json` that exists) plus both
+ * default paths, since creating either would make it the file read (`.toml`
+ * first). `home` is `homedir()` and, when it differs, `env.HOME`. A relative
+ * `CORVIDINHO_ALLOWLIST_FILE` is taken from this process's cwd (where its
+ * loader reads it) and from home (as the shell's SAFE-21 guard does). Each
+ * path as written and where it lands (`landingPath`).
+ */
+export function allowlistFilePaths(
+  env: NodeJS.ProcessEnv = process.env,
+  home: string = homedir(),
+): string[] {
+  const homes = [home];
+  const envHome = env.HOME?.trim();
+  if (envHome && isAbsolute(envHome) && envHome !== home) homes.push(envHome);
+  const named = new Set<string>();
+  for (const h of homes) {
+    const p = resolveAllowlistPath(env, h);
+    if (p) {
+      named.add(resolve(p));
+      if (!isAbsolute(p)) named.add(resolve(h, p));
+    }
+    for (const d of defaultAllowlistPaths(h)) named.add(resolve(d));
+  }
+  const out = new Set<string>();
+  for (const p of named) {
+    out.add(p);
+    out.add(landingPath(p));
+  }
+  return [...out];
+}
+
+/**
+ * IDENTITY-6 / ALLOW-6: true when `absPath` — where a file tool's write,
+ * edit or delete would land (`resolveProjectPath`, symlinks resolved) — is
+ * one of {@link allowlistFilePaths}, or a regular file sharing the inode of
+ * one (a hard link). Only the owner changes a person's links, outside chat:
+ * `/admin people` (audited) or the file on the VM.
+ */
+export function isAllowlistFilePath(
+  absPath: string,
+  env: NodeJS.ProcessEnv = process.env,
+  home: string = homedir(),
+): boolean {
+  const target = resolve(absPath);
+  let st: ReturnType<typeof statSync> | null = null;
+  try {
+    st = statSync(target);
+  } catch {
+    /* missing: compared by path only */
+  }
+  for (const p of allowlistFilePaths(env, home)) {
+    if (p === target) return true;
+    if (!st?.isFile()) continue;
+    try {
+      const b = statSync(p);
+      if (b.isFile() && b.dev === st.dev && b.ino === st.ino) return true;
+    } catch {
+      /* missing: no shared inode */
+    }
+  }
+  return false;
+}
+
+export function allowlistFileRefuseMessage(path: string): string {
+  return (
+    `refused (IDENTITY-6): '${path}' is Corvidinho's allowlist file, which holds the people it knows ` +
+    `(their linked accounts and roles), the owner and the allow/deny lists. Only the owner adds, changes ` +
+    `or removes a person's links, never through chat, and widening an allowlist is a config change the ` +
+    `owner makes (ALLOW-6), so the file tools never write, edit or delete it. The owner uses ` +
+    `/admin people add|link|unlink|remove|role (audited) or edits the file on the VM.`
+  );
 }
 
 export function rootInstructionRefuseMessage(path: string): string {

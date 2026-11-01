@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "schema_version": 2,
+      "change_id": "file-tools-refuse-the-loaded-allowlist-file-so-people-links-never-change-through-chat-identity-6",
+      "reviewer": "corvid-agent",
+      "provenance": {
+        "schema_version": 1,
+        "provider": "github_actions_check",
+        "required_check": "SpecSync scoped review"
+      },
+      "verdict": "pass",
+      "implementation_commit": "cd552b87f9dfa0f1e4f8b206717a3ff1f74ca156",
+      "contract_digest": "25366378472d922eeffe64aa5f6e67418595ae692d8faf33dda607cf6deecf78",
+      "execution_digest": "2af3c5414b727bef62d8b0e9270a714845dd269c1cf1e146d4d30fa2d3a4560e",
+      "workspace_digest": "1284522b8b4f7d36c995b90109653096a15b6f109ec123dc7f36fb6a6f905054",
+      "timestamp": 1793550524
+    }
+  ]
+}

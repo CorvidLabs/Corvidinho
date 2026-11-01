@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 71
+version: 72
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -59,6 +59,7 @@ files:
   - plugins/files/argv.ts
   - plugins/files/image.ts
   - tests/plugins.nongit-project-dir.test.ts
+  - tests/files.allowlist-file.test.ts
   - plugins/search/index.ts
   - plugins/search/commands.ts
   - tests/memory.plugins.test.ts
@@ -208,7 +209,10 @@ Export allowlist load + github/discord gate helpers used by plugins and future
 HEAR. `resolveAllowlistPath(env, home)` returns `CORVIDINHO_ALLOWLIST_FILE`
 with a leading `~` or `~/` read as `home` (`~user` and every other value as
 written), else the first default path that exists; the loader, owner loader,
-`/admin` writer and doctor all resolve the file through it. File/search
+`/admin` writer and doctor all resolve the file through it, and so does the
+file tools' IDENTITY-6 guard (`isAllowlistFilePath` /
+`allowlistFilePaths` / `allowlistFileRefuseMessage` in
+`plugins/files/protectedPaths.ts`, REQ-plugins-1204). File/search
 plugins register via `loadFilesPlugins` / `loadSearchPlugins`.
 HEAR. `isChannelDenied` (`src/allowlist/discord.ts`) reports a `deny_channels`
 hit alone (case-insensitive, trimmed, as `checkChannel` uses it) so a thread
@@ -369,6 +373,16 @@ tools never change its root `AGENTS.md` or `CLAUDE.md` (AGENT-1.b,
 REQ-plugins-110): `refuseProtected` refuses, for every caller,
 `isNonGitRootInstructionPath` — the root names, paths under them, the file a
 symlink of that name leads to, a hard link to one — with `refused (AGENT-1.b)`.
+The file tools never write, edit or delete the allowlist file this process
+reads people from, wherever it is (IDENTITY-6 / ALLOW-6, REQ-plugins-1204):
+`refuseProtected` refuses, for every caller (the owner's session and the
+local CLI included), `isAllowlistFilePath` — `resolveAllowlistPath`
+(`CORVIDINHO_ALLOWLIST_FILE`, else `~/.config/corvidinho/allowlist.toml|json`)
+and both default paths, as written and where they land, judged where the
+write would land, a hard link to it included — with `refused (IDENTITY-6)`
+naming `/admin people`. A non-git project folder or a non-git `$HOME`
+bridge can hold that file (AGENT-1.a); links change only through `/admin
+people` (audited) or the file on the VM.
 Team work tools need a git work tree: `actingWorkTask(env, cwd)` reads the
 `/work` stamp and `isGitRepo(cwd)`, and `runPlugin` passes the call's cwd, so
 other people's runs only read in a non-git folder (AGENT-1.a,
@@ -1443,6 +1457,12 @@ command line.
 - **When** `files-write`, `files-edit` or `files-delete` targets `hi/agent.md`, a new file under `hi/`, or a symlink that lands there
 - **Then** each refuses with `refused (AGENT-18): '<path>' is under hi/, …` and the file is unchanged; `files-read hi/agent.md` still works, and in a repo whose `hi/` has no hi front matter the write goes through
 
+### Scenario: file tools leave the allowlist file alone (IDENTITY-6)
+
+- **Given** a non-git project folder holding the allowlist file the process reads people from (`CORVIDINHO_ALLOWLIST_FILE` inside it, or the default `~/.config/corvidinho/allowlist.toml` with `$HOME` the project) and the owner's chat session
+- **When** `files-edit` adds a `discord_ids` link or changes a `role` there, or `files-write` / `files-delete` targets it (relative, absolute, a symlink to it, a hard link to it)
+- **Then** each refuses with exit 2 and `refused (IDENTITY-6): …` naming `/admin people`, and the file is byte-for-byte unchanged; other project files are written as before
+
 ### Scenario: a run's own PR in a hi repo after a criterion changed (AGENT-18)
 
 - **Given** a run in progress in a repo whose `hi/agent.md` has `hi:` front matter, and a criterion committed there through the shell
@@ -1492,6 +1512,7 @@ command line.
 | Unknown plugin name | Throw / fail with Unknown plugin command |
 | Dangerous + non-interactive + not allowlisted | Deny (exit 2) |
 | Mutating + acting non-ADMIN (ROLES-CHAT-3) | Deny (exit 2, not allowed for your role) |
+| `files-write` / `files-edit` / `files-delete` of the allowlist file this process reads people from (IDENTITY-6), any caller | Refuse (exit 2, `refused (IDENTITY-6)`, names `/admin people`); nothing written |
 | Team role, mutating tool outside its review tools (and work tools in /work) (IDENTITY-10) | Deny (exit 2, not allowed for your role) |
 | Team GitHub write on a repo not on the GITHUB-6 allowlist (IDENTITY-10) | Refuse (exit 3, GITHUB-6) |
 | `github-docs-read` path outside README / docs/ / STATUS / CHANGELOG (ROLES-CHAT-8.a) | Refuse (exit 2) before GitHub is called |
@@ -1719,3 +1740,4 @@ and current rows for plugins host evolution.
 | 2026-10-07 | my-own-memory-forget-and-override-by-id-ask-me-on-a-dm-card-with-approve-and-a-one-time-code-and-an-override-shows-the: My own memory forget and override by id ask me on a DM card with Approve and a one-time code, and an override shows the new text word for word (SAFE-18.a) |
 | 2026-10-07 | a-headless-agent-cli-can-be-one-of-my-models-in-my-own-runs-only-with-the-same-tools-as-my-other-models-inside-that: A headless agent CLI can be one of my models, in my own runs only, with the same tools as my other models, inside that talk's own worktree; other runs skip it and use my next model (AGENT-13, AGENT-13.a) |
 | 2026-11-01 | at-a-spend-cap-a-flat-priced-tool-call-web-search-gif-search-waits-on-the-owner-s-spend-approve-card-like-a-model-call: At a spend cap a flat-priced tool call (web-search, gif-search) waits on the owner's spend Approve card like a model call instead of stopping at once; Approve plus the one-time code lets only that call through at the amount shown, the next one asks again, and any no keeps today's spend-cap ask (SAFE-8, SAFE-8.a) |
+| 2026-11-01 | file-tools-refuse-the-loaded-allowlist-file-so-people-links-never-change-through-chat-identity-6: File tools refuse the loaded allowlist file so people links never change through chat (IDENTITY-6) |
