@@ -14,12 +14,15 @@
  *   env vars, so the key can never come back.
  * - `safesearch=moderate` is always sent explicitly (Leif, #318).
  * - SAFE-8: each search reserves `BRAVE_SEARCH_COST_MICRO_USD` (about $0.005)
- *   against the total daily cap before the request (`reserveFlatSpend`).
+ *   against the total daily cap before the request (`reserveFlatSpend`); one
+ *   that would pass it waits on the calling run's spend card (`spendCard`,
+ *   action `send one web-search via api.search.brave.com`) and is sent only
+ *   when the owner lets that one search through (SAFE-8.a).
  * - SAFE-6: a query carrying a secret-looking value is refused, never sent.
  */
 
 import type { Database } from "bun:sqlite";
-import { reserveFlatSpend, type FlatSpendOutcome } from "../../src/agent/spend.ts";
+import { reserveFlatSpend, type FlatSpendCard, type FlatSpendOutcome } from "../../src/agent/spend.ts";
 import type { HumanAsk } from "../../src/agent/types.ts";
 import { stripInvisible } from "../../src/agent/untrusted.ts";
 import { redactSecretEnvValues, scrubSecrets } from "../../src/store/scrub.ts";
@@ -102,6 +105,8 @@ export type WebSearchDeps = ApiGetDeps & {
   spendDb?: Database;
   now?: () => number;
   signal?: AbortSignal;
+  /** SAFE-8 / SAFE-8.a: the calling run's spend card (`PluginHandlerArgs.spendCard`). */
+  spendCard?: FlatSpendCard;
 };
 
 export type WebSearchResult = {
@@ -316,11 +321,15 @@ export async function braveWebSearch(argv: readonly string[], deps: WebSearchDep
   if (deps.signal?.aborted) {
     throw new WebSearchError("aborted", "stopped: the calling run was interrupted");
   }
-  const hold = reserveFlatSpend({
+  // SAFE-8: past the total cap it waits on the run's spend card (when it has one).
+  const hold = await reserveFlatSpend({
     env,
     provider: BRAVE_SEARCH_HOST,
     model: BRAVE_SEARCH_SPEND_MODEL,
+    tool: "web-search",
     costMicroUsd: BRAVE_SEARCH_COST_MICRO_USD,
+    ...(deps.spendCard ? { card: deps.spendCard } : {}),
+    ...(deps.signal ? { signal: deps.signal } : {}),
     ...(deps.spendDb ? { db: deps.spendDb } : {}),
     ...(deps.now ? { now: deps.now } : {}),
   });

@@ -32,6 +32,8 @@ export type RunOptions = {
   signal?: AbortSignal;
   /** Passed to the handler: the calling agent run's review context (GITHUB-9). */
   review?: PluginHandlerArgs["review"];
+  /** Passed to the handler: the calling agent run's spend card (SAFE-8, flat-priced calls). */
+  spendCard?: PluginHandlerArgs["spendCard"];
 };
 
 export class PluginDeniedError extends Error {
@@ -171,6 +173,7 @@ export async function runPlugin(opts: RunOptions): Promise<PluginHandlerResult> 
       ...(opts.tier ? { tier: opts.tier } : {}),
       ...(opts.signal ? { signal: opts.signal } : {}),
       ...(opts.review ? { review: opts.review } : {}),
+      ...(opts.spendCard ? { spendCard: opts.spendCard } : {}),
     });
   } catch (e) {
     if (dangerous) safeRecord(cmd.name, args, "error", 1);

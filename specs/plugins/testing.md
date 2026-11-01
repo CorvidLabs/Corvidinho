@@ -991,3 +991,48 @@ it); "the GITHUB-9 reviewer is never a cli entry": `resolveReviewer` picks
 `gpt-x` over `cli:fakecli --print` and is null with only the CLI. The shell,
 runners and Fledge runs keep a closed stdin (`tests/fledge.*.test.ts`,
 `tests/shell.*`, `tests/runners.plugins.test.ts` unchanged and passing).
+
+## web-search and gif-search hand the run's spend card to reserveFlatSpend (REQ-plugins-398 added; SAFE-8 / SAFE-8.a / SAFE-14.a)
+
+In `tests/web.search.test.ts` ("the handler: the run's card lets exactly
+that one search through …"): a guard with an owner and `approval` gives
+`flatCard`; the `web-search` handler called with `spendCard` at $0.9980 of a
+$1.00 cap raises one `spend` / `money` card (`send one web-search via
+api.search.brave.com`, `total`, `~$0.0050 (this one call's estimate)`);
+approved, one request goes out and the row settles `actual` 5000; nothing
+outside the fence carries `$`, `CORVIDINHO_`, `SAFE-8` or "spend" and there
+is no `spendAsk`. The next search raises a new card; denied, no request,
+exit 2, `data.code` `spend-cap`, the error `web-search spend-cap: refused:
+Work is paused for budget. (SAFE-8)` (no `$`, no `CORVIDINHO_`), and
+`spendAsk` naming the denied card.
+
+In `tests/gif.search.test.ts` ("past the cap a GIF search waits on the
+owner's spend Approve card …"): with the window past the cap, the
+`gif-search` handler with `spendCard` raises a card (`send one gif-search via
+api.giphy.com`, `total`, `~$0.00 (this one call's estimate)`); approved, one
+request and one `actual` $0 row; the next one, denied, sends nothing and
+returns the `gif-search spend-cap` error with the card in `spendAsk`.
+
+Both handlers hand the run's abort signal to the card wait ("the run's stop
+ends the card wait at once …", one in each file): the owner never answers a
+card that would stay open a minute; the run's stop ends the wait within
+seconds, no request goes out, no row is recorded, and the result is the
+`<tool> spend-cap` error with `spendAsk` saying the wait on that card was cut
+short. With the handler's signal hand-off to `reserveFlatSpend` removed, both
+fail (the wait runs on past the stop).
+
+The existing at-cap cases (no `spendCard`, as from `corvidinho plugins run`)
+keep stopping with the spend-cap ask.
+
+Fail-on-base: with main's (`49273ff4`) sources swapped in (see the agent
+module's evidence), both handler cases fail (the handler ignores
+`spendCard`: nothing is sent and no card is raised). Restored, both pass.
+
+## Requirement evidence
+
+| Requirement | Test | Evidence |
+|---|---|---|
+| `REQ-plugins-398` | `tests/web.search.test.ts` ("the handler: the run's card lets exactly that one search through; a no sends nothing …") | `ctx.spendCard` reaches `reserveFlatSpend`: approved, one request and one `actual` row; denied, nothing sent and only "Work is paused for budget." with the card in `spendAsk`. Fails on base. |
+| `REQ-plugins-398` | `tests/web.search.test.ts`, `tests/gif.search.test.ts` ("the run's stop ends the card wait at once …") | The handler hands the run's abort signal to the card wait: the stop ends it at once, nothing sent or recorded, `spendAsk` says the wait was cut short. Fails on base and without the signal hand-off. |
+| `REQ-plugins-398` | `tests/gif.search.test.ts` ("approved, exactly that one search is sent and recorded at $0 …") | The same through `gif-search` at $0. Fails on base. |
+| `REQ-plugins-398` | `tests/web.search.test.ts` ("in the tool loop: approved, …") | `runPlugin` passes the tool loop's `spendCard` to the handler. Fails on base. |

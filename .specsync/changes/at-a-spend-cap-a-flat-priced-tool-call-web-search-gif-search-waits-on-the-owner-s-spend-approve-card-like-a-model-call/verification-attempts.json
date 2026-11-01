@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "attempts": [
+    {
+      "timestamp": 1793545819,
+      "commit": "50b730539cd2c5bf58ab0bcb82fd81cb8b1fb67a",
+      "contract_digest": "a896ea413275e0f5ffc60cfcc585e717eff34151a036cd3a7e5e41b5de4bf2e5",
+      "execution_digest": "ba7a2e5f513cef7c368aab0dd822acfea6b21659791f91bc1ffabbfdb914f1bb",
+      "workspace_digest": "9a3eec1165970ffd3b3b9eb06702b9decc6698cce9df51b156db36341ddfd124",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-agent-398",
+        "REQ-plugins-398"
+      ]
+    },
+    {
+      "timestamp": 1793545821,
+      "commit": "9ff2b7a4cbccdd6de55be0bb955e8827fd576434",
+      "contract_digest": "a896ea413275e0f5ffc60cfcc585e717eff34151a036cd3a7e5e41b5de4bf2e5",
+      "execution_digest": "ba7a2e5f513cef7c368aab0dd822acfea6b21659791f91bc1ffabbfdb914f1bb",
+      "workspace_digest": "9a3eec1165970ffd3b3b9eb06702b9decc6698cce9df51b156db36341ddfd124",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-agent-398",
+        "REQ-plugins-398"
+      ]
+    },
+    {
+      "timestamp": 1793547348,
+      "commit": "c92e17a4348590cdec0fdabe6d9216fa6bbcecb2",
+      "contract_digest": "a896ea413275e0f5ffc60cfcc585e717eff34151a036cd3a7e5e41b5de4bf2e5",
+      "execution_digest": "ba7a2e5f513cef7c368aab0dd822acfea6b21659791f91bc1ffabbfdb914f1bb",
+      "workspace_digest": "282b438df73b3609f08f356a557d214c94b8efad4aa901b432d5a46a7e430d3e",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-agent-398",
+        "REQ-plugins-398"
+      ]
+    },
+    {
+      "timestamp": 1793547350,
+      "commit": "7384f4384b046f5497997f7b8d13ea492008cfab",
+      "contract_digest": "a896ea413275e0f5ffc60cfcc585e717eff34151a036cd3a7e5e41b5de4bf2e5",
+      "execution_digest": "ba7a2e5f513cef7c368aab0dd822acfea6b21659791f91bc1ffabbfdb914f1bb",
+      "workspace_digest": "282b438df73b3609f08f356a557d214c94b8efad4aa901b432d5a46a7e430d3e",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-agent-398",
+        "REQ-plugins-398"
+      ]
+    },
+    {
+      "timestamp": 1793547378,
+      "commit": "13149ad0249e2f474033b91b244bb4ad176be50e",
+      "contract_digest": "a896ea413275e0f5ffc60cfcc585e717eff34151a036cd3a7e5e41b5de4bf2e5",
+      "execution_digest": "ba7a2e5f513cef7c368aab0dd822acfea6b21659791f91bc1ffabbfdb914f1bb",
+      "workspace_digest": "4f94b831e5ecb41aa68dbc7302ba1b131f459e8f9c459d48879184f10f98403c",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-agent-398",
+        "REQ-plugins-398"
+      ]
+    },
+    {
+      "timestamp": 1793547380,
+      "commit": "c1f640c22c4aca082f5f481a1ae1aa6b5fba8973",
+      "contract_digest": "a896ea413275e0f5ffc60cfcc585e717eff34151a036cd3a7e5e41b5de4bf2e5",
+      "execution_digest": "ba7a2e5f513cef7c368aab0dd822acfea6b21659791f91bc1ffabbfdb914f1bb",
+      "workspace_digest": "4f94b831e5ecb41aa68dbc7302ba1b131f459e8f9c459d48879184f10f98403c",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-agent-398",
+        "REQ-plugins-398"
+      ]
+    },
+    {
+      "timestamp": 1793548158,
+      "commit": "cae2715053d61cf218f1b86d316dd5899cbd3d9e",
+      "contract_digest": "a896ea413275e0f5ffc60cfcc585e717eff34151a036cd3a7e5e41b5de4bf2e5",
+      "execution_digest": "ba7a2e5f513cef7c368aab0dd822acfea6b21659791f91bc1ffabbfdb914f1bb",
+      "workspace_digest": "4f94b831e5ecb41aa68dbc7302ba1b131f459e8f9c459d48879184f10f98403c",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-agent-398",
+        "REQ-plugins-398"
+      ]
+    },
+    {
+      "timestamp": 1793548161,
+      "commit": "79d55ad60fd4f1a45e61e92a8f80b08246ff7803",
+      "contract_digest": "a896ea413275e0f5ffc60cfcc585e717eff34151a036cd3a7e5e41b5de4bf2e5",
+      "execution_digest": "ba7a2e5f513cef7c368aab0dd822acfea6b21659791f91bc1ffabbfdb914f1bb",
+      "workspace_digest": "4f94b831e5ecb41aa68dbc7302ba1b131f459e8f9c459d48879184f10f98403c",
+      "passed": true,
+      "commands": [
+        {
+          "command": "specsync check --spec agent --spec plugins",
+          "success": true,
+          "exit_code": 0
+        }
+      ],
+      "requirement_ids": [
+        "REQ-agent-098",
+        "REQ-agent-398",
+        "REQ-plugins-398"
+      ]
+    }
+  ]
+}

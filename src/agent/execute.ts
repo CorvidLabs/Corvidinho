@@ -39,7 +39,7 @@ import type { PluginHandlerResult, PluginImage, PrReviewRun } from "../plugins/t
 import { scrubSecrets } from "../store/scrub.ts";
 import { projectLabel } from "../discord/list-scope.ts";
 import { projectKeyFor } from "../memory/scope.ts";
-import { createSpendGuard, SpendCapRefusal } from "./spend.ts";
+import { createSpendGuard, SpendCapRefusal, type FlatSpendCard } from "./spend.ts";
 import { formatSpendWarningLine, SPEND_CAP_SUMMARY } from "./spend-notice.ts";
 import {
   REPLY_ATTRIBUTION_BY_TOOL,
@@ -1394,6 +1394,9 @@ export function createTaskExecute(opts: CreateTaskExecuteOpts = {}): TaskExecute
       },
       onPrivateReply: (text) => opts.onPrivateReply?.(text),
       review,
+      // SAFE-8 / SAFE-8.a: a web-search or gif-search past the total cap asks
+      // on this run's spend card, as a model call does.
+      ...(spend.flatCard ? { spendCard: spend.flatCard } : {}),
       onPrCreate: (result) => {
         reviewRefusal =
           result.reviewHold === "refused" ? oneLineNote(result.error ?? "") || null : null;
@@ -1527,6 +1530,8 @@ type LoopArgs = {
   onPrivateReply: (text: string) => void;
   /** GITHUB-9: the run's review context for github-pr-create (and its authors for delegate workers). */
   review?: PrReviewRun;
+  /** SAFE-8 / SAFE-8.a: the run's spend card for a flat-priced tool call past the total cap. */
+  spendCard?: FlatSpendCard;
   /** GITHUB-9.a: each github-pr-create result of the run. */
   onPrCreate?: (result: PluginHandlerResult) => void;
   /** GITHUB-9.a: a tool call may have changed the checkout (record the run's authors for it). */
@@ -1617,6 +1622,7 @@ async function runToolLoop(args: LoopArgs): Promise<LoopResult> {  const {
     onInjection,
     onPrivateReply,
     review,
+    spendCard,
     onPrCreate,
     onStateChange,
     onReplyAttribution,
@@ -2019,6 +2025,7 @@ async function runToolLoop(args: LoopArgs): Promise<LoopResult> {  const {
               tier: llm.tier,
               signal,
               ...(review ? { review } : {}),
+              ...(spendCard ? { spendCard } : {}),
             })
           : invented && isMutatingPlugin(invented) && (await refusedForRole(roleEnv, invented, cwd))
           ? roleRefusal(name)
@@ -2092,12 +2099,12 @@ async function runToolLoop(args: LoopArgs): Promise<LoopResult> {  const {
         await onStateChange();
       }
       // SAFE-8 (REQ-agent-098): a flat-priced tool call (`web-search`, or
-      // `gif-search` recorded at $0)
-      // stopped at the daily spend cap before it was sent ends the attempt
-      // with the same `spend-cap` ask a model call stopped at the cap gets:
-      // the run is blocked and the owner is asked. The ask (amounts, cap
-      // settings) never reaches the model, a tool message or the summary
-      // (SAFE-14.a).
+      // `gif-search` recorded at $0) stopped at the daily spend cap before it
+      // was sent — no spend card to ask on, or the owner's card came to no —
+      // ends the attempt with the same `spend-cap` ask a model call stopped
+      // at the cap gets: the run is blocked and the owner is asked. The ask
+      // (amounts, cap settings) never reaches the model, a tool message or
+      // the summary (SAFE-14.a).
       if (offered.has(name) && result.spendAsk?.reason === "spend-cap") {
         emit(onEvent, { type: "ToolResult", name: eventName, success: false, detail: SPEND_CAP_SUMMARY });
         return {

@@ -1441,3 +1441,71 @@ base-era imports gave 0 of 3 on the base (`cli:` parsed as `openai`; the
 owner's run sent `cli:fakecli --print` as a chat model and never started the
 CLI; a team run did the same instead of skipping it) and 3 of 3 on the
 branch. Restored, 29 of 29 pass (32 with the review fixes).
+
+## A flat-priced tool call past the total cap waits on the owner's spend card (REQ-agent-398 added, REQ-agent-098 modified; SAFE-8 / SAFE-8.a / SAFE-14.a / SAFE-18 / SAFE-19 / SAFE-20)
+
+In `tests/agent.spend-approve.test.ts` ("a flat-priced tool call past the
+total cap waits on the same spend card …"; in-memory SQLite, a fixed owner in
+the guard's env, cards decided in the store as the bridge's engine would,
+`reserveFlatSpend` with the guard's `flatCard`):
+
+- Approve + code: `held`; one `spend` / `money` request, `used`, action
+  `send one web-search via api.search.brave.com`, target `total`, amount
+  `~$0.0050 (this one call's estimate)`, title, requester, project and task
+  text as for a model call; one `reserved` row at 5000, settled once to
+  `actual` 5000 (a second settle changes nothing); the wait note names "one
+  web-search past a spend cap, SAFE-8.a" with no `$` amount, then the
+  approval note; no model call; `finish` leaves the result alone.
+- SAFE-8.a: after one approved search the next one raises a second card
+  (another id); denied, it is `stopped` and only the first row exists.
+- Deny: `stopped`, no row, request `denied`; the ask (`spendScopes`
+  `["total"]`) is `spendCapReachedAsk` naming the card, `Stopped at cap:
+  total.`, both ways on, no reply note; `finish` untouched.
+- No answer before the card lapses (`expired`; a later approval does not
+  take), the run's stop (ends the wait at once, `expired`, "was cut short"),
+  a stop that lands as the owner approves (approval left unused) and a run
+  already stopped (no card): `stopped`, no row.
+- No card where a model call gets none: no owner (plain ask at once, "so I
+  stopped before sending it", reply note), a guard without `approval`
+  (`flatCard` undefined), an invalid cap value ("Spend cap can't be
+  enforced"), an unavailable ledger ("spend ledger is unavailable"): no
+  request, no row (passes on base too: today's ask kept).
+- One open card per run: a model call's pending card holds the search's card
+  back until it is decided; then the search gets its own card.
+- A $0 GIPHY `gif-search` with the window already past the cap: a card with
+  action `send one gif-search via api.giphy.com`, amount `~$0.00 (this one
+  call's estimate)`; approved, `held` at 0; denied, `stopped`.
+
+In `tests/web.search.test.ts` ("at the cap a search waits on the owner's
+spend Approve card, as a model call does …"):
+
+- Through `createTaskExecute` (owner and cap in the run's env, a priced
+  `gpt-4o-mini`, the search's ledger at $0.9980 of $1.00): approved, the one
+  search goes out, its row settles `actual` 5000, the run goes on to the
+  model's answer with no ask; the card's text holds the task; the tool
+  message and the `ToolResult` hold the fenced results and no `$` amount,
+  `CORVIDINHO_`, "spend" or "Approve card"; the wait and approval lines are
+  Text events. Denied: no request to Brave, one model call, summary
+  `SPEND_CAP_SUMMARY`, the `spend-cap` ask naming the card, a `ToolResult`
+  with success false and detail `SPEND_CAP_SUMMARY`, no row.
+
+Fail-on-base: with main's (`49273ff4`) `src/agent/spend.ts`,
+`src/agent/execute.ts`, `src/plugins/types.ts`, `src/plugins/run.ts`,
+`plugins/web/search.ts`, `plugins/web/commands.ts`, `plugins/gif/giphy.ts` and
+`plugins/gif/commands.ts` swapped in, the new `tests/agent.spend-approve.test.ts`
+cases gave 1 pass, 6 fail (the "no card where a model call gets none" case
+passes on base by design) and the new `tests/web.search.test.ts` cases 0 pass,
+3 fail. Restored, all pass.
+
+## Requirement evidence
+
+| Requirement | Test | Evidence |
+|---|---|---|
+| `REQ-agent-398` | `tests/agent.spend-approve.test.ts` ("Approve + code: exactly that one search is let through …") | One `spend` / `money` card with the search's action, target `total` and amount; one row at 5000 settled once; wait note without amounts. Fails on base. |
+| `REQ-agent-398` | `tests/agent.spend-approve.test.ts` ("SAFE-8.a: the next search past the cap raises a new card and code …") | Second card, second id; denied, no second row. Fails on base. |
+| `REQ-agent-398` | `tests/agent.spend-approve.test.ts` ("Deny: …", "no answer in time, a late code and the run's stop are a no …") | `stopped` with `spendCapReachedAsk(…, card)`; no row; `finish` untouched; a late approval does not take. Fail on base. |
+| `REQ-agent-398` | `tests/agent.spend-approve.test.ts` ("where a model call gets no card, neither does a search …") | No owner, no `approval`, invalid setting, unavailable ledger: today's ask, no card, no row. |
+| `REQ-agent-398` | `tests/agent.spend-approve.test.ts` ("a search and a model call of one run share its one open card …") | The search's card is recorded only after the model call's card is decided. Fails on base. |
+| `REQ-agent-398` | `tests/agent.spend-approve.test.ts` ("a free GIPHY gif-search ($0) …") | `send one gif-search via api.giphy.com`, `~$0.00`; approved held, denied stopped. Fails on base. |
+| `REQ-agent-398` | `tests/web.search.test.ts` ("in the tool loop: approved, …", "in the tool loop: denied, …") | The tool loop hands the run's card to `web-search`; approved, one search and the run goes on, no amount in the tool message or `ToolResult`; denied, blocked on the card's `spend-cap` ask with `SPEND_CAP_SUMMARY`. Fail on base. |
+| `REQ-agent-098` | `tests/web.search.test.ts` (the existing SAFE-8 cases: "at the cap: nothing is sent …", "an unavailable ledger fails closed …", "in the tool loop a search stopped at the cap ends the attempt …") | Without a card (no owner / no guard cap in the run) the flat call stops as before with the `spend-cap` ask. |
