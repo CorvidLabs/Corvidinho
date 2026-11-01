@@ -1,6 +1,6 @@
 ---
 module: plugins
-version: 70
+version: 71
 status: draft
 files:
   - plugins/discord/user-lookup.ts
@@ -1731,3 +1731,4 @@ and current rows for plugins host evolution.
 | 2026-10-07 | named-personas-are-their-own-files-in-personas-with-name-model-and-skill-tags-the-owner-can-run-a-task-as-one-and-a: Named personas are their own files in personas/ with name, model and skill tags; the owner can run a task as one and a lead's delegate picks one by skill tag; team and community can't pick one (AUTONOMOUS-2.a, AUTONOMOUS-5.a) |
 | 2026-10-07 | my-own-memory-forget-and-override-by-id-ask-me-on-a-dm-card-with-approve-and-a-one-time-code-and-an-override-shows-the: My own memory forget and override by id ask me on a DM card with Approve and a one-time code, and an override shows the new text word for word (SAFE-18.a) |
 | 2026-10-07 | a-headless-agent-cli-can-be-one-of-my-models-in-my-own-runs-only-with-the-same-tools-as-my-other-models-inside-that: A headless agent CLI can be one of my models, in my own runs only, with the same tools as my other models, inside that talk's own worktree; other runs skip it and use my next model (AGENT-13, AGENT-13.a) |
+| 2026-11-01 | file-tools-refuse-the-loaded-allowlist-file-so-people-links-never-change-through-chat-identity-6: File tools refuse the loaded allowlist file so people links never change through chat (IDENTITY-6) |

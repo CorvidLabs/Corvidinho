@@ -7,10 +7,11 @@
   "title": "File tools refuse the loaded allowlist file so people links never change through chat (IDENTITY-6)",
   "description": "File tools refuse the loaded allowlist file so people links never change through chat (IDENTITY-6)",
   "kind": "bug_fix",
-  "state": "approved",
+  "state": "verifying",
+  "canonical_applied": true,
   "base_commit": "49273ff4a95fafcad87cde66492e3a8dd2c6c3f4",
   "created_at": 1793544656,
-  "updated_at": 1793545129,
+  "updated_at": 1793545160,
   "affected_specs": [
     "plugins"
   ],

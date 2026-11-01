@@ -1,6 +1,6 @@
 ---
 id: file-tools-refuse-the-loaded-allowlist-file-so-people-links-never-change-through-chat-identity-6
-state: approved
+state: implementing
 type: bug_fix
 base_commit: 49273ff4a95fafcad87cde66492e3a8dd2c6c3f4
 ---
