@@ -1013,6 +1013,14 @@ api.giphy.com`, `total`, `~$0.00 (this one call's estimate)`); approved, one
 request and one `actual` $0 row; the next one, denied, sends nothing and
 returns the `gif-search spend-cap` error with the card in `spendAsk`.
 
+Both handlers hand the run's abort signal to the card wait ("the run's stop
+ends the card wait at once …", one in each file): the owner never answers a
+card that would stay open a minute; the run's stop ends the wait within
+seconds, no request goes out, no row is recorded, and the result is the
+`<tool> spend-cap` error with `spendAsk` saying the wait on that card was cut
+short. With the handler's signal hand-off to `reserveFlatSpend` removed, both
+fail (the wait runs on past the stop).
+
 The existing at-cap cases (no `spendCard`, as from `corvidinho plugins run`)
 keep stopping with the spend-cap ask.
 
@@ -1024,6 +1032,7 @@ module's evidence), both handler cases fail (the handler ignores
 
 | Requirement | Test | Evidence |
 |---|---|---|
-| `REQ-plugins-398` | `tests/web.search.test.ts` ("the handler: the run's card lets exactly that one search through; a no sends nothing …") | `ctx.spendCard` reaches `reserveFlatSpend` with the run's signal: approved, one request and one `actual` row; denied, nothing sent and only "Work is paused for budget." with the card in `spendAsk`. Fails on base. |
+| `REQ-plugins-398` | `tests/web.search.test.ts` ("the handler: the run's card lets exactly that one search through; a no sends nothing …") | `ctx.spendCard` reaches `reserveFlatSpend`: approved, one request and one `actual` row; denied, nothing sent and only "Work is paused for budget." with the card in `spendAsk`. Fails on base. |
+| `REQ-plugins-398` | `tests/web.search.test.ts`, `tests/gif.search.test.ts` ("the run's stop ends the card wait at once …") | The handler hands the run's abort signal to the card wait: the stop ends it at once, nothing sent or recorded, `spendAsk` says the wait was cut short. Fails on base and without the signal hand-off. |
 | `REQ-plugins-398` | `tests/gif.search.test.ts` ("approved, exactly that one search is sent and recorded at $0 …") | The same through `gif-search` at $0. Fails on base. |
 | `REQ-plugins-398` | `tests/web.search.test.ts` ("in the tool loop: approved, …") | `runPlugin` passes the tool loop's `spendCard` to the handler. Fails on base. |

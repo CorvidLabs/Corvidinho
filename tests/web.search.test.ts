@@ -1171,6 +1171,41 @@ describe("at the cap a search waits on the owner's spend Approve card, as a mode
     db.close();
   });
 
+  test("the handler: the run's stop ends the card wait at once (SAFE-20): nothing is sent or recorded and the ask says the wait was cut short", async () => {
+    const db = nearCap();
+    const g = createSpendGuard(async () => new Response("{}"), {
+      env: { [SPEND_CAP_ENV]: "1", CORVIDINHO_OWNER_DISCORD_ID: OWNER },
+      readUsage: extractUsage,
+      approval: { taskText: "search for bun" },
+    });
+    const t = fakeTransport(() => ({ json: braveJson(HITS) }));
+    const cmd = searchCommand({
+      resolver: fakeResolver().resolver,
+      transport: t.transport,
+      env: { [BRAVE_SEARCH_API_KEY_ENV]: KEY, [SPEND_CAP_ENV]: "1" },
+      spendDb: db,
+    });
+    // The owner never answers; the card would stay open for a minute.
+    const asked: ApprovalRequest[] = [];
+    setSpendCardTestHooks({ ttlMs: 60_000, pollMs: 5, onRequest: (req) => asked.push(req) });
+    const stop = new AbortController();
+    const started = Date.now();
+    const pending = cmd.handler({ ...ctx(["bun"]), signal: stop.signal, spendCard: g.flatCard! });
+    for (let i = 0; i < 400 && asked.length === 0; i++) await Bun.sleep(5);
+    expect(asked).toHaveLength(1);
+    stop.abort();
+    const no = await pending;
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(t.calls).toHaveLength(0);
+    expect(no.ok).toBe(false);
+    expect((no.data as { code: string }).code).toBe("spend-cap");
+    expect(no.error).toBe("web-search spend-cap: refused: Work is paused for budget. (SAFE-8)");
+    expect(no.spendAsk?.question).toContain(`The wait on Approve card ${asked[0]!.id} was cut short`);
+    expect(new ApprovalStore({ db }).get(asked[0]!.id)?.status).not.toBe("used");
+    expect(braveRows(db)).toEqual([]);
+    db.close();
+  });
+
   function cardRun() {
     const db = nearCap();
     clearRegistry();

@@ -1108,6 +1108,35 @@ describe("past the cap a GIF search waits on the owner's spend Approve card, thr
     expect(rows()).toHaveLength(1);
     db.close();
   });
+
+  test("the run's stop ends the card wait at once (SAFE-20): nothing is sent or recorded and the ask says the wait was cut short", async () => {
+    const db = openCorvidinhoDb({ memory: true });
+    new SpendLedger(db).reserve({ provider: "p", model: "gpt-4o-mini", estimateMicroUsd: 1_000_001, capMicroUsd: 1e12, now: Date.now() - 1000 });
+    const g = createSpendGuard(async () => new Response("{}"), {
+      env: { [SPEND_CAP_ENV]: "1", CORVIDINHO_OWNER_DISCORD_ID: OWNER },
+      readUsage: extractUsage,
+      approval: { taskText: "find a cat gif" },
+    });
+    const t = fakeTransport(() => ({ json: giphyJson(HITS) }));
+    const cmd = gifCommand({ resolver: fakeResolver().resolver, transport: t.transport, env: withKey({ [SPEND_CAP_ENV]: "1" }), spendDb: db });
+    // The owner never answers; the card would stay open for a minute.
+    const asked: ApprovalRequest[] = [];
+    setSpendCardTestHooks({ ttlMs: 60_000, pollMs: 5, onRequest: (req) => asked.push(req) });
+    const stop = new AbortController();
+    const started = Date.now();
+    const pending = cmd.handler({ ...ctx(["cat"]), signal: stop.signal, spendCard: g.flatCard! });
+    for (let i = 0; i < 400 && asked.length === 0; i++) await Bun.sleep(5);
+    expect(asked).toHaveLength(1);
+    stop.abort();
+    const no = await pending;
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(t.calls).toHaveLength(0);
+    expect(no.ok).toBe(false);
+    expect(no.error).toBe("gif-search spend-cap: refused: Work is paused for budget. (SAFE-8)");
+    expect(no.spendAsk?.question).toContain(`The wait on Approve card ${asked[0]!.id} was cut short`);
+    expect(db.query("SELECT COUNT(*) AS n FROM spend_ledger WHERE provider = ?").get(GIPHY_API_HOST)).toEqual({ n: 0 });
+    db.close();
+  });
 });
 
 describe("docs: the key, the allowlist name, link-only posting and GIPHY's attribution", () => {
